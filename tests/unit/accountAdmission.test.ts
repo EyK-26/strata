@@ -31,6 +31,7 @@ import type {
 } from "@getstrata/core/contracts/authUserDirectory";
 import type { ScopedPolicy } from "@getstrata/core/contracts/persistence";
 import type { DatabaseSession } from "@getstrata/core/database/session";
+import { authFixtureOutcome } from "../helpers/authOutcome";
 import { withBoundDatabase } from "../helpers/boundRepositoryHarness";
 import { withPolicyPersistence } from "../helpers/policyPersistence";
 
@@ -47,6 +48,7 @@ function sessionGuard(directory: AuthUserDirectory) {
       secret,
       ttlSeconds: 60 * 60 * 24 * 30,
     }),
+    hasCredential: (request) => request.headers.has("cookie"),
     abilities: (role) => (role === "admin" ? ["*"] : []),
     validity: directory.hasActiveBrowserSession
       ? (directory as Required<Pick<AuthUserDirectory, "hasActiveBrowserSession">>)
@@ -195,9 +197,13 @@ test("opaque and static guards reject explicitly inactive principals and AuthMan
       bearer("static-fixture"),
     ),
   ).toBeNull();
-  const manager = new AuthManager({ resolve: () => ({ id: 1, isActive: false }) });
+  const manager = new AuthManager({
+    authenticate: () => authFixtureOutcome({ id: 1, isActive: false }),
+  });
   expect(await manager.user(new Request("http://localhost"))).toBeNull();
-  manager.registerGuard("api", { resolve: () => ({ id: 1, isActive: false }) });
+  manager.registerGuard("api", {
+    authenticate: () => authFixtureOutcome({ id: 1, isActive: false }),
+  });
   expect(await manager.user(bearer("opaque-fixture"))).toBeNull();
   record.is_active = true;
   expect(await opaque.resolve(bearer("opaque-fixture"))).toMatchObject({ id: 1 });

@@ -156,6 +156,14 @@ describe("HttpKernel", () => {
     let calls = 0;
     dependencies.container.set(CORE_AUTH_TOKEN, {
       ...establishedAuthReader,
+      authenticate: async () => {
+        calls++;
+        return {
+          status: "authenticated",
+          user: { id: 1, role: "admin" },
+          credentialSource: "session",
+        };
+      },
       resolveWithSource: async () => {
         calls++;
         return { user: { id: 1, role: "admin" }, credentialSource: "session" };

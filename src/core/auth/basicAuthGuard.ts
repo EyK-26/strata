@@ -5,9 +5,10 @@ import type {
   AuthEmailLookup,
   AuthUserRecord,
 } from "../contracts/authUserDirectory";
-import { readBasicCredentials } from "../http/statelessAuth";
+import { authorizationScheme, readBasicCredentials } from "../http/statelessAuth";
 import { isAccountActive, isAuthUserActive } from "./accountState";
 import type { AuthUser } from "./authContext";
+import { type AuthOutcome, authenticateProof, authUserFromOutcome } from "./authOutcome";
 import type { AuthGuard } from "./guard";
 import { verifyPassword } from "./password";
 import { completePasswordLogin } from "./passwordLogin";
@@ -54,7 +55,7 @@ class BasicAuthGuard implements AuthGuard {
 
   private async persistRecovery(record: AuthUserRecord, hash: string): Promise<boolean> {
     try {
-      return await this.options.persistRecovery(record, hash);
+      return (await this.options.persistRecovery(record, hash)) === true;
     } catch (error) {
       if (error instanceof UnprocessableEntityError && error.message === "mfa_invalid")
         return false;
@@ -62,7 +63,15 @@ class BasicAuthGuard implements AuthGuard {
     }
   }
 
+  authenticate(request: Request): Promise<AuthOutcome> {
+    return authenticateProof("basic", authorizationScheme(request) === "basic", () =>
+      this.resolveUser(request),
+    );
+  }
   async resolve(request: Request): Promise<AuthUser | null> {
+    return authUserFromOutcome(await this.authenticate(request));
+  }
+  private async resolveUser(request: Request): Promise<AuthUser | null> {
     const credentials = readBasicCredentials(request);
 
     if (!credentials) {
@@ -115,11 +124,7 @@ class BasicAuthGuard implements AuthGuard {
         ? await this.options.emailLookup.findByEmail(credentials.username)
         : null;
       if (!record) {
-        try {
-          record = await this.options.accounts.findByIdOrThrow(userId);
-        } catch {
-          return null;
-        }
+        record = await this.options.accounts.findByIdOrThrow(userId);
       }
 
       if (record.id !== userId) return null;

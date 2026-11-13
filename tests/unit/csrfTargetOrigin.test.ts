@@ -8,6 +8,7 @@ import { ForbiddenError } from "@getstrata/core/errors/http";
 import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
 import { createCsrfTokenCookie } from "@getstrata/core/http/csrfToken";
 import configProvider from "../../src/bootstrap/providers/config";
+import { authFixtureOutcome } from "../helpers/authOutcome";
 import { createMockDependencies } from "./testHelpers";
 
 const targetOrigin = "https://forms.example.test";
@@ -205,7 +206,7 @@ test("the validated target is captured instead of following later caller mutatio
 test("HttpKernel uses explicit config for web and cookie API routes without an app wrapper", async () => {
   const container = new ServiceContainer();
   const config = new ConfigStore();
-  container.set(CORE_AUTH_TOKEN, new AuthManager({ resolve: () => null }));
+  container.set(CORE_AUTH_TOKEN, new AuthManager({ authenticate: () => authFixtureOutcome(null) }));
   container.set(CORE_CONFIG_TOKEN, config);
   config.set("http.csrf.targetOrigin", targetOrigin);
   const kernel = createHttpKernel(createMockDependencies(container));

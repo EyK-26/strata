@@ -7,6 +7,7 @@ import { BasicAuthGuard } from "@getstrata/core/auth/basicAuthGuard";
 import { DatabaseTokenGuard } from "@getstrata/core/auth/guard";
 import { JwtGuard } from "@getstrata/core/auth/jwtGuard";
 import { SessionGuard } from "@getstrata/core/auth/sessionGuard";
+import { authFixtureOutcome } from "../helpers/authOutcome";
 
 const accounts = { findByIdOrThrow: async (id: number) => ({ id, role: "member" }) };
 const email = { findByEmail: async () => null };
@@ -18,12 +19,18 @@ function options(mechanisms: MetadataAuthOptions["mechanisms"]): MetadataAuthOpt
     production: true,
     allowDevHeaders: false,
     jwtSecret: secret,
+    hasSessionCredential: () => true,
     readSession: () => null,
     abilities: { admin: ["*"], member: [] },
     roleAbilities: () => [],
   };
 }
-const session = { read: () => null, abilities: () => [], validity: null };
+const session = {
+  hasCredential: () => true,
+  read: () => null,
+  abilities: () => [],
+  validity: null,
+};
 
 describe("selected authentication capabilities", () => {
   test("requires each selected mechanism's adapter at assembly", () => {
@@ -77,7 +84,10 @@ describe("selected authentication capabilities", () => {
     expect(await empty.resolve(new Request("http://example.test/"))).toBeNull();
     const custom = createMetadataAuthManager(
       {},
-      { ...options(["session"]), sessionGuard: { resolve: () => ({ id: "custom-session" }) } },
+      {
+        ...options(["session"]),
+        sessionGuard: { authenticate: () => authFixtureOutcome({ id: "custom-session" }) },
+      },
       recover,
     );
     expect(await custom.resolve(new Request("http://example.test/"))).toEqual({

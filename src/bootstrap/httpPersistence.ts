@@ -1,7 +1,9 @@
 import { establishedAuthReader, runWithEstablishedAuth } from "@getstrata/core/auth/authReader";
+import { type AuthOutcome, validatedAuthOutcome } from "@getstrata/core/auth/guard";
 import { runWithMembershipSnapshot } from "@getstrata/core/auth/membershipContext";
 import type { ApplicationConfig } from "@getstrata/core/contracts/application";
 import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
+import { InternalServerError, UnauthorizedError } from "@getstrata/core/errors/http";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { createPublicTenantSelector } from "@getstrata/core/tenant/publicTenantHost";
 import { runWithTenant, type TenantContext } from "@getstrata/core/tenant/tenantContext";
@@ -17,7 +19,13 @@ import type {
 
 export { HTTP_PERSISTENCE_OPTIONS } from "#strata-http-route";
 
-function snapshotAuth(auth: EstablishedRequest["auth"]): EstablishedRequest["auth"] {
+function snapshotAuth(input: AuthOutcome): EstablishedRequest["auth"] {
+  const auth = validatedAuthOutcome(input);
+  if (auth.status === "error")
+    throw Object.assign(new InternalServerError(), { cause: auth.error });
+  if (auth.status === "invalid") throw new UnauthorizedError();
+  if (auth.status !== "absent" && auth.status !== "authenticated")
+    throw new TypeError("Invalid authentication outcome.");
   const user = auth.user;
   const name = user?.name;
   const email = user?.email;

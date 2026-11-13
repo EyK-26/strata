@@ -19,6 +19,7 @@ import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { createStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
 import { createTenantMiddleware } from "@getstrata/core/tenant/tenantMiddleware";
+import { authFixtureOutcome } from "../helpers/authOutcome";
 import { createMockDependencies } from "../unit/testHelpers";
 
 // Retain the opt-out transport characterization and every original security control.
@@ -237,7 +238,10 @@ async function fixture(
   if (options.kernel) {
     const container = new ServiceContainer();
     const config = new ConfigStore();
-    container.set(CORE_AUTH_TOKEN, new AuthManager({ resolve: () => null }));
+    container.set(
+      CORE_AUTH_TOKEN,
+      new AuthManager({ authenticate: () => authFixtureOutcome(null) }),
+    );
     container.set(CORE_CONFIG_TOKEN, config);
     config.set(CSRF_TARGET_ORIGIN_CONFIG_KEY, publicOrigin);
     kernel = createHttpKernel(

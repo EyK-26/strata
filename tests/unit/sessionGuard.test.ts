@@ -7,9 +7,10 @@ import {
   sessionTtlSeconds,
 } from "@getstrata/core/auth/sessionCookie";
 import { SessionGuard } from "@getstrata/core/auth/sessionGuard";
-import type {
-  AuthSessionValidity,
-  AuthUserDirectory,
+import {
+  AuthAccountNotFoundError,
+  type AuthSessionValidity,
+  type AuthUserDirectory,
 } from "@getstrata/core/contracts/authUserDirectory";
 import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
 
@@ -25,7 +26,7 @@ function directoryWith(directory: Partial<AuthUserDirectory> | null): AuthUserDi
   return {
     resolveUserFromToken: async () => null,
     findByIdOrThrow: async () => {
-      throw new Error("missing directory");
+      throw new AuthAccountNotFoundError();
     },
     ...directory,
   };
@@ -38,6 +39,7 @@ function sessionPorts(validity: AuthSessionValidity | null = null) {
       secret: requireConfiguredSecret(["SESSION_SECRET"], "session-secret"),
     }),
     abilities: resolveAbilitiesForRole,
+    hasCredential: (request: Request) => request.headers.has("cookie"),
     validity,
   };
 }
@@ -59,7 +61,7 @@ describe("SessionGuard", () => {
     const missing = new SessionGuard(
       directoryWith({
         findByIdOrThrow: async () => {
-          throw new Error("missing");
+          throw new AuthAccountNotFoundError();
         },
       }),
       sessionPorts(),

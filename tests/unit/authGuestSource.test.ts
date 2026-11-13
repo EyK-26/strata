@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { authFixtureOutcome } from "../helpers/authOutcome";
 import { guestGuardOptions } from "../helpers/devAuthHeaders";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -20,7 +21,7 @@ for (const name of ["default", "web", "session", "api", "token", "jwt", "basic"]
       const auth =
         name === "default"
           ? new AuthManager(new GuestGuard(guestGuardOptions()))
-          : new AuthManager({ resolve: () => null }).registerGuard(
+          : new AuthManager({ authenticate: () => authFixtureOutcome(null) }).registerGuard(
               name,
               new GuestGuard(guestGuardOptions()),
             );
@@ -44,9 +45,12 @@ for (const [name, scheme, source] of [
 ] as const)
   test(`custom persisted ${name} guard retains ${source} source classification`, () =>
     withMode("local", async () => {
-      const auth = new AuthManager({ resolve: () => null }).registerGuard(name, {
-        resolve: () => ({ id: 7, role: "member" }),
-      });
+      const auth = new AuthManager({ authenticate: () => authFixtureOutcome(null) }).registerGuard(
+        name,
+        {
+          authenticate: () => authFixtureOutcome({ id: 7, role: "member" }, source),
+        },
+      );
       const resolved = await auth.resolveWithSource(
         new Request("https://app.example.test/", {
           headers: scheme ? { authorization: scheme } : {},

@@ -392,6 +392,7 @@ test("two actual composed applications retain their own gate, selected tenant an
       allowTenantDevHeaders: false,
       metadata: () => ({
         authenticate: async () => ({
+          status: "authenticated",
           user: { id: tenantId + 40, role: "member" },
           credentialSource: "bearer",
         }),

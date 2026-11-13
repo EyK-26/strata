@@ -160,9 +160,7 @@ function createMockDependencies(
           const manager = container.has(CORE_AUTH_TOKEN)
             ? container.resolve(CORE_AUTH_TOKEN)
             : anonymous;
-          return typeof manager.resolveWithSource === "function"
-            ? manager.resolveWithSource(request)
-            : { user: await manager.resolve(request), credentialSource: null };
+          return manager.authenticate(request);
         },
         memberships: async () => [],
         userTenantId: async () => defaultTestTenant.id,

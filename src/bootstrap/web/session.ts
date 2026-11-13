@@ -1,7 +1,13 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { isAccountActive, matchesAuthVersion } from "@getstrata/core/auth/accountState";
 import type { AuthUser } from "@getstrata/core/auth/authContext";
-import { type AuthGuard, AuthManager } from "@getstrata/core/auth/guard";
+import {
+  type AuthGuard,
+  AuthManager,
+  type AuthOutcome,
+  authenticateProof,
+  authUserFromOutcome,
+} from "@getstrata/core/auth/guard";
 import { isSessionInvalidated } from "@getstrata/core/auth/sessionCookie";
 import type { ScopedPolicy } from "@getstrata/core/contracts/persistence";
 import type { DatabaseSession, TransactionSession } from "@getstrata/core/database/session";
@@ -211,6 +217,22 @@ export class CookieSessionStore {
     return this.withSecureFlag(`${this.cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
   }
 
+  hasCredential(request: Request): boolean {
+    // Check presence before decoding/signature validation: malformed supplied cookies
+    // are invalid credentials, never an excuse to try a weaker guard.
+    return (
+      readRequestCookie(request, this.cookieName) !== null ||
+      (request.headers
+        .get("cookie")
+        ?.split(";")
+        .some((part) => {
+          const separator = part.indexOf("=");
+          return (separator === -1 ? part : part.slice(0, separator)).trim() === this.cookieName;
+        }) ??
+        false)
+    );
+  }
+
   sessionIdFromRequest(request: Request): string | null {
     const cookie = readRequestCookie(request, this.cookieName);
     const raw = cookie ?? null;
@@ -324,7 +346,17 @@ export class CookieSessionGuard implements AuthGuard {
     private readonly mapUser: MapSessionUser = defaultMapSessionUser,
   ) {}
 
+  authenticate(request: Request): Promise<AuthOutcome> {
+    return authenticateProof(
+      "session",
+      () => this.store.hasCredential(request),
+      () => this.resolveUser(request),
+    );
+  }
   async resolve(request: Request): Promise<AuthUser | null> {
+    return authUserFromOutcome(await this.authenticate(request));
+  }
+  private async resolveUser(request: Request): Promise<AuthUser | null> {
     const user = await this.store.read(request);
 
     if (!user) {

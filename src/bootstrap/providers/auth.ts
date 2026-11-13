@@ -29,6 +29,7 @@ export interface MetadataAuthOptions {
   readonly production: boolean;
   readonly allowDevHeaders: boolean;
   readonly jwtSecret: string;
+  readonly hasSessionCredential?: (request: Request) => boolean;
   readonly readSession: (request: Request) => ReturnType<typeof readSession>;
   readonly abilities: { readonly admin: readonly string[]; readonly member: readonly string[] };
   readonly roleAbilities: (role: string) => string[];
@@ -97,7 +98,7 @@ export function createMetadataAuthManager(
     const session = add(
       "web",
       options.sessionGuard !== undefined
-        ? requireAuthCapability<AuthGuard>(options.sessionGuard, ["resolve"], "custom session")
+        ? requireAuthCapability<AuthGuard>(options.sessionGuard, ["authenticate"], "custom session")
         : new SessionGuard(
             requireAuthCapability<AuthAccountLookup>(
               directory,
@@ -106,6 +107,9 @@ export function createMetadataAuthManager(
             ),
             {
               read: options.readSession,
+              hasCredential: requireAuthCapability<
+                Required<Pick<MetadataAuthOptions, "hasSessionCredential">>
+              >(options, ["hasSessionCredential"], "session presence").hasSessionCredential,
               abilities: options.roleAbilities,
               validity:
                 directory.hasActiveBrowserSession === undefined

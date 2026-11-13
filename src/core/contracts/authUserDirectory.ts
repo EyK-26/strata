@@ -17,7 +17,16 @@ interface AuthUserRecord {
   mfa_recovery_codes?: string | null;
 }
 
+/** Expected lookup miss. Operational failures must retain their original error. */
+class AuthAccountNotFoundError extends Error {
+  constructor() {
+    super("Authentication account not found.");
+    this.name = "AuthAccountNotFoundError";
+  }
+}
+
 interface AuthAccountLookup {
+  /** Throw AuthAccountNotFoundError only for an expected miss; retain operational failures. */
   findByIdOrThrow(id: number): Promise<AuthUserRecord>;
 }
 
@@ -53,3 +62,5 @@ export type {
   AuthUserDirectory,
   AuthUserRecord,
 };
+
+export { AuthAccountNotFoundError };

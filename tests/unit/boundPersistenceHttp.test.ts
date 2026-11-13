@@ -83,6 +83,7 @@ test("BP7 actual API and web wrappers roll back writes before error conversion a
           production: false,
           allowDevHeaders: true,
           jwtSecret: "app-specific-signing-secret",
+          hasSessionCredential: () => true,
           readSession() {
             sessionReads++;
             return { userId: 1, role: "admin", issuedAt: Math.floor(Date.now() / 1000) };
@@ -104,7 +105,7 @@ test("BP7 actual API and web wrappers roll back writes before error conversion a
         },
       );
       return {
-        authenticate: (request) => manager.resolveWithSource(request),
+        authenticate: (request) => manager.authenticate(request),
         memberships: async () => [],
         userTenantId: async () => 1,
         tenant: async (id) => (id === 1 ? tenant : null),
@@ -380,7 +381,7 @@ test("HTTP identity snapshot preserves profile and security fields without retai
     metadata: () => ({
       authenticate: async () => {
         authentications++;
-        return { user, credentialSource: "session" as const };
+        return { status: "authenticated", user, credentialSource: "session" as const };
       },
       memberships: async () => [],
       userTenantId: async () => 1,
@@ -474,7 +475,7 @@ async function compositionFixture(options: HttpPersistenceOptions, afterMetadata
   };
 }
 const noIdentityMetadata: HttpPersistenceOptions["metadata"] = () => ({
-  authenticate: async () => ({ user: null, credentialSource: null }),
+  authenticate: async () => ({ status: "absent", user: null, credentialSource: null }),
   memberships: async () => [],
   userTenantId: async () => 1,
   tenant: async () => null,
@@ -617,7 +618,11 @@ test("HTTP mismatched tenant lookup is denied before business invocation or SQL"
     production: false,
     allowTenantDevHeaders: false,
     metadata: () => ({
-      authenticate: async () => ({ user: { id: 1, role: "member" }, credentialSource: "session" }),
+      authenticate: async () => ({
+        status: "authenticated",
+        user: { id: 1, role: "member" },
+        credentialSource: "session",
+      }),
       memberships: async () => [],
       userTenantId: async () => 1,
       tenant: async (id) => {
@@ -705,6 +710,7 @@ test("established auth user and membership snapshots restore through nested and 
       authenticate: async (request) => {
         authentications++;
         return {
+          status: "authenticated",
           user: { id: Number(new URL(request.url).searchParams.get("id")), role: "member" },
           credentialSource: "session",
         };
@@ -801,7 +807,9 @@ test("owned HTTP business admission carries detached principal claims and never 
     metadata: () => ({
       authenticate: async () => {
         authentications++;
-        return { user, credentialSource: user ? "session" : null };
+        return user
+          ? { status: "authenticated", user, credentialSource: "session" }
+          : { status: "absent", user: null, credentialSource: null };
       },
       memberships: async () => [],
       userTenantId: async () => 1,
@@ -981,7 +989,11 @@ test("ordinary selected tenant snapshots validate before equality and retain det
       metadata: () => ({
         authenticate: async () => {
           authentications++;
-          return { user: { id: 7, role: "member" }, credentialSource: "session" };
+          return {
+            status: "authenticated",
+            user: { id: 7, role: "member" },
+            credentialSource: "session",
+          };
         },
         memberships: async () => [],
         userTenantId: async () => 1,
@@ -1038,7 +1050,11 @@ test("ordinary metadata preserves missing-tenant refusal and rejects malformed s
     production: false,
     allowTenantDevHeaders: false,
     metadata: () => ({
-      authenticate: async () => ({ user: { id: 7, role: "member" }, credentialSource: "session" }),
+      authenticate: async () => ({
+        status: "authenticated",
+        user: { id: 7, role: "member" },
+        credentialSource: "session",
+      }),
       memberships: async () => [],
       userTenantId: async () => 1,
       tenant: async () => {
@@ -1067,5 +1083,56 @@ test("ordinary metadata preserves missing-tenant refusal and rejects malformed s
     }
   } finally {
     await fixture.close();
+  }
+});
+
+test("HTTP metadata rejects invalid and malformed auth outcomes before entering business scope", async () => {
+  const outcomes: unknown[] = [
+    { status: "invalid", user: null, credentialSource: "bearer" },
+    { status: "absent", user: { id: 1, role: "admin" }, credentialSource: null },
+    { status: "authenticated", user: null, credentialSource: "session" },
+    { status: "unknown", user: { id: 1 }, credentialSource: "session" },
+    ...[undefined, null, false, 0, ""].map((error) => ({
+      status: "error",
+      user: null,
+      credentialSource: "bearer",
+      error,
+    })),
+  ];
+  for (const outcome of outcomes) {
+    let memberships = 0,
+      handled = 0;
+    const fixture = await compositionFixture({
+      tenancy: "none",
+      production: false,
+      allowTenantDevHeaders: false,
+      metadata: () => ({
+        authenticate: async () => outcome as import("@getstrata/core/auth/guard").AuthOutcome,
+        memberships: async () => {
+          memberships++;
+          return [];
+        },
+        userTenantId: async () => 1,
+        tenant: async () => null,
+      }),
+    });
+    try {
+      const response = await fixture.kernel.wrapApi(async () => {
+        handled++;
+        return new Response("unexpected");
+      })(new Request("http://example.test/private"));
+      assert.equal(
+        response.status,
+        (outcome as { status: string }).status === "invalid" ? 401 : 500,
+      );
+      assert.equal(memberships, 0);
+      assert.equal(handled, 0);
+      assert.equal(
+        fixture.envelopes.filter((envelope) => envelope.actor?.kind === "principal").length,
+        0,
+      );
+    } finally {
+      await fixture.close();
+    }
   }
 });

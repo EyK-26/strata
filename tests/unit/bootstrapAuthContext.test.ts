@@ -6,13 +6,14 @@ import { type AppDependencies, ServiceContainer } from "@getstrata/bootstrap/con
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { type AuthUser, createAuthMiddleware, currentAuthUser } from "@getstrata/core";
 import { establishedAuthReader } from "@getstrata/core/auth/authReader";
+import { authFixtureOutcome } from "../helpers/authOutcome";
 import { createMockDependencies } from "./testHelpers";
 
 function createDependencies(authUser: AuthUser | null): AppDependencies {
   const container = new ServiceContainer();
   container.set(CORE_AUTH_TOKEN, {
     ...establishedAuthReader,
-    resolveWithSource: async () => ({ user: authUser, credentialSource: null }),
+    authenticate: () => authFixtureOutcome(authUser),
     resolve: async () => authUser,
   });
 

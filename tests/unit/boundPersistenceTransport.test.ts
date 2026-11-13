@@ -47,7 +47,11 @@ test("BP7 actual native HTTP drain owns the metadata-business gap before pool cl
       authenticate: async () => {
         const rows = await ports.database.execute({ text: "SELECT id FROM gap_rows", params: [] });
         assert.equal(rows.length, 1);
-        return { user: { id: 1, role: "admin" }, credentialSource: "session" };
+        return {
+          status: "authenticated",
+          user: { id: 1, role: "admin" },
+          credentialSource: "session",
+        };
       },
       memberships: async () => [],
       userTenantId: async () => 1,
@@ -170,7 +174,7 @@ test("BP7 native public documents and synthesized preflights skip auth metadata 
     metadata: () => ({
       authenticate: async () => {
         metadataCalls++;
-        return { user: null, credentialSource: null };
+        return { status: "absent", user: null, credentialSource: null };
       },
       memberships: async () => [],
       userTenantId: async () => 1,

@@ -24,6 +24,7 @@ import {
   type TenantContext,
 } from "@getstrata/core/tenant/tenantContext";
 import { createTenantMiddleware } from "@getstrata/core/tenant/tenantMiddleware";
+import { authFixtureOutcome } from "../helpers/authOutcome";
 import { type DatabaseInvocation, withBoundDatabase } from "../helpers/boundRepositoryHarness";
 import { sessionSql } from "../helpers/nativePersistenceApplication";
 import { createMockDependencies, defaultTestTenant } from "../unit/testHelpers";
@@ -176,17 +177,28 @@ describe.skipIf(!rlsUrl)("real Postgres transaction/RLS composition", () => {
     withRls(
       async (invoke) => {
         const marker = new AsyncLocalStorage<string>();
-        const auth = new AuthManager({ resolve: () => null });
+        const auth = new AuthManager({ authenticate: () => authFixtureOutcome(null) });
         auth.registerGuard("api", {
-          resolve(request) {
-            const match = /^Bearer fixture-(\d+)$/.exec(request.headers.get("authorization") ?? "");
-            return match ? { id: Number(match[1]), role: "member" } : null;
+          authenticate(request) {
+            return authFixtureOutcome(
+              (async () => {
+                const match = /^Bearer fixture-(\d+)$/.exec(
+                  request.headers.get("authorization") ?? "",
+                );
+                return match ? { id: Number(match[1]), role: "member" } : null;
+              })(),
+              "bearer",
+            );
           },
         });
         auth.registerGuard("web", {
-          resolve(request) {
-            const match = /fixture_user=(\d+)/.exec(request.headers.get("cookie") ?? "");
-            return match ? { id: Number(match[1]), role: "member" } : null;
+          authenticate(request) {
+            return authFixtureOutcome(
+              (async () => {
+                const match = /fixture_user=(\d+)/.exec(request.headers.get("cookie") ?? "");
+                return match ? { id: Number(match[1]), role: "member" } : null;
+              })(),
+            );
           },
         });
         const kernel = createHttpKernel(
@@ -200,7 +212,7 @@ describe.skipIf(!rlsUrl)("real Postgres transaction/RLS composition", () => {
               production: false,
               allowTenantDevHeaders: false,
               metadata: () => ({
-                authenticate: (request) => auth.resolveWithSource(request),
+                authenticate: (request) => auth.authenticate(request),
                 memberships: async () => [],
                 userTenantId: async (id) => id,
                 tenant: async (id) => ({ ...defaultTestTenant, id }),

@@ -36,7 +36,7 @@ async function createTestApp(options: CreateTestAppOptions = {}): Promise<TestAp
       production: false,
       allowTenantDevHeaders: false,
       metadata: () => ({
-        authenticate: async () => ({ user: null, credentialSource: null }),
+        authenticate: async () => ({ status: "absent", user: null, credentialSource: null }),
         memberships: async () => [],
         userTenantId: async () => 1,
         tenant: async (id) => ({ id, slug: "test" }),

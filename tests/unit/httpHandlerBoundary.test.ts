@@ -68,7 +68,7 @@ async function fixture() {
     metadata: () => {
       counts.metadata++;
       return {
-        authenticate: async () => ({ user: null, credentialSource: null }),
+        authenticate: async () => ({ status: "absent", user: null, credentialSource: null }),
         memberships: async () => [],
         userTenantId: async () => 1,
         tenant: async () => null,

@@ -21,8 +21,18 @@ export function authCapabilityContracts(
   const persistRecovery = async () => false;
   new DatabaseTokenGuard(tokens);
   new JwtGuard({ directory: accounts, secret: "fixture-key" });
-  new SessionGuard(accounts, { read: () => null, abilities: () => [], validity });
-  new SessionGuard(accounts, { read: () => null, abilities: () => [], validity: null });
+  new SessionGuard(accounts, {
+    read: () => null,
+    hasCredential: () => false,
+    abilities: () => [],
+    validity,
+  });
+  new SessionGuard(accounts, {
+    read: () => null,
+    hasCredential: () => false,
+    abilities: () => [],
+    validity: null,
+  });
   new BasicAuthGuard({ accounts, emailLookup, persistRecovery });
   new BasicAuthGuard({ accounts, credentials, persistRecovery });
   // @ts-expect-error An account lookup is not a bearer resolver.
@@ -30,7 +40,7 @@ export function authCapabilityContracts(
   // @ts-expect-error A bearer resolver is not an account lookup.
   new JwtGuard({ directory: tokens, secret: "fixture-key" });
   // @ts-expect-error Session registry selection is explicit, including account-only null.
-  new SessionGuard(accounts, { read: () => null, abilities: () => [] });
+  new SessionGuard(accounts, { read: () => null, hasCredential: () => false, abilities: () => [] });
   // @ts-expect-error Basic requires at least one credential lookup capability.
   new BasicAuthGuard({ accounts, persistRecovery });
 }

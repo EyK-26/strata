@@ -1,6 +1,7 @@
 import type { AuthAccountLookup, AuthSessionValidity } from "../contracts/authUserDirectory";
 import { isAccountActive, matchesAuthVersion } from "./accountState";
 import type { AuthUser } from "./authContext";
+import { type AuthOutcome, authenticateProof, authUserFromOutcome } from "./authOutcome";
 import type { AuthGuard } from "./guard";
 import { requireAuthCapability } from "./requireAuthCapability";
 import { isSessionInvalidated, type readSession } from "./sessionCookie";
@@ -10,13 +11,18 @@ class SessionGuard implements AuthGuard {
     private readonly directory: AuthAccountLookup,
     private readonly session: {
       read(request: Request): ReturnType<typeof readSession>;
+      hasCredential(request: Request): boolean;
       abilities(role: string): string[];
       /** Null explicitly selects account epoch/cutoff validation without a session registry. */
       validity: AuthSessionValidity | null;
     },
   ) {
     requireAuthCapability<AuthAccountLookup>(directory, ["findByIdOrThrow"], "session account");
-    requireAuthCapability<typeof session>(session, ["read", "abilities"], "session");
+    requireAuthCapability<typeof session>(
+      session,
+      ["read", "abilities", "hasCredential"],
+      "session",
+    );
     if (session.validity !== null) {
       requireAuthCapability<AuthSessionValidity>(
         session.validity,
@@ -26,7 +32,17 @@ class SessionGuard implements AuthGuard {
     }
   }
 
+  authenticate(request: Request): Promise<AuthOutcome> {
+    return authenticateProof(
+      "session",
+      () => this.session.hasCredential(request),
+      () => this.resolveUser(request),
+    );
+  }
   async resolve(request: Request): Promise<AuthUser | null> {
+    return authUserFromOutcome(await this.authenticate(request));
+  }
+  private async resolveUser(request: Request): Promise<AuthUser | null> {
     const session = this.session.read(request);
 
     if (!session) {
@@ -35,7 +51,7 @@ class SessionGuard implements AuthGuard {
 
     const accounts = this.directory;
 
-    try {
+    {
       const user = await accounts.findByIdOrThrow(session.userId);
 
       if (!isAccountActive(user) || !matchesAuthVersion(session.authVersion, user.auth_version))
@@ -54,7 +70,7 @@ class SessionGuard implements AuthGuard {
           session.issuedAt,
         );
 
-        if (!active) {
+        if (active !== true) {
           return null;
         }
       }
@@ -66,8 +82,6 @@ class SessionGuard implements AuthGuard {
         abilities: this.session.abilities(user.role),
         emailVerifiedAt: user.email_verified_at ?? null,
       };
-    } catch {
-      return null;
     }
   }
 }

@@ -1,7 +1,8 @@
 import type { AuthAccountLookup } from "../contracts/authUserDirectory";
-import { readBearerToken } from "../http/statelessAuth";
+import { authorizationScheme, readBearerToken } from "../http/statelessAuth";
 import { isAccountActive, matchesAuthVersion } from "./accountState";
 import type { AuthUser } from "./authContext";
+import { type AuthOutcome, authenticateProof, authUserFromOutcome } from "./authOutcome";
 import type { AuthGuard } from "./guard";
 import { type JwtPayload, verifyJwt } from "./jwt";
 import { requireAuthCapability } from "./requireAuthCapability";
@@ -43,7 +44,18 @@ class JwtGuard implements AuthGuard {
     this.options = options;
   }
 
+  authenticate(request: Request): Promise<AuthOutcome> {
+    return authenticateProof(
+      "bearer",
+      authorizationScheme(request) === "bearer" &&
+        (readBearerToken(request) === null || readBearerToken(request)?.split(".").length === 3),
+      () => this.resolveUser(request),
+    );
+  }
   async resolve(request: Request): Promise<AuthUser | null> {
+    return authUserFromOutcome(await this.authenticate(request));
+  }
+  private async resolveUser(request: Request): Promise<AuthUser | null> {
     const token = readBearerToken(request);
 
     if (token?.split(".").length !== 3) {
@@ -67,12 +79,7 @@ class JwtGuard implements AuthGuard {
       return null;
     }
 
-    let record: Awaited<ReturnType<AuthAccountLookup["findByIdOrThrow"]>>;
-    try {
-      record = await directory.findByIdOrThrow(userId);
-    } catch {
-      return null;
-    }
+    const record = await directory.findByIdOrThrow(userId);
 
     if (!isAccountActive(record) || !matchesAuthVersion(payload.authVersion, record.auth_version))
       return null;

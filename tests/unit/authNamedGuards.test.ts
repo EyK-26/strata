@@ -12,7 +12,9 @@ import type {
   AuthUserDirectory,
   AuthUserRecord,
 } from "@getstrata/core/contracts/authUserDirectory";
+import { AuthAccountNotFoundError } from "@getstrata/core/contracts/authUserDirectory";
 import { generateRecoveryCodes, hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
+import { authFixtureOutcome } from "../helpers/authOutcome";
 import { withBoundDatabase } from "../helpers/boundRepositoryHarness";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -280,8 +282,12 @@ describe("named auth guards", () => {
       ).toThrow("Auth guard name must not be empty.");
 
       const bearerMiss = new AuthManager({
-        resolve() {
-          return { id: 99, role: "fallback" };
+        authenticate() {
+          return authFixtureOutcome(
+            (async () => {
+              return { id: 99, role: "fallback" };
+            })(),
+          );
         },
       });
       expect(
@@ -604,7 +610,7 @@ test("legacy basic directories deny missing, inactive and deleted principals", a
       },
       async findByIdOrThrow() {
         lookups++;
-        throw new Error("deleted");
+        throw new AuthAccountNotFoundError();
       },
     };
     expect(await basic(directory).resolve(request)).toBeNull();
@@ -624,7 +630,7 @@ test("signed JWTs still require finite issuance, a usable subject and a current 
     secret,
     directory: jwtDirectory(() => {
       lookups++;
-      throw new Error("deleted");
+      throw new AuthAccountNotFoundError();
     }),
   });
   const now = Math.floor(Date.now() / 1000);

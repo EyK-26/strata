@@ -134,6 +134,7 @@ const contexts = await Promise.all(
         allowTenantDevHeaders: false,
         metadata: () => ({
           authenticate: async () => ({
+            status: "authenticated",
             user: { id: label === "one" ? 1 : 2, role: "member" },
             credentialSource: "session",
           }),

@@ -4,13 +4,23 @@ import { authorizationScheme, readBearerToken } from "../http/statelessAuth";
 import { timingSafeCompareString } from "../security/timingSafeCompare";
 import { isAuthUserActive } from "./accountState";
 import type { AuthUser, CredentialSource } from "./authContext";
-import { currentAuthUser } from "./authContext";
+import { currentAuthUser, currentCredentialSource } from "./authContext";
+import {
+  type AuthOutcome,
+  absentAuth,
+  authenticatedAuth,
+  authenticateProof,
+  authUserFromOutcome,
+  invalidAuth,
+  validatedAuthOutcome,
+} from "./authOutcome";
 import { BasicAuthGuard } from "./basicAuthGuard";
 import { JwtGuard } from "./jwtGuard";
 import { requireAuthCapability } from "./requireAuthCapability";
 
+/** Security composition consumes outcomes; concrete resolve methods are user-only conveniences. */
 interface AuthGuard {
-  resolve(request: Request): AuthUser | null | Promise<AuthUser | null>;
+  authenticate(request: Request): AuthOutcome | Promise<AuthOutcome>;
 }
 
 class GuestGuard implements AuthGuard {
@@ -21,7 +31,20 @@ class GuestGuard implements AuthGuard {
       abilities: { admin: readonly string[]; member: readonly string[] };
     },
   ) {}
+  authenticate(request: Request): AuthOutcome {
+    if (
+      this.options.production ||
+      !this.options.allowDevHeaders ||
+      !request.headers.has("x-authenticated-user-id")
+    )
+      return absentAuth;
+    const user = this.resolveUser(request);
+    return user ? authenticatedAuth(user, "guest") : invalidAuth("guest");
+  }
   resolve(request: Request): AuthUser | null {
+    return authUserFromOutcome(this.authenticate(request));
+  }
+  private resolveUser(request: Request): AuthUser | null {
     if (this.options.production) {
       return null;
     }
@@ -58,7 +81,15 @@ class ApiTokenGuard implements AuthGuard {
     },
   ) {}
 
+  authenticate(request: Request): AuthOutcome {
+    if (authorizationScheme(request) !== "bearer") return absentAuth;
+    const user = this.resolveUser(request);
+    return user ? authenticatedAuth(user, "bearer") : invalidAuth("bearer");
+  }
   resolve(request: Request): AuthUser | null {
+    return authUserFromOutcome(this.authenticate(request));
+  }
+  private resolveUser(request: Request): AuthUser | null {
     const token = readBearerToken(request);
 
     if (!token || !timingSafeCompareString(token, this.options.token)) {
@@ -74,7 +105,18 @@ class DatabaseTokenGuard implements AuthGuard {
     requireAuthCapability<AuthBearerResolver>(tokens, ["resolveUserFromToken"], "API token");
   }
 
+  authenticate(request: Request): Promise<AuthOutcome> {
+    const token = readBearerToken(request);
+    return authenticateProof(
+      "bearer",
+      authorizationScheme(request) === "bearer" && token?.split(".").length !== 3,
+      () => this.resolveUser(request),
+    );
+  }
   async resolve(request: Request): Promise<AuthUser | null> {
+    return authUserFromOutcome(await this.authenticate(request));
+  }
+  private async resolveUser(request: Request): Promise<AuthUser | null> {
     const token = readBearerToken(request);
 
     if (!token || token.split(".").length === 3) {
@@ -88,19 +130,20 @@ class DatabaseTokenGuard implements AuthGuard {
 
 class CompositeGuard implements AuthGuard {
   constructor(private readonly guards: AuthGuard[]) {}
-
-  async resolve(request: Request): Promise<AuthUser | null> {
-    return (await this.resolveWithSource(request)).user;
-  }
-  async resolveWithSource(
-    request: Request,
-  ): Promise<{ user: AuthUser | null; credentialSource: CredentialSource }> {
+  async authenticate(request: Request): Promise<AuthOutcome> {
     for (const guard of this.guards) {
-      const user = await guard.resolve(request);
-      if (user && isAuthUserActive(user))
-        return { user, credentialSource: guard instanceof GuestGuard ? "guest" : "session" };
+      let outcome: AuthOutcome;
+      try {
+        outcome = validatedAuthOutcome(await guard.authenticate(request));
+      } catch (error) {
+        return { status: "error", user: null, credentialSource: null, error };
+      }
+      if (outcome.status !== "absent") return outcome;
     }
-    return { user: null, credentialSource: null };
+    return absentAuth;
+  }
+  async resolve(request: Request): Promise<AuthUser | null> {
+    return authUserFromOutcome(await this.authenticate(request));
   }
 }
 
@@ -109,179 +152,114 @@ const BASIC_GUARD_NAMES = ["basic"] as const;
 const SESSION_GUARD_NAMES = ["web", "session", "default"] as const;
 
 class AuthManager {
-  // A Basic recovery code is a single-use proof, not a repeatable lookup.
-  // Weak keys limit reuse to the actual Request, never a later HTTP request.
   private basicResolutions = new WeakMap<
     Request,
-    {
-      authorization: string | null;
-      mfaCode: string | null;
-      result: Promise<{ user: AuthUser | null; credentialSource: CredentialSource }>;
-    }
+    { authorization: string | null; mfaCode: string | null; result: Promise<AuthOutcome> }
   >();
   private readonly namedGuards = new Map<string, AuthGuard>();
-
   constructor(private readonly guard: AuthGuard) {
+    if (typeof guard?.authenticate !== "function")
+      throw new TypeError("Auth guards require authenticate().");
     this.namedGuards.set("default", guard);
   }
-
   registerGuard(name: string, next: AuthGuard): this {
     const trimmed = name.trim();
-
-    if (!trimmed) {
-      throw new Error("Auth guard name must not be empty.");
-    }
-
+    if (!trimmed) throw new Error("Auth guard name must not be empty.");
+    if (typeof next.authenticate !== "function")
+      throw new TypeError("Auth guards require authenticate().");
     this.namedGuards.set(trimmed, next);
     this.basicResolutions = new WeakMap();
     return this;
   }
-
   use(name = "default"): AuthGuard {
     const found = this.namedGuards.get(name);
-
-    if (!found) {
-      throw new Error(`Unknown auth guard "${name}".`);
-    }
-
+    if (!found) throw new Error(`Unknown auth guard "${name}".`);
     return found;
   }
-
   guardNames(): string[] {
     return [...this.namedGuards.keys()];
   }
-
-  async resolve(request?: Request): Promise<AuthUser | null> {
-    const result = await this.resolveWithSource(request);
-    return result.user;
+  async authenticate(request?: Request): Promise<AuthOutcome> {
+    if (!request) {
+      const user = currentAuthUser();
+      return user ? authenticatedAuth(user, currentCredentialSource()) : absentAuth;
+    }
+    if (authorizationScheme(request) !== "basic") {
+      this.basicResolutions.delete(request);
+      return this.authenticateRequest(request);
+    }
+    const authorization = request.headers.get("authorization"),
+      mfaCode = request.headers.get("x-mfa-code");
+    const cached = this.basicResolutions.get(request);
+    if (cached && cached.authorization === authorization && cached.mfaCode === mfaCode)
+      return cached.result;
+    const entry = { authorization, mfaCode, result: this.authenticateRequest(request) };
+    this.basicResolutions.set(request, entry);
+    const outcome = await entry.result;
+    if (outcome.status === "error" && this.basicResolutions.get(request) === entry)
+      this.basicResolutions.delete(request);
+    return outcome;
   }
-
+  /** User-only convenience; composition must consume authenticate(). */
+  async resolve(request?: Request): Promise<AuthUser | null> {
+    return authUserFromOutcome(await this.authenticate(request));
+  }
   async resolveWithSource(
     request?: Request,
   ): Promise<{ user: AuthUser | null; credentialSource: CredentialSource }> {
-    if (!request) {
-      const user = currentAuthUser();
-      return { user: user && isAuthUserActive(user) ? user : null, credentialSource: null };
-    }
-
-    if (authorizationScheme(request) !== "basic") {
-      this.basicResolutions.delete(request);
-      return await this.authenticateRequest(request);
-    }
-    const authorization = request.headers.get("authorization");
-    const mfaCode = request.headers.get("x-mfa-code");
-    const cached = this.basicResolutions.get(request);
-    if (cached && cached.authorization === authorization && cached.mfaCode === mfaCode) {
-      return await cached.result;
-    }
-    const entry = { authorization, mfaCode, result: this.authenticateRequest(request) };
-    this.basicResolutions.set(request, entry);
-    try {
-      return await entry.result;
-    } catch (error) {
-      if (this.basicResolutions.get(request) === entry) this.basicResolutions.delete(request);
-      throw error;
-    }
+    const outcome = await this.authenticate(request);
+    const user = authUserFromOutcome(outcome);
+    return { user, credentialSource: user ? outcome.credentialSource : null };
   }
-
   user(request?: Request): Promise<AuthUser | null> {
     return this.resolve(request);
   }
-
   async check(request?: Request): Promise<boolean> {
-    return (await this.user(request)) !== null;
+    return (await this.resolve(request)) !== null;
   }
-
   async requireUser(request?: Request): Promise<AuthUser> {
-    const user = await this.user(request);
-
-    if (!user) {
-      throw new UnauthorizedError();
-    }
-
+    const user = await this.resolve(request);
+    if (!user) throw new UnauthorizedError();
     return user;
   }
-
-  private async resolveGuard(guard: AuthGuard, request: Request): Promise<AuthUser | null> {
-    const user = await guard.resolve(request);
-    return user && isAuthUserActive(user) ? user : null;
+  private async resolveGuard(guard: AuthGuard, request: Request): Promise<AuthOutcome> {
+    try {
+      const outcome = validatedAuthOutcome(await guard.authenticate(request));
+      return outcome.status === "authenticated"
+        ? authenticatedAuth(outcome.user, outcome.credentialSource)
+        : outcome;
+    } catch (error) {
+      return { status: "error", user: null, credentialSource: null, error };
+    }
   }
-
-  private async authenticateRequest(
-    request: Request,
-  ): Promise<{ user: AuthUser | null; credentialSource: CredentialSource }> {
+  private async authenticateRequest(request: Request): Promise<AuthOutcome> {
     const scheme = authorizationScheme(request);
-
-    if (scheme === "bearer") {
-      const fromNamed = await this.tryNamedGuards(request, BEARER_GUARD_NAMES, "bearer");
-      if (fromNamed) {
-        return fromNamed;
+    if (scheme === "bearer" || scheme === "basic") {
+      const names = scheme === "bearer" ? BEARER_GUARD_NAMES : BASIC_GUARD_NAMES;
+      const named = await this.tryNamedGuards(request, names);
+      if (named.status !== "absent") return named;
+      if (
+        (scheme === "bearer" && isBearerCapableGuard(this.guard)) ||
+        (scheme === "basic" && this.guard instanceof BasicAuthGuard)
+      ) {
+        const outcome = await this.resolveGuard(this.guard, request);
+        if (outcome.status !== "absent") return outcome;
       }
-
-      if (isBearerCapableGuard(this.guard)) {
-        const fromDefault = await this.resolveGuard(this.guard, request);
-        return { user: fromDefault, credentialSource: fromDefault ? "bearer" : null };
-      }
-
-      return { user: null, credentialSource: null };
+      return invalidAuth(scheme);
     }
-
-    if (scheme === "basic") {
-      const fromNamed = await this.tryNamedGuards(request, BASIC_GUARD_NAMES, "basic");
-      if (fromNamed) {
-        return fromNamed;
-      }
-
-      if (this.guard instanceof BasicAuthGuard) {
-        const fromDefault = await this.resolveGuard(this.guard, request);
-        return { user: fromDefault, credentialSource: fromDefault ? "basic" : null };
-      }
-
-      return { user: null, credentialSource: null };
-    }
-
-    const fromSession = await this.tryNamedGuards(request, SESSION_GUARD_NAMES, "session");
-    if (fromSession) {
-      return fromSession;
-    }
-
-    const fromDefault = await this.resolveGuard(this.guard, request);
-    if (!fromDefault) {
-      return { user: null, credentialSource: null };
-    }
-
-    const source: CredentialSource = this.guard instanceof GuestGuard ? "guest" : "session";
-    return { user: fromDefault, credentialSource: source };
+    if (scheme || request.headers.has("authorization")) return invalidAuth(null);
+    return this.tryNamedGuards(request, SESSION_GUARD_NAMES);
   }
-
-  private async tryNamedGuards(
-    request: Request,
-    names: readonly string[],
-    source: "session" | "bearer" | "basic",
-  ): Promise<{ user: AuthUser; credentialSource: CredentialSource } | null> {
+  private async tryNamedGuards(request: Request, names: readonly string[]): Promise<AuthOutcome> {
     const seen = new Set<AuthGuard>();
-
     for (const name of names) {
-      const named = this.namedGuards.get(name);
-
-      if (!named || seen.has(named)) {
-        continue;
-      }
-
-      seen.add(named);
-      if (source === "session" && named instanceof CompositeGuard) {
-        const result = await named.resolveWithSource(request);
-        if (result.user) return { user: result.user, credentialSource: result.credentialSource };
-        continue;
-      }
-      const user = await this.resolveGuard(named, request);
-
-      if (user) {
-        return { user, credentialSource: named instanceof GuestGuard ? "guest" : source };
-      }
+      const guard = this.namedGuards.get(name);
+      if (!guard || seen.has(guard)) continue;
+      seen.add(guard);
+      const outcome = await this.resolveGuard(guard, request);
+      if (outcome.status !== "absent") return outcome;
     }
-
-    return null;
+    return absentAuth;
   }
 }
 
@@ -293,12 +271,18 @@ function isBearerCapableGuard(guard: AuthGuard): boolean {
   );
 }
 
-export type { AuthGuard, AuthUser };
+export type { AuthGuard, AuthOutcome, AuthUser };
 export {
   ApiTokenGuard,
   AuthManager,
+  absentAuth,
+  authenticatedAuth,
+  authenticateProof,
+  authUserFromOutcome,
   CompositeGuard,
   DatabaseTokenGuard,
   GuestGuard,
+  invalidAuth,
   requireAuthCapability,
+  validatedAuthOutcome,
 };

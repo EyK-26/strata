@@ -1,4 +1,5 @@
 import type { AuthUser, CredentialSource } from "@getstrata/core/auth/authContext";
+import type { AuthOutcome } from "@getstrata/core/auth/guard";
 import type { OrganizationMemberRole } from "@getstrata/core/contracts/membership";
 import type { TenantContext } from "@getstrata/core/tenant/tenantContext";
 
@@ -24,7 +25,7 @@ export interface EstablishedRequest {
   }>[];
 }
 export interface MetadataPorts {
-  authenticate(request: Request): Promise<AuthResolution>;
+  authenticate(request: Request): Promise<AuthOutcome>;
   memberships(user: AuthUser): Promise<EstablishedRequest["memberships"]>;
   userTenantId(userId: number): Promise<number>;
   tenant(id: number): Promise<TenantContext | null>;

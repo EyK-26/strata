@@ -158,7 +158,11 @@ describe.skipIf(!restrictedUrl || !adminUrl)("real HTTP post-commit boundaries",
                 production: false,
                 allowTenantDevHeaders: false,
                 metadata: () => ({
-                  authenticate: async () => ({ user: null, credentialSource: null }),
+                  authenticate: async () => ({
+                    status: "absent",
+                    user: null,
+                    credentialSource: null,
+                  }),
                   memberships: async () => [],
                   userTenantId: async () => 1,
                   tenant: async (id) => (id === 1 ? { id, slug: "post-commit-fixture" } : null),
