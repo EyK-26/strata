@@ -325,7 +325,7 @@ console.log('Packed explicit private JSON and namespaced HTML defaults preserve 
     admissionProbe,
     `import assert from 'node:assert/strict';
 import {runWithAuthUser,currentAuthUser} from '@getstrata/core/auth/authContext';
-import {AuthManager} from '@getstrata/core/auth/guard';
+import {AuthManager,absentAuth} from '@getstrata/core/auth/guard';
 import {PolicyGate} from '@getstrata/core/auth/policy';
 import {ForbiddenError} from '@getstrata/core/errors/http';
 import {createRequireAuthMiddleware} from '@getstrata/core/http/requireAuthMiddleware';
@@ -336,7 +336,7 @@ import {createRequireVerifiedMiddleware} from '@getstrata/core/http/requireVerif
 import {createRequirePasswordConfirmMiddleware} from '@getstrata/core/http/requirePasswordConfirmMiddleware';
 import {createBodySizeLimitMiddleware} from '@getstrata/core/http/bodySizeLimitMiddleware';
 import {withErrorHandling} from '@getstrata/core/http/response';
-const auth=new AuthManager({resolve:()=>null});
+const auth=new AuthManager({authenticate:()=>absentAuth});
 const member={id:4,role:'member'};
 const json=()=>new Request('https://app.example.test/private',{headers:{accept:'application/json'}});
 async function denied(middleware,user,status,message,request=json()){
