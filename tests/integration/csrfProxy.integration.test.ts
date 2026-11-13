@@ -248,7 +248,7 @@ async function fixture(
       createMockDependencies(
         container,
         new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
-        new StorageManager(createStorageDriver()),
+        new StorageManager(createStorageDriver({ driver: "local", rootDirectory: "storage" })),
       ),
     );
     const ownedKernel = kernel;

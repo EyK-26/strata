@@ -117,7 +117,7 @@ test("BP7 actual API and web wrappers roll back writes before error conversion a
     invoke,
     container,
     cache: new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
-    storage: new StorageManager(createStorageDriver()),
+    storage: new StorageManager(createStorageDriver({ driver: "local", rootDirectory: "storage" })),
   });
   const plain = async () => Response.json({ plain: true });
   assert.throws(
@@ -450,7 +450,7 @@ async function compositionFixture(options: HttpPersistenceOptions, afterMetadata
     invoke,
     container,
     cache,
-    storage: new StorageManager(createStorageDriver()),
+    storage: new StorageManager(createStorageDriver({ driver: "local", rootDirectory: "storage" })),
   });
   await app.run((scope) =>
     scope
@@ -820,7 +820,7 @@ test("owned HTTP business admission carries detached principal claims and never 
     invoke,
     container,
     cache: new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
-    storage: new StorageManager(createStorageDriver()),
+    storage: new StorageManager(createStorageDriver({ driver: "local", rootDirectory: "storage" })),
   });
   const route = kernel.composed(async (request, ports) => {
     const actor = present(envelopes.at(-1)).actor;

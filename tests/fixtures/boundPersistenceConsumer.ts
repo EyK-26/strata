@@ -108,7 +108,9 @@ const provider: ServiceProvider = {
     context.dependencies.cache = new CacheRepository(
       new SimpleCacheStore(new SimpleCache(60_000, 20)),
     );
-    context.dependencies.storage = new StorageManager(createStorageDriver());
+    context.dependencies.storage = new StorageManager(
+      createStorageDriver({ driver: "local", rootDirectory: "storage" }),
+    );
   },
 };
 const contexts = await Promise.all(

@@ -601,12 +601,16 @@ export {
   type ShutdownResult,
 } from "../core/lifecycle/gracefulShutdown.ts";
 export { createRequestLoggingMiddleware } from "../core/logging/requestLoggingMiddleware.ts";
-export type { MailDriver, MailMessage } from "../core/mail/mailer.ts";
+export type { MailDriver, MailMessage, SmtpConfig, SmtpTransport } from "../core/mail/mailer.ts";
 export {
   buildSmtpPayload,
+  CORE_MAIL_TOKEN,
+  createMailDriver,
   LogMailDriver,
   Mailer,
-  mailer,
+  resolveSmtpConfig,
+  SmtpMailDriver,
+  snapshotSmtpConfig,
 } from "../core/mail/mailer.ts";
 export type { MarkdownMailLayoutOptions, RenderedMarkdownMail } from "../core/mail/markdownMail.ts";
 export {
@@ -718,12 +722,14 @@ export {
 export type { SecurityEventDetails } from "../core/security/securityEvents.ts";
 export { logSecurityEvent } from "../core/security/securityEvents.ts";
 export { signedWebhookHeaders, signWebhookBody } from "../core/security/webhookSignature.ts";
-export type { StorageDriver } from "../core/storage/storage.ts";
+export type { S3StorageConfig, StorageConfig, StorageDriver } from "../core/storage/storage.ts";
 export {
+  CORE_STORAGE_TOKEN,
   createStorageDriver,
   LocalStorageDriver,
-  resetDefaultStorage,
+  resolveStorageConfig,
   StorageManager,
+  snapshotStorageConfig,
 } from "../core/storage/storage.ts";
 export {
   enableTenantRlsSql,

@@ -92,7 +92,9 @@ afterEach(async () => {
 function createMockDependencies(
   container: AppDependencies["container"],
   cache: CacheLike = createMockCache(),
-  storage: StorageManager = new StorageManager(createStorageDriver()),
+  storage: StorageManager = new StorageManager(
+    createStorageDriver({ driver: "local", rootDirectory: "storage" }),
+  ),
   explicitInvoke?: PersistenceInvocation,
   http?: HttpPersistenceOptions,
 ): AppDependencies {

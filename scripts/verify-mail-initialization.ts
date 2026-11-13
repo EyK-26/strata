@@ -22,14 +22,14 @@ try {
     `import {strict as assert} from "node:assert";
 await import("./src/bootstrap/preload.ts");
 assert.equal(process.env.MAIL_DRIVER,"smtp");assert.equal(process.env.MAIL_HOST,undefined);
-const {Mailer,mailer,createMailDriver}=await import("@getstrata/core/mail/mailer");
+const {Mailer,createMailDriver}=await import("@getstrata/core/mail/mailer");
 const {createApp}=await import("./src/bootstrap/createApp.ts");assert.equal(typeof createApp,"function");
 let calls=0;const failure=new Error("owned-provider-error");const signal=AbortSignal.abort();
 const custom=new Mailer({async send(message){calls++;assert.equal(message.signal,signal);if(calls===2)throw failure;}});
 await custom.send({to:"fixture@example.test",subject:"fixture",body:"No network",signal});
 await assert.rejects(custom.send({to:"fixture@example.test",subject:"fixture",body:"No network",signal}),error=>error===failure);assert.equal(calls,2);
-assert.throws(()=>createMailDriver(),/requires MAIL_HOST/);assert.throws(()=>mailer(),/requires MAIL_HOST/);
-process.env.MAIL_DRIVER="log";assert.equal(mailer(),mailer());
+assert.throws(()=>createMailDriver(),/requires MAIL_HOST/);
+process.env.MAIL_DRIVER="log";assert.ok(new Mailer(createMailDriver()) instanceof Mailer);
 console.log(JSON.stringify({generatedSmtpCustomDriver:true,unusedSmtpNotInitialized:true,usedSmtpStillValidated:true,externalSends:0}));\n`,
   );
   const env = Object.fromEntries(

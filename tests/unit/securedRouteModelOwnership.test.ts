@@ -406,7 +406,9 @@ test("two actual composed applications retain their own gate, selected tenant an
       container,
       invoke,
       cache,
-      storage: new StorageManager(createStorageDriver()),
+      storage: new StorageManager(
+        createStorageDriver({ driver: "local", rootDirectory: "storage" }),
+      ),
     });
     kernel = selectedKernel;
     const route = (action: "view" | "update") =>

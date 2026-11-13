@@ -1,3 +1,4 @@
+import { createServiceToken } from "@getstrata/core/contracts/token";
 import type { TLSOptions } from "bun";
 import { smtpEhloHost } from "../runtime/appKeyPrefix";
 import {
@@ -48,15 +49,17 @@ function resolveSmtpConfig(environment?: Readonly<Record<string, string | undefi
     throw new Error('MAIL_DRIVER="smtp" requires MAIL_FROM to be set.');
   }
 
+  if (env.MAIL_SECURE !== undefined && !["true", "false"].includes(env.MAIL_SECURE))
+    throw new TypeError("MAIL_SECURE must be true or false.");
   const port = Number(env.MAIL_PORT ?? "587");
 
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
     throw new Error('Environment variable "MAIL_PORT" must be a positive integer.');
   }
 
-  return {
+  return snapshotSmtpConfig({
     host,
-    ...(environment ? { ehloHost: smtpEhloHost(env) } : {}),
+    ehloHost: smtpEhloHost(env),
     port,
     from,
     secure: (env.MAIL_SECURE ?? "false") === "true",
@@ -65,7 +68,37 @@ function resolveSmtpConfig(environment?: Readonly<Record<string, string | undefi
       : {}),
     ...(env.MAIL_USERNAME?.trim() ? { username: env.MAIL_USERNAME.trim() } : {}),
     ...(env.MAIL_PASSWORD?.trim() ? { password: env.MAIL_PASSWORD.trim() } : {}),
-  };
+  });
+}
+
+function snapshotSmtpConfig(config: SmtpConfig): Readonly<SmtpConfig> {
+  if (
+    typeof config.host !== "string" ||
+    !config.host.trim() ||
+    /[\r\n\0]/.test(config.host) ||
+    !Number.isInteger(config.port) ||
+    config.port < 1 ||
+    config.port > 65535
+  )
+    throw new RangeError("SMTP requires a host and a port between 1 and 65535.");
+  if (typeof config.secure !== "boolean") throw new TypeError("SMTP secure must be a boolean.");
+  if (Boolean(config.username) !== Boolean(config.password))
+    throw new Error("SMTP authentication requires both username and password.");
+  if (config.username) assertSafeSmtpField(config.username, "username");
+  if (config.password) assertSafeSmtpField(config.password, "password");
+  assertSafeSmtpAddress(config.from, "from");
+  const tls = config.tls === undefined ? undefined : Object.freeze(structuredClone(config.tls));
+  if (tls && Array.isArray(tls.ca)) Object.freeze(tls.ca);
+  return Object.freeze({
+    host: config.host,
+    port: config.port,
+    from: config.from,
+    secure: config.secure,
+    timeoutMs: smtpTimeout(config.timeoutMs),
+    ehloHost: (config.ehloHost ?? "strata.local").replace(/[^a-zA-Z0-9.-]/g, "") || "strata.local",
+    ...(config.username ? { username: config.username, password: config.password } : {}),
+    ...(tls ? { tls } : {}),
+  });
 }
 
 function redactMailBody(body: string): string {
@@ -82,24 +115,12 @@ function smtpTimeout(value = 10000): number {
 }
 
 async function defaultSmtpTransport(config: SmtpConfig, message: MailMessage): Promise<void> {
+  config = snapshotSmtpConfig(config);
   const timeoutMs = smtpTimeout(config.timeoutMs);
   const ehloHost =
     config.ehloHost === undefined
-      ? smtpEhloHost()
+      ? "strata.local"
       : config.ehloHost.replace(/[^a-zA-Z0-9.-]/g, "") || "strata.local";
-  if (
-    !config.host.trim() ||
-    !Number.isInteger(config.port) ||
-    config.port < 1 ||
-    config.port > 65535
-  ) {
-    throw new RangeError("SMTP requires a host and a port between 1 and 65535.");
-  }
-  if (Boolean(config.username) !== Boolean(config.password)) {
-    throw new Error("SMTP authentication requires both username and password.");
-  }
-  if (config.username) assertSafeSmtpField(config.username, "username");
-  if (config.password) assertSafeSmtpField(config.password, "password");
   const fromHeader = assertSafeSmtpAddress(config.from, "from");
   const toHeader = assertSafeSmtpAddress(message.to, "to");
   assertSafeSmtpField(message.subject, "subject");
@@ -324,13 +345,16 @@ class LogMailDriver implements MailDriver {
 }
 
 class SmtpMailDriver implements MailDriver {
+  private readonly config: Readonly<SmtpConfig>;
   constructor(
-    private readonly config: SmtpConfig,
+    config: SmtpConfig,
     private readonly transport: SmtpTransport = defaultSmtpTransport,
-  ) {}
+  ) {
+    this.config = snapshotSmtpConfig(config);
+  }
 
   send(message: MailMessage): Promise<void> {
-    return this.transport(this.config, message);
+    return this.transport(snapshotSmtpConfig(this.config), message);
   }
 }
 
@@ -344,6 +368,8 @@ class Mailer {
   }
 }
 
+const CORE_MAIL_TOKEN = createServiceToken<Mailer>("core.mail");
+
 function createMailDriver(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): MailDriver {
@@ -353,14 +379,8 @@ function createMailDriver(
     return new SmtpMailDriver(resolveSmtpConfig(env));
   }
 
+  if (driver !== "log") throw new TypeError("Unknown mail driver.");
   return new LogMailDriver();
-}
-
-let appMailer: Mailer | undefined;
-
-function mailer(): Mailer {
-  if (!appMailer) appMailer = new Mailer(createMailDriver());
-  return appMailer;
 }
 
 export type { MailDriver, MailMessage, SmtpConfig, SmtpTransport };
@@ -368,13 +388,14 @@ export {
   assertSafeSmtpAddress,
   assertSafeSmtpField,
   buildSmtpPayload,
+  CORE_MAIL_TOKEN,
   createMailDriver,
   defaultSmtpTransport,
   LogMailDriver,
   Mailer,
-  mailer,
   redactMailBody,
   resolveSmtpConfig,
   SmtpMailDriver,
   smtpEnvelopeAddress,
+  snapshotSmtpConfig,
 };

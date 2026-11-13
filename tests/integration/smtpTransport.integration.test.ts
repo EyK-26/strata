@@ -3,8 +3,14 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SmtpConfig } from "@getstrata/core/mail/mailer";
-import { defaultSmtpTransport } from "@getstrata/core/mail/mailer";
+import {
+  CORE_MAIL_TOKEN,
+  defaultSmtpTransport,
+  resolveSmtpConfig,
+} from "@getstrata/core/mail/mailer";
+import { createApplication } from "@getstrata/core/runtime/application";
 import type { Socket, TLSOptions } from "bun";
+import { createMailBindings } from "../../src/bootstrap/providers/mail";
 
 type Mode =
   | "normal"
@@ -303,5 +309,59 @@ test("native SMTP DATA cannot terminate early or inject commands from text/HTML"
     expect(server.commands).not.toContain("RSET");
   } finally {
     server.close();
+  }
+});
+
+test("two application SMTP bindings retain independent transports and EHLO after caller/env mutation", async () => {
+  const first = fixture("normal"),
+    second = fixture("normal");
+  const previousEhlo = process.env.MAIL_EHLO;
+  const env = {
+    MAIL_HOST: "127.0.0.1",
+    MAIL_PORT: String(first.config.port),
+    MAIL_FROM: "first@example.test",
+    MAIL_EHLO: "first.local",
+  };
+  const firstConfig = resolveSmtpConfig(env);
+  const mutableConfig = { ...second.config, ehloHost: "second.local" };
+  const one = createApplication({
+    providers: [],
+    services: createMailBindings({ driver: "smtp", smtp: firstConfig }),
+  });
+  const two = createApplication({
+    providers: [],
+    services: createMailBindings({ driver: "smtp", smtp: mutableConfig }),
+  });
+  try {
+    env.MAIL_HOST = "redirected.invalid";
+    env.MAIL_PORT = "1";
+    env.MAIL_EHLO = "redirected.local";
+    mutableConfig.host = "redirected.invalid";
+    mutableConfig.port = 1;
+    mutableConfig.ehloHost = "redirected.local";
+    process.env.MAIL_EHLO = "ambient-redirect.local";
+    await one.start();
+    await two.start();
+    await one.run((scope) =>
+      scope.resolve(CORE_MAIL_TOKEN).send({ ...message, body: "first body" }),
+    );
+    await two.run((scope) =>
+      scope.resolve(CORE_MAIL_TOKEN).send({ ...message, body: "second body" }),
+    );
+    expect(first.messages).toHaveLength(1);
+    expect(second.messages).toHaveLength(1);
+    expect(first.messages[0]).toContain("first body");
+    expect(second.messages[0]).toContain("second body");
+    expect(first.commands).toContain("EHLO first.local");
+    expect(second.commands).toContain("EHLO second.local");
+    expect(first.commands).toContain("MAIL FROM:<first@example.test>");
+    expect(second.commands).toContain("MAIL FROM:<sender@example.test>");
+  } finally {
+    if (previousEhlo === undefined) delete process.env.MAIL_EHLO;
+    else process.env.MAIL_EHLO = previousEhlo;
+    await one.stop();
+    await two.stop();
+    first.close();
+    second.close();
   }
 });

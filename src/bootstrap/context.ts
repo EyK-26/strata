@@ -12,10 +12,9 @@ import {
   type ServiceProvider,
 } from "./contracts";
 import { HTTP_PERSISTENCE_OPTIONS } from "./httpPersistence";
-import { discoverModules, ensureModulesLoaded } from "./modules";
 import type { HttpPersistenceOptions, PersistenceInvocation } from "./persistenceContracts";
 import { createPersistenceInvocation } from "./persistenceInvocation";
-import { coreProviders } from "./providers";
+import { createCoreProviders } from "./providers";
 
 export type InitializedAppContext = AppContext & {
   readonly application: Application;
@@ -35,8 +34,8 @@ export interface AppContextOptions {
     handle: Readonly<{ application: Application; invoke: PersistenceInvocation }>,
   ) => undefined;
 }
-export function collectProviders(modules: AppModule[] = discoverModules()): ServiceProvider[] {
-  return [...coreProviders, ...modules.flatMap((module) => module.providers ?? [])];
+export function collectProviders(modules: readonly AppModule[] = []): ServiceProvider[] {
+  return [...createCoreProviders(), ...modules.flatMap((module) => module.providers ?? [])];
 }
 export async function runProviderPhase(
   providers: readonly ServiceProvider[],
@@ -162,6 +161,6 @@ export async function createAppContext(
   providers: readonly ServiceProvider[] | undefined,
   options: AppContextOptions,
 ): Promise<InitializedAppContext> {
-  if (!providers) await ensureModulesLoaded();
-  return createApplicationContext(providers ?? collectProviders(), options).start();
+  const selected = providers ?? collectProviders();
+  return createApplicationContext(selected, options).start();
 }

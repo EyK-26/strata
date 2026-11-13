@@ -63,7 +63,7 @@ test("BP7 actual native HTTP drain owns the metadata-business gap before pool cl
     invoke,
     container,
     cache: new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
-    storage: new StorageManager(createStorageDriver()),
+    storage: new StorageManager(createStorageDriver({ driver: "local", rootDirectory: "storage" })),
   });
   const bindings = createDatabaseBindings({
     default: "main",
@@ -185,7 +185,7 @@ test("BP7 native public documents and synthesized preflights skip auth metadata 
     invoke,
     container,
     cache: new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
-    storage: new StorageManager(createStorageDriver()),
+    storage: new StorageManager(createStorageDriver({ driver: "local", rootDirectory: "storage" })),
   });
   const bindings = createDatabaseBindings({
     default: "main",

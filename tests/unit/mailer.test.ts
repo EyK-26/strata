@@ -112,6 +112,8 @@ describe("Mailer", () => {
     try {
       expect(resolveSmtpConfig()).toEqual({
         host: "smtp.mail.test",
+        ehloHost: expect.any(String),
+        timeoutMs: 10000,
         port: 2525,
         from: "noreply@strata.test",
         username: "smtp-user",

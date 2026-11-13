@@ -90,7 +90,14 @@ export type {
 export { createMetricsRoutes, createMetricsRuntime } from "./metricsRoutes.ts";
 export { prefixRouteMap } from "./prefixRouteMap.ts";
 export { type CacheBindingOptions, createCacheBindings } from "./providers/cache.ts";
-export { coreProviders } from "./providers/index.ts";
+export { createCoreProviders } from "./providers/index.ts";
+export { CORE_MAIL_TOKEN, createMailBindings, type MailBindingOptions } from "./providers/mail.ts";
+export {
+  CORE_STORAGE_TOKEN,
+  createStorageBindings,
+  createStorageProvider,
+  type StorageBindingOptions,
+} from "./providers/storage.ts";
 export { default as tracingProvider } from "./providers/tracing.ts";
 export { registerDefaultJobs } from "./queue/defaultJobs.ts";
 export { compileRouteMap, composeRouteMaps, getRouteInventory } from "./routePlan.ts";
