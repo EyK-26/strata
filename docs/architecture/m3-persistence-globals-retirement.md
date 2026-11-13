@@ -28,6 +28,8 @@ routing and pool cleanup remain required. Production package exports and entry
 inventories drop retired paths; clean builds and packed artifact checks must also
 prove stale distribution files are absent.
 
-Mutable schema dialect state remains a separate M3 follow-up. Request tenant/auth
-metadata and general container/token retirement remain in their agreed later
-scope; this deletion does not claim completion of the entire refactor.
+Schema compilation now also requires an explicit driver or a scoped
+`runWithSqlDialect` invocation; mutable overrides and environment fallback are
+retired. Authentication outcomes, typed container keys, and owned route inventories
+are documented in the target API migration guide. These source changes do not
+by themselves establish complete distribution or release qualification.

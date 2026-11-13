@@ -13,5 +13,7 @@ and type contracts now assert that the retired registry and facades are absent.
 The application-boundary checker keeps its negative fixtures to prevent their
 reintroduction. Coverage exclusions are removed only for deleted files.
 
-This does not retire the remaining string service keys, provider adapter, global
-route registry, or mail/storage adapters. Those remain separate migration work.
+String service keys and the process-wide route registry are also retired. Use
+canonical service tokens and the immutable inventory carried by each compiled route
+map. The provider adapter and mail/storage configuration ownership still require
+separate reconciliation; this is not a claim that every adapter is migrated.
