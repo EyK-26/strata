@@ -1138,3 +1138,139 @@ test("HTTP metadata rejects invalid and malformed auth outcomes before entering 
     }
   }
 });
+
+test("invalid owned session cookies expire on denial without admitting or downgrading the request", async () => {
+  let handled = 0;
+  let memberships = 0;
+  const cookie = {
+    name: "owner_a_session",
+    expiredHeader: "owner_a_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
+  };
+  const fixture = await compositionFixture({
+    tenancy: "none",
+    production: false,
+    allowTenantDevHeaders: false,
+    invalidSessionCookie: cookie,
+    metadata: () => ({
+      authenticate: async (request) =>
+        request.headers.has("cookie")
+          ? { status: "invalid", user: null, credentialSource: "session" }
+          : { status: "absent", user: null, credentialSource: null },
+      memberships: async () => {
+        memberships++;
+        return [];
+      },
+      userTenantId: async () => 1,
+      tenant: async () => null,
+    }),
+  });
+  // Ownership includes this declaration: mutating caller config cannot redirect cleanup.
+  cookie.name = "owner_b_session";
+  cookie.expiredHeader = "owner_b_session=; Max-Age=0";
+  const handler = fixture.kernel.wrap("api", async () => {
+    handled++;
+    return new Response("guest login page");
+  });
+  try {
+    const response = await handler(
+      new Request("http://example.test/auth/csrf", {
+        headers: { cookie: "owner_a_session=revoked" },
+      }),
+    );
+    assert.equal(response.status, 401);
+    assert.equal(
+      response.headers.get("set-cookie"),
+      "owner_a_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
+    );
+    assert.equal(handled, 0, "The rejected request cannot execute even an anonymous handler");
+    assert.equal(memberships, 0);
+    assert.equal(fixture.envelopes.filter((e) => e.metadata?.phase === "business").length, 0);
+    assert.equal(fixture.envelopes.filter((e) => e.actor?.kind === "principal").length, 0);
+    const clean = await handler(new Request("http://example.test/auth/csrf"));
+    assert.equal(
+      clean.status,
+      200,
+      "A new request after cookie expiration may begin ordinary guest login",
+    );
+    assert.equal(
+      clean.headers.getSetCookie().some((value) => value.startsWith("owner_a_session=")),
+      false,
+    );
+    assert.equal(handled, 1);
+  } finally {
+    await fixture.close();
+  }
+});
+
+for (const scenario of [
+  {
+    name: "forged bearer alongside a valid session",
+    outcome: { status: "invalid", user: null, credentialSource: "bearer" },
+    cookie: "owner_session=valid",
+    status: 401,
+  },
+  {
+    name: "invalid different owner's session",
+    outcome: { status: "invalid", user: null, credentialSource: "session" },
+    cookie: "other_session=revoked",
+    status: 401,
+  },
+  {
+    name: "session lookup operational error",
+    outcome: {
+      status: "error",
+      user: null,
+      credentialSource: "session",
+      error: new Error("fixture lookup failed"),
+    },
+    cookie: "owner_session=valid",
+    status: 500,
+  },
+  {
+    name: "valid session with business authorization denial",
+    outcome: {
+      status: "authenticated",
+      user: { id: 1, role: "member" },
+      credentialSource: "session",
+    },
+    cookie: "owner_session=valid",
+    status: 401,
+  },
+] as const) {
+  test(`session cleanup does not erase credentials for ${scenario.name}`, async () => {
+    let handled = 0;
+    const fixture = await compositionFixture({
+      tenancy: "none",
+      production: false,
+      allowTenantDevHeaders: false,
+      invalidSessionCookie: {
+        name: "owner_session",
+        expiredHeader: "owner_session=; Path=/; Max-Age=0",
+      },
+      metadata: () => ({
+        authenticate: async () => scenario.outcome,
+        memberships: async () => [],
+        userTenantId: async () => 1,
+        tenant: async () => null,
+      }),
+    });
+    try {
+      const response = await fixture.kernel.wrap("api", async () => {
+        handled++;
+        return new Response("denied", { status: 401 });
+      })(
+        new Request("http://example.test/private", {
+          headers: { cookie: scenario.cookie, authorization: "Bearer forged" },
+        }),
+      );
+      assert.equal(response.status, scenario.status);
+      assert.equal(
+        response.headers.getSetCookie().some((value) => value.startsWith("owner_session=")),
+        false,
+      );
+      assert.equal(handled, scenario.outcome.status === "authenticated" ? 1 : 0);
+    } finally {
+      await fixture.close();
+    }
+  });
+}
