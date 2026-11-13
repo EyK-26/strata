@@ -379,20 +379,24 @@ test("real HTTP collector outage times out, preserves request availability and c
   const blocked = new Promise<void>((resolve) => {
     unblock = resolve;
   });
+  const accepted = Promise.withResolvers<void>();
   const collector = Bun.serve({
     port: 0,
     async fetch(request) {
       await request.text();
       requests++;
+      accepted.resolve();
       await blocked;
       return new Response(null);
     },
   });
   const runtime = createTracingRuntime({
     endpoint: new URL("/v1/traces", collector.url).href,
-    exportTimeoutMillis: 75,
+    // Leave transport startup room under coverage; the external deadline remains bounded.
+    exportTimeoutMillis: 500,
   });
   runtimes.push(runtime);
+  let shutdownMillis = 0;
   try {
     const response = await createTracingMiddleware(runtime)(
       new Request("http://shop"),
@@ -400,18 +404,56 @@ test("real HTTP collector outage times out, preserves request availability and c
     );
     expect(await response.text()).toBe("available");
     const started = performance.now();
-    await expect(runtime.forceFlush()).rejects.toBeDefined();
+    let flushSettled = false;
+    const flushed = runtime.forceFlush().then(
+      () => {
+        flushSettled = true;
+        return { failed: false };
+      },
+      () => {
+        flushSettled = true;
+        return { failed: true };
+      },
+    );
+    // Establish the outage before checking availability. A timeout before acceptance
+    // cannot prove that an application request survived a stalled HTTP collector.
+    expect(
+      await Promise.race([accepted.promise.then(() => "accepted"), flushed.then(() => "settled")]),
+    ).toBe("accepted");
+    const duringOutage = await createTracingMiddleware(runtime)(
+      new Request("http://shop/during-outage"),
+      async () => new Response("still available"),
+    );
+    expect(await duringOutage.text()).toBe("still available");
+    expect(flushSettled).toBe(false);
     expect(requests).toBe(1);
-    await Bun.sleep(10); // The callback-deadline observer may settle just after SDK timeout.
+    expect(await flushed).toEqual({ failed: true });
+    // The processor timeout can precede transport cancellation. Wait for its
+    // completion before shutdown exports the request served during the outage.
+    while (runtime.metrics().failedBatches === 0 && performance.now() - started < 1500) {
+      await Bun.sleep(5);
+    }
+    expect(runtime.metrics().failedBatches).toBe(1);
     expect(runtime.metrics().flushFailures).toBe(1);
     expect(runtime.metrics().exportDeadlineExceededBatches).toBe(1);
-    expect(runtime.metrics().queueSize).toBe(0);
+    // The request served during the outage is retained for the shutdown flush.
+    expect(runtime.metrics().queueSize).toBe(1);
     expect(performance.now() - started).toBeLessThan(1500);
   } finally {
     unblock();
-    await runtime.shutdown();
-    await collector.stop(true);
+    const closing = performance.now();
+    try {
+      await runtime.shutdown();
+      shutdownMillis = performance.now() - closing;
+    } finally {
+      await collector.stop(true);
+    }
   }
+  expect(runtime.metrics().active).toBe(false);
+  expect(runtime.metrics().queueSize).toBeNull(); // SDK unregisters its queue callback.
+  expect(runtime.metrics().exportedSpans).toBe(1);
+  expect(requests).toBe(2);
+  expect(shutdownMillis).toBeLessThan(1500);
 });
 
 test("standard sampler and SDK-disabled settings are honored", async () => {
