@@ -24,6 +24,10 @@ export async function createGeneratedSecurityApp(
   extraFlags: readonly string[] = [],
   options: { publishedVersion?: string; parentDirectory?: string; reference?: "work-tracker" } = {},
 ) {
+  if (options.publishedVersion && options.reference)
+    throw new Error(
+      "Reference selection requires the candidate generator; the published CLI has no reference option.",
+    );
   const migrationUrl = process.env.MIGRATION_DATABASE_URL;
   const runtimeUrl = process.env.RLS_TEST_DATABASE_URL ?? process.env.APP_DATABASE_URL;
   if (database === "postgres" && (!migrationUrl || !runtimeUrl))

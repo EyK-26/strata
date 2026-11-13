@@ -77,6 +77,9 @@ try {
   await other.request({action:"task",organization:otherOrganization.id,project:otherProject.id,title:"Other private task"});
   const task=await(await member.request({action:"task",organization:organization.id,project:project.id,title:"Ship <safe>",tenantId:2,userId:4})).json() as {id:string;tenant_id:number};
   assert.equal(task.tenant_id,1,"payload cannot override established tenant/actor");
+  const [auditActor]=await invoke(db=>execute<{actor_id:number;tenant_id:number}>(db,"SELECT actor_id,tenant_id FROM work_audit WHERE entity_id=? AND action='task.created'",[task.id]));
+  assert.equal(auditActor?.actor_id,2,"payload cannot replace authenticated audit actor");
+  assert.equal(auditActor?.tenant_id,1);
   assert.equal((await(await viewer.tasks(organization.id)).json() as unknown[]).length,1);
   await viewer.request({action:"complete",organization:organization.id,task:task.id},403);
   await other.tasks(organization.id,403);
@@ -116,11 +119,12 @@ try {
   void polling.catch(error=>console.error("Worker polling error",error));
   try {
     const deadline=Date.now()+5000;
-    while(await count("work_notifications")!==before.events){
+    const completedCount=()=>invoke(async db=>Number((await db.execute<{n:number}>({text:"SELECT COUNT(*) AS n FROM strata_outbox_delivery WHERE status='completed'",params:[]}))[0]!.n));
+    while(await count("work_notifications")!==before.events||await completedCount()!==before.events){
       if(Date.now()>deadline)throw new Error("Owned outbox worker did not deliver the reference events.");
       await new Promise(resolve=>setTimeout(resolve,25));
     }
-    const completed=await invoke(async db=>Number((await db.execute<{n:number}>({text:"SELECT COUNT(*) AS n FROM strata_outbox_delivery WHERE status='completed'",params:[]}))[0]!.n));
+    const completed=await completedCount();
     assert.equal(completed,before.events,"public worker completed every durable delivery");
   }finally{
     const stopped=await workerApp.application.stop();
