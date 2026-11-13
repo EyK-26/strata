@@ -134,3 +134,17 @@ describe("@getstrata/core published bundle singletons", () => {
     expect(view.renderWebErrorHtml).toBe(main.renderWebErrorHtml);
   });
 });
+
+test("published queue registry token uses canonical opaque token ownership", async () => {
+  const registry = await import(join(CORE_DIST, "entries/queue/jobRegistry.js"));
+  const tokens = await import("@getstrata/core/contracts/token");
+  const services = await import("@getstrata/core/contracts/services");
+  const value = new registry.JobRegistry();
+  expect(tokens.isServiceToken(registry.QUEUE_JOB_REGISTRY_TOKEN)).toBe(true);
+  expect(() => services.valueService(registry.QUEUE_JOB_REGISTRY_TOKEN, value)).not.toThrow();
+  const forged = { name: "core.queueJobRegistry" };
+  expect(tokens.isServiceToken(forged)).toBe(false);
+  expect(() => services.valueService(forged as never, value)).toThrow(
+    "Expected an opaque service token",
+  );
+});

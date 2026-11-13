@@ -1,4 +1,4 @@
-import { createServiceToken } from "../contracts/token";
+import { createServiceToken } from "@getstrata/core/contracts/token";
 import type { Job } from "./index";
 
 type JobFactory = () => Job;

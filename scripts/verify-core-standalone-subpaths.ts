@@ -78,6 +78,21 @@ for (const subpath of canonical) {
     );
   }
 }
+// Every public token must use the canonical opaque brand, including tokens defined in the root bundle.
+const rootExports = await import(join(root, "packages/strata-core/dist/index.js"));
+const canonicalTokens = await import("@getstrata/core/contracts/token");
+const canonicalServices = await import("@getstrata/core/contracts/services");
+for (const [name, value] of Object.entries(rootExports)) {
+  if (!name.endsWith("_TOKEN")) continue;
+  assert(
+    canonicalTokens.isServiceToken(value),
+    `Public ${name} has a private or invalid token brand`,
+  );
+  assert.doesNotThrow(
+    () => canonicalServices.valueService(value as never, undefined),
+    `Public ${name} must be accepted by canonical valueService`,
+  );
+}
 // The policy adapter is consumed by installed bootstrap; source aliases must not hide missing exports.
 const queuePolicy = await import(
   join(root, "packages/strata-core/dist/entries/queue/queueConfig.js")
