@@ -93,7 +93,12 @@ function createHealthRoutes(
   options: CreateHealthRoutesOptions = {},
 ) {
   const redisUrl = resolveRedisUrl(dependencies);
-  const debug = envFlagEnabled(process.env.APP_DEBUG);
+  const config = dependencies.container.has(CORE_CONFIG_TOKEN)
+    ? dependencies.container.resolve(CORE_CONFIG_TOKEN)
+    : undefined;
+  const debug = config
+    ? config.get<boolean>("app.debug") === true
+    : envFlagEnabled(process.env.APP_DEBUG);
   return {
     "/health": async (request?: Request) => {
       if (request && request.method !== "GET" && request.method !== "HEAD") {
