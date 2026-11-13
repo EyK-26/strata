@@ -1,4 +1,9 @@
-# Qualification status
+# Historical qualification status (2.x)
+
+> Historical 2.x record. Preserve its dated evidence and original conclusions;
+> it does not describe the current 3.x API or certify a current release. See the
+> [refactor completion ledger](architecture/refactor-completion-ledger.md) and
+> [current migration guide](architecture/target-api-migration.md).
 
 Historical baseline: published Strata 2.2.37. This record separates implemented mechanisms from local acceptance and deployment qualification. Historical issue reports and failed runs remain evidence; an open tracker is not a statement that its entire original API is still missing.
 

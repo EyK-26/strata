@@ -1,3 +1,8 @@
+HISTORICAL INVENTORY — NOT CURRENT IMPLEMENTATION STATUS
+The M2.1 caller inventory and intermediate notes below are retained as migration
+evidence. Runtime ownership and public API retirement are implemented; consult
+refactor-completion-ledger.md and target-api-migration.md for current contracts.
+
 2026-11-13 typed-token reconciliation (implementation, final qualification pending)
 LegacyServiceKey/string container overloads and CORE_TOKEN_SERVICE_TOKEN fallback are removed. CORE_CONFIG/QUEUE/EVENT_BUS/POLICY_GATE/AUTH/ABILITY_CHECKER/AUTH_USER_DIRECTORY and actual HTTP_PERSISTENCE_OPTIONS/CORE_VIEW_TOKEN/FAILED_JOB_SERVICE_TOKEN now use canonical opaque tokens; generated queue and probe consumers migrate to their canonical declarations. Existing typed methods continue on the same engine. ConfigStore string configuration keys remain a distinct adapter contract, not service keys. Items below record the historical M2.1 inventory and are not current pending string-key ownership work.
 

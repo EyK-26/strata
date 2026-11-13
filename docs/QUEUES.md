@@ -4,6 +4,8 @@ Strata's application queue is selected by `QUEUE_DRIVER=sync|async|redis`. For R
 
 An idle list worker reclaims every priority and reserves the first job in one script. Later empty polls in that wait only reserve, so they do not scan processing lists again. `reclaimExpiredQueueReservations` remains the stopped-maintenance helper and still runs one script per priority.
 
+Create an application-owned `JobRegistry`, pass it to `registerDefaultJobs(registry)` and `await discoverJobs(registry, options)`, and supply it as the fourth argument to `createAppQueue(driver, redisUrl, failedJobs, registry)`. `RedisStreamsQueue(redisUrl, registry)` also requires this explicit registry. `createQueueWorker(redisUrl, failedJobs, registry, options)` receives the registry as its third argument; use matching registrations for producers and workers.
+
 The worker factory can now return either implementation. Type injected workers with `ReturnType<typeof createQueueWorker>` (as the generated CLI does), rather than annotating the concrete legacy `QueueWorker` class. Existing one-argument `Job.handle(payload)` implementations remain supported.
 
 ## Streams delivery contract
@@ -20,6 +22,7 @@ Delivery is **at least once**. A process can complete an external effect and die
 import { Job, type JobContext } from "@getstrata/core/queue";
 
 class Deliver extends Job<{ businessId: string }> {
+  static override jobName = "application.deliver";
   async handle(payload: { businessId: string }, context?: JobContext) {
     context?.signal.throwIfAborted();
     // Use payload.businessId for durable business deduplication.
@@ -42,9 +45,15 @@ The Streams queue has an explicit typed admission API that returns the stable lo
 
 ```ts
 import { RedisStreamsQueue } from "@getstrata/core/queue/redisQueue";
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+// Deliver is the job class declared above.
 const redisUrl = process.env.REDIS_URL;
 if (!redisUrl) throw new Error("REDIS_URL is required");
-const queue = new RedisStreamsQueue(redisUrl);
+const registry = new JobRegistry();
+registry.register(Deliver.jobName, () => new Deliver());
+const deliverJob = new Deliver();
+const payload = { businessId: "delivery-123" };
+const queue = new RedisStreamsQueue(redisUrl, registry);
 try {
   const jobId = await queue.enqueue(deliverJob, payload, { timeoutMs: 120_000 });
   // Store jobId with application-owned tracking if needed.

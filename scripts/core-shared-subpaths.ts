@@ -106,8 +106,3 @@ export function bootstrapSubpathExternalFlags(
   }
   return flags.join(" ");
 }
-
-/** @deprecated Use coreSubpathExternalFlags(CORE_SUBPATHS) from sync-package-subpaths. */
-export function coreSharedSubpathExternalFlags(): string {
-  return coreSubpathExternalFlags(CORE_SHARED_SUBPATHS);
-}

@@ -19,7 +19,7 @@ import {
   parseCreateStrataArgs,
 } from "../../packages/strata-starter/src/parseArgs.ts";
 import { renderInitialAdminMigration } from "../../packages/strata-starter/src/renderInitialAdmin.ts";
-import { renderStarterSchemaMigration } from "../../packages/strata-starter/src/renderRuntime.ts";
+import { renderStarterSchemaMigration } from "../../packages/strata-starter/src/renderMigrations.ts";
 import { candidatePackage } from "../../scripts/candidate-packages.ts";
 
 import { installGeneratedAppDependencies } from "../unit/cli/helpers";

@@ -129,7 +129,7 @@ The retroactive reset review reproduced [#174](https://github.com/EyK-26/strata/
 
 ## Generated CLI runtime and API scope
 
-After rebuilding core/bootstrap, run `scripts/with-host-env.sh bun run verify:generated-runtime` for generated CLI OpenAPI and native HTTP acceptance. The command selects two native E2E cases, each preserving the complete 40-operation runtime inventory. For one profile use Bun’s `-t` filter on `tests/e2e/generatedRuntime.test.ts`, or invoke `bun scripts/verify-generated-runtime.ts --openapi` / `--http` directly. `bun run smoke` owns its HTTP server fixture and retains the separate integration-extra and built-SPA checks, so it no longer needs a running HiroApp. The complete chain is included in `validate:ci`, including release validation.
+After rebuilding core/bootstrap, run `scripts/with-host-env.sh bun run verify:generated-runtime` for generated CLI OpenAPI and native HTTP acceptance. The command runs the native E2E profiles in `tests/e2e/generatedRuntime.test.ts`, including SQLite and MySQL column tenancy, against the current `tests/fixtures/generated-runtime-routes.json` inventory. For one profile use Bun’s `-t` filter on `tests/e2e/generatedRuntime.test.ts`, or invoke `bun scripts/verify-generated-runtime.ts --openapi` / `--http` directly. `bun run smoke` owns its HTTP server fixture and retains the separate integration-extra and built-SPA checks, so it no longer needs a running HiroApp. The complete chain is included in `validate:ci`, including release validation.
 
 The corrected `docs/openapi.json` contains 22 API/protocol operations. The older 40-operation snapshot accidentally included 18 HTML operations because the legacy adapter discarded middleware metadata. See [the preservation and correction evidence](GENERATED-APP-ACCEPTANCE.md#second-pr-generated-cliopenapi-and-http-smoke). No runtime endpoint was removed.
 
@@ -141,10 +141,10 @@ executed by the server. Three additional E2E profiles cover ordinary API routes,
 web/API scoped CRUD and a custom API prefix; the original profiles and runtime
 assertions remain independent. `--published=VERSION` uses exact published packages.
 
-Module-rendering hashes retain the original pre-extraction fixture. A narrow inverse
-transformation permits only the declared controller request annotations and removal
-of generated route casts/imports. Every other emitted byte and path must still match
-the historical hashes; the fixture is not regenerated to accept unrelated changes.
+Module-rendering checks compare output with the reviewed canonical hash fixture.
+The original pre-extraction fixture remains an inventory reference; it does not
+require the retired 2.x API bytes. Changes to canonical hashes require review of
+the emitted behavior and the existing compiler/installed-runtime acceptance.
 
 Source regression tests for generated views, login throttle wiring and request-path RLS isolation use temporary RLS/team profiles through `tests/helpers/generatedSourceApps.ts`. Setup requires every path in the frozen 52-file inventory, and teardown removes its owned source fixtures. The populated failed-job identity upgrade fixture remains under `tests/fixtures/migrations`; current initial-schema generation is not a substitute for testing that historical upgrade. These checks complement, rather than replace, packed-app runtime acceptance.
 
@@ -153,10 +153,10 @@ Source regression tests for generated views, login throttle wiring and request-p
 The [starter journey matrix](STARTER-JOURNEYS.md) exercises fresh account creation, real SMTP verification/reset, MFA, replay, rollback and recovery across external installed apps. It complements seeded-login, OIDC/SAML, CLI/OpenAPI and Docker acceptance; it does not replace those assertions.
 
 The runtime renderer separates database clients/provisioning, migrations and database
-commands, model declarations, bootstrap/providers and CLI adapters. `renderRuntime.ts`
-retains its original exports as a compatibility facade; generation imports the artifact
-owners directly. The frozen eight-profile, 550-file path/hash baseline and all generated
-compiler/installed runtime checks still apply. The RLS source fence scans every new
+commands, model declarations, bootstrap/providers and CLI adapters. Generation and
+tests import those artifact owners directly; the unused `renderRuntime.ts`
+compatibility facade has been removed. The eight-profile canonical path/hash checks
+and generated compiler/installed runtime checks still apply. The RLS source fence scans every new
 artifact file, permits the same single migrate/seed bypass, and independently asserts
 that bootstrap/request handlers contain no unbounded bypass. Moving a renderer does
 not authorize changing generated SQL, privilege separation or runtime behavior.

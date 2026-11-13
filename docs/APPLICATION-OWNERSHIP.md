@@ -1,9 +1,11 @@
 # Explicit application ownership
 
-This is the ownership foundation of the breaking framework refactor. The candidate
-entrypoint is `@getstrata/core/runtime/application`. It owns provider setup,
-resource acquisition, admitted commands and cleanup. It does not yet replace the
-existing starter, `App`, HTTP kernel, auth services or ORM.
+The entrypoint `@getstrata/core/runtime/application` owns provider setup, resource
+acquisition, admitted commands and cleanup. Bootstrap, generated applications,
+HTTP, authentication and persistence now compose through explicit owners. See the
+[completion ledger](architecture/refactor-completion-ledger.md) for acceptance
+coverage and the [migration guide](architecture/target-api-migration.md) for the
+retired public APIs.
 
 ```ts
 import { createApplication } from "@getstrata/core/runtime/application";
@@ -487,11 +489,9 @@ form wait cycles. Clean journal records retire, but the task tree can retain set
 child entries until its root settles. Neither arbitrary cycle detection nor fixed
 memory for an indefinitely active execution is promised.
 
-The existing provider and helper now use these contracts. `bootstrap/legacyCache.ts`
-temporarily adapts the old provider graph and route builders, snapshotting their
-environment inputs at composition. It has no public subpath and must be removed with
-M4/M5 composition changes. Generated starter composition still migrates in M5/M6;
-its existing cache template now passes an explicit namespace.
+Providers, HTTP helpers and generated starter composition use these contracts with
+explicit namespaces and captured application policy. The temporary
+`bootstrap/legacyCache.ts` adapter has been deleted; it is not an alternate runtime.
 
 ## Deliberate job execution
 
@@ -553,24 +553,25 @@ their own failures. This in-process idiom provides no durable delivery, retry, c
 survival, automatic logging or job-status registry.
 
 These guarantees apply to the explicit execution context and guarded dependencies.
-Legacy auth and tenant async stores still have consumers awaiting M4/M5 migration;
-this checkpoint does not promise to clear those stores or third-party async context.
-Worker and outbox adapters must enter deliberate job envelopes when they migrate.
+Worker and outbox adapters enter deliberate owned job executions. Auth/tenant
+propagation does not select a last-started application, and copied metadata alone
+does not grant authority. The framework does not clear arbitrary third-party async
+context. Queue actor/tenant transfer uses the authenticated handoff contract in the
+[completion ledger](architecture/refactor-completion-ledger.md).
 
 ## Migration boundary
 
-The new owner never delegates to the existing global owners. The CLI's direct-child
-supervisor now uses it as described below. The remaining consumers must migrate
-before final acceptance:
+The owner never delegates to a global application owner. The migrations below are
+implemented; the completion ledger maps their executable acceptance:
 
-| Existing mechanism | Replacement milestone |
+| Retired mechanism | Current replacement |
 | --- | --- |
-| `App`, `createAppContext`, provider cleanup arrays, default lifecycle | Explicit owner and provider migration, M1/M2 |
-| Application registry and implicit context lookup | Typed dependencies and execution scopes, M2–M5 |
-| Default database pool, connection/model globals | Application-owned database/session contracts, M3 |
-| Auth/policy lookup and duplicated HTTP routing | Explicit security dependencies and one route plan, M4 |
-| Generated entrypoints and CLI composition | Candidate-package commercial apps, M5/M6 |
-| Superseded exports and compatibility paths | Complete deletion and distribution qualification, M7 |
+| Implicit application startup and default lifecycle | Explicit application handle and provider resource ownership |
+| Application registry and implicit context lookup | Typed dependencies and owned execution scopes |
+| Default database pool, connection/model globals | Application-owned database sessions and bound models/repositories |
+| Ambient auth/policy lookup and duplicated HTTP routing | Explicit security capabilities and compiled route plans |
+| Generated entrypoints relying on global owners | Generated application composition and owned CLI/worker execution |
+| Superseded public globals and string service keys | Retired exports, canonical typed tokens and packed absence checks |
 
 ### CLI direct-child supervision
 
@@ -589,12 +590,9 @@ run returns the child's actual numeric exit code.
 This owns a direct child, not its arbitrary descendants. Signals before relay
 installation are outside this helper's observation window. Parent configuration,
 preload and custom-command discovery happen before this supervisor and retain their
-existing behavior. The child's auth, database and application state also remain on
-their existing runtime. Those paths still need the migrations in the table above.
-
-The final framework must have one owner. Keeping this proof alongside the old
-implementation permanently, or falling back to the last started application,
-does not satisfy the refactor.
+existing behavior. The child owns its application, authentication and database
+resources independently through its generated entrypoint. The supervisor owns the
+native child process; it does not adopt the child's in-process capabilities.
 
 Source unit tests, installed-package acceptance and import-boundary checks are
 separate evidence. A passing ownership proof does not qualify browser behavior,
@@ -615,9 +613,9 @@ Within each provider, reservation order determines reverse cleanup order even wh
 finish in a different order. Execution initialization and entire callback-tree
 settlement share the application's admitted-work barrier.
 
-The remaining legacy owners, string keys and consumers are enumerated in
-[the migration ledger](architecture/m21-legacy-callers.txt). Their continued
-presence does not establish application isolation for those paths.
+The [historical M2.1 inventory](architecture/m21-legacy-callers.txt) records the
+former owners and callers. It is not a list of current runtime dependencies; use
+the completion ledger and migration guide for the accepted replacements.
 
 ### Internal completion bookkeeping
 
@@ -635,5 +633,5 @@ Ordinary operations, tasks and resource admission retain their cancellation chec
 This mechanism is reserved for framework-owned snapshot restoration, which must
 run only after the persistence layer confirms rollback. It is not a public rollback
 hook or a sandbox that revokes previously captured objects and capabilities. This
-prerequisite does not itself register model snapshots or change native transaction
-outcomes; the subsequent persistence migration supplies that integration.
+mechanism is integrated with owned persistence snapshot restoration. Native
+transaction outcomes still determine whether rollback actually completed.

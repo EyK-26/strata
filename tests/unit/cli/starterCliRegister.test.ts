@@ -16,7 +16,7 @@ import {
 import {
   renderCliQueueWorkTs,
   renderCliRegisterTs,
-} from "../../../packages/strata-starter/src/renderRuntime.ts";
+} from "../../../packages/strata-starter/src/renderCli.ts";
 import { createGeneratedSourceApps } from "../../helpers/generatedSourceApps.ts";
 import { captureConsole, repoRoot } from "./helpers";
 

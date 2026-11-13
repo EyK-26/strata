@@ -1,5 +1,10 @@
 # Compatible framework maintainability audit — 2.2.49
 
+> Historical 2.x record. Preserve its dated evidence and original conclusions;
+> it does not describe the current 3.x API or certify a current release. See the
+> [refactor completion ledger](architecture/refactor-completion-ledger.md) and
+> [current migration guide](architecture/target-api-migration.md).
+
 This closes the compatible framework work reviewed on 20–21 October 2026. The
 published runtime is [2.2.49](https://github.com/EyK-26/strata/releases/tag/v2.2.49),
 commit `bbd15b226e385487e3cfe0bd4938fbe603ce2593`, tree

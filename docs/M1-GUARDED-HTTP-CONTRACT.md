@@ -1,5 +1,10 @@
 # M1 guarded HTTP and document contract proposal
 
+> Historical 2.x record. Preserve its dated evidence and original conclusions;
+> it does not describe the current 3.x API or certify a current release. See the
+> [refactor completion ledger](architecture/refactor-completion-ledger.md) and
+> [current migration guide](architecture/target-api-migration.md).
+
 Status: **design and compiler feasibility only**. No new package export, route
 factory, runtime validator, manifest resolver or breaking change is implemented.
 The selected major target remains an explicitly public artifact origin. This note
