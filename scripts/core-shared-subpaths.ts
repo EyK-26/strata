@@ -1,9 +1,9 @@
 /**
  * Subpaths that re-export the main @getstrata/core bundle (dist/index.js).
  *
- * Use shared shims when a module owns process-wide singleton state (AsyncLocalStorage,
- * default DB pool, global registries) or when consumers rely on `instanceof` across
- * import paths (Notification base class).
+ * Use shared shims for canonical execution carriers (AsyncLocalStorage) or when
+ * consumers rely on `instanceof` across import paths (Notification base class).
+ * Application resources remain explicitly owned; shims do not establish a default owner.
  *
  * Synced by: scripts/sync-package-subpaths.ts, scripts/write-core-shared-shims.ts
  * Verified by: scripts/verify-core-shared-subpaths.ts
@@ -26,6 +26,7 @@ export const CORE_STANDALONE_SUBPATHS = [
   "database/factory",
   "queue/failedJobRepository",
   "queue/queueConfig",
+  "queue/queueHandoff",
   "database/tokens",
   "cache/tokens",
   "config/applicationConfig",

@@ -76,7 +76,7 @@ const neutralEdges: Readonly<
   },
   [PATH("view/tokens")]: {
     values: ["contracts/token"],
-    types: ["view/viewRenderer", "view/etaViewEngine"],
+    types: ["view/viewRenderer", "view/etaViewEngine", "view/webErrorView"],
   },
   [PATH("cache/tokens")]: {
     values: ["contracts/token"],

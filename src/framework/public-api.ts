@@ -117,6 +117,12 @@ export type {
   RouteModelAuthorization,
   RouteModelBindingPorts,
 } from "@getstrata/core/http/securedRouteModelBinding";
+export type { QueueHandoff, QueueIdentity } from "@getstrata/core/queue/queueHandoff";
+export {
+  createIdentityQueue,
+  createQueueHandoff,
+  QueueHandoffError,
+} from "@getstrata/core/queue/queueHandoff";
 export { CORE_VIEW_RENDERER_TOKEN, CORE_WEB_ERROR_VIEW_TOKEN } from "@getstrata/core/view/tokens";
 export {
   BaseRepository,

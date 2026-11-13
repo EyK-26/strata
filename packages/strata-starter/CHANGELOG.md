@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 3.0.0
+
+Breaking application-owned runtime, typed authorization and persistence, immutable starter plans, isolated adapters and authenticated queue handoffs.
+
 ## 2.2.60
 
 - Generate applications with the aligned 2.2.60 core/bootstrap/CLI dependencies. Existing applications must deliberately upgrade their installed packages; no generated-source rewrite or automatic historical-data repair is performed.
