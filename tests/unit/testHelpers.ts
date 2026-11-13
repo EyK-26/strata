@@ -20,6 +20,7 @@ import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
 import { createApplication } from "@getstrata/core/runtime/application";
 import { createStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
 import { HTTP_PERSISTENCE_OPTIONS } from "../../src/bootstrap/httpPersistence";
+import { resolveHttpResponsePolicy } from "../../src/bootstrap/providers/config";
 import type { DatabaseConnection } from "../../src/db/connection/createConnection";
 import type { CacheLike } from "../../src/types/services";
 
@@ -147,6 +148,7 @@ function createMockDependencies(
     );
     const passwordSecret = secret(["SESSION_SECRET", "OAUTH_STATE_SECRET"], "session-secret");
     const options: HttpPersistenceOptions = http ?? {
+      responsePolicy: resolveHttpResponsePolicy(environment),
       features: {
         emailVerificationRequired: environment.FEATURE_EMAIL_VERIFICATION === "true",
         viewsEnabled: ["server-htmx", "hybrid"].includes(environment.FRONTEND_MODE ?? "api"),

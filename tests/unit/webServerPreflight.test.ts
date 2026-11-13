@@ -7,6 +7,7 @@ import { convertAppRoutesToBunRoutes, createWebServer } from "@getstrata/bootstr
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { generateOpenApiSpec } from "@getstrata/core/openapi/generator";
+import { resolveHttpResponsePolicy } from "../../src/bootstrap/providers/config";
 import { guestGuardOptions } from "../helpers/devAuthHeaders";
 import { createMockDependencies } from "./testHelpers";
 
@@ -60,7 +61,12 @@ describe("native registered-route preflights", () => {
         },
       ],
     });
-    const server = createWebServer({ port: 0, native: { hostname: "127.0.0.1" }, routes });
+    const server = createWebServer({
+      cors: resolveHttpResponsePolicy(process.env).cors,
+      port: 0,
+      native: { hostname: "127.0.0.1" },
+      routes,
+    });
     try {
       const url = `http://127.0.0.1:${server.port}/api/v1/orders`;
       const allowed = await fetch(url, preflight());
@@ -99,6 +105,7 @@ describe("native registered-route preflights", () => {
   test("GET shorthand, HEAD fallback and parameterized method maps retain native dispatch", async () => {
     let calls = 0;
     const server = createWebServer({
+      cors: resolveHttpResponsePolicy(process.env).cors,
       port: 0,
       native: { hostname: "127.0.0.1" },
       routes: {
@@ -136,6 +143,7 @@ describe("native registered-route preflights", () => {
     const invalid = convertAppRoutesToBunRoutes({ "/empty": {}, "/metadata": { nope: false } });
     expect(Object.keys(invalid)).toEqual([]);
     const server = createWebServer({
+      cors: resolveHttpResponsePolicy(process.env).cors,
       port: 0,
       native: { hostname: "127.0.0.1" },
       routes: {
@@ -160,14 +168,20 @@ describe("native registered-route preflights", () => {
         port: 0,
         native: { hostname: "127.0.0.1" },
         routes: { "/read": () => new Response("read") },
-        cors: { additionalAllowedHeaders: ["*"] },
+        cors: { ...resolveHttpResponsePolicy(process.env).cors, additionalAllowedHeaders: ["*"] },
       }),
     ).toThrow(TypeError);
     const server = createWebServer({
       port: 0,
       native: { hostname: "127.0.0.1" },
       routes: { "/read": () => new Response("read") },
-      cors: { additionalAllowedHeaders: ["X-Native"] },
+      cors: {
+        ...resolveHttpResponsePolicy(process.env).cors,
+        additionalAllowedHeaders: [
+          ...(resolveHttpResponsePolicy(process.env).cors?.additionalAllowedHeaders ?? []),
+          "X-Native",
+        ],
+      },
     });
     try {
       const response = await fetch(`http://127.0.0.1:${server.port}/read`, preflight());

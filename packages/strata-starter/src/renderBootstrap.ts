@@ -220,6 +220,7 @@ import type { QueueServices } from "@getstrata/core/queue/createAppQueue";
 import { createQueueWorkerTransport } from "@getstrata/core/queue/queueWorkerTransport";
 import { type JobRegistry, QUEUE_JOB_REGISTRY_TOKEN } from "@getstrata/core/queue/jobRegistry";
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
+import { resolveHttpResponsePolicy } from "@getstrata/bootstrap/providers";
 import { createHealthRoutes } from "@getstrata/bootstrap/health";
 import { mergeSpaRoutes } from "@getstrata/bootstrap/createSpaRoutes";
 import { discoverListeners } from "@getstrata/bootstrap/discoverListeners";
@@ -231,6 +232,8 @@ import type { WebErrorView } from "@getstrata/core/view";
 import { webServerResource, type NativeServerOptions } from "@getstrata/bootstrap/web/server";
 import type { Server } from "bun";
 import { abilityCatalog } from "@getstrata/core/auth/abilityCatalog";
+import { intendedUrlCookieOptionsFromEnvironment } from "@getstrata/core/auth/intendedUrlCookie";
+import { flashSessionOptionsFromEnvironment } from "@getstrata/core/http/flashSession";
 import { csrfTokenOptionsFromEnvironment } from "@getstrata/core/http/csrfToken";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { createDatabaseReadinessBindings } from "@getstrata/bootstrap/databaseReadiness";
@@ -328,7 +331,7 @@ export async function bootstrapApp(options:BootstrapOptions={}):Promise<Bootstra
   }};
   const handle=createApplicationContext([],{
     connection:"main",
-    http:{metadata:auth.metadata,features:{emailVerificationRequired:env.FEATURE_EMAIL_VERIFICATION==="true",viewsEnabled:["server-htmx","hybrid"].includes(env.FRONTEND_MODE??${JSON.stringify(layers.frontend)}),publicReadsEnabled:env.FEATURE_PUBLIC_READS==="true",etagEnabled:env.FEATURE_ETAG!=="false"},csrf:{token:csrfTokenOptionsFromEnvironment(env),allowDevelopmentHeaders:!production&&env.AUTH_DEV_HEADERS==="true",samlAcsUrl:env.SAML_ACS_URL??""},tenancy:${JSON.stringify(layers.tenancy)},production,allowTenantDevHeaders:!production&&env.TENANT_DEV_HEADERS==="true",signatureSecret:auth.config.signatureSecret,passwordConfirmation:auth.config.passwordConfirmation,
+    http:{metadata:auth.metadata,responsePolicy:resolveHttpResponsePolicy(env),intendedUrl:intendedUrlCookieOptionsFromEnvironment(env),flash:flashSessionOptionsFromEnvironment(env),features:{emailVerificationRequired:env.FEATURE_EMAIL_VERIFICATION==="true",viewsEnabled:["server-htmx","hybrid"].includes(env.FRONTEND_MODE??${JSON.stringify(layers.frontend)}),publicReadsEnabled:env.FEATURE_PUBLIC_READS==="true",etagEnabled:env.FEATURE_ETAG!=="false"},csrf:{token:csrfTokenOptionsFromEnvironment(env),allowDevelopmentHeaders:!production&&env.AUTH_DEV_HEADERS==="true",samlAcsUrl:env.SAML_ACS_URL??""},tenancy:${JSON.stringify(layers.tenancy)},production,allowTenantDevHeaders:!production&&env.TENANT_DEV_HEADERS==="true",signatureSecret:auth.config.signatureSecret,passwordConfirmation:auth.config.passwordConfirmation,
       ...(production?{publicTenancy:{resolveTenantId:async(host:string)=>host===new URL(config.appUrl).hostname?1:null}}:{}),${layers.extras.scim ? "\n      scim:createScimAuthenticator({resolveToken:token=>resolveScimTenantFromToken(token,env),resolveTenant})," : ""}
     },
     onConstructed:owner=>{invoke=owner.invoke;options.onConstructed?.(owner.application);return undefined;},
@@ -338,7 +341,7 @@ export async function bootstrapApp(options:BootstrapOptions={}):Promise<Bootstra
       ...createDatabaseBindings({default:"main",connections:{main:dbOptions},preparation:[outbox.token],repositories:[...repositoryDefinitions,failedJobRepository,...(options.persistence?.repositories??[])],models:[...modelDefinitions,...(options.persistence?.models??[])],repositoryEffects:[...catalog.flatMap(declaration=>declaration.repositoryEffects),...(options.persistence?.repositoryEffects??[])]}),
     ],providers:[],transports:[...(options.transports??[]),...(worker?[worker.transport]:[]),...(outboxWorker?[outboxWorker.transport]:[]),...(mode==="http"?[{name:"starter.http",async setup(scope:import("@getstrata/core/contracts/application").ProviderScope){
       if(!routes||!kernel)throw new Error("Route assembly did not finish before transport setup.");
-      server=await scope.acquire(webServerResource({port:options.server?.port??config.port,native:options.server?.native??(config.hostname?{hostname:config.hostname}:undefined),routes,errorView,publicDir:join(import.meta.dir,"../../public"),enter:(request,handler)=>kernel!.run(request,handler)}));
+      server=await scope.acquire(webServerResource({env,port:options.server?.port??config.port,native:{maxRequestBodySize:resolveHttpResponsePolicy(env).maxBodyBytes,...(config.hostname?{hostname:config.hostname}:{}),...options.server?.native},cors:resolveHttpResponsePolicy(env).cors,routes,errorView,publicDir:join(import.meta.dir,"../../public"),enter:(request,handler)=>kernel!.run(request,handler)}));
     }}]:[]) ]},
   });
   const context=await handle.start();

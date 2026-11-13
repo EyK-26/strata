@@ -1,9 +1,6 @@
 import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { type AuthReader, establishedAuthReader } from "@getstrata/core/auth/authReader";
-import {
-  hasVerifiedEmail,
-  isEmailVerificationRequired,
-} from "@getstrata/core/auth/emailVerification";
+import { hasVerifiedEmail } from "@getstrata/core/auth/emailVerification";
 import type { Policy } from "@getstrata/core/auth/policy";
 import {
   CORE_TRACING_RUNTIME_TOKEN,
@@ -11,7 +8,7 @@ import {
 } from "@getstrata/core/contracts/serviceTokens";
 import { createAuthorizeMiddleware } from "@getstrata/core/http/authorizeMiddleware";
 import { createBodySizeLimitMiddleware } from "@getstrata/core/http/bodySizeLimitMiddleware";
-import { createCorsMiddleware } from "@getstrata/core/http/corsMiddleware";
+import { createCorsMiddleware, resolveCorsConfig } from "@getstrata/core/http/corsMiddleware";
 import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
 import { createFlashMiddleware } from "@getstrata/core/http/flashMiddleware";
 import { createLoginThrottleMiddleware } from "@getstrata/core/http/loginThrottleMiddleware";
@@ -32,8 +29,6 @@ import { createSecurityHeadersMiddleware } from "@getstrata/core/http/securityHe
 import { createValidateSignatureMiddleware } from "@getstrata/core/http/signedUrl";
 import { createThrottleMiddleware } from "@getstrata/core/http/throttleMiddleware";
 import { createRequestLoggingMiddleware } from "@getstrata/core/logging/requestLoggingMiddleware";
-import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
-import { isPublicReadsEnabled } from "@getstrata/core/security/publicReads";
 import { createTracingMiddleware } from "@getstrata/core/tracing/tracingMiddleware";
 import { CORE_WEB_ERROR_VIEW_TOKEN } from "@getstrata/core/view/tokens";
 import type { ComposedRouteHandler } from "#strata-http-route";
@@ -73,6 +68,7 @@ class HttpKernel {
   private readonly publicReadsEnabled: boolean;
   private readonly etagEnabled: boolean;
   private readonly httpOptions: HttpPersistenceOptions | undefined;
+  private readonly responsePolicy: NonNullable<HttpPersistenceOptions["responsePolicy"]>;
   private readonly configuredCsrfMiddleware: Middleware;
   private readonly responses: Readonly<Record<"json" | "web", readonly Middleware[]>>;
   private readonly persistence: ReturnType<typeof createHttpPersistence> | undefined;
@@ -81,11 +77,39 @@ class HttpKernel {
       ? dependencies.container.resolve<HttpPersistenceOptions>(HTTP_PERSISTENCE_OPTIONS)
       : undefined;
     this.httpOptions = http;
-    this.emailVerificationRequired =
-      http?.features?.emailVerificationRequired ?? isEmailVerificationRequired({});
-    this.viewsEnabled = http?.features?.viewsEnabled ?? isViewsEnabled();
-    this.publicReadsEnabled = http?.features?.publicReadsEnabled ?? isPublicReadsEnabled();
-    this.etagEnabled = http?.features?.etagEnabled ?? true;
+    const config = dependencies.container.has(CORE_CONFIG_TOKEN)
+      ? dependencies.container.resolve(CORE_CONFIG_TOKEN)
+      : undefined;
+    const features =
+      http?.features ?? config?.get<HttpPersistenceOptions["features"]>("http.features");
+    this.emailVerificationRequired = features?.emailVerificationRequired ?? false;
+    this.viewsEnabled = features?.viewsEnabled ?? false;
+    this.publicReadsEnabled = features?.publicReadsEnabled ?? false;
+    this.etagEnabled = features?.etagEnabled ?? true;
+    const policy =
+      http?.responsePolicy ??
+      config?.get<HttpPersistenceOptions["responsePolicy"]>("http.responsePolicy");
+    if (policy?.cors) resolveCorsConfig(policy.cors);
+    this.responsePolicy = Object.freeze({
+      cors: policy?.cors
+        ? {
+            allowedOrigins: [...(policy.cors.allowedOrigins ?? [])],
+            additionalAllowedHeaders: [...(policy.cors.additionalAllowedHeaders ?? [])],
+          }
+        : undefined,
+      securityHeaders: policy?.securityHeaders ?? {
+        production: http?.production ?? true,
+        frontendMode: this.viewsEnabled ? ("server-htmx" as const) : ("api" as const),
+      },
+      maxBodyBytes: policy?.maxBodyBytes ?? 1_048_576,
+      rateLimitPerMinute: policy?.rateLimitPerMinute ?? 120,
+      namespace: policy?.namespace ?? "strata",
+      trustForwardedFor: policy?.trustForwardedFor ?? false,
+      loginRateLimit: Object.freeze({ ...(policy?.loginRateLimit ?? resolveLoginRateLimit()) }),
+      registerRateLimit: Object.freeze({
+        ...(policy?.registerRateLimit ?? resolveRegisterRateLimit()),
+      }),
+    });
     const targetOrigin = dependencies.container.has(CORE_CONFIG_TOKEN)
       ? dependencies.container.resolve(CORE_CONFIG_TOKEN).get<string>(CSRF_TARGET_ORIGIN_CONFIG_KEY)
       : undefined;
@@ -249,14 +273,14 @@ class HttpKernel {
 
   private responseMiddleware(errorFormat: "json" | "web"): Middleware[] {
     return [
-      createCorsMiddleware(),
-      createSecurityHeadersMiddleware(),
-      createBodySizeLimitMiddleware(),
+      createCorsMiddleware(this.responsePolicy.cors),
+      createSecurityHeadersMiddleware(this.responsePolicy.securityHeaders),
+      createBodySizeLimitMiddleware(this.responsePolicy.maxBodyBytes),
       ...(this.dependencies.container.has(CORE_TRACING_RUNTIME_TOKEN)
         ? [createTracingMiddleware(this.dependencies.container.resolve(CORE_TRACING_RUNTIME_TOKEN))]
         : []),
       createMetricsMiddleware(),
-      createRequestLoggingMiddleware(),
+      createRequestLoggingMiddleware(this.responsePolicy.trustForwardedFor),
       requestIdMiddleware,
       // Commit and deferred listeners finish inside this boundary, before telemetry records the result.
       errorFormat === "json"
@@ -309,11 +333,13 @@ class HttpKernel {
         const redisUrl = config.get<string>(REDIS_URL_CONFIG_KEY)?.trim() ?? "";
 
         if (!redisUrl) {
-          const maxAttempts = Number(process.env.RATE_LIMIT_PER_MINUTE ?? "120");
+          const maxAttempts = this.responsePolicy.rateLimitPerMinute ?? 120;
 
           return [
             this.ownThrottle(
               createMemoryThrottleMiddleware({
+                namespace: this.responsePolicy.namespace,
+                trustForwardedFor: this.responsePolicy.trustForwardedFor,
                 maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
                 decaySeconds: 60,
                 quotaPolicy,
@@ -323,11 +349,13 @@ class HttpKernel {
           ];
         }
 
-        const maxAttempts = Number(process.env.RATE_LIMIT_PER_MINUTE ?? "120");
+        const maxAttempts = this.responsePolicy.rateLimitPerMinute ?? 120;
 
         return [
           this.ownThrottle(
             createThrottleMiddleware({
+              namespace: this.responsePolicy.namespace,
+              trustForwardedFor: this.responsePolicy.trustForwardedFor,
               redisUrl,
               maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
               decaySeconds: 60,
@@ -585,7 +613,11 @@ class HttpKernel {
     handler: BusinessRouteHandler<TRequest>,
   ): ComposedRouteHandler<TRequest> {
     assertHttpHandler(handler);
-    return this.wrapThrottle("login", resolveLoginRateLimit(), handler);
+    return this.wrapThrottle(
+      "login",
+      this.responsePolicy.loginRateLimit ?? resolveLoginRateLimit(),
+      handler,
+    );
   }
 
   wrapSigned<TRequest extends Request = Request>(
@@ -609,7 +641,11 @@ class HttpKernel {
     handler: BusinessRouteHandler<TRequest>,
   ): ComposedRouteHandler<TRequest> {
     assertHttpHandler(handler);
-    return this.wrapThrottle("register", resolveRegisterRateLimit(), handler);
+    return this.wrapThrottle(
+      "register",
+      this.responsePolicy.registerRateLimit ?? resolveRegisterRateLimit(),
+      handler,
+    );
   }
 
   private wrapWebAuth<TRequest extends Request = Request>(
@@ -663,6 +699,8 @@ class HttpKernel {
         withMiddleware(
           this.ownThrottle(
             createLoginThrottleMiddleware({
+              namespace: this.responsePolicy.namespace,
+              trustForwardedFor: this.responsePolicy.trustForwardedFor,
               ...(redisUrl ? { redisUrl } : {}),
               maxAttempts: rateLimit.maxAttempts,
               decaySeconds: rateLimit.decaySeconds,
@@ -680,6 +718,8 @@ class HttpKernel {
         withMiddleware(
           this.ownThrottle(
             createThrottleMiddleware({
+              namespace: this.responsePolicy.namespace,
+              trustForwardedFor: this.responsePolicy.trustForwardedFor,
               redisUrl,
               maxAttempts: rateLimit.maxAttempts,
               decaySeconds: rateLimit.decaySeconds,
@@ -697,6 +737,8 @@ class HttpKernel {
       withMiddleware(
         this.ownThrottle(
           createMemoryThrottleMiddleware({
+            namespace: this.responsePolicy.namespace,
+            trustForwardedFor: this.responsePolicy.trustForwardedFor,
             maxAttempts: rateLimit.maxAttempts,
             decaySeconds: rateLimit.decaySeconds,
             keyPrefix: memoryKeyPrefix,

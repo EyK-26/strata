@@ -50,6 +50,7 @@ describe("createMemoryThrottleMiddleware", () => {
         maxAttempts: 1,
         decaySeconds: 60,
         keyPrefix: "test-throttle-c:",
+        trustForwardedFor: true,
       });
       const next = async () => Response.json({ ok: true });
 

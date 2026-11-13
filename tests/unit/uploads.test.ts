@@ -52,7 +52,7 @@ describe("upload helpers", () => {
     expect(isAllowedMimeType("")).toBe(false);
 
     process.env.UPLOAD_ALLOW_UNKNOWN_MIME = "true";
-    expect(isAllowedMimeType("application/octet-stream")).toBe(true);
+    expect(isAllowedMimeType("application/octet-stream", true)).toBe(true);
 
     if (previous === undefined) {
       delete process.env.UPLOAD_ALLOW_UNKNOWN_MIME;
@@ -87,7 +87,9 @@ describe("upload helpers", () => {
       const file = new File([new Uint8Array([1, 2, 3, 4, 5])], "photo.jpg", {
         type: "image/jpeg",
       });
-      await expect(validateUploadFile(file)).rejects.toThrow(PayloadTooLargeError);
+      await expect(
+        validateUploadFile(file, "file", { maxBytes: 4, allowUnknownMime: false }),
+      ).rejects.toThrow(PayloadTooLargeError);
     } finally {
       if (previous === undefined) {
         delete process.env.MAX_UPLOAD_BYTES;

@@ -165,6 +165,9 @@ function wrapScim(kernel: HttpKernel, services:StarterAuthServices, handler: Bus
   const enabled = services.config.scimEnabled;
   const throttle = kernel.ownThrottle(createScimThrottleMiddleware({
     redisUrl: services.config.redisUrl,
+    namespace: services.config.throttleNamespace,
+    trustForwardedFor: services.config.trustForwardedFor,
+    resolveTenant: services.config.scimTenantForToken,
     maxAttempts: 120,
     decaySeconds: 60,
   }));

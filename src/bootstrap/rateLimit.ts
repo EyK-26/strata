@@ -13,8 +13,15 @@ const PRODUCTION_LOGIN_RATE_LIMIT: LoginRateLimitConfig = {
   decaySeconds: 900,
 };
 
-function isLocalAppEnv(): boolean {
-  return (process.env.APP_ENV ?? "local") === "local";
+interface RateLimitEnvironment {
+  readonly [key: string]: string | undefined;
+  APP_ENV?: string;
+  LOGIN_RATE_LIMIT_PER_WINDOW?: string;
+  LOGIN_RATE_LIMIT_WINDOW_SECONDS?: string;
+  LOGIN_RATE_LIMIT_WINDOW_MS?: string;
+  REGISTER_RATE_LIMIT_PER_WINDOW?: string;
+  REGISTER_RATE_LIMIT_WINDOW_SECONDS?: string;
+  REGISTER_RATE_LIMIT_WINDOW_MS?: string;
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
@@ -47,35 +54,36 @@ function parseWindowSeconds(
   return fallback;
 }
 
-function resolveLoginRateLimit(): LoginRateLimitConfig {
-  const defaults = isLocalAppEnv() ? LOCAL_LOGIN_RATE_LIMIT : PRODUCTION_LOGIN_RATE_LIMIT;
+function resolveLoginRateLimit(env: RateLimitEnvironment = {}): LoginRateLimitConfig {
+  const defaults = env.APP_ENV === "local" ? LOCAL_LOGIN_RATE_LIMIT : PRODUCTION_LOGIN_RATE_LIMIT;
 
   return {
-    maxAttempts: parsePositiveInt(process.env.LOGIN_RATE_LIMIT_PER_WINDOW, defaults.maxAttempts),
+    maxAttempts: parsePositiveInt(env.LOGIN_RATE_LIMIT_PER_WINDOW, defaults.maxAttempts),
     decaySeconds: parseWindowSeconds(
-      process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
-      process.env.LOGIN_RATE_LIMIT_WINDOW_MS,
+      env.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+      env.LOGIN_RATE_LIMIT_WINDOW_MS,
       defaults.decaySeconds,
     ),
   };
 }
 
-function resolveRegisterRateLimit(): LoginRateLimitConfig {
-  const defaults = isLocalAppEnv()
-    ? { maxAttempts: 100, decaySeconds: 60 }
-    : { maxAttempts: 10, decaySeconds: 60 };
+function resolveRegisterRateLimit(env: RateLimitEnvironment = {}): LoginRateLimitConfig {
+  const defaults =
+    env.APP_ENV === "local"
+      ? { maxAttempts: 100, decaySeconds: 60 }
+      : { maxAttempts: 10, decaySeconds: 60 };
 
   return {
-    maxAttempts: parsePositiveInt(process.env.REGISTER_RATE_LIMIT_PER_WINDOW, defaults.maxAttempts),
+    maxAttempts: parsePositiveInt(env.REGISTER_RATE_LIMIT_PER_WINDOW, defaults.maxAttempts),
     decaySeconds: parseWindowSeconds(
-      process.env.REGISTER_RATE_LIMIT_WINDOW_SECONDS,
-      process.env.REGISTER_RATE_LIMIT_WINDOW_MS,
+      env.REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+      env.REGISTER_RATE_LIMIT_WINDOW_MS,
       defaults.decaySeconds,
     ),
   };
 }
 
-export type { LoginRateLimitConfig };
+export type { LoginRateLimitConfig, RateLimitEnvironment };
 export {
   LOCAL_LOGIN_RATE_LIMIT,
   PRODUCTION_LOGIN_RATE_LIMIT,

@@ -43,3 +43,52 @@ test("core config and cache declarations reject invalid settings synchronously",
   ).toThrow();
   expect(() => createCacheProvider({ CACHE_DRIVER: "unknown" })).toThrow();
 });
+
+test("HTTP, upload and token policies belong to the configuration declaration before startup", async () => {
+  const env = {
+    DATABASE_URL: "sqlite://:memory:",
+    CACHE_DRIVER: "array",
+    APP_URL: "https://a.test/",
+    FRONTEND_MODE: "hybrid",
+    FEATURE_PUBLIC_READS: "true",
+    FEATURE_EMAIL_VERIFICATION: "true",
+    MAX_UPLOAD_BYTES: "4",
+    UPLOAD_ALLOW_UNKNOWN_MIME: "true",
+    API_TOKEN_DEFAULT_EXPIRY_DAYS: "30",
+    RATE_LIMIT_PER_MINUTE: "2",
+    APP_KEY_PREFIX: "owner-a",
+    TRUST_FORWARDED_FOR: "true",
+  };
+  const owner = configured(env);
+  Object.assign(env, {
+    APP_URL: "https://other.test",
+    FRONTEND_MODE: "api",
+    FEATURE_PUBLIC_READS: "false",
+    FEATURE_EMAIL_VERIFICATION: "false",
+    MAX_UPLOAD_BYTES: "999",
+    UPLOAD_ALLOW_UNKNOWN_MIME: "false",
+    API_TOKEN_DEFAULT_EXPIRY_DAYS: "999",
+    RATE_LIMIT_PER_MINUTE: "999",
+    APP_KEY_PREFIX: "other",
+    TRUST_FORWARDED_FOR: "false",
+  });
+  try {
+    await owner.app.start();
+    expect(owner.config.get("http.features")).toEqual({
+      emailVerificationRequired: true,
+      viewsEnabled: true,
+      publicReadsEnabled: true,
+      etagEnabled: true,
+    });
+    expect(owner.config.get("http.uploadPolicy")).toEqual({ maxBytes: 4, allowUnknownMime: true });
+    expect(owner.config.get("auth.defaultTokenExpiryDays")).toBe(30);
+    expect(owner.config.get("http.responsePolicy")).toMatchObject({
+      cors: { allowedOrigins: ["https://a.test"] },
+      rateLimitPerMinute: 2,
+      namespace: "owner-a",
+      trustForwardedFor: true,
+    });
+  } finally {
+    expect((await owner.app.stop()).successful).toBe(true);
+  }
+});

@@ -1,4 +1,4 @@
-import { isSpaEnabled, isViewsEnabled } from "../runtime/frontendMode";
+import type { FrontendMode } from "../runtime/frontendMode";
 
 type CspDirectiveValue = string | string[] | false;
 
@@ -7,6 +7,8 @@ interface ContentSecurityPolicyDirectives {
 }
 
 interface ContentSecurityPolicyOptions {
+  readonly frontendMode?: FrontendMode;
+  readonly production?: boolean;
   /** Full HTML Content-Security-Policy. Replaces the HTMX/SPA baseline. */
   csp?: string;
   /** Alias for `csp`. */
@@ -57,20 +59,10 @@ const SPA_HTML_DIRECTIVES: Record<string, string[]> = {
   "base-uri": ["'self'"],
 };
 
-let configuredHtmlOptions: ContentSecurityPolicyOptions = {};
-
 function generateCspNonce(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   return Buffer.from(bytes).toString("base64");
-}
-
-function configureContentSecurityPolicy(options: ContentSecurityPolicyOptions): void {
-  configuredHtmlOptions = { ...options };
-}
-
-function resetContentSecurityPolicyForTests(): void {
-  configuredHtmlOptions = {};
 }
 
 function cloneDirectives(source: Record<string, string[]>): Record<string, string[]> {
@@ -138,12 +130,12 @@ function applyNonce(
   return next;
 }
 
-function htmlBaselineDirectives(): Record<string, string[]> {
-  if (isViewsEnabled()) {
+function htmlBaselineDirectives(mode: FrontendMode = "api"): Record<string, string[]> {
+  if (mode === "server-htmx" || mode === "hybrid") {
     return cloneDirectives(HTMX_HTML_DIRECTIVES);
   }
 
-  if (isSpaEnabled()) {
+  if (mode === "spa-react") {
     return cloneDirectives(SPA_HTML_DIRECTIVES);
   }
 
@@ -165,22 +157,17 @@ function spaContentSecurityPolicy(nonce?: string): string {
 function resolveHtmlContentSecurityPolicy(
   options: ResolveContentSecurityPolicyOptions = {},
 ): string {
-  const resolved: ContentSecurityPolicyOptions = {
-    ...configuredHtmlOptions,
-    ...options,
-    directives: {
-      ...configuredHtmlOptions.directives,
-      ...options.directives,
-    },
-  };
-  const override = resolved.htmlCsp ?? resolved.csp;
+  const override = options.htmlCsp ?? options.csp;
 
   if (override) {
     return override;
   }
 
   return serializeDirectives(
-    applyNonce(mergeDirectives(htmlBaselineDirectives(), resolved.directives), options.nonce),
+    applyNonce(
+      mergeDirectives(htmlBaselineDirectives(options.frontendMode), options.directives),
+      options.nonce,
+    ),
   );
 }
 
@@ -199,10 +186,8 @@ function resolveContentSecurityPolicy(
 
 export type { ContentSecurityPolicyDirectives, ContentSecurityPolicyOptions };
 export {
-  configureContentSecurityPolicy,
   generateCspNonce,
   HTMX_2_0_4_INDICATOR_STYLE_HASH,
-  resetContentSecurityPolicyForTests,
   resolveContentSecurityPolicy,
   resolveHtmlContentSecurityPolicy,
   serverHtmxContentSecurityPolicy,

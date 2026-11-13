@@ -10,11 +10,12 @@ import {
   type DisposableThrottle,
   type RedisThrottleClient,
   redisThrottleKey,
+  type ThrottleIdentityPolicy,
   throttleUnavailableResponse,
 } from "./throttleMiddleware";
 import { tooManyRequestsResponse } from "./throttleResponse";
 
-interface LoginThrottleOptions extends MemoryThrottleStorageOptions {
+interface LoginThrottleOptions extends MemoryThrottleStorageOptions, ThrottleIdentityPolicy {
   redisUrl?: string;
   maxAttempts: number;
   decaySeconds: number;
@@ -25,8 +26,8 @@ interface LoginThrottleOptions extends MemoryThrottleStorageOptions {
 
 let resetGeneration = 0;
 
-function resolveLoginIdentity(request: Request): string {
-  return readClientIp(request) ?? "unknown";
+function resolveLoginIdentity(request: Request, trustForwardedFor = false): string {
+  return readClientIp(request, { TRUST_FORWARDED_FOR: String(trustForwardedFor) }) ?? "unknown";
 }
 
 async function resolveLoginEmail(request: Request): Promise<string> {
@@ -54,6 +55,7 @@ async function resolveLoginEmail(request: Request): Promise<string> {
 function createMemoryLoginThrottleMiddleware(
   options: LoginThrottleOptions,
 ): DisposableMemoryThrottle {
+  options = Object.freeze({ ...options });
   const store = new BoundedThrottleStore(options.decaySeconds * 1000, options);
   if (!Number.isSafeInteger(options.maxAttempts) || options.maxAttempts < 0)
     throw new Error("Invalid memory throttle limit.");
@@ -67,7 +69,9 @@ function createMemoryLoginThrottleMiddleware(
     const key = redisThrottleKey(
       request,
       options.keyPrefix ?? "login-throttle",
-      JSON.stringify([resolveLoginIdentity(request), email]),
+      JSON.stringify([resolveLoginIdentity(request, options.trustForwardedFor), email]),
+      undefined,
+      options.namespace,
     );
     const attempts = store.consume(key);
     if (attempts === null) return throttleUnavailableResponse();
@@ -85,13 +89,20 @@ function createMemoryLoginThrottleMiddleware(
 function createRedisLoginThrottleMiddleware(
   options: LoginThrottleOptions & { redisUrl: string },
 ): DisposableThrottle {
+  options = Object.freeze({ ...options });
   const consume = createRedisThrottleConsumer(options);
   const prefix = options.keyPrefix ?? "login-throttle";
 
   const middleware: Middleware = async (request, next) => {
-    const identity = resolveLoginIdentity(request);
+    const identity = resolveLoginIdentity(request, options.trustForwardedFor);
     const email = await resolveLoginEmail(request);
-    const throttleKey = redisThrottleKey(request, prefix, JSON.stringify([identity, email]));
+    const throttleKey = redisThrottleKey(
+      request,
+      prefix,
+      JSON.stringify([identity, email]),
+      undefined,
+      options.namespace,
+    );
     let attempts: number;
     try {
       attempts = await consume(throttleKey, options.decaySeconds);

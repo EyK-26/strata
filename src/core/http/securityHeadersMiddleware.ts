@@ -1,14 +1,23 @@
 import type { ContentSecurityPolicyOptions } from "@getstrata/core/http/contentSecurityPolicy";
 import {
-  configureContentSecurityPolicy,
   generateCspNonce,
   resolveContentSecurityPolicy,
 } from "@getstrata/core/http/contentSecurityPolicy";
 import { currentRequestMeta, runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
-import { isProductionEnv } from "../runtime/appEnv";
 import type { Middleware } from "./middleware";
 
 function createSecurityHeadersMiddleware(options: ContentSecurityPolicyOptions = {}): Middleware {
+  options = Object.freeze({
+    ...options,
+    directives: options.directives
+      ? Object.fromEntries(
+          Object.entries(options.directives).map(([key, value]) => [
+            key,
+            Array.isArray(value) ? [...value] : value,
+          ]),
+        )
+      : undefined,
+  });
   return async (request: Request, next: () => Promise<Response>) => {
     const nonce = generateCspNonce();
     const existing = currentRequestMeta();
@@ -37,7 +46,7 @@ function createSecurityHeadersMiddleware(options: ContentSecurityPolicyOptions =
           resolveContentSecurityPolicy(response, { ...options, nonce }),
         );
 
-        if (isProductionEnv()) {
+        if (options.production) {
           headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
         }
 
@@ -52,4 +61,4 @@ function createSecurityHeadersMiddleware(options: ContentSecurityPolicyOptions =
 }
 
 export type { ContentSecurityPolicyOptions };
-export { configureContentSecurityPolicy, createSecurityHeadersMiddleware };
+export { createSecurityHeadersMiddleware };

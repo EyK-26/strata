@@ -7,12 +7,13 @@ import type { Middleware } from "./middleware";
 import {
   redisThrottleKey,
   resolveThrottleQuota,
+  type ThrottleIdentityPolicy,
   type ThrottleQuotaPolicy,
   throttleUnavailableResponse,
 } from "./throttleMiddleware";
 import { tooManyRequestsResponse } from "./throttleResponse";
 
-interface MemoryThrottleOptions extends MemoryThrottleStorageOptions {
+interface MemoryThrottleOptions extends MemoryThrottleStorageOptions, ThrottleIdentityPolicy {
   maxAttempts: number;
   decaySeconds: number;
   keyPrefix?: string;
@@ -23,6 +24,7 @@ type DisposableMemoryThrottle = Middleware & { dispose(): void; stats(): MemoryT
 let resetGeneration = 0;
 
 function createMemoryThrottleMiddleware(options: MemoryThrottleOptions): DisposableMemoryThrottle {
+  options = Object.freeze({ ...options });
   const store = new BoundedThrottleStore(options.decaySeconds * 1000, options);
   if (!Number.isSafeInteger(options.maxAttempts) || options.maxAttempts < 0)
     throw new Error("Invalid memory throttle limit.");
@@ -42,7 +44,9 @@ function createMemoryThrottleMiddleware(options: MemoryThrottleOptions): Disposa
       redisThrottleKey(
         request,
         options.keyPrefix ?? "memory-throttle",
-        resolveThrottleIdentity(request),
+        resolveThrottleIdentity(request, options.trustForwardedFor),
+        undefined,
+        options.namespace,
       ),
     );
     if (attempts === null) return throttleUnavailableResponse();

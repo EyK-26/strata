@@ -1,5 +1,5 @@
-function resolveDefaultTokenExpiryDays(): number | null {
-  const raw = process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS?.trim();
+function resolveDefaultTokenExpiryDays(value?: string): number | null {
+  const raw = value?.trim();
 
   if (!raw) {
     return null;

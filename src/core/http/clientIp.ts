@@ -2,7 +2,7 @@ import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 
 type EnvRecord = Record<string, string | undefined>;
 
-function trustForwardedFor(env: EnvRecord = process.env): boolean {
+function trustForwardedFor(env: EnvRecord = {}): boolean {
   return (env.TRUST_FORWARDED_FOR ?? "false") === "true";
 }
 
@@ -46,7 +46,7 @@ function forwardedClientIp(request: Request): string | undefined {
 }
 
 /** Forwarded headers only when trusted; otherwise the socket address the server recorded. */
-function readClientIp(request: Request, env: EnvRecord = process.env): string | undefined {
+function readClientIp(request: Request, env: EnvRecord = {}): string | undefined {
   if (trustForwardedFor(env)) {
     const forwarded = forwardedClientIp(request);
     if (forwarded) {

@@ -1,6 +1,10 @@
 import { resolve } from "node:path";
 import { resolveMaxBodyBytes } from "@getstrata/core/http/bodySizeLimitMiddleware";
-import { type CorsOptions, createCorsMiddleware } from "@getstrata/core/http/corsMiddleware";
+import {
+  type CorsOptions,
+  createCorsMiddleware,
+  resolveCorsConfig,
+} from "@getstrata/core/http/corsMiddleware";
 import { currentRequestMeta, runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import type { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
 import { assertUrlPathUnderRoot } from "@getstrata/core/security/safePath";
@@ -10,6 +14,7 @@ import type { BunRequest, Serve, Server } from "bun";
 import { dispatchOwnedRoute } from "#strata-http-route";
 import type { AppRouteMap } from "../contracts.ts";
 import type { BusinessRequestPorts, BusinessRouteHandler } from "../persistenceContracts";
+import { resolveHttpResponsePolicy } from "../providers/config";
 
 export type NativeServerOptions<T = unknown> = Omit<Serve.HostnamePortServeOptions<T>, "port"> & {
   websocket?: Bun.WebSocketHandler<T>;
@@ -20,6 +25,8 @@ type RequestInterception = Response | void;
 
 export interface WebServerOptions<T = unknown> {
   port: number;
+  /** Environment adapter input captured before transport acquisition. */
+  env?: Readonly<Record<string, string | undefined>>;
   enter?: (request: Request, handler: BusinessRouteHandler) => Promise<Response>;
   handle?: (
     request: Request,
@@ -231,7 +238,20 @@ function openWebServer<T>(
   for (const field of ["fetch", "routes", "port", "unix"])
     if (options.native && field in options.native)
       throw new TypeError(`native.${field} is owned by createWebServer.`);
-  const maxRequestBodySize = options.native?.maxRequestBodySize ?? resolveMaxBodyBytes();
+  const responsePolicy = resolveHttpResponsePolicy(
+    Object.freeze({ ...(options.env ?? process.env) }),
+  );
+  if (options.cors) resolveCorsConfig(options.cors);
+  const cors: CorsOptions = {
+    ...responsePolicy.cors,
+    ...options.cors,
+    additionalAllowedHeaders: [
+      ...(responsePolicy.cors?.additionalAllowedHeaders ?? []),
+      ...(options.cors?.additionalAllowedHeaders ?? []),
+    ],
+  };
+  const maxRequestBodySize =
+    options.native?.maxRequestBodySize ?? responsePolicy.maxBodyBytes ?? resolveMaxBodyBytes();
   if (!Number.isSafeInteger(maxRequestBodySize) || maxRequestBodySize <= 0)
     throw new RangeError("maxRequestBodySize must be a positive safe integer.");
   const renderError = options.errorView;
@@ -251,14 +271,7 @@ function openWebServer<T>(
     );
   const publicDir = resolve(options.publicDir ?? "./public");
   const bunRoutes = options.routes
-    ? convertAppRoutesToBunRoutes(
-        options.routes,
-        options.cors,
-        onRequest,
-        track,
-        options.enter,
-        validate,
-      )
+    ? convertAppRoutesToBunRoutes(options.routes, cors, onRequest, track, options.enter, validate)
     : undefined;
 
   const { websocket, ...native } = options.native ?? {};

@@ -3,17 +3,18 @@ import {
   BoundedThrottleStore,
   type MemoryThrottleStorageOptions,
 } from "../runtime/boundedThrottleStore";
-import { resolveScimTenantFromToken } from "../security/scimTenantTokens";
 import { readClientIp } from "./clientIp";
 import type { Middleware } from "./middleware";
 import {
   createRedisThrottleConsumer,
   type RedisThrottleClient,
   redisThrottleKey,
+  type ThrottleIdentityPolicy,
   throttleUnavailableResponse,
 } from "./throttleMiddleware";
 
-interface ScimThrottleOptions extends MemoryThrottleStorageOptions {
+interface ScimThrottleOptions extends MemoryThrottleStorageOptions, ThrottleIdentityPolicy {
+  resolveTenant?: (token: string) => number | null;
   redisUrl?: string;
   maxAttempts: number;
   decaySeconds: number;
@@ -22,7 +23,7 @@ interface ScimThrottleOptions extends MemoryThrottleStorageOptions {
   keyPrefix?: string;
 }
 
-function resolveScimIdentity(request: Request): string {
+function resolveScimIdentity(request: Request, trustForwardedFor = false): string {
   const authorization = request.headers.get("authorization") ?? "";
   const presented = authorization.startsWith("Bearer ")
     ? authorization.slice("Bearer ".length).trim()
@@ -32,10 +33,11 @@ function resolveScimIdentity(request: Request): string {
     return createHash("sha256").update(presented).digest("hex");
   }
 
-  return readClientIp(request) ?? "unknown";
+  return readClientIp(request, { TRUST_FORWARDED_FOR: String(trustForwardedFor) }) ?? "unknown";
 }
 
 function createScimThrottleMiddleware(options: ScimThrottleOptions) {
+  options = Object.freeze({ ...options });
   if (!Number.isSafeInteger(options.maxAttempts) || options.maxAttempts < 0)
     throw new Error("Invalid SCIM throttle limit.");
   const redisUrl = options.redisUrl?.trim() ?? "";
@@ -46,7 +48,7 @@ function createScimThrottleMiddleware(options: ScimThrottleOptions) {
   let disposed = false;
   const middleware: Middleware = async (request, next) => {
     if (disposed) return throttleUnavailableResponse();
-    const identity = resolveScimIdentity(request);
+    const identity = resolveScimIdentity(request, options.trustForwardedFor);
     const token = request.headers.get("authorization")?.startsWith("Bearer ")
       ? (request.headers.get("authorization")?.slice("Bearer ".length).trim() ?? "")
       : "";
@@ -54,7 +56,8 @@ function createScimThrottleMiddleware(options: ScimThrottleOptions) {
       request,
       options.keyPrefix ?? "scim-throttle:v2",
       identity,
-      resolveScimTenantFromToken(token) ?? undefined,
+      options.resolveTenant?.(token) ?? null,
+      options.namespace,
     );
     let attempts: number | null | undefined;
     try {

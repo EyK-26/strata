@@ -7,9 +7,10 @@ import {
 import { readClientIp } from "../http/clientIp";
 import { appLogger } from "./logger";
 
-function createRequestLoggingMiddleware(): Middleware {
+function createRequestLoggingMiddleware(trustForwardedFor = false): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
-    const ipAddress = readClientIp(request) ?? null;
+    const ipAddress =
+      readClientIp(request, { TRUST_FORWARDED_FOR: String(trustForwardedFor) }) ?? null;
     const requestId = resolveRequestId(request);
     return await runWithRequestMeta(
       {

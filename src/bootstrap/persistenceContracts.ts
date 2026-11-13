@@ -55,6 +55,16 @@ export interface HttpPersistenceOptions {
   }>;
   readonly intendedUrl?: import("@getstrata/core/auth/intendedUrlCookie").IntendedUrlCookieOptions;
   readonly flash?: import("@getstrata/core/http/flashSession").FlashSessionOptions;
+  readonly responsePolicy?: Readonly<{
+    securityHeaders?: import("@getstrata/core/http/contentSecurityPolicy").ContentSecurityPolicyOptions;
+    cors?: import("@getstrata/core/http/corsMiddleware").CorsOptions;
+    maxBodyBytes?: number;
+    rateLimitPerMinute?: number;
+    namespace?: string;
+    trustForwardedFor?: boolean;
+    loginRateLimit?: import("./rateLimit").LoginRateLimitConfig;
+    registerRateLimit?: import("./rateLimit").LoginRateLimitConfig;
+  }>;
   readonly csrf?: import("@getstrata/core/http/csrfMiddleware").CsrfOptions;
   readonly scim?: (
     request: Request,
