@@ -39,7 +39,7 @@ after qualification. This document neither changes package versions nor publishe
 anything. Local archives must remain tied to their source and integrity receipts.
 
 Before release, reconcile remaining provider/configuration adapters (including
-mail/storage), execute the bounded adapter/profile qualification inventory, review
+view rendering), execute the bounded adapter/profile qualification inventory, review
 generated route/OpenAPI/SDK snapshots, and pass the complete distribution, E2E,
 smoke, and CI gates on the integrated revision. Publication and hosted deployment
 remain separate decisions.
