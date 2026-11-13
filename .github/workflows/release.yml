@@ -146,7 +146,7 @@ jobs:
         run: bun scripts/verify-release-ci.ts
 
       - name: Install npm CLI for trusted publishing
-        run: npm install -g npm@latest
+        run: npm install -g "npm@$(cat .npm-version)"
 
       - name: Install dependencies
         run: |

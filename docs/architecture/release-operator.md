@@ -1,6 +1,6 @@
 # Stable major release operator procedure
 
-The proposed version is `3.0.0`. The publisher selects it only after the complete
+The corrected stable release is `3.0.1`. The publisher selects it only after the complete
 breaking-refactor acceptance inventory passes. A failed or incomplete gate blocks
 merge/publication. Local fixtures do not qualify hosted providers or authorize
 provisioning/deployment. The completion-sprint authorization covers merge and a new
@@ -22,7 +22,7 @@ release once accepted; root owns GitHub and registry operations.
    Merge the reviewed result into actual `main`. Wait for successful `CI` from the
    `push` event at the exact merged SHA. A prior PR green run or earlier main SHA
    does not qualify. The release workflow checks this API evidence itself.
-4. Root tags that exact SHA with `v3.0.0` and pushes the tag, or dispatches `Release`
+4. Root tags that exact SHA with `v3.0.1` and pushes the tag, or dispatches `Release`
    with an already verified existing tag and the workflow ref set to that tag.
    Tag pushes trigger publication. The
    workflow repeats the release quality gate, packs each package once, records the
@@ -41,6 +41,13 @@ release once accepted; root owns GitHub and registry operations.
 
 ## Partial publication and recovery
 
+The `v3.0.0` attempt passed its quality gate and builds, then failed before archive
+upload or npm publication: npm 12 changed `npm pack --json` from an array to a
+package-keyed object. Preserve that tag. The `3.0.1` patch accepts both formats and
+checks the reported identity and integrity against each archive. `.npm-version`
+pins the CLI used by both the publication workflow and CI's real packing check.
+Upgrade that pin through a reviewed change with successful packing evidence.
+
 Publication is not atomic across registries or packages. If any step fails, first
 record which effects occurred. Do not move a tag, unpublish packages, overwrite a
 version, or create new archive bytes to force progress.
@@ -49,7 +56,7 @@ For an npm failure after archive upload, root dispatches the same `Release` work
 with the same tag, workflow ref set to that tag, and `recovery_run_id` set to the original Release run ID:
 
 ```sh
-gh workflow run release.yml --ref v3.0.0 -f tag=v3.0.0 -f recovery_run_id=ORIGINAL_RUN_ID
+gh workflow run release.yml --ref v3.0.1 -f tag=v3.0.1 -f recovery_run_id=ORIGINAL_RUN_ID
 ```
 
 The workflow rejects `GITHUB_SHA` differing from the checked-out release commit,
