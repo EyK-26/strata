@@ -1,10 +1,8 @@
 import { resolveFieldEncryptionKeyring } from "@getstrata/core/crypto/fieldEncryption";
-import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
 import { envFlagEnabled, isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { isViewsMode, parseFrontendMode } from "@getstrata/core/runtime/frontendMode";
 import {
   assertPostgresRoleCannotBypassRls,
-  inspectCurrentPostgresRole,
   isPostgresUrl,
   postgresUrlUsername,
 } from "@getstrata/core/tenant/enableTenantRls";
@@ -226,12 +224,6 @@ type LivePostgresRoleInspector = () => Promise<{
   rolbypassrls: boolean;
 } | null>;
 
-let livePostgresRoleInspector: LivePostgresRoleInspector | null = null;
-
-function setLivePostgresRoleInspectorForTests(inspect: LivePostgresRoleInspector | null): void {
-  livePostgresRoleInspector = inspect;
-}
-
 /**
  * Generated request traffic uses APP_DATABASE_URL when set, otherwise DATABASE_URL.
  * Fixture DATABASE_URL may stay a superuser for migrate:fresh DROP. That URL is
@@ -282,22 +274,14 @@ function assertRlsUsesAppDatabaseRole(env: Record<string, string | undefined>): 
   }
 }
 
-async function defaultInspectLivePostgresRole(): Promise<{
-  rolname: string;
-  rolsuper: boolean;
-  rolbypassrls: boolean;
-} | null> {
-  return await inspectCurrentPostgresRole(getDefaultDatabasePool());
-}
-
 /**
  * After the runtime pool is open, refuse rolsuper / rolbypassrls whenever
  * TENANCY_DRIVER=rls, including local. Fail closed if the live query cannot run.
  * MIGRATION_DATABASE_URL may stay a superuser.
  */
 async function assertRlsLiveDatabaseRole(
-  env: Record<string, string | undefined> = process.env,
-  inspect?: LivePostgresRoleInspector,
+  env: Record<string, string | undefined>,
+  inspect: LivePostgresRoleInspector,
 ): Promise<void> {
   if (!isRlsTenancy(env)) {
     return;
@@ -313,7 +297,17 @@ async function assertRlsLiveDatabaseRole(
 
   let role: { rolname: string; rolsuper: boolean; rolbypassrls: boolean } | null;
   try {
-    role = await (inspect ?? livePostgresRoleInspector ?? defaultInspectLivePostgresRole)();
+    const inspected = await inspect();
+    if (!inspected) throw new TypeError("Missing live PostgreSQL role.");
+    const { rolname, rolsuper, rolbypassrls } = inspected;
+    if (
+      typeof rolname !== "string" ||
+      !rolname.trim() ||
+      typeof rolsuper !== "boolean" ||
+      typeof rolbypassrls !== "boolean"
+    )
+      throw new TypeError("Malformed live PostgreSQL role.");
+    role = { rolname, rolsuper, rolbypassrls };
   } catch {
     throw new Error(
       `TENANCY_DRIVER=rls startup blocked: could not inspect the live Postgres role for ${source}.`,
@@ -373,4 +367,4 @@ function assertProductionSecrets(env: Record<string, string | undefined> = proce
   assertRlsUsesAppDatabaseRole(env);
 }
 
-export { assertProductionSecrets, assertRlsLiveDatabaseRole, setLivePostgresRoleInspectorForTests };
+export { assertProductionSecrets, assertRlsLiveDatabaseRole };

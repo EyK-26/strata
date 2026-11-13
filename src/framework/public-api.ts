@@ -219,13 +219,8 @@ export {
   fieldEncryptionRotationRepository,
   runFieldEncryptionRotationBatch,
 } from "../core/crypto/fieldEncryptionRotation";
-export {
-  bindDatabaseConnection,
-  getBoundDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "../core/database/bindConnection.ts";
 export { createDatabaseBindings } from "../core/database/bindings";
-export { bindBunSql, createBunSqlPool } from "../core/database/bunSql.ts";
+export { createBunSqlPool } from "../core/database/bunSql.ts";
 export { createDatabaseConnection } from "../core/database/connection.ts";
 export {
   getActiveDatabaseConnection,
@@ -233,13 +228,6 @@ export {
   runWithDatabaseConnection,
 } from "../core/database/connectionContext.ts";
 export type { DatabaseConnection } from "../core/database/connectionContracts.ts";
-export {
-  getDefaultDatabasePool,
-  getDefaultDatabaseQuery,
-  isDefaultDatabaseConnection,
-  registerDefaultDatabasePool,
-  resetDefaultDatabasePoolForTests,
-} from "../core/database/defaultConnection.ts";
 export type { SqlDialect } from "../core/database/dialect.ts";
 export {
   currentSqlDialect,
@@ -285,14 +273,6 @@ export {
   createMysqlPool,
   resetMysqlLoaderForTests,
 } from "../core/database/mysqlConnection.ts";
-export {
-  getNamedConnection,
-  hasNamedConnection,
-  registerNamedConnection,
-  resetNamedConnections,
-  runOnNamedConnection,
-  unregisterNamedConnection,
-} from "../core/database/namedConnections.ts";
 export {
   buildAdvancedWhereClause,
   buildCountQuery,
@@ -343,10 +323,6 @@ export {
   morphOne,
   morphTo,
 } from "../core/database/relationships.ts";
-export {
-  repositoryConnection,
-  resolveRepositoryConnection,
-} from "../core/database/repositoryConnection.ts";
 export {
   projectPluck,
   uniqueColumnSelect,

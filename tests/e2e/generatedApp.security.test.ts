@@ -349,14 +349,22 @@ describe("Generated application security", () => {
       process.env.TENANCY_DRIVER = "rls";
       process.env.DATABASE_URL = migrationUrl;
       process.env.APP_DATABASE_URL = migrationUrl;
+      let inspections = 0;
       await expect(
-        assertRlsLiveDatabaseRole({
-          APP_ENV: "local",
-          TENANCY_DRIVER: "rls",
-          DATABASE_URL: migrationUrl,
-          APP_DATABASE_URL: migrationUrl,
-        }),
+        assertRlsLiveDatabaseRole(
+          {
+            APP_ENV: "local",
+            TENANCY_DRIVER: "rls",
+            DATABASE_URL: migrationUrl,
+            APP_DATABASE_URL: migrationUrl,
+          },
+          async () => {
+            inspections++;
+            throw new Error("URL denylist must reject before live inspection");
+          },
+        ),
       ).rejects.toThrow(/not postgres/);
+      expect(inspections).toBe(0);
     } finally {
       restoreEnv("DATABASE_URL", previousDatabaseUrl);
       restoreEnv("APP_DATABASE_URL", previousAppUrl);

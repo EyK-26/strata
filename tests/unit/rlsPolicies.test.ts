@@ -3,11 +3,11 @@ import {
   enableTenantRlsSql,
   generatedRlsBootstrapSql,
 } from "@getstrata/core/tenant/enableTenantRls";
-import db from "../../src/db/connection";
+import { fixtureDatabase } from "../helpers/fixtureDatabase";
 
 describe("tenant RLS inventory", () => {
   test("forces tenant_isolation on tenant-owned tables including later domain tables", async () => {
-    const rows = (await db`
+    const rows = (await fixtureDatabase.connection()`
       SELECT tablename
       FROM pg_policies
       WHERE policyname = 'tenant_isolation'
@@ -24,7 +24,7 @@ describe("tenant RLS inventory", () => {
   });
 
   test("keeps api_token, organization_member, and sessions auth-global without tenant RLS", async () => {
-    const rows = (await db`
+    const rows = (await fixtureDatabase.connection()`
       SELECT tablename
       FROM pg_policies
       WHERE policyname = 'tenant_isolation'

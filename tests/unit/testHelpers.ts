@@ -11,45 +11,15 @@ import {
 import type { Application } from "@getstrata/core/contracts/application";
 import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
 import { CORE_HTTP_CLEANUP_TOKEN } from "@getstrata/core/contracts/serviceTokens";
-import { bindDatabaseConnection } from "@getstrata/core/database/bindConnection";
 import { createDatabaseBindings } from "@getstrata/core/database/bindings";
-import { resetBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
 import { createApplication } from "@getstrata/core/runtime/application";
 import { createStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
-import { SQL } from "bun";
 import { HTTP_PERSISTENCE_OPTIONS } from "../../src/bootstrap/httpPersistence";
-import type { DatabaseConnection as CoreDatabaseConnection } from "../../src/core/database/connectionContracts";
-import type { DatabaseConnection } from "../../src/db/connection";
+import type { DatabaseConnection } from "../../src/db/connection/createConnection";
 import type { CacheLike } from "../../src/types/services";
-
-type TransactionCapableConnection = CoreDatabaseConnection & {
-  begin<TValue>(
-    callback: (transaction: CoreDatabaseConnection) => Promise<TValue>,
-  ): Promise<TValue>;
-};
-
-function bindFakeTransactionConnection(): void {
-  const transactionConnection: CoreDatabaseConnection = {
-    async unsafe() {
-      return [];
-    },
-  };
-
-  bindDatabaseConnection({
-    async unsafe() {
-      return [];
-    },
-    async begin(callback) {
-      return await callback(transactionConnection);
-    },
-  } as TransactionCapableConnection);
-}
-
-function resetFakeTransactionConnection(): void {
-  resetBoundDatabaseConnection();
-}
+import { fixtureDatabase } from "../helpers/fixtureDatabase";
 
 const defaultTestTenant = {
   id: 1,
@@ -59,11 +29,6 @@ const defaultTestTenant = {
 };
 
 type MockQuery = (strings: TemplateStringsArray, ...values: unknown[]) => Promise<unknown[]>;
-
-function readInteger(name: string, fallback: number): number {
-  const parsed = Number.parseInt(process.env[name] ?? String(fallback), 10);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
-}
 
 function createMockDatabaseConnection(
   query: MockQuery,
@@ -78,25 +43,6 @@ function createMockDatabaseConnection(
   }) as DatabaseConnection;
 
   return connection;
-}
-
-async function restoreDefaultDatabaseConnection(): Promise<void> {
-  const url = process.env.DATABASE_URL;
-
-  if (!url) {
-    return;
-  }
-
-  const { replaceDatabaseConnectionForTests } = await import("../../src/db/connection");
-  await replaceDatabaseConnectionForTests(
-    new SQL({
-      url,
-      max: readInteger("DB_POOL_MAX", 10),
-      idleTimeout: readInteger("DB_POOL_IDLE_TIMEOUT", 30),
-      maxLifetime: readInteger("DB_POOL_MAX_LIFETIME", 3600),
-      connectionTimeout: readInteger("DB_CONNECTION_TIMEOUT", 10),
-    }),
-  );
 }
 
 function createMockCache(overrides: Partial<CacheLike> = {}): CacheLike {
@@ -237,7 +183,7 @@ function mockFetch(implementation: (...args: never[]) => unknown): typeof fetch 
 
 /** Explicit legacy audit-fixture cleanup; it does not grant canonical ORM authority. */
 async function clearPendingAuditLogs(): Promise<void> {
-  const db = (await import("../../src/db/connection")).default;
+  const db = fixtureDatabase.connection();
   await db.begin(async (transaction) => {
     if ((process.env.DB_CONNECTION ?? "pgsql") === "pgsql")
       await transaction.unsafe("SELECT set_config('app.bypass_rls', $1, true)", ["true"]);
@@ -248,13 +194,10 @@ async function clearPendingAuditLogs(): Promise<void> {
 }
 
 export {
-  bindFakeTransactionConnection,
   clearPendingAuditLogs,
   createMockCache,
   createMockDatabaseConnection,
   createMockDependencies,
   defaultTestTenant,
   mockFetch,
-  resetFakeTransactionConnection,
-  restoreDefaultDatabaseConnection,
 };

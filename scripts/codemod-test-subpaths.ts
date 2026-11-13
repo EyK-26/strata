@@ -42,8 +42,6 @@ const SUBPATHS = new Set([
   "crypto/mfaSecret",
   "database",
   "database/baseRepository",
-  "database/bindConnection",
-  "database/boundConnection",
   "database/connection",
   "database/errors",
   "database/factory",

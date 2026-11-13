@@ -73,15 +73,6 @@ export {
   createMysqlConnectionFromPool,
   createMysqlPool,
 } from "./mysqlConnection.ts";
-export type { NamedConnectionEntry } from "./namedConnections.ts";
-export {
-  getNamedConnection,
-  hasNamedConnection,
-  registerNamedConnection,
-  resetNamedConnections,
-  runOnNamedConnection,
-  unregisterNamedConnection,
-} from "./namedConnections.ts";
 export { projectPluck, uniqueColumnSelect } from "./pluck.ts";
 export {
   buildAdvancedWhereClause,

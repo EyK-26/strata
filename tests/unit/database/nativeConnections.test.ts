@@ -3,24 +3,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  type ActiveDatabaseHandle,
-  getActiveDatabaseConnection,
-  hasActiveDatabaseConnection,
-} from "@getstrata/core/database/connectionContext";
-import { currentSqlDialect } from "@getstrata/core/database/dialect";
-import {
   createMysqlConnectionFromPool,
   resetMysqlLoaderForTests,
 } from "@getstrata/core/database/mysqlConnection";
 
-import {
-  getNamedConnection,
-  hasNamedConnection,
-  registerNamedConnection,
-  resetNamedConnections,
-  runOnNamedConnection,
-  unregisterNamedConnection,
-} from "@getstrata/core/database/namedConnections";
 import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
 
 type MysqlCorePool = {
@@ -28,51 +14,6 @@ type MysqlCorePool = {
   listenerCount(event: string): number;
   emit(event: string, ...args: unknown[]): boolean;
 };
-
-describe("named database connections", () => {
-  afterEach(() => {
-    resetNamedConnections();
-  });
-
-  test("register, get, has, unregister, and reset", () => {
-    expect(hasNamedConnection("kiosk")).toBe(false);
-    expect(() => getNamedConnection("kiosk")).toThrow('Named database connection "kiosk"');
-    expect(() => registerNamedConnection("  ", "sqlite", { unsafe: async () => [] })).toThrow(
-      "non-empty name",
-    );
-
-    const handle = { unsafe: async <T>() => [] as T[] };
-    registerNamedConnection("kiosk", "sqlite", handle);
-    expect(hasNamedConnection("kiosk")).toBe(true);
-    expect(getNamedConnection("kiosk").driver).toBe("sqlite");
-    expect(unregisterNamedConnection("kiosk")).toBe(true);
-    expect(hasNamedConnection("kiosk")).toBe(false);
-    expect(unregisterNamedConnection("kiosk")).toBe(false);
-
-    registerNamedConnection("kiosk", "sqlite", handle);
-    resetNamedConnections();
-    expect(hasNamedConnection("kiosk")).toBe(false);
-  });
-
-  test("runOnNamedConnection sets dialect and connection for async work", async () => {
-    const sqlite = createSqliteConnection(":memory:");
-    const fallback: ActiveDatabaseHandle = { unsafe: async () => [] };
-    registerNamedConnection("kiosk", "sqlite", sqlite);
-    const rows = await runOnNamedConnection("kiosk", async () => {
-      await Promise.resolve();
-      expect(currentSqlDialect().driver).toBe("sqlite");
-      expect(hasActiveDatabaseConnection()).toBe(true);
-      expect(getActiveDatabaseConnection(fallback)).toBe(sqlite);
-      await sqlite.unsafe("CREATE TABLE kiosk_scorecards (id INTEGER PRIMARY KEY, notes TEXT)");
-      await sqlite.unsafe("INSERT INTO kiosk_scorecards (notes) VALUES (?)", ["onsite"]);
-      return sqlite.unsafe<{ id: number; notes: string }>("SELECT id, notes FROM kiosk_scorecards");
-    });
-    expect(rows).toEqual([{ id: 1, notes: "onsite" }]);
-    expect(hasActiveDatabaseConnection()).toBe(false);
-    expect(getActiveDatabaseConnection(fallback)).toBe(fallback);
-    sqlite.close();
-  });
-});
 
 describe("SQLite connection", () => {
   test("rejects an empty filename", () => {

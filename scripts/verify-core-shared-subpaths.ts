@@ -31,16 +31,6 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
   "queue/queueMetrics": ["createFailedJobMetricsCollector", "renderFailedJobMetrics"],
   "tracing/tracingMiddleware": ["createTracingRuntime", "renderTracingMetrics"],
   "database/model": ["Model", "ModelQuery", "defineModel", "defineRepository", "repositoryEffects"],
-  "database/boundConnection": [
-    "bindDatabaseConnection",
-    "getBoundDatabaseConnection",
-    "resetBoundDatabaseConnection",
-  ],
-  "database/bindConnection": [
-    "bindDatabaseConnection",
-    "getBoundDatabaseConnection",
-    "resetBoundDatabaseConnection",
-  ],
   "scheduler/schedule": [
     "appSchedule",
     "Schedule",
@@ -56,7 +46,7 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
     "createOutboxMetricsCollector",
     "renderOutboxMetrics",
   ],
-  "database/bunSql": ["bindBunSql", "createBunSqlPool"],
+  "database/bunSql": ["createBunSqlPool"],
   "database/dialect": ["currentSqlDialect", "sqlTimestamp", "useSqlDialect"],
   "database/mysqlConnection": [
     "createMysqlConnection",
@@ -212,6 +202,23 @@ try {
     "snapshotModelQuery",
     "createBoundModel",
     "getBindingPorts",
+    "bindDatabaseConnection",
+    "getBoundDatabaseConnection",
+    "resetBoundDatabaseConnection",
+    "registerDefaultDatabasePool",
+    "getDefaultDatabasePool",
+    "getDefaultDatabaseQuery",
+    "isDefaultDatabaseConnection",
+    "resetDefaultDatabasePoolForTests",
+    "bindBunSql",
+    "getNamedConnection",
+    "hasNamedConnection",
+    "registerNamedConnection",
+    "resetNamedConnections",
+    "runOnNamedConnection",
+    "unregisterNamedConnection",
+    "repositoryConnection",
+    "resolveRepositoryConnection",
   ]) {
     assert(
       !(removed in barrel),
@@ -224,11 +231,6 @@ try {
   const { ModelQuery: DatabaseModelQuery } = await import(join(ENTRIES_DIR, "database.js"));
   assert.equal(ModelQuery, DatabaseModelQuery, "ModelQuery must retain legacy database identity.");
   assert.equal(ModelQuery, barrel.ModelQuery, "ModelQuery must retain root bundle identity.");
-  for (const exportName of REQUIRED_SHARED_RUNTIME_EXPORTS["database/boundConnection"] ?? []) {
-    if (!(exportName in barrel) || barrel[exportName] === undefined) {
-      errors.push(`@getstrata/core dist/index.js missing runtime export "${exportName}"`);
-    }
-  }
 } catch (error) {
   errors.push(
     `Unable to import packages/strata-core/dist/index.js: ${error instanceof Error ? error.message : String(error)}`,

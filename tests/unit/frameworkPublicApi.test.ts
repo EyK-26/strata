@@ -81,11 +81,11 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.collectQueueMetrics).toBe("function");
     expect(typeof core.FailedJobService).toBe("function");
     expect(typeof core.createStorageDriver).toBe("function");
-    expect(typeof core.registerDefaultDatabasePool).toBe("function");
-    expect(typeof core.getBoundDatabaseConnection).toBe("function");
-    expect(typeof core.resetBoundDatabaseConnection).toBe("function");
-    expect(typeof core.bindBunSql).toBe("function");
+    expect("registerDefaultDatabasePool" in core).toBe(false);
+    expect("getBoundDatabaseConnection" in core).toBe(false);
+    expect("resetBoundDatabaseConnection" in core).toBe(false);
     expect(typeof core.createBunSqlPool).toBe("function");
+    expect(typeof core.createDatabaseQueryProxy).toBe("function");
     expect(typeof core.rssResponse).toBe("function");
     expect(typeof core.resetMemoryThrottleForTests).toBe("function");
     expect(typeof core.createCacheStore).toBe("function");

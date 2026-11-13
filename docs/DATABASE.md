@@ -355,22 +355,40 @@ const lines = await CartItem.with(["product"]).get();
 
 ## Named connections
 
-Register extra engines without moving your primary application tables:
+Declare named connections in the application's `createDatabaseBindings` configuration
+and select them from the current `DatabaseSession`. Registries are owned by that
+application; the same connection name in another application selects its own pool.
 
 ```typescript
-import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
-import { createMysqlConnection } from "@getstrata/core/database/mysqlConnection";
-import { registerNamedConnection, runOnNamedConnection } from "@getstrata/core/database/namedConnections";
+import { createDatabaseBindings } from "@getstrata/core/database/bindings";
+import { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
+import { createApplication } from "@getstrata/core/runtime/application";
 
-registerNamedConnection("kiosk", "sqlite", createSqliteConnection(":memory:"));
-registerNamedConnection("analytics", "mysql", createMysqlConnection(process.env.MYSQL_URL!));
-
-await runOnNamedConnection("kiosk", async () => {
-  // currentSqlDialect() is sqlite, and unsafe() hits the kiosk handle
-});
+const app = createApplication({ providers: [], services: createDatabaseBindings({
+  default: "primary",
+  connections: {
+    primary: { driver: "sqlite", filename: "./primary.sqlite" },
+    kiosk: { driver: "sqlite", filename: "./kiosk.sqlite" },
+  },
+}) });
+try {
+  await app.start();
+  await app.run(async scope => {
+    const kiosk = scope.resolve(DATABASE_SESSION_TOKEN).connection("kiosk");
+    await kiosk.execute({ text: "SELECT 1", params: [] });
+  });
+} finally {
+  const result = await app.stop();
+  if (!result.successful) throw new Error("Application cleanup incomplete");
+}
 ```
 
-A dialect change does not invent a driver. You still provide the connection. `Bun.sql` is Postgres-only. MySQL uses `mysql2` (an optional peer of `@getstrata/core`; `bun add mysql2` in the app). SQLite uses `bun:sqlite`. The in-repo examples each use one engine.
+Unknown names and use after the selected execution scope expires reject. There is
+no process-wide connection registration, default/bound pool lookup, or implicit
+repository proxy. `registerNamedConnection` and `runOnNamedConnection` have been
+removed along with their public subpath. See [application-owned sessions](DATABASE-SESSIONS.md)
+for repository/model binding and explicit transactions. MySQL uses the optional
+`mysql2` peer; SQLite uses `bun:sqlite`; a dialect choice does not invent a driver.
 
 ## Timestamps are UTC on every engine
 
@@ -415,9 +433,18 @@ Schema grammar identifier quoting now follows the explicitly selected engine, in
 
 Keep data transformations, unsupported DDL, RLS policy helpers, and guarded rollbacks as explicit SQL where needed. `schema.drop` retains its historical Postgres CASCADE behavior, so use explicit restrictive SQL when a rollback must reject dependent objects. Do not rewrite applied history casually: compare fresh-schema catalogs and populated upgrades before converting existing migration implementations, retain file names, and leave applied databases unchanged.
 
-## Binding the client
+## Explicit native clients
 
-Generated Postgres apps use Bun's `Bun.sql`. `getSql()` calls `createBunSqlPool()`, `registerDefaultDatabasePool()`, then `bindDatabaseConnection()`. `bindBunSql()` is a shorter helper that does the last two steps. A dialect change does not invent a MySQL driver. You still provide the connection.
+`createBunSqlPool(options)` remains an explicit PostgreSQL constructor. Callers own
+its cleanup. `createDatabaseQueryProxy(pool)` also remains available for explicit
+raw-adapter consumers; it receives the pool and uses the existing raw transaction
+context, without registering a default connection. `bindBunSql`, global default
+and bound connection APIs, and `repositoryConnection` have been removed.
+Generated applications use their declared application-owned database bindings.
+A live PostgreSQL RLS role check receives both the explicit environment and an
+inspector bound to the selected pool/session; there is no default-pool fallback
+or mutable inspector override. Applicable checks fail closed if inspection is
+missing, fails, or returns malformed/unsafe role data.
 
 ## Tenancy
 
@@ -431,9 +458,13 @@ Postgres RLS is documented in [TENANCY.md](./TENANCY.md). `TENANCY_DRIVER=none` 
 - MySQL has no `RETURNING`. Insert helpers that expect a returned row need another SELECT.
 - Identifier quoting rejects anything that is not `[A-Za-z_][A-Za-z0-9_]*`.
 
-### Generated Postgres query handle
+### Selected generated persistence
 
-Postgres starters expose `SqlClient = SqlDatabaseConnection`, retaining both bound `unsafe(text, params)` and tagged-template calls. `getSql()` returns the framework transaction-aware query proxy, so tagged calls use the active request/savepoint connection rather than the pool. For example, a tagged `SELECT` with `${productId}` binds the value instead of interpolating SQL text. Tagged results remain plain driver rows; the public interface returns `unknown[]`, while typed model projections are preferred for declared application records. SQLite/MySQL starter adapters retain their existing unsafe-only application handle; this change does not promise native Bun helpers on those adapters.
+Generated business handlers receive selected persistence capabilities through the
+owned execution context. Repositories and models use that selected session's
+pool, dialect, tenant policy, and transaction scope. An expired capability cannot
+fall back to a process default. Explicit low-level native adapters remain available
+for separately owned tooling; they do not supply ambient application authority.
 
 ### Typed pessimistic row locks
 

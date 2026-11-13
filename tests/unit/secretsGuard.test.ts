@@ -657,3 +657,61 @@ describe("assertProductionSecrets APP_URL", () => {
     }
   });
 });
+
+describe("explicit live-role inspection boundary", () => {
+  const target = {
+    APP_ENV: "local",
+    TENANCY_DRIVER: "rls",
+    APP_DATABASE_URL: "postgresql://strata_app:rotated@db.example/app",
+  };
+  test("runtime omitted inspector fails closed for an applicable target", async () => {
+    const { assertRlsLiveDatabaseRole } = await import("@getstrata/bootstrap/secretsGuard");
+    const untyped = assertRlsLiveDatabaseRole as unknown as (
+      environment: typeof target,
+    ) => Promise<void>;
+    await expect(untyped(target)).rejects.toThrow("could not inspect the live Postgres role");
+  });
+  for (const malformed of [
+    null,
+    {},
+    { rolname: "app" },
+    { rolname: "", rolsuper: false, rolbypassrls: false },
+    { rolname: "app", rolsuper: "false", rolbypassrls: false },
+  ]) {
+    test(`fails closed for malformed inspector result ${JSON.stringify(malformed)}`, async () => {
+      const { assertRlsLiveDatabaseRole } = await import("@getstrata/bootstrap/secretsGuard");
+      await expect(
+        assertRlsLiveDatabaseRole(target, async () => malformed as never),
+      ).rejects.toThrow("could not inspect the live Postgres role");
+    });
+  }
+  test("URL denylist runs before the selected inspector", async () => {
+    const { assertRlsLiveDatabaseRole } = await import("@getstrata/bootstrap/secretsGuard");
+    let calls = 0;
+    await expect(
+      assertRlsLiveDatabaseRole(
+        { ...target, APP_DATABASE_URL: "postgresql://postgres:secret@db.example/app" },
+        async () => {
+          calls++;
+          throw new Error("inspector must not run");
+        },
+      ),
+    ).rejects.toThrow(/not postgres/);
+    expect(calls).toBe(0);
+  });
+  test("inapplicable targets do not query even when untyped inspector omitted", async () => {
+    const { assertRlsLiveDatabaseRole } = await import("@getstrata/bootstrap/secretsGuard");
+    const untyped = assertRlsLiveDatabaseRole as unknown as (
+      environment: Record<string, string>,
+    ) => Promise<void>;
+    await expect(untyped({ TENANCY_DRIVER: "none" })).resolves.toBeUndefined();
+    await expect(
+      untyped({ TENANCY_DRIVER: "rls", DATABASE_URL: "sqlite:app.sqlite" }),
+    ).resolves.toBeUndefined();
+  });
+});
+
+test("live-role guard no longer exports a mutable inspector override", async () => {
+  const guard = await import("@getstrata/bootstrap/secretsGuard");
+  expect("setLivePostgresRoleInspectorForTests" in guard).toBe(false);
+});

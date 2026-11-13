@@ -1,57 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import {
-  getBoundDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "@getstrata/core/database/boundConnection";
-import { bindBunSql, createBunSqlPool } from "@getstrata/core/database/bunSql";
-import {
-  getDefaultDatabasePool,
-  registerDefaultDatabasePool,
-} from "@getstrata/core/database/defaultConnection";
-import type { SqlDatabaseConnection } from "../../src/core/database/connectionContracts";
-import { getDatabase } from "../../src/db/connection";
+import { describe, expect, test } from "bun:test";
+import { createBunSqlPool } from "@getstrata/core/database/bunSql";
 
-describe("bun SQL helpers", () => {
-  let restoredPool: SqlDatabaseConnection | null = null;
-
-  beforeEach(() => {
-    try {
-      restoredPool = getDefaultDatabasePool();
-    } catch {
-      restoredPool = null;
-    }
-  });
-
-  afterEach(() => {
-    resetBoundDatabaseConnection();
-
-    if (restoredPool) {
-      registerDefaultDatabasePool(restoredPool);
-      restoredPool = null;
-      return;
-    }
-
-    if (process.env.DATABASE_URL) {
-      getDatabase();
-    }
-  });
-
-  test("bindBunSql registers the client as the bound connection and default pool", async () => {
-    const calls: string[] = [];
-    const sql = Object.assign(async () => [] as unknown[], {
-      async unsafe<T>(query: string) {
-        calls.push(query);
-        return [] as T[];
-      },
-    }) as SqlDatabaseConnection;
-
-    expect(bindBunSql(sql)).toBe(sql);
-    expect(getBoundDatabaseConnection()).toBe(sql);
-    expect(getDefaultDatabasePool()).toBe(sql);
-    await sql.unsafe("SELECT 1");
-    expect(calls).toEqual(["SELECT 1"]);
-  });
-
+describe("explicit Bun SQL pool constructor", () => {
   test("createBunSqlPool requires a url", () => {
     expect(() => createBunSqlPool({ url: "" })).toThrow("DATABASE_URL is not configured");
   });

@@ -47,6 +47,17 @@ test("database barrel excludes ambient transaction owners", () => {
     "hasActiveTransaction",
     "requestTransactionRollback",
     "afterCommit",
+    "getNamedConnection",
+    "hasNamedConnection",
+    "registerNamedConnection",
+    "resetNamedConnections",
+    "runOnNamedConnection",
+    "unregisterNamedConnection",
+    "getDefaultDatabasePool",
+    "registerDefaultDatabasePool",
+    "bindDatabaseConnection",
+    "repositoryConnection",
+    "bindBunSql",
   ])
     expect(name in databaseBarrel).toBe(false);
 });
