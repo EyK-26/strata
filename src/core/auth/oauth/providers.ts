@@ -47,6 +47,8 @@ class GitHubOAuthProvider implements OAuthProvider {
 
   private readonly options: Readonly<GitHubOAuthOptions>;
   constructor(options: GitHubOAuthOptions) {
+    if (typeof options.production !== "boolean" || !options.userAgent?.trim())
+      throw new TypeError("Explicit GitHub OAuth production policy and user agent are required.");
     this.options = Object.freeze({ ...options });
   }
 
