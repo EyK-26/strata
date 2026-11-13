@@ -564,7 +564,6 @@ if(errors.length===1)throw errors[0];if(errors.length>1)throw new AggregateError
     await ready(devServer, "/app/");
   }
   checkInterrupted();
-  process.env.PLAYWRIGHT_BROWSERS_PATH = "/workspace/.cache/ms-playwright";
   const { chromium } = await import("playwright");
   checkInterrupted();
   browser = await chromium.launch();
