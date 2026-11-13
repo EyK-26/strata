@@ -7,7 +7,10 @@ import {
   sessionTtlSeconds,
 } from "@getstrata/core/auth/sessionCookie";
 import { SessionGuard } from "@getstrata/core/auth/sessionGuard";
-import type { AuthUserDirectory } from "@getstrata/core/contracts/authUserDirectory";
+import type {
+  AuthSessionValidity,
+  AuthUserDirectory,
+} from "@getstrata/core/contracts/authUserDirectory";
 import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
 
 function requestWithSession(userId = 1): Request {
@@ -27,7 +30,7 @@ function directoryWith(directory: Partial<AuthUserDirectory> | null): AuthUserDi
     ...directory,
   };
 }
-function sessionPorts() {
+function sessionPorts(validity: AuthSessionValidity | null = null) {
   return {
     read: createSessionReader({
       cookieName: sessionCookieName(),
@@ -35,6 +38,7 @@ function sessionPorts() {
       secret: requireConfiguredSecret(["SESSION_SECRET"], "session-secret"),
     }),
     abilities: resolveAbilitiesForRole,
+    validity,
   };
 }
 
@@ -75,7 +79,7 @@ describe("SessionGuard", () => {
     expect(await invalidated.resolve(requestWithSession())).toBeNull();
   });
 
-  test("resolves the user when hasActiveBrowserSession is absent or true", async () => {
+  test("resolves the user with explicit account-only or active registry validation", async () => {
     const withoutHook = new SessionGuard(
       directoryWith({
         findByIdOrThrow: async () => ({
@@ -93,9 +97,8 @@ describe("SessionGuard", () => {
     const active = new SessionGuard(
       directoryWith({
         findByIdOrThrow: async () => ({ id: 1, role: "member" }),
-        hasActiveBrowserSession: async () => true,
       }),
-      sessionPorts(),
+      sessionPorts({ hasActiveBrowserSession: async () => true }),
     );
     expect(await active.resolve(requestWithSession())).toMatchObject({ id: 1, role: "member" });
   });
@@ -104,9 +107,8 @@ describe("SessionGuard", () => {
     const guard = new SessionGuard(
       directoryWith({
         findByIdOrThrow: async () => ({ id: 1, role: "admin" }),
-        hasActiveBrowserSession: async () => false,
       }),
-      sessionPorts(),
+      sessionPorts({ hasActiveBrowserSession: async () => false }),
     );
 
     expect(await guard.resolve(requestWithSession())).toBeNull();

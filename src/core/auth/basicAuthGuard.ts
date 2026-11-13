@@ -1,19 +1,56 @@
 import { UnprocessableEntityError } from "@getstrata/core/errors/http";
-import type { AuthUserDirectory, AuthUserRecord } from "../contracts/authUserDirectory";
+import type {
+  AuthAccountLookup,
+  AuthCredentialVerifier,
+  AuthEmailLookup,
+  AuthUserRecord,
+} from "../contracts/authUserDirectory";
 import { readBasicCredentials } from "../http/statelessAuth";
 import { isAccountActive, isAuthUserActive } from "./accountState";
 import type { AuthUser } from "./authContext";
 import type { AuthGuard } from "./guard";
 import { verifyPassword } from "./password";
 import { completePasswordLogin } from "./passwordLogin";
+import { requireAuthCapability } from "./requireAuthCapability";
+
+type BasicAuthGuardOptions = {
+  accounts: AuthAccountLookup;
+  persistRecovery(record: AuthUserRecord, hash: string): Promise<boolean>;
+} & (
+  | { emailLookup: AuthEmailLookup; credentials?: AuthCredentialVerifier }
+  | { emailLookup?: AuthEmailLookup; credentials: AuthCredentialVerifier }
+);
 
 class BasicAuthGuard implements AuthGuard {
-  constructor(
-    private readonly options: {
-      directory: AuthUserDirectory;
-      persistRecovery(record: AuthUserRecord, hash: string): Promise<boolean>;
-    },
-  ) {}
+  constructor(private readonly options: BasicAuthGuardOptions) {
+    requireAuthCapability<AuthAccountLookup>(
+      options.accounts,
+      ["findByIdOrThrow"],
+      "Basic account",
+    );
+    requireAuthCapability<Pick<BasicAuthGuardOptions, "persistRecovery">>(
+      options,
+      ["persistRecovery"],
+      "Basic recovery",
+    );
+    if (options.emailLookup !== undefined) {
+      requireAuthCapability<AuthEmailLookup>(
+        options.emailLookup,
+        ["findByEmail"],
+        "Basic email lookup",
+      );
+    }
+    if (options.credentials !== undefined) {
+      requireAuthCapability<AuthCredentialVerifier>(
+        options.credentials,
+        ["verifyCredentials"],
+        "Basic credentials",
+      );
+    }
+    if (!options.emailLookup && !options.credentials) {
+      throw new TypeError("Basic authentication requires an email lookup or credential verifier.");
+    }
+  }
 
   private async persistRecovery(record: AuthUserRecord, hash: string): Promise<boolean> {
     try {
@@ -32,16 +69,9 @@ class BasicAuthGuard implements AuthGuard {
       return null;
     }
 
-    const directory = this.options.directory;
-
-    if (!directory) {
-      return null;
-    }
-
-    const record =
-      typeof directory.findByEmail === "function"
-        ? await directory.findByEmail(credentials.username)
-        : null;
+    const record = this.options.emailLookup
+      ? await this.options.emailLookup.findByEmail(credentials.username)
+      : null;
 
     if (record && !isAccountActive(record)) return null;
     if (record?.password) {
@@ -68,19 +98,21 @@ class BasicAuthGuard implements AuthGuard {
       };
     }
 
-    if (typeof directory.verifyCredentials === "function") {
-      const user = await directory.verifyCredentials(credentials.username, credentials.password);
+    if (this.options.credentials) {
+      const user = await this.options.credentials.verifyCredentials(
+        credentials.username,
+        credentials.password,
+      );
       if (!user || !isAuthUserActive(user)) {
         return null;
       }
 
-      let record =
-        typeof directory.findByEmail === "function"
-          ? await directory.findByEmail(credentials.username)
-          : null;
+      let record = this.options.emailLookup
+        ? await this.options.emailLookup.findByEmail(credentials.username)
+        : null;
       if (!record) {
         try {
-          record = await directory.findByIdOrThrow(Number(user.id));
+          record = await this.options.accounts.findByIdOrThrow(Number(user.id));
         } catch {
           return null;
         }
@@ -104,4 +136,5 @@ class BasicAuthGuard implements AuthGuard {
   }
 }
 
+export type { BasicAuthGuardOptions };
 export { BasicAuthGuard };

@@ -1,17 +1,30 @@
-import type { AuthUserDirectory } from "../contracts/authUserDirectory";
+import type { AuthAccountLookup, AuthSessionValidity } from "../contracts/authUserDirectory";
 import { isAccountActive, matchesAuthVersion } from "./accountState";
 import type { AuthUser } from "./authContext";
 import type { AuthGuard } from "./guard";
+import { requireAuthCapability } from "./requireAuthCapability";
 import { isSessionInvalidated, type readSession } from "./sessionCookie";
 
 class SessionGuard implements AuthGuard {
   constructor(
-    private readonly directory: AuthUserDirectory,
+    private readonly directory: AuthAccountLookup,
     private readonly session: {
       read(request: Request): ReturnType<typeof readSession>;
       abilities(role: string): string[];
+      /** Null explicitly selects account epoch/cutoff validation without a session registry. */
+      validity: AuthSessionValidity | null;
     },
-  ) {}
+  ) {
+    requireAuthCapability<AuthAccountLookup>(directory, ["findByIdOrThrow"], "session account");
+    requireAuthCapability<typeof session>(session, ["read", "abilities"], "session");
+    if (session.validity !== null) {
+      requireAuthCapability<AuthSessionValidity>(
+        session.validity,
+        ["hasActiveBrowserSession"],
+        "session validity",
+      );
+    }
+  }
 
   async resolve(request: Request): Promise<AuthUser | null> {
     const session = this.session.read(request);
@@ -20,14 +33,10 @@ class SessionGuard implements AuthGuard {
       return null;
     }
 
-    const tokenService = this.directory;
-
-    if (!tokenService) {
-      return null;
-    }
+    const accounts = this.directory;
 
     try {
-      const user = await tokenService.findByIdOrThrow(session.userId);
+      const user = await accounts.findByIdOrThrow(session.userId);
 
       if (!isAccountActive(user) || !matchesAuthVersion(session.authVersion, user.auth_version))
         return null;
@@ -39,8 +48,11 @@ class SessionGuard implements AuthGuard {
         return null;
       }
 
-      if (typeof tokenService.hasActiveBrowserSession === "function") {
-        const active = await tokenService.hasActiveBrowserSession(session.userId, session.issuedAt);
+      if (this.session.validity !== null) {
+        const active = await this.session.validity.hasActiveBrowserSession(
+          session.userId,
+          session.issuedAt,
+        );
 
         if (!active) {
           return null;

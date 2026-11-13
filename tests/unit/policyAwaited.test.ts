@@ -40,12 +40,22 @@ describe("awaited policy decisions", () => {
 
   test("denies unknown actions, non-functions and Object prototype methods", async () => {
     const gate = new PolicyGate();
-    gate.register("records", new (class extends Policy {})());
+    gate.register(
+      "records",
+      new (class extends Policy {
+        override view() {
+          return true;
+        }
+      })(),
+    );
+    expect(await gate.allows("records", "view", null)).toBe(true);
     for (const action of [
       null,
       undefined,
       1,
       {},
+      { toString: () => "view" },
+      Symbol("view"),
       "missing",
       "constructor",
       "toString",

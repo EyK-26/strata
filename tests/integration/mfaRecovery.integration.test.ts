@@ -149,9 +149,8 @@ test.skipIf(!rlsAdmin || !rlsRuntime)(
         ({ database, policy }) =>
           policy.run(database, { kind: "tenant", tenantId: 102 }, async (selected) => {
             const guard = new BasicAuthGuard({
-              directory: {
-                resolveUserFromToken: async () => null,
-                findByIdOrThrow: async (id) => ({ id, role: "member" }),
+              accounts: { findByIdOrThrow: async (id) => ({ id, role: "member" }) },
+              emailLookup: {
                 findByEmail: async () => ({
                   id: 1,
                   role: "member",

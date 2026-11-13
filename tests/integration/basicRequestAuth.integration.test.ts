@@ -43,9 +43,8 @@ test("actual Basic HTTP middleware and controller resolve one recovery proof onc
     const handler = withErrorHandling((request) =>
       invoke({ kind: "request" }, async ({ database }) => {
         const guard = new BasicAuthGuard({
-          directory: {
-            resolveUserFromToken: async () => null,
-            findByIdOrThrow: async (id) => ({ id, role: "member" }),
+          accounts: { findByIdOrThrow: async (id) => ({ id, role: "member" }) },
+          emailLookup: {
             findByEmail: async (email) => {
               if (email !== "fixture@example.test") return null;
               const [row] = await database.execute<{ mfa_recovery_codes: string }>({

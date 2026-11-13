@@ -1,14 +1,15 @@
-import type { AuthUserDirectory } from "../contracts/authUserDirectory";
+import type { AuthAccountLookup } from "../contracts/authUserDirectory";
 import { readBearerToken } from "../http/statelessAuth";
 import { isAccountActive, matchesAuthVersion } from "./accountState";
 import type { AuthUser } from "./authContext";
 import type { AuthGuard } from "./guard";
 import { type JwtPayload, verifyJwt } from "./jwt";
+import { requireAuthCapability } from "./requireAuthCapability";
 import { isSessionInvalidated } from "./sessionCookie";
 
 interface JwtGuardOptions {
   secret: string;
-  directory: AuthUserDirectory;
+  directory: AuthAccountLookup;
 }
 
 function authUserFromJwt(payload: JwtPayload): AuthUser {
@@ -35,6 +36,10 @@ class JwtGuard implements AuthGuard {
   private readonly options: JwtGuardOptions;
 
   constructor(options: JwtGuardOptions) {
+    requireAuthCapability<AuthAccountLookup>(options.directory, ["findByIdOrThrow"], "JWT");
+    if (typeof options.secret !== "string" || !options.secret) {
+      throw new TypeError("Explicit JWT secret is required.");
+    }
     this.options = options;
   }
 
@@ -57,16 +62,12 @@ class JwtGuard implements AuthGuard {
 
     const directory = this.options.directory;
 
-    if (!directory) {
-      return null;
-    }
-
     const userId = jwtSubjectId(payload);
     if (userId === null) {
       return null;
     }
 
-    let record: Awaited<ReturnType<AuthUserDirectory["findByIdOrThrow"]>>;
+    let record: Awaited<ReturnType<AuthAccountLookup["findByIdOrThrow"]>>;
     try {
       record = await directory.findByIdOrThrow(userId);
     } catch {

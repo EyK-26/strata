@@ -17,13 +17,39 @@ interface AuthUserRecord {
   mfa_recovery_codes?: string | null;
 }
 
-interface AuthUserDirectory {
-  /** Participating directories must project fresh account status as AuthUser.isActive. */
-  resolveUserFromToken(token: string): Promise<AuthUser | null>;
+interface AuthAccountLookup {
   findByIdOrThrow(id: number): Promise<AuthUserRecord>;
-  hasActiveBrowserSession?(userId: number, issuedAt: number): Promise<boolean>;
-  findByEmail?(email: string): Promise<AuthUserRecord | null>;
-  verifyCredentials?(email: string, password: string): Promise<AuthUser | null>;
 }
 
-export type { AuthUserDirectory, AuthUserRecord };
+interface AuthBearerResolver {
+  /** Participating resolvers must project fresh account status as AuthUser.isActive. */
+  resolveUserFromToken(token: string): Promise<AuthUser | null>;
+}
+
+interface AuthSessionValidity {
+  hasActiveBrowserSession(userId: number, issuedAt: number): Promise<boolean>;
+}
+
+interface AuthEmailLookup {
+  findByEmail(email: string): Promise<AuthUserRecord | null>;
+}
+
+interface AuthCredentialVerifier {
+  verifyCredentials(email: string, password: string): Promise<AuthUser | null>;
+}
+
+/** Adapter composition surface. Guards depend on the individual selected capabilities. */
+interface AuthUserDirectory
+  extends AuthAccountLookup,
+    AuthBearerResolver,
+    Partial<AuthSessionValidity & AuthEmailLookup & AuthCredentialVerifier> {}
+
+export type {
+  AuthAccountLookup,
+  AuthBearerResolver,
+  AuthCredentialVerifier,
+  AuthEmailLookup,
+  AuthSessionValidity,
+  AuthUserDirectory,
+  AuthUserRecord,
+};

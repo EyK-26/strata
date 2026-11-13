@@ -1,5 +1,5 @@
 import { UnauthorizedError } from "@getstrata/core/errors/http";
-import type { AuthUserDirectory } from "../contracts/authUserDirectory";
+import type { AuthBearerResolver } from "../contracts/authUserDirectory";
 import { authorizationScheme, readBearerToken } from "../http/statelessAuth";
 import { timingSafeCompareString } from "../security/timingSafeCompare";
 import { isAuthUserActive } from "./accountState";
@@ -7,6 +7,7 @@ import type { AuthUser, CredentialSource } from "./authContext";
 import { currentAuthUser } from "./authContext";
 import { BasicAuthGuard } from "./basicAuthGuard";
 import { JwtGuard } from "./jwtGuard";
+import { requireAuthCapability } from "./requireAuthCapability";
 
 interface AuthGuard {
   resolve(request: Request): AuthUser | null | Promise<AuthUser | null>;
@@ -69,7 +70,9 @@ class ApiTokenGuard implements AuthGuard {
 }
 
 class DatabaseTokenGuard implements AuthGuard {
-  constructor(private readonly directory: AuthUserDirectory) {}
+  constructor(private readonly tokens: AuthBearerResolver) {
+    requireAuthCapability<AuthBearerResolver>(tokens, ["resolveUserFromToken"], "API token");
+  }
 
   async resolve(request: Request): Promise<AuthUser | null> {
     const token = readBearerToken(request);
@@ -78,13 +81,7 @@ class DatabaseTokenGuard implements AuthGuard {
       return null;
     }
 
-    const tokenService = this.directory;
-
-    if (!tokenService || typeof tokenService.resolveUserFromToken !== "function") {
-      return null;
-    }
-
-    const user = await tokenService.resolveUserFromToken(token);
+    const user = await this.tokens.resolveUserFromToken(token);
     return user && isAuthUserActive(user) ? user : null;
   }
 }

@@ -24,6 +24,8 @@ import {
 } from "@getstrata/core/auth/sessionCookie";
 import { SessionGuard } from "@getstrata/core/auth/sessionGuard";
 import type {
+  AuthCredentialVerifier,
+  AuthEmailLookup,
   AuthUserDirectory,
   AuthUserRecord,
 } from "@getstrata/core/contracts/authUserDirectory";
@@ -46,15 +48,26 @@ function sessionGuard(directory: AuthUserDirectory) {
       ttlSeconds: 60 * 60 * 24 * 30,
     }),
     abilities: (role) => (role === "admin" ? ["*"] : []),
+    validity: directory.hasActiveBrowserSession
+      ? (directory as Required<Pick<AuthUserDirectory, "hasActiveBrowserSession">>)
+      : null,
   });
 }
 function basic(directory: AuthUserDirectory) {
-  return new BasicAuthGuard({
-    directory,
-    persistRecovery: async () => {
-      throw new Error("No recovery proof may be consumed by these account admission fixtures.");
-    },
-  });
+  const persistRecovery = async () => {
+    throw new Error("No recovery proof may be consumed by these account admission fixtures.");
+  };
+  const emailLookup = directory.findByEmail ? (directory as AuthEmailLookup) : undefined;
+  const credentials = directory.verifyCredentials
+    ? (directory as AuthCredentialVerifier)
+    : undefined;
+  return emailLookup
+    ? new BasicAuthGuard({ accounts: directory, emailLookup, credentials, persistRecovery })
+    : new BasicAuthGuard({
+        accounts: directory,
+        credentials: credentials as AuthCredentialVerifier,
+        persistRecovery,
+      });
 }
 function cookieRequest(header: string) {
   return new Request("http://localhost/account", {
