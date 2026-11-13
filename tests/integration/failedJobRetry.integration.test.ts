@@ -56,6 +56,9 @@ describe.skipIf(!redisUrl)("failed-job SQL recovery and Redis admission", () => 
           name,
           payload: { marker: "persisted" },
           attempts: 0,
+          jobId: expect.stringMatching(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+          ),
         });
       } finally {
         if (id !== undefined) await service.delete(id).catch(() => {});

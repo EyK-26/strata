@@ -549,3 +549,41 @@ test("queue transport captures its registry source before application setup", as
     expect((await fixture.application.stop()).successful).toBe(true);
   }
 });
+
+test("owned queue transport settles failed polls and runs before closing its one worker", async () => {
+  const fixture = await createQueuePersistenceFixture();
+  const pollFailure = new Error("owned poll failure");
+  const runFailure = new Error("owned run failure");
+  let closes = 0;
+  const transport = createQueueWorkerTransport({
+    redisUrl: "redis://unused",
+    registry: new JobRegistry(),
+    queueServices: fixture.services,
+    createWorker: () => ({
+      requestStop() {},
+      async processNext() {
+        throw pollFailure;
+      },
+      async run() {
+        throw runFailure;
+      },
+      close() {
+        closes++;
+      },
+    }),
+  });
+  const application = createApplication({ providers: [], transports: [transport.transport] });
+  try {
+    await application.start();
+    await expect(transport.processNext()).rejects.toBe(pollFailure);
+    await expect(transport.start()).rejects.toBe(runFailure);
+    expect((await application.stop()).successful).toBe(true);
+    expect(closes).toBe(1);
+    await expect(transport.processNext()).rejects.toThrow("bounded admission");
+    await expect(transport.start()).rejects.toBe(runFailure);
+    expect(closes).toBe(1);
+  } finally {
+    await application.stop();
+    expect((await fixture.application.stop()).successful).toBe(true);
+  }
+});

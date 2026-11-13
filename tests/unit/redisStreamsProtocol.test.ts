@@ -252,3 +252,19 @@ test("maintenance conversion captures keys and batch size before asynchronous Re
     ["owner-low", "3"],
   ]);
 });
+
+test("claimed Streams entries preserve their owner and reclaim cursor without admitting a fresh entry", async () => {
+  let reads = 0;
+  const client = {
+    async send() {
+      reads++;
+      if (reads !== 1) throw new Error("A recovered reservation must not also read fresh work");
+      return ["42-7", [["9-3", ["payload", '{"name":"recovered","payload":{}}']]]];
+    },
+  };
+  expect(await reserveStreamJob(client as never, "owned-key", "new-owner", "1-0", 200)).toEqual({
+    cursor: "42-7",
+    reservation: { id: "9-3", owner: "new-owner", payload: '{"name":"recovered","payload":{}}' },
+  });
+  expect(reads).toBe(1);
+});

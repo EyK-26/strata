@@ -31,6 +31,7 @@ import { createQueuePersistenceFixture, overrideQueueRecorder } from "../helpers
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 const redisUrl = process.env.REDIS_URL?.trim() ?? "";
+const FIXTURE_VISIBILITY_MS = 200;
 function required<T>(value: T | undefined): T {
   if (value === undefined) throw new Error("Missing test fixture value");
   return value;
@@ -47,7 +48,7 @@ async function fixture(
   const previousVisibility = process.env.QUEUE_VISIBILITY_MS;
   const previousTransport = process.env.QUEUE_REDIS_TRANSPORT;
   process.env.APP_KEY_PREFIX = `streams-test-${crypto.randomUUID()}`;
-  process.env.QUEUE_VISIBILITY_MS = "200";
+  process.env.QUEUE_VISIBILITY_MS = String(FIXTURE_VISIBILITY_MS);
   const keys: [string, string, string] = [
     queueKeyForPriority("high"),
     queueKeyForPriority(),
@@ -425,7 +426,8 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
         await worker.processNext();
         const id = await queue.enqueue(job, {}, { cancellable: true });
         const original = required(
-          (await reserveStreamJob(client, keys[1], "original")).reservation ?? undefined,
+          (await reserveStreamJob(client, keys[1], "original", "0-0", FIXTURE_VISIBILITY_MS))
+            .reservation ?? undefined,
         );
         expect(await queue.cancel(id)).toBe(true);
         await expect(
@@ -435,11 +437,12 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
             original,
             { name, payload: {}, jobId: id, cancellable: true },
             0,
+            FIXTURE_VISIBILITY_MS,
           ),
         ).rejects.toThrow("cancelled");
         expect(await client.send("ZCARD", [streamRetryKey(keys[1])])).toBe(0);
         await agePending(client, keys[1]);
-        await reserveStreamJob(client, keys[1], "replacement");
+        await reserveStreamJob(client, keys[1], "replacement", "0-0", FIXTURE_VISIBILITY_MS);
         expect(
           await updateStreamReservation(
             client,
@@ -447,6 +450,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
             original,
             "ack",
             streamControlKey(keys[1], id),
+            FIXTURE_VISIBILITY_MS,
           ),
         ).toBe(false);
         expect(await client.send("HGET", [streamControlKey(keys[1], id), "state"])).toBe(
@@ -477,7 +481,8 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
         expect(await client.send("HGET", [streamControlKey(keys[1], id), "state"])).toBe("active");
         await client.del(streamRetryKey(keys[1]));
         const reservation = required(
-          (await reserveStreamJob(client, keys[1], "owner")).reservation ?? undefined,
+          (await reserveStreamJob(client, keys[1], "owner", "0-0", FIXTURE_VISIBILITY_MS))
+            .reservation ?? undefined,
         );
         await client.del(streamControlKey(keys[1], id));
         await expect(
@@ -487,6 +492,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
             reservation,
             { name, payload: {}, jobId: id, cancellable: true },
             0,
+            FIXTURE_VISIBILITY_MS,
           ),
         ).rejects.toThrow("control state");
         await agePending(client, keys[1]);
@@ -499,6 +505,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
             { ...reservation, owner: "wrong" },
             "ack",
             streamControlKey(keys[1], id),
+            FIXTURE_VISIBILITY_MS,
           ),
         ).resolves.toBe(false);
         expect(calls).toBe(0);
@@ -895,26 +902,28 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
         await worker.processNext();
         await queue.dispatch(job, {});
         const reservation = required(
-          (await reserveStreamJob(client, key, "owner")).reservation ?? undefined,
+          (await reserveStreamJob(client, key, "owner", "0-0", FIXTURE_VISIBILITY_MS))
+            .reservation ?? undefined,
         );
         const next = { name, payload: {}, attempts: 1, jobId: "stable" };
         await client.set(streamRetryKey(key), "wrong type");
-        await expect(scheduleStreamRetry(client, key, reservation, next, 0)).rejects.toThrow(
-          "retry key type",
-        );
+        await expect(
+          scheduleStreamRetry(client, key, reservation, next, 0, FIXTURE_VISIBILITY_MS),
+        ).rejects.toThrow("retry key type");
         expect((await entries(client, key)).length).toBe(1);
         await client.del(streamRetryKey(key));
         await agePending(client, key);
-        await expect(scheduleStreamRetry(client, key, reservation, next, 0)).rejects.toThrow(
-          "lease lost",
-        );
+        await expect(
+          scheduleStreamRetry(client, key, reservation, next, 0, FIXTURE_VISIBILITY_MS),
+        ).rejects.toThrow("lease lost");
         const recovered = required(
-          (await reserveStreamJob(client, key, "replacement")).reservation ?? undefined,
+          (await reserveStreamJob(client, key, "replacement", "0-0", FIXTURE_VISIBILITY_MS))
+            .reservation ?? undefined,
         );
-        await expect(scheduleStreamRetry(client, key, reservation, next, 0)).rejects.toThrow(
-          "lease lost",
-        );
-        await scheduleStreamRetry(client, key, recovered, next, 0);
+        await expect(
+          scheduleStreamRetry(client, key, reservation, next, 0, FIXTURE_VISIBILITY_MS),
+        ).rejects.toThrow("lease lost");
+        await scheduleStreamRetry(client, key, recovered, next, 0, FIXTURE_VISIBILITY_MS);
         expect(await entries(client, key)).toEqual([]);
         expect(await promoteStreamRetries(client, key)).toBe(1);
         expect(JSON.parse(required((await entries(client, key))[0])[1][1] ?? "{}")).toEqual(next);
@@ -943,16 +952,17 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
         await worker.processNext();
         await queue.dispatch(job, {});
         const reservation = required(
-          (await reserveStreamJob(client, key, "owner")).reservation ?? undefined,
+          (await reserveStreamJob(client, key, "owner", "0-0", FIXTURE_VISIBILITY_MS))
+            .reservation ?? undefined,
         );
         const next = { name, payload: {}, attempts: 1, jobId: "stable" };
         await expect(
-          scheduleStreamRetry(loseReply as never, key, reservation, next, 0),
+          scheduleStreamRetry(loseReply as never, key, reservation, next, 0, FIXTURE_VISIBILITY_MS),
         ).rejects.toThrow("Lost reply");
         expect(await entries(client, key)).toEqual([]);
-        await expect(scheduleStreamRetry(client, key, reservation, next, 0)).rejects.toThrow(
-          "lease lost",
-        );
+        await expect(
+          scheduleStreamRetry(client, key, reservation, next, 0, FIXTURE_VISIBILITY_MS),
+        ).rejects.toThrow("lease lost");
         await expect(promoteStreamRetries(loseReply as never, key)).rejects.toThrow("Lost reply");
         expect(await promoteStreamRetries(client, key)).toBe(0);
         expect((await entries(client, key)).length).toBe(1);
@@ -1141,10 +1151,30 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
           ">",
         ]);
         const old = { id, owner: "old", payload: "raw" };
-        expect(await updateStreamReservation(client, key, old, "renew")).toBe(true);
+        expect(
+          await updateStreamReservation(
+            client,
+            key,
+            old,
+            "renew",
+            undefined,
+            FIXTURE_VISIBILITY_MS,
+          ),
+        ).toBe(true);
         await agePending(client, key);
-        expect(await updateStreamReservation(client, key, old, "renew")).toBe(false);
-        expect(await updateStreamReservation(client, key, old, "ack")).toBe(false);
+        expect(
+          await updateStreamReservation(
+            client,
+            key,
+            old,
+            "renew",
+            undefined,
+            FIXTURE_VISIBILITY_MS,
+          ),
+        ).toBe(false);
+        expect(
+          await updateStreamReservation(client, key, old, "ack", undefined, FIXTURE_VISIBILITY_MS),
+        ).toBe(false);
         await client.send("XAUTOCLAIM", [
           streamQueueKey(key),
           STREAM_GROUP,
@@ -1154,9 +1184,18 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
           "COUNT",
           "1",
         ]);
-        expect(await updateStreamReservation(client, key, old, "ack")).toBe(false);
         expect(
-          await updateStreamReservation(client, key, { ...old, owner: "replacement" }, "ack"),
+          await updateStreamReservation(client, key, old, "ack", undefined, FIXTURE_VISIBILITY_MS),
+        ).toBe(false);
+        expect(
+          await updateStreamReservation(
+            client,
+            key,
+            { ...old, owner: "replacement" },
+            "ack",
+            undefined,
+            FIXTURE_VISIBILITY_MS,
+          ),
         ).toBe(true);
         expect(await entries(client, key)).toEqual([]);
       } finally {
@@ -1532,11 +1571,27 @@ const jobRegistry = new JobRegistry();
       const id = required((await entries(client, key))[0])[0];
       const reservation = { id, owner: "owner", payload: "retained" };
       try {
-        await expect(updateStreamReservation(lostReply, key, reservation, "ack")).rejects.toThrow(
-          "disconnected after execution",
-        );
+        await expect(
+          updateStreamReservation(
+            lostReply,
+            key,
+            reservation,
+            "ack",
+            undefined,
+            FIXTURE_VISIBILITY_MS,
+          ),
+        ).rejects.toThrow("disconnected after execution");
         expect(await entries(client, key)).toEqual([]);
-        expect(await updateStreamReservation(client, key, reservation, "ack")).toBe(false);
+        expect(
+          await updateStreamReservation(
+            client,
+            key,
+            reservation,
+            "ack",
+            undefined,
+            FIXTURE_VISIBILITY_MS,
+          ),
+        ).toBe(false);
       } finally {
         worker.close();
       }
