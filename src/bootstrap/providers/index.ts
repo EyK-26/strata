@@ -6,7 +6,7 @@ import configProvider from "./config";
 import policyProvider from "./policy";
 import queueProvider from "./queue";
 import { createStorageProvider } from "./storage";
-import tracingProvider from "./tracing";
+import { createTracingProvider } from "./tracing";
 import { viewProvider } from "./view";
 
 function createCoreProviders(
@@ -15,7 +15,7 @@ function createCoreProviders(
   const storageProvider = createStorageProvider(createStorageDriver(resolveStorageConfig(env)));
   return [
     configProvider,
-    tracingProvider,
+    createTracingProvider({ env }),
     legacyCacheProvider,
     storageProvider,
     authProvider,
