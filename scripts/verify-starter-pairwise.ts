@@ -1,7 +1,7 @@
 /** Bounded installed-candidate qualification; never substitutes planning coverage for execution. */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -15,11 +15,13 @@ import {
   starterLocalFixtureUrl,
 } from "../tests/helpers/starterPairwiseDatabase";
 import { createStarterPairwiseInventory } from "../tests/helpers/starterPairwiseProfiles";
-import { candidatePackage, prepareCandidatePackages } from "./candidate-packages";
+import { candidatePackage } from "./candidate-packages";
 import { installerEnvironment } from "./installer-environment";
+import { StarterQualificationRoot } from "./starter-qualification-root";
 
 const inventory = createStarterPairwiseInventory();
 const root = await mkdtemp(join(tmpdir(), "strata-pairwise-"));
+const rootOwner = new StarterQualificationRoot(root);
 const output = process.argv.find((arg) => arg.startsWith("--output="))?.slice(9);
 const compileOnly = process.argv.includes("--compile-only");
 const records: Array<{ name: string; stages: Record<string, string>; error?: string }> = [];
@@ -33,6 +35,7 @@ const receipt = {
   startedAt: new Date().toISOString(),
   finishedAt: "",
   interrupted: false,
+  rootDisposition: "owned",
   summary: {} as Record<string, number>,
   kind: "installed-candidate-pairwise-qualification",
   profileSha256: createHash("sha256").update(JSON.stringify(inventory.profiles)).digest("hex"),
@@ -45,7 +48,7 @@ const receipt = {
     mailDelivery: false,
     dockerStartup: false,
     commandTimeoutMs: 90000,
-    secretOverrides: ["JWT_SECRET", "TOKEN_HASH_PEPPER", "SIGNED_URL_SECRET"],
+    secretOverrides: ["JWT_SECRET", "TOKEN_HASH_PEPPER"],
     databaseIsolation: "one owned empty database per profile",
   },
   archives: {} as unknown,
@@ -113,7 +116,7 @@ try {
   if (!compileOnly) starterLocalFixtureUrl(process.env.REDIS_URL, ["redis:", "rediss:"]);
   const archives = join(root, "archives");
   await mkdir(archives);
-  await prepareCandidatePackages(archives);
+  await rootOwner.prepare(archives);
   process.env.STRATA_TEST_PACKAGE_DIR = archives;
   receipt.archives = JSON.parse(await readFile(join(archives, "manifest.json"), "utf8"));
   const installs = new Map<string, string>();
@@ -200,7 +203,6 @@ try {
               APP_KEY_PREFIX: `pairwise-${crypto.randomUUID()}`,
               JWT_SECRET: "pairwise-owned-jwt-secret-at-least-32",
               TOKEN_HASH_PEPPER: "pairwise-owned-token-pepper",
-              SIGNED_URL_SECRET: "pairwise-owned-signed-url-secret-at-least32",
               MAIL_HOST: "127.0.0.1",
               MAIL_PORT: "1025",
             });
@@ -272,9 +274,10 @@ try {
   if (failures.length) process.exitCode = 1;
 } finally {
   receipt.finishedAt = new Date().toISOString();
+  receipt.rootDisposition = await rootOwner.cleanup(children.size > 0 || unresolvedChild);
+  if (receipt.rootDisposition === "retained")
+    console.error(`Unconfirmed child remains; retained qualification root: ${root}`);
   await save();
-  if (children.size === 0) await rm(root, { recursive: true, force: true });
-  else console.error(`Unconfirmed children remain; retained qualification root: ${root}`);
   process.off("SIGTERM", terminate);
   process.off("SIGINT", terminate);
 }

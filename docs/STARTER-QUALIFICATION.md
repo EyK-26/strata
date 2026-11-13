@@ -2,7 +2,9 @@
 
 `bun scripts/report-starter-pairwise.ts` is a planning inventory, not execution evidence.
 `bun scripts/verify-starter-pairwise.ts --output=/absolute/path/receipt.json` executes
-that same inventory outside the checkout against immutable packed candidate packages.
+that same inventory outside the checkout. Generation imports the current starter source;
+the generated consumers install immutable packed core, bootstrap and CLI candidates.
+The harness does not invoke a packed starter CLI.
 Build core and bootstrap in the current checkout first. Use `scripts/with-host-env.sh`
 for the owned local PostgreSQL, MySQL and Redis fixtures; never provide cloud URLs.
 `--compile-only` deliberately leaves migration and boot marked `not-run`.
@@ -23,7 +25,8 @@ boot for each named profile, and records package hashes, inventory hash and limi
 This is backend compile/migration/boot qualification. It does not build the React frontend,
 exercise Docker startup, send mail, contact an identity provider, deliver queue jobs,
 or establish the behavior of an integration merely because its profile booted.
-Fixture JWT, token-pepper and signed-URL secrets are supplied explicitly. Generated
+Fixture JWT and token-pepper secrets are supplied explicitly. Signing uses the generated
+`SIGNED_URL_SECRET` or `SESSION_SECRET` from `.env.example`, without a harness override. Generated
 `.env.example` values otherwise supply application config, with local database/Redis/mail
 addresses and a unique cache namespace. This is not a literal onboarding test.
 
@@ -66,5 +69,7 @@ correctly encountered the account-state administrative reset guard. Neither expl
 receipt is qualifying runtime evidence. The final harness instead allocates a database per
 profile. Exploration also found a generated JWT/email-verification signing-secret onboarding
 gap; explicit local `SIGNED_URL_SECRET` is an acknowledged fixture override, with the
-renderer correction tracked separately. Final integration requires a new receipt against
+renderer correction tracked separately. That override was removed from the final harness
+after the renderer emitted its dedicated signing secret; the historical baseline receipt
+retains its explicit override declaration. Final integration requires a new receipt against
 freshly built integrated candidates, not reuse of these baseline archives.
