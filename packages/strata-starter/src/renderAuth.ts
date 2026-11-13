@@ -189,6 +189,10 @@ ${users ? 'import { createMetadataAuthManager, type MetadataAuthOptions } from "
 ${cookie ? 'import { createCookieSessionAuthManager, type CookieSessionAuthManager } from "@getstrata/bootstrap/web/session";\n' : ""}import { establishedAuthReader } from "@getstrata/core/auth/authReader";
 ${users ? 'import { persistConsumedRecoveryHash } from "@getstrata/core/auth/passwordLogin";\n' : 'import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";\n'}import { createTokenAbilityChecker } from "@getstrata/core/auth/tokenAbilityChecker";
 import { csrfTokenOptionsFromEnvironment } from "@getstrata/core/http/csrfToken";
+import { intendedUrlCookieOptionsFromEnvironment } from "@getstrata/core/auth/intendedUrlCookie";
+import { flashSessionOptionsFromEnvironment } from "@getstrata/core/http/flashSession";
+import { resolveScimTenantFromToken } from "@getstrata/core/security/scimTenantTokens";
+${users ? 'import { createFieldEncryptionCodec } from "@getstrata/core/crypto/fieldEncryption";\nimport { createMfaSecretCodec } from "@getstrata/core/crypto/mfaSecret";\n' : ""}
 import type { OAuthStateOptions } from "@getstrata/core/security/oauthState";
 ${cookie ? 'import { createSamlServiceProvider, createSqlSamlAssertionReplayStore, readSamlEnvOptions, type SamlServiceProvider, type SamlServiceProviderConfig } from "@getstrata/core/auth/saml/samlServiceProvider";\n' : ""}${users ? 'import { Mailer, createMailDriver } from "@getstrata/core/mail/mailer";\nimport { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";\n' : ""}
 import { ${cookie ? "passwordConfirmCookieName, passwordConfirmTtlSeconds, " : ""}type PasswordConfirmWriteOptions } from "@getstrata/core/auth/passwordConfirmCookie";
@@ -205,8 +209,11 @@ export interface StarterAuthRuntime {
   readonly oauthEnabled: boolean;
   readonly appName: string;
   readonly appUrl: string;${cookie ? "\n  readonly saml: Readonly<SamlServiceProviderConfig> | undefined;" : ""}
-  readonly github: Readonly<{clientId:string;clientSecret:string;redirectUri:string}>;
-  readonly oidc: Readonly<{issuer:string;clientId:string;clientSecret:string;redirectUri:string}>;
+  readonly github: Readonly<{clientId:string;clientSecret:string;redirectUri:string;production:boolean;userAgent:string}>;
+  readonly oidc: Readonly<{issuer:string;clientId:string;clientSecret:string;redirectUri:string;networkPolicy:Readonly<{production:boolean;allowPrivate:boolean}>}>;
+  readonly throttleNamespace:string;
+  readonly trustForwardedFor:boolean;
+  readonly scimTenantForToken:(token:string)=>number|null;
   readonly tokenExpiryDays: number | null;
   readonly jwtTtlSeconds: number;
   readonly jwtSecret: string;
@@ -217,6 +224,8 @@ export interface StarterAuthRuntime {
 export interface StarterAuthServices {
   readonly config: StarterAuthRuntime;${users ? "\n  readonly mail: Mailer;" : ""}${cookie ? "\n  readonly saml: (ports:StarterAuthPersistence) => SamlServiceProvider;" : ""}${plan.decisions.pendingMfa ? "\n  readonly pendingMfa: ReturnType<typeof createPendingMfaHelpers>;" : ""}
   readonly csrf: ReturnType<typeof csrfTokenOptionsFromEnvironment>;
+  readonly intendedUrl: ReturnType<typeof intendedUrlCookieOptionsFromEnvironment>;
+  readonly flash: ReturnType<typeof flashSessionOptionsFromEnvironment>;${users ? "\n  readonly fieldEncryption: ReturnType<typeof createFieldEncryptionCodec>;\n  readonly mfaSecrets: ReturnType<typeof createMfaSecretCodec>;" : ""}
   readonly metadata: MetadataFactory;${users ? "\n  readonly directory: (ports: StarterAuthPersistence) => ReturnType<typeof createStarterAuthDirectory>;" : ""}${cookie ? "\n  readonly session: (ports: StarterAuthPersistence) => CookieSessionAuthManager;" : ""}
 }
 export const STARTER_AUTH_SERVICES = createServiceToken<StarterAuthServices>("starter.auth.services");
@@ -233,8 +242,11 @@ export function createStarterAuthServices(options: StarterAuthServicesOptions): 
     samlEnabled: env.FEATURE_SAML === "true",
     oauthEnabled: env.FEATURE_OAUTH === "true",
     appName: env.APP_NAME ?? "Strata", appUrl,${cookie ? '\n    saml: env.FEATURE_SAML === "true" ? Object.freeze(readSamlEnvOptions(env)) : undefined,' : ""}
-    github: Object.freeze({clientId:env.GITHUB_CLIENT_ID?.trim() ?? "",clientSecret:env.GITHUB_CLIENT_SECRET?.trim() ?? "",redirectUri:env.GITHUB_REDIRECT_URI?.trim() || appUrl + "/auth/github/callback"}),
-    oidc: Object.freeze({issuer:env.OIDC_ISSUER?.trim() ?? "",clientId:env.OIDC_CLIENT_ID?.trim() ?? "",clientSecret:env.OIDC_CLIENT_SECRET?.trim() ?? "",redirectUri:env.OIDC_REDIRECT_URI?.trim() || appUrl + "/auth/oidc/callback"}),
+    github: Object.freeze({clientId:env.GITHUB_CLIENT_ID?.trim() ?? "",clientSecret:env.GITHUB_CLIENT_SECRET?.trim() ?? "",redirectUri:env.GITHUB_REDIRECT_URI?.trim() || appUrl + "/auth/github/callback",production:snapshot.production,userAgent:env.APP_USER_AGENT?.trim()||env.APP_KEY_PREFIX?.trim()||"strata"}),
+    oidc: Object.freeze({issuer:env.OIDC_ISSUER?.trim() ?? "",clientId:env.OIDC_CLIENT_ID?.trim() ?? "",clientSecret:env.OIDC_CLIENT_SECRET?.trim() ?? "",redirectUri:env.OIDC_REDIRECT_URI?.trim() || appUrl + "/auth/oidc/callback",networkPolicy:Object.freeze({production:snapshot.production,allowPrivate:env.OIDC_ALLOW_PRIVATE === "true"})}),
+    throttleNamespace:env.APP_KEY_PREFIX?.trim()||"strata",
+    trustForwardedFor:env.TRUST_FORWARDED_FOR === "true",
+    scimTenantForToken:(token:string)=>resolveScimTenantFromToken(token,env),
     tokenExpiryDays: ${plan.decisions.token ? '(() => { const days=Number.parseInt(env.API_TOKEN_DEFAULT_EXPIRY_DAYS?.trim() ?? "",10); return Number.isInteger(days) && days > 0 ? days : null; })()' : "null"},
     jwtTtlSeconds: ${plan.decisions.jwt ? '(() => { const ttl=Number.parseInt(env.JWT_TTL_SECONDS ?? "",10); return Number.isInteger(ttl) && ttl > 0 ? ttl : 3600; })()' : "3600"}, jwtSecret:snapshot.jwtSecret,
     signatureSecret: ${plan.decisions.signedUrls ? 'options.signatureSecret ?? requireConfiguredSecret(["SIGNED_URL_SECRET","SESSION_SECRET","OAUTH_STATE_SECRET"],"signed-url-secret",secretsEnv)' : "options.signatureSecret ?? snapshot.jwtSecret"},
@@ -269,7 +281,7 @@ export function createStarterAuthServices(options: StarterAuthServicesOptions): 
       tenant: ${plan.decisions.tenantTable ? "id => resolveTenant(ports.database, id)" : 'async id => ({id,slug:"default"})'},
     };
   };
-  return Object.freeze({ config, metadata, csrf:csrfTokenOptionsFromEnvironment(env)${users ? ", mail: new Mailer(createMailDriver(env))" : ""}${cookie ? ', saml: (ports:StarterAuthPersistence) => { if(!config.saml) throw new Error("SAML is not configured.");return createSamlServiceProvider({...config.saml,replayStore:createSqlSamlAssertionReplayStore(ports.database)}); }' : ""}${plan.decisions.pendingMfa ? ", pendingMfa: createPendingMfaHelpers({secret:snapshot.sessionSecret!,production:snapshot.production})" : ""}${users ? ", directory: createStarterAuthDirectory" : ""}${cookie ? ", session" : ""} });
+  return Object.freeze({ config, metadata, csrf:csrfTokenOptionsFromEnvironment(env), intendedUrl:intendedUrlCookieOptionsFromEnvironment(env),flash:flashSessionOptionsFromEnvironment(env)${users ? ",fieldEncryption:createFieldEncryptionCodec(env),mfaSecrets:createMfaSecretCodec(env)" : ""}${users ? ", mail: new Mailer(createMailDriver(env))" : ""}${cookie ? ', saml: (ports:StarterAuthPersistence) => { if(!config.saml) throw new Error("SAML is not configured.");return createSamlServiceProvider({...config.saml,replayStore:createSqlSamlAssertionReplayStore(ports.database)}); }' : ""}${plan.decisions.pendingMfa ? ", pendingMfa: createPendingMfaHelpers({secret:snapshot.sessionSecret!,production:snapshot.production})" : ""}${users ? ", directory: createStarterAuthDirectory" : ""}${cookie ? ", session" : ""} });
 }
 export function createStarterAuthProvider(services: StarterAuthServices): ServiceProvider {
   return {
