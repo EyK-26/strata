@@ -232,3 +232,45 @@ test("session and recovery adapters must return exact true before authentication
   proof.headers.set("x-mfa-code", code);
   expect(await basic.authenticate(proof)).toEqual(invalidAuth("basic"));
 });
+
+test("JWT uses a complete safe numeric subject and the matching fresh account identity", async () => {
+  const secret = "strict-subject-fixture-secret-at-least-32-characters";
+  let lookups = 0;
+  const guard = new JwtGuard({
+    secret,
+    directory: {
+      findByIdOrThrow: async (id) => {
+        lookups++;
+        return { id, role: "member" };
+      },
+    },
+  });
+  for (const sub of [
+    "1junk",
+    "1.5",
+    " 1",
+    "0x1",
+    "1e0",
+    "01",
+    "",
+    0,
+    -1,
+    1.5,
+    Number.MAX_SAFE_INTEGER + 1,
+  ]) {
+    expect(await guard.authenticate(request(`Bearer ${signJwt({ sub }, { secret })}`))).toEqual(
+      invalidAuth("bearer"),
+    );
+  }
+  expect(lookups).toBe(0);
+  const valid = await guard.authenticate(request(`Bearer ${signJwt({ sub: "1" }, { secret })}`));
+  expect(valid.status).toBe("authenticated");
+  expect(valid.user?.id).toBe(1);
+  const mismatched = new JwtGuard({
+    secret,
+    directory: { findByIdOrThrow: async () => ({ id: 2, role: "admin" }) },
+  });
+  expect(
+    await mismatched.authenticate(request(`Bearer ${signJwt({ sub: 1 }, { secret })}`)),
+  ).toEqual(invalidAuth("bearer"));
+});

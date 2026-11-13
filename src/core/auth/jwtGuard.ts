@@ -23,12 +23,9 @@ function authUserFromJwt(payload: JwtPayload): AuthUser {
 }
 
 function jwtSubjectId(payload: JwtPayload): number | null {
-  const userId =
-    typeof payload.sub === "number" ? payload.sub : Number.parseInt(String(payload.sub), 10);
-
-  if (!Number.isInteger(userId) || userId <= 0) {
-    return null;
-  }
+  if (typeof payload.sub === "string" && !/^[1-9]\d*$/.test(payload.sub)) return null;
+  const userId = typeof payload.sub === "number" ? payload.sub : Number(payload.sub);
+  if (!Number.isSafeInteger(userId) || userId <= 0) return null;
 
   return userId;
 }
@@ -80,6 +77,7 @@ class JwtGuard implements AuthGuard {
     }
 
     const record = await directory.findByIdOrThrow(userId);
+    if (record.id !== userId) return null;
 
     if (!isAccountActive(record) || !matchesAuthVersion(payload.authVersion, record.auth_version))
       return null;
@@ -93,6 +91,7 @@ class JwtGuard implements AuthGuard {
 
     return {
       ...authUserFromJwt(payload),
+      id: record.id,
       ...(record.auth_version !== undefined ? { authVersion: record.auth_version } : {}),
     };
   }
