@@ -2,20 +2,23 @@ import { describe, expect, test } from "bun:test";
 import { formatCefLine, formatSiemAuditEvent } from "@getstrata/core/audit/siemFormatter";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
-function sampleEvent() {
-  return formatSiemAuditEvent({
-    action: "organization.created",
-    subject_type: "organization",
-    subject_id: 1,
-    user_id: 1,
-    tenant_id: 1,
-    trace_id: "abc123",
-    ip_address: "127.0.0.1",
-    user_agent: "curl",
-    checksum: "deadbeef",
-    payload: { slug: "acme" },
-    created_at: new Date("2026-01-01T00:00:00.000Z"),
-  });
+function sampleEvent(eventType?: string) {
+  return formatSiemAuditEvent(
+    {
+      action: "organization.created",
+      subject_type: "organization",
+      subject_id: 1,
+      user_id: 1,
+      tenant_id: 1,
+      trace_id: "abc123",
+      ip_address: "127.0.0.1",
+      user_agent: "curl",
+      checksum: "deadbeef",
+      payload: { slug: "acme" },
+      created_at: new Date("2026-01-01T00:00:00.000Z"),
+    },
+    eventType,
+  );
 }
 
 describe("siemFormatter", () => {
@@ -47,10 +50,10 @@ describe("siemFormatter", () => {
     process.env.APP_NAME = "Forum";
 
     try {
-      const event = sampleEvent();
+      const event = sampleEvent("forum.audit");
 
       expect(event.event_type).toBe("forum.audit");
-      expect(formatCefLine(event)).toContain("CEF:0|Forum|API|1.0|");
+      expect(formatCefLine(event, "Forum")).toContain("CEF:0|Forum|API|1.0|");
     } finally {
       restoreEnvVar("SIEM_EVENT_TYPE", previousType);
       restoreEnvVar("APP_NAME", previousName);

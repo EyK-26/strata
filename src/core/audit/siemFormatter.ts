@@ -1,5 +1,3 @@
-import { appDisplayName, siemEventType } from "../runtime/appKeyPrefix";
-
 interface SiemAuditEvent {
   timestamp: string;
   event_type: string;
@@ -29,7 +27,7 @@ function formatSiemAuditEvent(
     payload?: Record<string, unknown>;
     created_at: Date;
   },
-  eventType = siemEventType(),
+  eventType = "strata.audit",
 ): SiemAuditEvent {
   return {
     timestamp: input.created_at.toISOString(),
@@ -47,7 +45,7 @@ function formatSiemAuditEvent(
   };
 }
 
-function formatCefLine(event: SiemAuditEvent, displayName = appDisplayName()): string {
+function formatCefLine(event: SiemAuditEvent, displayName = "Strata"): string {
   const extension = [
     `rt=${event.timestamp}`,
     `suid=${event.actor_user_id ?? "unknown"}`,

@@ -59,7 +59,7 @@ describe("totp", () => {
     expect(url).toContain("issuer=Strata");
   });
 
-  test("buildOtpauthUrl defaults the issuer from APP_NAME", () => {
+  test("buildOtpauthUrl uses an explicit issuer independent of APP_NAME", () => {
     const previous = process.env.APP_NAME;
 
     try {
@@ -70,7 +70,11 @@ describe("totp", () => {
 
       process.env.APP_NAME = "Acme";
       expect(
-        buildOtpauthUrl({ secret: "JBSWY3DPEHPK3PXP", account: "admin@strata.test" }),
+        buildOtpauthUrl({
+          secret: "JBSWY3DPEHPK3PXP",
+          account: "admin@strata.test",
+          issuer: "Acme",
+        }),
       ).toContain("issuer=Acme");
     } finally {
       restoreEnvVar("APP_NAME", previous);

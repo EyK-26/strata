@@ -5,7 +5,12 @@ import {
   getRouteInventory,
   type RegisteredRoute,
 } from "@getstrata/bootstrap/routePlan";
-import { generateOpenApiSpec, renderOpenApiDocument } from "@getstrata/core/openapi/generator";
+import {
+  generateOpenApiSpec,
+  type OpenApiConfig,
+  renderOpenApiDocument,
+  resolveOpenApiConfig,
+} from "@getstrata/core/openapi/generator";
 import { validateOpenApiSpec } from "@getstrata/core/openapi/validate";
 import { readSpaPrefix } from "@getstrata/core/runtime/frontendMode";
 
@@ -63,11 +68,16 @@ function createOpenApiCommand(
   };
 }
 
-function createOpenApiGenerateCommand(bootstrap: AppBootstrap, close?: AppCleanup) {
+function createOpenApiGenerateCommand(
+  bootstrap: AppBootstrap,
+  close?: AppCleanup,
+  config: OpenApiConfig = resolveOpenApiConfig(process.env),
+) {
+  config = Object.freeze({ ...config });
   return createOpenApiCommand(
     bootstrap,
     async (routes) => {
-      const spec = generateOpenApiSpec(routes);
+      const spec = generateOpenApiSpec(routes, config);
       const jsonPath = join(process.cwd(), "docs/openapi.json");
       await mkdir(dirname(jsonPath), { recursive: true });
       await writeFile(jsonPath, renderOpenApiDocument(spec), "utf8");
@@ -79,11 +89,16 @@ function createOpenApiGenerateCommand(bootstrap: AppBootstrap, close?: AppCleanu
   );
 }
 
-function createOpenApiValidateCommand(bootstrap: AppBootstrap, close?: AppCleanup) {
+function createOpenApiValidateCommand(
+  bootstrap: AppBootstrap,
+  close?: AppCleanup,
+  config: OpenApiConfig = resolveOpenApiConfig(process.env),
+) {
+  config = Object.freeze({ ...config });
   return createOpenApiCommand(
     bootstrap,
     async (routes) => {
-      const spec = generateOpenApiSpec(routes);
+      const spec = generateOpenApiSpec(routes, config);
       const errors = validateOpenApiSpec(spec);
 
       if (errors.length > 0) {
@@ -101,11 +116,16 @@ function createOpenApiValidateCommand(bootstrap: AppBootstrap, close?: AppCleanu
   );
 }
 
-function createOpenApiCheckCommand(bootstrap: AppBootstrap, close?: AppCleanup) {
+function createOpenApiCheckCommand(
+  bootstrap: AppBootstrap,
+  close?: AppCleanup,
+  config: OpenApiConfig = resolveOpenApiConfig(process.env),
+) {
+  config = Object.freeze({ ...config });
   return createOpenApiCommand(
     bootstrap,
     async (routes) => {
-      const spec = generateOpenApiSpec(routes);
+      const spec = generateOpenApiSpec(routes, config);
       const errors = validateOpenApiSpec(spec);
 
       if (errors.length > 0) {

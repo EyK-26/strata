@@ -1,17 +1,25 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { generateOpenApiSpec, renderTypeScriptSdk } from "../../core/openapi/generator";
-import { apiPrefix } from "../../core/runtime/appKeyPrefix";
+import {
+  generateOpenApiSpec,
+  renderTypeScriptSdk,
+  resolveOpenApiConfig,
+} from "../../core/openapi/generator";
 import { registerOpenApiRoutes } from "./registerOpenApiRoutes";
 
 async function sdkGenerateCommand(): Promise<void> {
+  const config = resolveOpenApiConfig(process.env);
   const routes = await registerOpenApiRoutes();
-  const spec = generateOpenApiSpec(routes);
+  const spec = generateOpenApiSpec(routes, config);
   const outputDirectory = join(process.cwd(), "sdk/typescript");
   const outputPath = join(outputDirectory, "client.ts");
 
   await mkdir(outputDirectory, { recursive: true });
-  await writeFile(outputPath, renderTypeScriptSdk(spec, apiPrefix()), "utf8");
+  await writeFile(
+    outputPath,
+    renderTypeScriptSdk(spec, config.apiPrefix, config.sdkClassName),
+    "utf8",
+  );
 
   console.log(`TypeScript SDK written to ${outputPath}.`);
 }

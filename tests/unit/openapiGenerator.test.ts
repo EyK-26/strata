@@ -1,11 +1,46 @@
 import { describe, expect, test } from "bun:test";
-import { generateOpenApiSpec, renderTypeScriptSdk } from "@getstrata/core/openapi/generator";
+import {
+  generateOpenApiSpec,
+  renderTypeScriptSdk,
+  resolveOpenApiConfig,
+} from "@getstrata/core/openapi/generator";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 interface OpenApiOperation {
   summary?: string;
   security?: Array<Record<string, unknown[]>>;
 }
+
+test("independent API documentation owners retain naming, public auth and SDK paths", () => {
+  const input = {
+    APP_NAME: "One",
+    APP_URL: "https://one.test/",
+    API_PREFIX: "one",
+    APP_SDK_CLASS: "OneSdk",
+  };
+  const first = resolveOpenApiConfig(input);
+  input.APP_NAME = "Two";
+  input.APP_URL = "https://two.test";
+  input.API_PREFIX = "/two/";
+  input.APP_SDK_CLASS = "invalid class";
+  const second = resolveOpenApiConfig(input);
+  const routes = [{ method: "POST", path: "/one/auth/login", middleware: [] }];
+  const a = generateOpenApiSpec(routes, first);
+  const b = generateOpenApiSpec(routes, second);
+  expect(Object.isFrozen(first)).toBe(true);
+  expect(a.info.title).toBe("One API");
+  expect(a.servers[0]?.url).toBe("https://one.test/one");
+  expect(operation(a, "/one/auth/login", "post")?.security).toBeUndefined();
+  expect(operation(b, "/one/auth/login", "post")?.security).toEqual([{ bearerAuth: [] }]);
+  expect(renderTypeScriptSdk(a, first.apiPrefix, first.sdkClassName)).toContain(
+    "export class OneSdk",
+  );
+  expect(renderTypeScriptSdk(b, second.apiPrefix, second.sdkClassName)).toContain(
+    "export class TwoClient",
+  );
+  expect(resolveOpenApiConfig({ APP_NAME: "!!", API_PREFIX: "/" }).sdkClassName).toBe("AppClient");
+  expect(generateOpenApiSpec([]).info.title).toBe("Strata API");
+});
 
 function operation(
   spec: ReturnType<typeof generateOpenApiSpec>,
@@ -145,15 +180,18 @@ describe("generateOpenApiSpec", () => {
     process.env.API_PREFIX = "/api";
 
     try {
-      const spec = generateOpenApiSpec([
-        { method: "POST", path: "/api/login", middleware: ["global", "api"] },
-        { method: "POST", path: "/api/auth/token", middleware: ["global", "api"] },
-        { method: "GET", path: "/api/careers", middleware: ["global"] },
-        { method: "GET", path: "/api/careers/:id", middleware: ["global"] },
-        { method: "POST", path: "/api/apply/login", middleware: ["global", "api"] },
-        { method: "GET", path: "/api/integrations/ping", middleware: ["global", "api"] },
-        { method: "POST", path: "/api/auth/tokens", middleware: ["global", "api"] },
-      ]);
+      const spec = generateOpenApiSpec(
+        [
+          { method: "POST", path: "/api/login", middleware: ["global", "api"] },
+          { method: "POST", path: "/api/auth/token", middleware: ["global", "api"] },
+          { method: "GET", path: "/api/careers", middleware: ["global"] },
+          { method: "GET", path: "/api/careers/:id", middleware: ["global"] },
+          { method: "POST", path: "/api/apply/login", middleware: ["global", "api"] },
+          { method: "GET", path: "/api/integrations/ping", middleware: ["global", "api"] },
+          { method: "POST", path: "/api/auth/tokens", middleware: ["global", "api"] },
+        ],
+        resolveOpenApiConfig({ API_PREFIX: "/api" }),
+      );
 
       expect(operation(spec, "/api/login", "post")?.summary).toBe("Login with email and password");
       expect(operation(spec, "/api/login", "post")?.security).toBeUndefined();
@@ -186,8 +224,9 @@ describe("generateOpenApiSpec", () => {
     process.env.APP_SDK_CLASS = "ForumClient";
 
     try {
-      const spec = generateOpenApiSpec([]);
-      const sdk = renderTypeScriptSdk(spec);
+      const config = resolveOpenApiConfig(process.env);
+      const spec = generateOpenApiSpec([], config);
+      const sdk = renderTypeScriptSdk(spec, config.apiPrefix, config.sdkClassName);
 
       expect(spec.info.title).toBe("Forum API");
       expect(spec.servers[0]?.description).toBe("Forum API");
