@@ -57,4 +57,9 @@ Use static imports so the bundler includes modules. Factory closures retain appl
 
 `discoverJobs()` now returns `Promise<string[]>` and `discoverListeners()` returns `Promise<ListenerRegistrar[]>`. Existing synchronous custom callers must migrate to `await`; this is a public source compatibility change, not a patch-only fix. Previously ignored malformed files also become startup errors. Release this contract change through the agreed breaking-change/prerelease process and update application callers before stable promotion. No package version is bumped by this PR.
 
-Generated entrypoints and all checked-in example apps adopt the awaited shape. Models keep their separate existing `discoverModels`/`bootModels` contracts; their constructor and repository semantics differ from job/listener/module discovery. Tests cover top-level await, deterministic nested exports, malformed/duplicate diagnostics, failed-load retry, stale pending loads after reset, custom factories, async registrar boot, actual Bun bundles and the packed-package TypeScript matrix.
+Generated entrypoints adopt awaited infrastructure discovery. Models use explicit
+`defineRepository`/`defineModel` definitions registered with the application's
+`createDatabaseBindings`; the former global `discoverModels`/`bootModels` APIs are
+removed. Tests cover trusted imports, deterministic nested exports, malformed and
+duplicate diagnostics, failed-load retry, custom factories, asynchronous registrar
+boot, actual Bun bundles and packed-package contracts.

@@ -121,33 +121,35 @@ await counters.upsert({ slug: "home" }, ["slug"], []);
 
 `incrementById` and `decrementById` update in place with `column = column + n`, so two concurrent callers cannot lose an update the way a read-then-write would.
 
-`runInTransaction()` is the business transaction boundary. Inside an open `runWithTenantDatabase()` transaction it uses a savepoint, so a throw rolls back that unit and leaves the outer transaction open. `withJsonErrorHandling()`, `withErrorHandling()`, and the JSON error middleware call `requestTransactionRollback()` when they catch an exception and return an error response. The open transaction or savepoint then rolls back instead of committing. A handler that returns a 4xx response without throwing does not roll back. If you catch inside the transaction yourself and still return a response, call `requestTransactionRollback()` or the writes commit. Nested same-tenant scopes and migration bypass scopes use SQL savepoints on the active connection and restore `app.tenant_id`, `app.bypass_rls`, and `app.bypass_identifier`. Cross-tenant nesting and concurrent sibling savepoints are rejected. Previously unset custom PostgreSQL settings restore to an empty value, which represents no identity.
-
-Framework transaction, tenant and bypass helpers bind native transaction callbacks to the complete caller async context before database admission. This preserves auth users/credential sources, request metadata and application-owned async stores when a Bun SQL pool opens a connection or queues acquisition. RLS still installs its own tenant/connection scope inside that callback; callers do not manually reconstruct authentication or bypass CSRF. Direct native `SQL.begin()` callbacks are outside this framework boundary and need their own caller-context binding when they depend on async-local state.
+Use `DatabaseSession.transaction(async tx => ...)` as the business transaction
+boundary. Select models/repositories from `tx`. Nested transactions use savepoints;
+throws roll back the relevant unit and deferred effects. Returning a 4xx Response
+is a successful callback; map errors outside the transaction. Scope policy handles
+explicit tenant/bypass settings and rejects cross-tenant/owner nesting.
 
 ### Cancellable transaction acquisition
 
 ```ts
-import { runInTransaction } from "@getstrata/core/database/transaction";
-
-await runInTransaction(async db => {
-  await db.unsafe("SELECT 1");
+await database.transaction(async tx => {
+  await tx.execute({ text: "SELECT 1", params: [] });
 }, { acquisitionSignal: AbortSignal.timeout(1000) });
 ```
 
-The optional `acquisitionSignal` controls admission and native pool checkout, **not** SQL execution or cancellation of an admitted business callback. A pre-aborted signal fails before any transaction/reservation. At the outer boundary the adapter must implement native `reserve({signal})`, `begin()` on its reservation and `release()`; unsupported adapters fail explicitly rather than pretending a Promise race cancels checkout. The tested Bun 1.4.2 SQL pool implements this [native acquisition contract](https://bun.sh/docs/runtime/sql). Existing calls without an option continue using `begin()` directly, including SQLite/MySQL adapters.
-
-The reservation is released on success, rollback, malformed-adapter rejection or cancellation between checkout and callback admission. Once the callback starts, later aborts do not silently roll back or suppress commit; use database query deadlines or explicit business rollback separately. Nested calls use the existing connection/savepoint and never reserve another slot. Cancellation before a nested callback rolls back that savepoint; cancellation of a running callback does not automatically abort its parent. Admission cancellation does not cancel an in-flight BEGIN/SAVEPOINT command; the signal is rechecked before the business callback. Connection/network timeouts still apply to those commands.
-
-Release occurs before committed deferred observers flush, so reentrant observers can acquire the same single-slot pool. Existing observer, SQL failure, deferred-event and tenant-scope semantics remain unchanged. This option does not install signal handlers, change tenancy or bind a global connection.
-
-`BaseRepository.create` / `updateById` / `deleteById` / `restoreById` dispatch `table.created` (and the matching write events) through `dispatchModelEvent()`. Outside a framework transaction that is immediate. Inside `runInTransaction()`, `runWithTenantDatabase()`, or `runWithMigrationBypass()`, the event waits for a successful commit and is dropped on rollback. Nested `begin` callbacks promote queued events to the outer commit. A savepoint rollback drops only the events queued inside that savepoint. Wrap a raw `pool.begin()` with `runWithDeferredModelEvents()` if you need the same contract. Model observers still run before commit.
-
-`Model.firstOrCreate` reads first, then inserts. If a concurrent writer wins that race the unique violation is caught and the existing row is returned, so a duplicate never surfaces as a conflict. Any other error propagates.
+The acquisition signal bounds admission/checkout, not admitted business SQL. A
+late checkout remains owned until its outcome is known; cancellation cannot prove
+that native work stopped. Nested savepoints share the existing checkout. Adapters
+must declare actual capabilities and reject unsupported operations. Connections
+remain owned through transaction completion and deferred work; a post-commit
+observer error does not mean committed data rolled back.
 
 ### Observing native transaction checkout
 
-`createTransactionAcquisitionMetrics()` creates an optional bounded process-local collector. Pass it as `runInTransaction(operation, { acquisitionMetrics })` and to `createMetricsRoutes({ transactionAcquisition: acquisitionMetrics })`. Opting in requires native reservation support and measures only the outer checkout, including pool wait and connection establishment. Nested savepoints do not produce another acquisition observation; business errors do not become checkout errors. Without metrics or an acquisition signal the existing direct `begin()` path is unchanged. See [runtime metrics](RUNTIME-METRICS.md#opt-in-transaction-acquisition-observations) for outcomes, cancellation semantics, aggregation and coverage limits. This is not a global pool statistic or a claim to instrument every direct SQL/tenant request.
+Pass `acquisitionMetrics` in the selected session's transaction options and to the
+metrics route configuration. The bounded collector observes outer checkout,
+including pool wait/connection establishment; savepoints and business errors are
+not checkout events. This is not a global pool statistic. See
+[application-owned SQL sessions](DATABASE-SESSIONS.md) for the current scope and
+connection contract.
 
 ### Walking large tables
 
@@ -390,7 +392,7 @@ for separately owned tooling; they do not supply ambient application authority.
 
 ### Typed pessimistic row locks
 
-Inside `runInTransaction` (or a Postgres tenant scope), call `query().lockForUpdate()` or `query().sharedLock()` before `first()`, `get()` or `select(...)`. Selection stays on the active connection and returns the same typed models/plain projections. Query options also accept `lock: { mode: "update" | "share", wait?, of? }` for repositories. `wait` is `"wait"` (default), `"nowait"` or `"skipLocked"`. PostgreSQL supports `of: ["table_name"]` for locking selected query tables; MySQL 8+ supports the lock/wait modes but rejects `of`. SQLite rejects row locking instead of silently omitting it; use its explicit write transaction semantics. Raw database/native transactions outside the framework do not satisfy the active-connection guard.
+Inside an owned session transaction (or explicit Postgres tenant policy), call `query().lockForUpdate()` or `query().sharedLock()` before `first()`, `get()` or `select(...)`. Selection stays on the active connection and returns the same typed models/plain projections. Query options also accept `lock: { mode: "update" | "share", wait?, of? }` for repositories. `wait` is `"wait"` (default), `"nowait"` or `"skipLocked"`. PostgreSQL supports `of: ["table_name"]` for locking selected query tables; MySQL 8+ supports the lock/wait modes but rejects `of`. SQLite rejects row locking instead of silently omitting it; use its explicit write transaction semantics. Raw database/native transactions outside the framework do not satisfy the active-connection guard.
 
 Locks last until transaction completion. Grouped queries and `count()` cannot take row locks. Eager-loading child queries do not inherit the parent's lock; explicitly design any child locking and its order. Keep business lock ordering deterministic. `SKIP LOCKED` is suitable for competing work claims, not a consistent full listing or pagination promise. Driver isolation, deadlocks and lock timeouts still apply; applications own replay-safe business effects. Advanced SQL remains a supported escape hatch.
 

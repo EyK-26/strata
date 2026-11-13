@@ -100,11 +100,13 @@ Generated HTTP binds its socket only after bootstrap succeeds, and bind failure 
 
 ### Business transactions and request tenancy
 
-Use `runInTransaction` from `@getstrata/core/database/transaction` around an atomic business operation. Repository queries and queries through the default connection use its active connection. Nested transactions use SQL savepoints: a thrown failure rolls back the nested writes and deferred model events, even if the controller subsequently converts that failure into an HTTP response. Successful nested writes and events remain subject to the outer transaction's commit or rollback.
-
-Keep error-to-response mapping outside the business transaction. Returning a Response, including a deliberate 4xx, is a successful callback and does not request rollback. Await nested transactions sequentially; concurrent sibling savepoints on one connection are rejected. Explicitly supplied repository connections remain the caller's responsibility.
-
-`runWithTenantDatabase` also gives nested RLS scopes a savepoint and restores the previous tenant/bypass settings. Switching tenants inside an active transaction is rejected before changing SQL settings. Nested migration bypass scopes use the same connection and restore the enclosing scope; use bypass only for trusted infrastructure operations. PostgreSQL represents a previously unset custom setting as an empty value after restoration, so treat empty and missing settings as having no identity.
+Use `DatabaseSession.transaction(async tx => ...)` for atomic business work and
+select repositories/models from `tx`. Nested transactions use savepoints: throws
+roll back nested writes and deferred effects; successful inner work remains subject
+to the outer commit. Map errors outside the transaction: returning a deliberate
+4xx Response is still a successful callback. Await sibling savepoints sequentially.
+Tenant/bypass policy runs through the execution's explicit `ScopedPolicy`; switching
+owners or tenants is rejected.
 
 Greenfield apps from `create-strata` use **file-based** migrations in `src/db/migrations/` plus `@getstrata/core/database/migrations` (`migrateDatabase`) from `src/db/migrate.ts`. Seed stays in `migrate.ts`. The runner records applied files in **`framework_migrations`**. See [STARTER.md](./STARTER.md#migrations).
 
@@ -357,15 +359,18 @@ The global HTTP error boundary encloses authentication, tenancy, the business tr
 
 ### SQLite transactions
 
-`createSqliteConnection` supports awaited `begin()` callbacks and the standard `runInTransaction` API. Nested framework transactions use savepoints. A single native SQLite connection serializes root transactions and unrelated queries; transaction-local queries use the bound handle, so another request cannot observe uncommitted writes. Failed callbacks and deferred constraint failures roll back before the next operation starts. Do not nest native `begin()` calls or issue manual transaction-control SQL inside a managed callback; use `runInTransaction`. Drain operations before closing the connection. This does not turn SQLite into a distributed writer database: file locking and the existing busy timeout still apply between processes.
+`createSqliteConnection` supports awaited `begin()` callbacks and owned `DatabaseSession.transaction`. Nested framework transactions use savepoints. A single native SQLite connection serializes root transactions and unrelated queries; transaction-local queries use the bound handle, so another request cannot observe uncommitted writes. Failed callbacks and deferred constraint failures roll back before the next operation starts. Do not nest native `begin()` calls or issue manual transaction-control SQL inside a managed callback; use the selected session's `transaction` method. Drain operations before closing the connection. This does not turn SQLite into a distributed writer database: file locking and the existing busy timeout still apply between processes.
 
 ### MySQL transactions
 
-The MySQL adapter reserves a pool connection for each awaited transaction and binds transaction-local pool/repository queries to that session. `runInTransaction` nests through savepoints. Queries with bound values use the prepared protocol; parameterless savepoint/DDL operations use the driver's query protocol. Failed callbacks or commits roll back before release. Uncertain BEGIN and failed rollback discard the session rather than returning it to the pool. Adapters supplied through `createMysqlConnectionFromPool` need `getConnection()` to support transactions; use `runInTransaction` for nesting and do not reuse transaction handles after completion.
+The MySQL adapter reserves a pool connection for each awaited transaction and binds transaction-local pool/repository queries to that session. Selected-session `transaction` nests through savepoints. Queries with bound values use the prepared protocol; parameterless savepoint/DDL operations use the driver's query protocol. Failed callbacks or commits roll back before release. Uncertain BEGIN and failed rollback discard the session rather than returning it to the pool. Adapters supplied through `createMysqlConnectionFromPool` need `getConnection()` to support transactions; use the selected session's `transaction` method for nesting and do not reuse transaction handles after completion.
 
 MySQL has no native mutation `RETURNING`. Entity-returning repository creates, upserts, ID updates/increments and restores therefore run their write and row readback in one framework transaction on one reserved session. Generated keys come from that statement's insert metadata; supplied string keys and stored defaults are preserved. No-op ID updates/increments return the live row even when the MySQL client reports changed rather than matched rows. Soft-delete and force-delete return false for absent/scoped-out rows, and observers receive rows rather than driver headers. Set-based conditional writes still use `affectedRows` metadata and bypass per-row observers. Postgres and SQLite retain their native RETURNING statements.
 
-Injected repositories can select a root pool through `runInTransaction(operation, { connection })`; default repository queries inside the callback share that active connection. Nested calls use savepoints and reject switching to an unrelated pool. The callback connection works with `repository.withConnection(db)`, including row locks. A transaction callback must not outlive its owning scope. Transactional observers still require an explicit outer framework transaction; do not use repository readback transactions as an implicit business transaction.
+Select repositories and models from the supplied transaction session. Nested calls
+use savepoints and reject switching to an unrelated pool. A callback must not
+outlive its execution. Use an explicit outer business transaction when writes and
+observers must commit together.
 
 Repositories with constructor-initialized state or JavaScript `#private` fields
 use a `defineRepository` construction function. Its `create(binding, ...dependencies)`
@@ -380,26 +385,15 @@ MySQL upsert uses the engine's native unique-index semantics, which do not targe
 
 ### Recoverable model cache invalidation
 
-The 2.x generated queue listener remains a compatibility path: a failed queue dispatch after commit can produce HTTP 500 with no persisted cache retry. SQL applications can opt into durable invalidation through the existing outbox schema. This is a migration, not an automatic bootstrap DDL or a silent error fallback.
+The retired 2.x queue listener is not a durability guarantee. Declare durable cache invalidation effects against the application repository/model definitions and owned SQL outbox. Publication participates in the selected business transaction; workers enter fresh trusted tenant/actor executions.
 
-Include `createModelCacheInvalidationListener()` from `@getstrata/bootstrap/listeners/invalidateCacheOnModelWrite` in the application's **one** `SqlOutbox` registry, alongside all business listeners. After module discovery and before admitting requests/jobs, call `registerInvalidateCacheOnModelWriteListeners(eventBus, { outbox })`. This replaces the generated queue registrations; later generated-provider calls cannot downgrade it. The returned cleanup restores the previous registration. No separate cache-only worker registry may claim the shared delivery table.
-
-```ts
-const outbox = new SqlOutbox({ listeners: [
-  createModelCacheInvalidationListener(),
-  // ...all application durable listeners
-] });
-const stopCacheListeners = registerInvalidateCacheOnModelWriteListeners(eventBus, { outbox });
-await runInTransaction(async () => {
-  await Product.create(attributes);
-});
-// Separate process, same complete registry and shared cache:
-await outbox.work({ signal: shutdown.signal });
-```
+Use one complete durable listener registry for cache invalidation and business
+listeners. Include the owned outbox services in the application and register effects
+before admitting HTTP/jobs. Do not let a cache-only worker claim the shared table.
 
 Row model events publish versioned cache intents through the active business connection before commit. Publication/schema failure rolls back the business write; cache/Redis availability does not participate in the commit response. Later synchronous hooks retain their normal order. The worker directly invokes the framework cache invalidation job, bypassing the Redis queue handoff, and the SQL outbox provides leases, retry, failed-delivery retention and `replay(eventId, "strata.cache.invalidate-tags.v1")`. Tune retry/attempt policy and alert on failed or aged cache deliveries.
 
-Durable mode requires explicit framework transactions around row writes (including workers and CLI commands). The RLS request scope already supplies one. Standalone writes or repositories bound to an unrelated connection fail **before SQL mutation**; this prevents an outbox record from claiming another connection's write. Direct SQL and bulk/projection APIs remain supported escape hatches: explicitly publish `strata.cache.invalidate-tags` with `{ tags }` inside their business transaction when they bypass row events. `EventBus.listenTransactional` hooks are invoked only by model event publication, inside the transaction; normal `dispatch`/`listen` hooks remain synchronous/in-process. Hooks must only persist intents, never perform remote delivery.
+Durable mode requires explicit framework transactions around row writes (including workers and CLI commands). The RLS request scope already supplies one. Standalone writes or repositories bound to an unrelated connection fail **before SQL mutation**; this prevents an outbox record from claiming another connection's write. Direct SQL and bulk/projection APIs remain supported escape hatches: explicitly publish `strata.cache.invalidate-tags` with `{ tags }` inside their business transaction when they bypass row events. Transactional repository effects execute inside the selected transaction; after-commit effects run after durability. Hooks must only persist intents, never perform remote delivery.
 
 Rollout: stop/drain old writers and workers, deploy the outbox file migration with the migration owner, install the complete registry and registrar, and then restart writers and the outbox worker. Preserve old queue jobs and pending SQL deliveries. Use a shared cache for multi-process workers; an array/memory cache belongs to its own process and cannot be invalidated by a different process. Invalidation is eventually consistent: worker lag can expose stale cached values, so use bounded TTLs and bypass cache for authoritative/financial decisions. This fixes recoverability of the handoff. The Redis cache driver also provides shared generation fencing, bounded metadata/LRU eviction and renewable fill leases; see [shared Redis cache](REDIS-CACHE.md) for consistency limits, configuration and the required cold-cache rollout. Existing generated apps must opt in; the legacy 2.x queue mode is not made durable by upgrading packages alone.
 
@@ -407,48 +401,26 @@ Rollout: stop/drain old writers and workers, deploy the outbox file migration wi
 
 Import `SqlOutbox` and `createOutboxMigration` from `@getstrata/core/events/outbox`. A new `create-strata` app already writes `0005_outbox.ts`, `src/outbox/registry.ts`, and `bun run outbox:work`. An existing app adds a numbered file migration exporting `createOutboxMigration("0010_outbox", "pgsql", { rls: true })` (use the selected driver and enable RLS only for Postgres RLS apps). This helper owns the infrastructure schema; do not copy its SQL into the application. Run migrations separately from workers. MySQL requires 8.0.16+ (8.4 is tested) for `SKIP LOCKED` and enforced checks. Grant the runtime role SELECT/INSERT/UPDATE on both outbox tables. DDL requires the migration owner; migration bypass is a row policy, not DDL permission. Downgrade refuses tables containing any undelivered event.
 
-```typescript
-const outbox = new SqlOutbox({
-  listeners: [{
-    name: "orders.receipt.v1", event: "orders.created",
-    async handle(event, { signal }) {
-      // Application handler: use event.id as the provider/business idempotency key.
-      await sendReceipt(event.payload, { signal, idempotencyKey: event.id });
-    },
-  }],
-});
-await runInTransaction(async () => {
-  const order = await orders.create(input);
-  await outbox.publish("orders.created", { orderId: order.id }, {
-    id: `order:${order.id}:created`, version: 1,
-  });
-});
-// Separate bootstrapped worker process; abort during shutdown and await completion.
-await outbox.work({ signal: shutdown.signal });
-```
+Compose `createSqlOutboxBindings({ invoke, connection, tenancy, listeners })` and
+include its service declarations in the application. Publish using
+`outbox.publish(tx, name, payload, { tenantId, id, version })` with that owner's
+`TransactionSession`; the tenant must match the execution envelope.
 
-Publication requires a framework business transaction (`runInTransaction` or `runWithTenantDatabase`). A savepoint keeps publication atomic even if the caller catches its error. Event payloads are JSON, versioned, limited to 64 KiB by default, and accompanied by the current tenant identity. The transaction captures the registered listener names and attempt budget. Reusing an event ID requires the same name, version, tenant and serialized payload; it never adds listeners retroactively. Canonicalize application payloads if object key ordering may differ between retries. Keep IDs globally unique (include the tenant when business IDs are tenant-local). Retain event rows for the required idempotency/audit window; deleting them permits that ID to be published again.
+
+Publication requires an owned business `TransactionSession`. A savepoint keeps publication atomic even if the caller catches its error. Event payloads are JSON, versioned, limited to 64 KiB by default, and accompanied by the current tenant identity. The transaction captures the registered listener names and attempt budget. Reusing an event ID requires the same name, version, tenant and serialized payload; it never adds listeners retroactively. Canonicalize application payloads if object key ordering may differ between retries. Keep IDs globally unique (include the tenant when business IDs are tenant-local). Retain event rows for the required idempotency/audit window; deleting them permits that ID to be published again.
 
 Durable listeners execute only in workers outside the business transaction; publication never calls a listener or a Redis queue. This differs from synchronous observers and commit-aware in-process model listeners, which are useful hooks but do not survive process death. Register the same durable listeners in producers and workers. Removing or renaming a listener leaves its existing delivery recoverable as a failure. Do not automatically convert all model hooks to durable events: apps choose which effects need durability.
 
 The official `runOutboxWorkerCommand` from `@getstrata/cli/outboxWorker` owns stop/drain/flush/close handling. Generated apps pass `listeners`, which constructs an outbox with framework defaults. Apps with a configured outbox pass `outbox` instead, preserving their tenant resolver, lease/retry settings and complete listener registry. Choose exactly one source; TypeScript and runtime validation reject ambiguous configuration. A supplied instance is reused directly after successful boot, with the same cancellation and cleanup contracts.
 
-```typescript
-await runOutboxWorkerCommand({
-  outbox: appOutbox,
-  boot: async () => { app = await bootstrapApp({ migrate: false }); },
-  drain: () => app?.context.drain(),
-  flush: () => app?.context.flush(),
-  close: async () => {
-    try { await app?.context.dispose(); }
-    finally { await closeDatabase(); }
-  },
-});
-```
+Generated `outbox:work` wiring supplies the owned application and outbox. Shutdown
+stops admission, drains work, flushes and closes through the application handle.
+Do not combine that handle with retired `context.dispose`/global database cleanup.
+
 
 Workers use database time, indexed claim scans, renewable unique ownership tokens and ownership-checked acknowledgement. Expired ownership is reclaimed before new work. Short coordination transactions retry only database deadlock/serialization aborts, with a bounded retry budget; persistent infrastructure errors propagate to the worker supervisor. Delivery is **at least once**. A lease fences acknowledgement, not arbitrary provider effects: a killed worker may have already sent email or charged a provider. Handlers must support replay and observe the abort signal. Cancellation does not delete work. Failed delivery persists a bounded code, not provider exception text; attempts and exponential retry deadlines survive restart. Defaults are a 60-second lease, five attempts, and a one-second initial retry delay capped at five minutes. Provision pool headroom for lease renewal in addition to active listeners. SQLite has one writer per connection; keep application write transactions short.
 
-Tenant listeners resolve the captured tenant and run through `runWithTenantDatabase`, with Postgres RLS bypass disabled. Missing tenants fail closed. The default resolver uses the generated tenant directory; inject the application's trusted directory when its schema differs. Non-RLS handlers receive tenant context and must explicitly use `runInTransaction` for atomic business writes. Platform events have no tenant; reserve them for authorized platform code.
+Tenant listeners resolve the captured tenant and run through their explicit scoped policy, with Postgres RLS bypass disabled. Missing tenants fail closed. The default resolver uses the generated tenant directory; inject the application's trusted directory when its schema differs. Non-RLS handlers receive tenant context and must explicitly use the selected session's `transaction` method for atomic business writes. Platform events have no tenant; reserve them for authorized platform code.
 
 Use `processNext({ signal })` for bounded worker orchestration/tests, or `work({ signal, pollMs })` for the framework polling loop. Monitor pending age, expired leases, attempts, and failed deliveries in the two SQL tables. `replay(eventId, listenerName)` atomically resets only that failed listener's delivery, preserving the original event and completed listeners. Expose replay solely through an authorized operator command, never an anonymous endpoint. Outbox schema/data must survive rolling deployment and restore. This API is additive and opt-in; the starter does not silently change existing listener execution semantics.
 
