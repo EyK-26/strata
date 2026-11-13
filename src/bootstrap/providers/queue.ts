@@ -5,6 +5,7 @@ import {
   FAILED_JOB_SERVICE_TOKEN,
 } from "@getstrata/core/queue/createAppQueue";
 import { JobRegistry, QUEUE_JOB_REGISTRY_TOKEN } from "@getstrata/core/queue/jobRegistry";
+import { resolveQueueConfig } from "@getstrata/core/queue/queueConfig";
 import {
   CORE_CACHE_TOKEN,
   CORE_QUEUE_TOKEN,
@@ -19,6 +20,7 @@ function createQueueProvider(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): ServiceProvider {
   const environment = Object.freeze({ ...env });
+  const retryPolicy = resolveQueueConfig(environment);
   return {
     name: "core.queue",
     async register({ container, config, onCleanup, invoke }) {
@@ -52,6 +54,7 @@ function createQueueProvider(
         config.get<string>(REDIS_URL_CONFIG_KEY) ?? environment.REDIS_URL,
         failedJobs,
         registry,
+        retryPolicy,
       );
       onCleanup(() => queue.close?.(), driver === "async" ? "drain" : "close");
       container.set(CORE_QUEUE_TOKEN, queue);

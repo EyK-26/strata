@@ -10,6 +10,7 @@ import {
   createTrackedJob,
   type QueueServices,
 } from "./publicQueue";
+import type { QueueRetryPolicy } from "./queueConfig";
 import { resolveQueueConfig } from "./queueConfig";
 
 function createAppQueue(
@@ -17,11 +18,13 @@ function createAppQueue(
   redisUrl: string | undefined,
   failedJobs: QueueServices,
   registry: JobRegistry,
+  retryPolicy?: QueueRetryPolicy,
 ): Queue {
   return createProductionQueue(driver, {
     redisUrl,
     failedJobs,
     registry,
+    retryPolicy,
   });
 }
 

@@ -3,7 +3,12 @@ import FailedJobService from "./failedJobService.ts";
 import type { Job, Queue } from "./index.ts";
 import type { JobRegistry } from "./jobRegistry.ts";
 import { runQueueJob } from "./jobRunner.ts";
-import { resolveRedisQueueTransport } from "./queueConfig";
+import {
+  type QueueRetryPolicy,
+  resolveQueueConfig,
+  resolveRedisQueueTransport,
+  snapshotQueueRetryPolicy,
+} from "./queueConfig";
 import {
   createFailedJobService,
   createQueueServices,
@@ -28,6 +33,7 @@ function createProductionQueue(
     redisUrl?: string;
     failedJobs: QueueServices;
     registry: JobRegistry;
+    retryPolicy?: QueueRetryPolicy;
   },
 ): Queue {
   const failedJobs = options.failedJobs;
@@ -42,7 +48,12 @@ function createProductionQueue(
       : new RedisQueue(options.redisUrl, options.registry);
   }
 
-  return new ResilientQueue(failedJobs, options.registry, driver === "async");
+  return new ResilientQueue(
+    failedJobs,
+    options.registry,
+    driver === "async",
+    snapshotQueueRetryPolicy(options.retryPolicy ?? resolveQueueConfig()),
+  );
 }
 
 function createQueueWorker(
