@@ -200,7 +200,7 @@ ${plan.decisions.pendingMfa ? 'import { createPendingMfaHelpers } from "../pendi
 import { createServiceToken } from "@getstrata/core/contracts/token";
 import type { ExecutionPersistence } from "@getstrata/core/contracts/persistence";
 ${plan.decisions.tenantTable ? 'import { resolveTenant } from "@getstrata/core/tenant/resolveTenant";\n' : ""}${users ? 'import { createStarterAuthDirectory, withAuthIdentifier, type StarterAuthPersistence } from "../authDirectory.ts";\n' : ""}${plan.decisions.tenantUsers ? 'import { User } from "../../models/User.ts";\n' : ""}
-export type StarterAuthServicesOptions = Omit<MetadataAuthOptions, "mechanisms" | "sessionGuard"> & { readonly environment:Readonly<Record<string,string|undefined>>; readonly sessionSecret?: string; readonly signatureSecret?:string; readonly oauthStateSecret?:string; readonly passwordConfirmation?:PasswordConfirmWriteOptions };
+export type StarterAuthServicesOptions = Omit<MetadataAuthOptions, "mechanisms" | "sessionGuard" | "mfaSecrets"> & { readonly environment:Readonly<Record<string,string|undefined>>; readonly sessionSecret?: string; readonly signatureSecret?:string; readonly oauthStateSecret?:string; readonly passwordConfirmation?:PasswordConfirmWriteOptions };
 export interface StarterAuthRuntime {
   readonly registrationEnabled: boolean;
   readonly scimEnabled: boolean;
