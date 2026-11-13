@@ -21,7 +21,6 @@ const PRUNE_TOP_LEVEL = [
 const PRUNE_FILES = [
   "bootstrap/createRoutes.d.ts",
   "bootstrap/routes.d.ts",
-  "bootstrap/preloadModules.d.ts",
 ] as const;
 
 for (const directory of PRUNE_TOP_LEVEL) {

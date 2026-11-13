@@ -23,7 +23,6 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/bootstrap/middleware.ts",
   "src/bootstrap/modules.ts",
   "src/bootstrap/prefixRouteMap.ts",
-  "src/bootstrap/preloadModules.ts",
   "src/bootstrap/providers/auth.ts",
   // Temporary M4/M5 bridge retains the former legacy cache provider's exemption.
   "src/bootstrap/legacyCache.ts",

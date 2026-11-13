@@ -85,7 +85,6 @@ coveragePathIgnorePatterns = [
   "src/bootstrap/middleware.ts",
   "src/bootstrap/modules.ts",
   "src/bootstrap/prefixRouteMap.ts",
-  "src/bootstrap/preloadModules.ts",
   "src/bootstrap/public-api.ts",
   "src/bootstrap/rateLimit.ts",
   "src/bootstrap/routes.ts",
