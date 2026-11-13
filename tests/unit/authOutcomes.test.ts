@@ -274,3 +274,23 @@ test("JWT uses a complete safe numeric subject and the matching fresh account id
     await mismatched.authenticate(request(`Bearer ${signJwt({ sub: 1 }, { secret })}`)),
   ).toEqual(invalidAuth("bearer"));
 });
+
+test("session account lookup must return the exact identity carried by the proof", async () => {
+  let validityChecks = 0;
+  const guard = new SessionGuard(
+    { findByIdOrThrow: async () => ({ id: 2, role: "admin" }) },
+    {
+      hasCredential: () => true,
+      read: () => ({ userId: 1, role: "member", issuedAt: Date.now() }),
+      abilities: () => [],
+      validity: {
+        hasActiveBrowserSession: async () => {
+          validityChecks++;
+          return true;
+        },
+      },
+    },
+  );
+  expect(await guard.authenticate(request())).toEqual(invalidAuth("session"));
+  expect(validityChecks).toBe(0);
+});

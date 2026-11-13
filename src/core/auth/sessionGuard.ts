@@ -53,6 +53,7 @@ class SessionGuard implements AuthGuard {
 
     {
       const user = await accounts.findByIdOrThrow(session.userId);
+      if (user.id !== session.userId) return null;
 
       if (!isAccountActive(user) || !matchesAuthVersion(session.authVersion, user.auth_version))
         return null;
