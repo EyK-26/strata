@@ -1,6 +1,6 @@
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { createServiceToken } from "@getstrata/core/contracts/token";
+import { CORE_STORAGE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { S3Client } from "bun";
 import { copyApplicationConfig } from "../config/configSnapshot";
 import { assertPathUnderRoot } from "../security/safePath";
@@ -110,8 +110,6 @@ class StorageManager {
     return this.driver.delete(path);
   }
 }
-
-const CORE_STORAGE_TOKEN = createServiceToken<StorageManager>("core.storage");
 
 type StorageConfig =
   | { readonly driver: "local"; readonly rootDirectory: string }

@@ -46,6 +46,7 @@ test("cold public root/events retain caller-owned identity without eager global 
     `
  const assert=await import('node:assert/strict');
  const key=Symbol.for('@getstrata/eventBus');assert.equal(Object.hasOwn(globalThis,key),false);
+ process.env.SHUTDOWN_TIMEOUT_MS='invalid-but-no-owner-constructed';
  const core=await import('@getstrata/core');const events=await import('@getstrata/core/events');
  assert.equal(Object.hasOwn(globalThis,key),false);
  for(const name of ['afterCommit','runInTransaction','requestTransactionRollback','hasActiveTransaction','isActiveTransactionConnection','eventBus','readSharedEventBus','dispatchModelEvent','runWithDeferredModelEvents','onDeferredModelRollback'])assert.equal(name in core,false,name);
@@ -56,6 +57,9 @@ test("cold public root/events retain caller-owned identity without eager global 
  for(const key of ['@getstrata/defaultDatabaseConnection','@getstrata/boundDatabaseConnection','@getstrata/namedConnections'])assert.equal(Object.hasOwn(globalThis,Symbol.for(key)),false,key);
  for(const name of ['auth','cache','config','events','log','mail','policyGate','queue','storage','setActiveApplicationContext','clearActiveApplicationContext','resolveApplicationAuth','resolveApplicationCache','resolveApplicationConfig','resolveApplicationDependencies','resolveApplicationEventBus','resolveApplicationLogger','resolveApplicationPolicyGate','resolveApplicationQueue'])assert.equal(name in core,false,name);
  assert.equal(Object.hasOwn(globalThis,Symbol.for('@getstrata/applicationContext')),false);
+ const lifecycle=await import('@getstrata/core/lifecycle/gracefulShutdown');
+ for(const name of ['registerShutdownHandler','runGracefulShutdown','resetGracefulShutdownForTests']){assert.equal(name in core,false,name);assert.equal(name in lifecycle,false,name);}
+ for(const name of ['mailer','resetDefaultStorage','jobRegistry','getTracingRuntime','acquireTracingRuntime'])assert.equal(name in core,false,name);
  const native=await import('@getstrata/core/database/bunSql');assert.equal(core.createBunSqlPool,native.createBunSqlPool);assert.equal(typeof core.createDatabaseQueryProxy,'function');assert.equal('bindBunSql' in native,false);
  const bus=new events.EventBus();const other=new core.EventBus();let calls=0;
  const name=events.modelEventName('orders','created');assert.equal(name,'orders.created');

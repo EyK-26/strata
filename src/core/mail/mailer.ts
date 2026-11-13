@@ -1,4 +1,4 @@
-import { createServiceToken } from "@getstrata/core/contracts/token";
+import { CORE_MAIL_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import type { TLSOptions } from "bun";
 import { smtpEhloHost } from "../runtime/appKeyPrefix";
 import {
@@ -367,8 +367,6 @@ class Mailer {
     return this.driver.send(message);
   }
 }
-
-const CORE_MAIL_TOKEN = createServiceToken<Mailer>("core.mail");
 
 function createMailDriver(
   env: Readonly<Record<string, string | undefined>> = process.env,

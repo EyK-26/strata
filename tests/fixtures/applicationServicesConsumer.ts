@@ -18,9 +18,12 @@ import * as Services from "@getstrata/core/contracts/services";
 import * as ServiceTokens from "@getstrata/core/contracts/serviceTokens";
 import { CORE_CACHE_TOKEN as serviceToken } from "@getstrata/core/contracts/serviceTokens";
 import * as Tokens from "@getstrata/core/contracts/token";
+import * as Mail from "@getstrata/core/mail/mailer";
 import * as AppQueue from "@getstrata/core/queue/createAppQueue";
+import * as JobRegistries from "@getstrata/core/queue/jobRegistry";
 import * as Runtime from "@getstrata/core/runtime/application";
 import { type CommandScope, createApplication } from "@getstrata/core/runtime/application";
+import * as Storage from "@getstrata/core/storage/storage";
 import * as Views from "@getstrata/core/view";
 import * as ViewTokens from "@getstrata/core/view/tokens";
 
@@ -53,6 +56,9 @@ const publicModules: Record<string, Record<string, unknown>> = {
   providerView: ProviderView,
   appQueue: AppQueue,
   viewTokens: ViewTokens,
+  mail: Mail,
+  storage: Storage,
+  jobRegistries: JobRegistries,
 };
 const opaqueConstants = new Map<string, Array<{ path: string; value: unknown }>>();
 for (const [path, module] of Object.entries(publicModules)) {
@@ -68,6 +74,11 @@ for (const [path, module] of Object.entries(publicModules)) {
   }
 }
 const expectedOpaque = [
+  "CORE_MAIL_TOKEN",
+  "CORE_STORAGE_TOKEN",
+  "CORE_JSON_RESPONSE_POLICY_TOKEN",
+  "CORE_TRACING_RUNTIME_TOKEN",
+  "QUEUE_JOB_REGISTRY_TOKEN",
   "CORE_CACHE_TOKEN",
   "CORE_CONFIG_TOKEN",
   "CORE_QUEUE_TOKEN",
@@ -190,9 +201,37 @@ const settings = parseApplicationConfig(
 );
 const Settings = Tokens.createServiceToken<typeof settings>("settings");
 const cache = new Root.CacheRepository(new SimpleCacheStore(new SimpleCache()));
+const sent: Mail.MailMessage[] = [];
+const objects = new Map<string, Uint8Array>();
 const app = createApplication({
   providers: [],
   services: [
+    ...BootstrapRoot.createMailBindings({
+      driver: "custom",
+      mail: {
+        async send(message) {
+          sent.push(message);
+        },
+      },
+    }),
+    ...BootstrapRoot.createStorageBindings({
+      driver: "custom",
+      storage: {
+        async put(path, contents) {
+          objects.set(
+            path,
+            typeof contents === "string" ? new TextEncoder().encode(contents) : contents,
+          );
+          return path;
+        },
+        async get(path) {
+          return objects.get(path) ?? null;
+        },
+        async delete(path) {
+          return objects.delete(path);
+        },
+      },
+    }),
     Root.resourceService(Managed, {
       lifetime: "application",
       dependencies: [second],
@@ -296,6 +335,18 @@ try {
   const contexts: Runtime.ExecutionContext[] = [];
   await app.run(async (scope) => {
     saved = scope;
+    const mail = scope.resolve(Root.CORE_MAIL_TOKEN);
+    assert.equal(mail, scope.resolve(Mail.CORE_MAIL_TOKEN));
+    await mail.send({ to: "fixture@example.test", subject: "packed identity", body: "owned mail" });
+    assert.equal(sent.length, 1);
+    const storage = scope.resolve(Root.CORE_STORAGE_TOKEN);
+    assert.equal(storage, scope.resolve(Storage.CORE_STORAGE_TOKEN));
+    await storage.put("identity.txt", "owned storage");
+    assert.equal(
+      new TextDecoder().decode((await storage.get("identity.txt")) ?? undefined),
+      "owned storage",
+    );
+    assert.equal(await storage.delete("identity.txt"), true);
     const executionHandle = scope.resolve(ExecutionResourceAlias);
     assert.equal(scope.resolve(ExecutionResource), executionHandle);
     await scope.acquire(packedTaskResource("root"));

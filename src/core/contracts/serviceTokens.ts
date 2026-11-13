@@ -4,8 +4,10 @@ import type { AuthReader } from "../auth/authReader";
 import type { PolicyGate } from "../auth/policy";
 import type { EventBus } from "../events/eventBusClass";
 import type { ThrottleQuotaPolicy } from "../http/throttleMiddleware";
+import type { Mailer } from "../mail/mailer";
 import type { Queue } from "../queue/index";
 import type { QueueServices } from "../queue/queueServices";
+import type { StorageManager } from "../storage/storage";
 import type { PublicTenancyOptions, TenantResolver } from "../tenant/tenantMiddleware";
 import type { TracingRuntime } from "../tracing/otel";
 import type { AuthAccountLookup } from "./authUserDirectory";
@@ -23,6 +25,11 @@ const CORE_HTTP_CLEANUP_TOKEN =
   createServiceToken<(cleanup: () => void) => void>("core.httpCleanup");
 
 const CORE_TRACING_RUNTIME_TOKEN = createServiceToken<TracingRuntime>("core.tracingRuntime");
+
+const CORE_MAIL_TOKEN = createServiceToken<Mailer>("core.mail");
+const CORE_STORAGE_TOKEN = createServiceToken<StorageManager>("core.storage");
+const CORE_JSON_RESPONSE_POLICY_TOKEN =
+  createServiceToken<Readonly<{ etagEnabled: boolean }>>("core.jsonResponsePolicy");
 
 const CORE_CONFIG_TOKEN = createServiceToken<ConfigStoreLike>("core.config");
 const FAILED_JOB_SERVICE_TOKEN = createServiceToken<QueueServices>("core.failedJobs");
@@ -72,9 +79,12 @@ export {
   CORE_CONFIG_TOKEN,
   CORE_EVENT_BUS_TOKEN,
   CORE_HTTP_CLEANUP_TOKEN,
+  CORE_JSON_RESPONSE_POLICY_TOKEN,
+  CORE_MAIL_TOKEN,
   CORE_POLICY_GATE_TOKEN,
   CORE_PUBLIC_TENANCY_TOKEN,
   CORE_QUEUE_TOKEN,
+  CORE_STORAGE_TOKEN,
   CORE_TENANT_RESOLVER_TOKEN,
   CORE_THROTTLE_QUOTA_POLICY_TOKEN,
   CORE_TRACING_RUNTIME_TOKEN,

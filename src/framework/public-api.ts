@@ -41,6 +41,12 @@ export {
   service,
   valueService,
 } from "@getstrata/core/contracts/services";
+export {
+  CORE_JSON_RESPONSE_POLICY_TOKEN,
+  CORE_MAIL_TOKEN,
+  CORE_STORAGE_TOKEN,
+  CORE_TRACING_RUNTIME_TOKEN,
+} from "@getstrata/core/contracts/serviceTokens";
 export type {
   TransactionAcquisitionMetrics,
   TransactionAcquisitionSnapshot,
@@ -604,7 +610,6 @@ export { createRequestLoggingMiddleware } from "../core/logging/requestLoggingMi
 export type { MailDriver, MailMessage, SmtpConfig, SmtpTransport } from "../core/mail/mailer.ts";
 export {
   buildSmtpPayload,
-  CORE_MAIL_TOKEN,
   createMailDriver,
   LogMailDriver,
   Mailer,
@@ -723,7 +728,6 @@ export { logSecurityEvent } from "../core/security/securityEvents.ts";
 export { signedWebhookHeaders, signWebhookBody } from "../core/security/webhookSignature.ts";
 export type { S3StorageConfig, StorageConfig, StorageDriver } from "../core/storage/storage.ts";
 export {
-  CORE_STORAGE_TOKEN,
   createStorageDriver,
   LocalStorageDriver,
   resolveStorageConfig,
