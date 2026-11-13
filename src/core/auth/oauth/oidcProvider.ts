@@ -40,15 +40,6 @@ function codeChallenge(verifier: string): string {
   return createHash("sha256").update(verifier).digest("base64url");
 }
 
-function requireOidcEndpoint(value: string | undefined, name: string): string {
-  const trimmed = value?.trim() ?? "";
-  if (!trimmed) {
-    throw new Error(`OIDC discovery document did not include ${name}.`);
-  }
-
-  return trimmed;
-}
-
 class OidcProvider implements OAuthProvider {
   readonly name: string;
 
@@ -80,7 +71,7 @@ class OidcProvider implements OAuthProvider {
         state,
         handshake,
         redirectUri,
-        requireOidcEndpoint(discovery.authorization_endpoint, "authorization_endpoint"),
+        discovery.authorization_endpoint,
       ),
       handshake,
     };
@@ -127,7 +118,7 @@ class OidcProvider implements OAuthProvider {
       code_verifier: handshake.codeVerifier,
     });
 
-    const tokenEndpoint = requireOidcEndpoint(discovery.token_endpoint, "token_endpoint");
+    const tokenEndpoint = discovery.token_endpoint;
     const tokenResponse = await safeFetch(
       tokenEndpoint,
       {
@@ -152,7 +143,7 @@ class OidcProvider implements OAuthProvider {
       issuer: this.options.issuer,
       clientId: this.options.clientId,
       nonce: handshake.nonce,
-      jwksUri: requireOidcEndpoint(discovery.jwks_uri, "jwks_uri"),
+      jwksUri: discovery.jwks_uri,
       accessToken: tokenBody.access_token,
     });
 

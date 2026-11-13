@@ -4,10 +4,10 @@ import { timingSafeCompareString } from "../../security/timingSafeCompare";
 import type { JwtPayload } from "../jwt";
 
 interface OidcDiscovery {
-  issuer?: string;
-  authorization_endpoint?: string;
-  token_endpoint?: string;
-  jwks_uri?: string;
+  readonly issuer?: string;
+  readonly authorization_endpoint: string;
+  readonly token_endpoint: string;
+  readonly jwks_uri: string;
 }
 
 interface JsonWebKeyLike {
@@ -126,19 +126,29 @@ async function loadOidcDiscovery(issuer: string, state: OidcState): Promise<Oidc
     return cached.discovery;
   }
 
-  const discovery = (await fetchJson(
-    `${key}/.well-known/openid-configuration`,
-    state,
-  )) as OidcDiscovery;
+  const raw = await fetchJson(`${key}/.well-known/openid-configuration`, state);
+  const document =
+    raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const { authorization_endpoint, token_endpoint, jwks_uri, issuer: declaredIssuer } = document;
   if (
-    !discovery?.authorization_endpoint?.trim() ||
-    !discovery.jwks_uri?.trim() ||
-    !discovery.token_endpoint?.trim()
+    typeof authorization_endpoint !== "string" ||
+    !authorization_endpoint.trim() ||
+    typeof token_endpoint !== "string" ||
+    !token_endpoint.trim() ||
+    typeof jwks_uri !== "string" ||
+    !jwks_uri.trim()
   ) {
     throw new Error(
       "OIDC discovery document did not include authorization_endpoint, jwks_uri, and token_endpoint.",
     );
   }
+  // Public clients share this cache entry: retain only validated immutable strings.
+  const discovery: OidcDiscovery = Object.freeze({
+    ...(typeof declaredIssuer === "string" ? { issuer: declaredIssuer } : {}),
+    authorization_endpoint: authorization_endpoint.trim(),
+    token_endpoint: token_endpoint.trim(),
+    jwks_uri: jwks_uri.trim(),
+  });
 
   state.discoveryCache.set(key, { discovery, fetchedAt: Date.now() });
   return discovery;
