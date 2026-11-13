@@ -108,7 +108,7 @@ async function loadWebLayoutData(
   resolved: WebLayoutDataOptions,
 ): Promise<Record<string, unknown>> {
   const meta = currentRequestMeta();
-  const established = meta.request === request;
+  const established = request !== undefined && meta.request === request;
   const csrfToken = request
     ? resolved.csrf
       ? resolveCsrfTokenForRequest(request, resolved.csrf)

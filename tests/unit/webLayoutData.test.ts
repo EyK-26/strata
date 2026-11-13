@@ -175,3 +175,18 @@ test("explicit request cannot borrow CSRF, flash, or nonce from another request 
     },
   );
 });
+
+test("layout without a request cannot adopt unbound request metadata", async () => {
+  const { runWithRequestMeta } = await import("@getstrata/core/http/requestMetaContext");
+  const container = {
+    has: () => false,
+    resolve: () => {
+      throw new Error("unused");
+    },
+  } as unknown as ServiceContainer;
+  const data = await runWithRequestMeta(
+    { ipAddress: null, userAgent: null, cspNonce: "unbound" },
+    () => resolveWebLayoutData(container),
+  );
+  expect(data.cspNonce).toBe("");
+});
