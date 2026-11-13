@@ -42,8 +42,7 @@ Breaking API removals warrant the approved stable `3.0.0` release after qualific
 This guide does not certify that qualification or publication occurred. Local
 archives must remain tied to their exact source and integrity receipts.
 
-Before release, reconcile remaining provider/configuration adapters (including
-view rendering), execute the bounded adapter/profile qualification inventory, review
+Before release, execute the bounded adapter/profile qualification inventory, review
 generated route/OpenAPI/SDK snapshots, and pass the complete distribution, E2E,
 smoke, and CI gates on the integrated revision. Publication and hosted deployment
 remain separate decisions.
@@ -94,8 +93,8 @@ concurrency and owned local databases. The generator is source code; its consume
 install packed core/bootstrap/CLI candidates. See [qualification limits](../STARTER-QUALIFICATION.md)
 for install reuse, credential fixtures and the separate deeper behavioral inventory.
 
-Completion requires the integrated view, queue actor/tenant transport, HTTP/security
-configuration and crypto ownership cuts, followed by final executable acceptance.
+The integrated source includes view, queue actor/tenant transport, HTTP/security
+configuration and crypto ownership. Completion requires final executable acceptance.
 Use the completion ledger and exact-revision integration receipt to determine their
 status. Source-level removal alone and historical health boots do not certify the
 final application, package or release contract.

@@ -76,8 +76,11 @@ Additional removed tests are accounted for explicitly:
 
 ## Acceptance status
 
-This ledger is a review map, not a release certificate. Final integration must
-resolve all assigned view, queue, HTTP/security configuration and crypto ownership
-cuts, reconcile current documentation, and run the complete required gates twice
-on one frozen revision. Historical 2.x qualification and the earlier 25-profile
-receipt cannot qualify changed source or newly built package archives.
+The source replacement now includes owned view rendering, authenticated queue
+actor/tenant transfer, captured HTTP/security configuration and encryption/MFA
+codecs. Generated failed-job schemas retain the authenticated handoff for retries.
+This ledger is a review map, not a release certificate: final acceptance requires
+two successful complete required-gate executions on the frozen source (local and
+hosted CI), current packed-profile evidence and independent challenge receipts.
+Historical 2.x qualification and earlier profile receipts cannot qualify changed
+source or newly built package archives.
