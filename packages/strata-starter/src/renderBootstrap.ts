@@ -205,6 +205,8 @@ import { assertAppDependenciesComplete, type AppRouteMap, type ServiceProvider }
 import type { Application } from "@getstrata/core/contracts/application";
 import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
 import { createDatabaseBindings } from "@getstrata/core/database/bindings";
+import { CORE_QUEUE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import { composeRouteMaps } from "@getstrata/bootstrap/routePlan";
 import { createSqlOutboxBindings, createOutboxWorkerTransport, type SqlOutbox } from "@getstrata/core/events/outbox";
 import { listeners as durableListeners } from "../outbox/registry.ts";
 import { failedJobRepository } from "@getstrata/core/queue/failedJobRepository";
@@ -306,10 +308,10 @@ export async function bootstrapApp(options:BootstrapOptions={}):Promise<Bootstra
     assertAppDependenciesComplete(dependencies);
     kernel=createHttpKernel(dependencies);
     ${layers.extras.metrics ? 'const {failedJobs,outbox,...runtime}=options.runtimeMetrics??{};metrics=createMetricsRuntime({...runtime,...(failedJobs?{failedJobs:{...failedJobs,observeReadOnly:createOwnedReadOnlyObservation(handle.application,"main",dbOptions)}}:{}),...(outbox?{outbox:{...outbox,observeReadOnly:createOwnedReadOnlyObservation(handle.application,"main",dbOptions,{postgresPolicy:"bypass"})}}:{})});onCleanup(()=>metrics!.close(),"drain");' : "void onCleanup;"}
-    routes=mergeSpaRoutes(dependencies,{
-      ...Object.fromEntries(Object.entries(createHealthRoutes(dependencies,{pingOnHealth:true,healthFormat:"text",schemaCheck:()=>dependencies.invoke({kind:"request",actor:{kind:"system",policy:"http.schema-health"}},async({database})=>{try{await database.model(Note).query().limit(1).select("id").get();return true;}catch{return false;}})})).map(([path,handler])=>[path,kernel!.wrapPublicDocument(handler)])),
-      ...buildRoutes(dependencies),${layers.extras.metrics ? "\n      ...Object.fromEntries(Object.entries(createMetricsRoutes({...metrics?.options,authorization:{token:env.METRICS_TOKEN,production}})).map(([path,handler])=>[path,kernel!.wrapPublicDocument(handler)]))," : ""}
-    },{distDirectory:join(import.meta.dir,"../../frontend/dist"),wrap:handler=>kernel!.wrapPublicDocument(handler)});
+    routes=mergeSpaRoutes(dependencies,composeRouteMaps(
+      Object.fromEntries(Object.entries(createHealthRoutes(dependencies,{pingOnHealth:true,healthFormat:"text",schemaCheck:()=>dependencies.invoke({kind:"request",actor:{kind:"system",policy:"http.schema-health"}},async({database})=>{try{await database.model(Note).query().limit(1).select("id").get();return true;}catch{return false;}})})).map(([path,handler])=>[path,kernel!.wrapPublicDocument(handler)])),
+      buildRoutes(dependencies),${layers.extras.metrics ? "\n      Object.fromEntries(Object.entries(createMetricsRoutes({...metrics?.options,authorization:{token:env.METRICS_TOKEN,production}})).map(([path,handler])=>[path,kernel!.wrapPublicDocument(handler)]))," : ""}
+    ),{distDirectory:join(import.meta.dir,"../../frontend/dist"),wrap:handler=>kernel!.wrapPublicDocument(handler)});
   }};
   const handle=createApplicationContext([],{
     connection:"main",
@@ -330,7 +332,7 @@ export async function bootstrapApp(options:BootstrapOptions={}):Promise<Bootstra
   try {
     if(!routes)throw new Error("Routes were not assembled.");
     if(!publisher)throw new Error("Outbox publisher was not assembled.");
-    return {application:handle.application,auditExport:auditExport!,invoke:handle.invoke,outbox:publisher,context,routes,config,queue:context.container.resolve("core.queue"),queueServices:selectedQueueServices(),...(server?{server}:{}),...(worker?{worker}:{}),...(outboxWorker?{outboxWorker}:{})};
+    return {application:handle.application,auditExport:auditExport!,invoke:handle.invoke,outbox:publisher,context,routes,config,queue:context.container.resolve(CORE_QUEUE_TOKEN),queueServices:selectedQueueServices(),...(server?{server}:{}),...(worker?{worker}:{}),...(outboxWorker?{outboxWorker}:{})};
   }catch(error){await handle.application.stop({reason:"STARTUP_FAILED"});throw error;}
 }
 export function createApp(options:BootstrapOptions={}) {return bootstrapApp({migrate:false,...options});}
@@ -342,15 +344,16 @@ export function createAppServer(options:Omit<BootstrapOptions,"mode">={}) {retur
 function renderRoutesTs(): string {
   return `import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
 import { buildWebModuleRoutes } from "@getstrata/bootstrap/buildWebModuleRoutes";
+import { composeRouteMaps } from "@getstrata/bootstrap/routePlan";
 import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
 
 export function buildRoutes(dependencies: AppDependencies): AppRouteMap {
   const api = buildModuleRoutes(dependencies);
-  return {
-    ...api,
-    ...(isViewsEnabled() ? buildWebModuleRoutes(dependencies, { clearRegistry: false }) : {}),
-  };
+  return composeRouteMaps(
+    ...(isViewsEnabled() ? [buildWebModuleRoutes(dependencies)] : []),
+    api,
+  );
 }
 `;
 }

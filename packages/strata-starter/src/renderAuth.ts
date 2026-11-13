@@ -87,7 +87,7 @@ function asNullableString(value: unknown): string | null {
   return `import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { verifyPassword } from "@getstrata/core/auth/password";
 import type { SelectedSession, ScopedPolicy } from "@getstrata/core/contracts/persistence";
-${hashImport}import type { AuthUserDirectory, AuthUserRecord } from "@getstrata/core/contracts/authUserDirectory";
+${hashImport}import { AuthAccountNotFoundError, type AuthUserDirectory, type AuthUserRecord } from "@getstrata/core/contracts/authUserDirectory";
 
 ${apiTokenImport}import { User } from "../models/User.ts";
 
@@ -135,7 +135,7 @@ async function findUserById(id: number) {
   return await withAuthIdentifier(ports, id, async (database) => {
     const user = await database.model(User).find(id);
     if (!user) {
-      throw new Error(\`User \${id} not found.\`);
+      throw new AuthAccountNotFoundError();
     }
     return mapUserRow(user);
   });
@@ -263,7 +263,7 @@ export function createStarterAuthServices(options: StarterAuthServicesOptions): 
         : "const auth = new AuthManager(new GuestGuard(snapshot));"
     }
     return {
-      authenticate: request => auth.resolveWithSource(request),
+      authenticate: request => auth.authenticate(request),
       // The starter schema has no organization-membership table.
       memberships: async () => Object.freeze([]),
       userTenantId: ${
