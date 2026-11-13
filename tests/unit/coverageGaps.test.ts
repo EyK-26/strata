@@ -83,15 +83,15 @@ describe("coverage gap helpers", () => {
     }
   });
 
-  test("covers base policy defaults and factory definitions", () => {
+  test("covers base policy defaults and factory definitions", async () => {
     const gate = new PolicyGate();
     gate.register("base", new DefaultPolicy());
     const basePolicy = new DefaultPolicy();
 
-    expect(gate.allows("base", "view")).toBe(false);
-    expect(gate.allows("base", "create")).toBe(false);
-    expect(gate.allows("base", "update")).toBe(false);
-    expect(gate.allows("base", "delete")).toBe(false);
+    expect(await gate.allows("base", "view", undefined)).toBe(false);
+    expect(await gate.allows("base", "create", undefined)).toBe(false);
+    expect(await gate.allows("base", "update", undefined)).toBe(false);
+    expect(await gate.allows("base", "delete", undefined)).toBe(false);
     expect(basePolicy.create()).toBe(false);
     expect(basePolicy.delete()).toBe(false);
     expect(WidgetFactory().make({ name: "custom" }).name).toBe("custom");

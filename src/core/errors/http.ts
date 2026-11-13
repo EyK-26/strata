@@ -1,3 +1,5 @@
+import { PolicyDeniedError } from "../auth/policy";
+
 class HttpError extends Error {
   readonly status: number;
   readonly details?: unknown;
@@ -93,6 +95,10 @@ function isHttpErrorLike(error: unknown): error is HttpErrorLike {
 }
 
 function toHttpError(error: unknown): HttpError | null {
+  if (error instanceof PolicyDeniedError) {
+    return new ForbiddenError();
+  }
+
   if (error instanceof HttpError) {
     return error;
   }
