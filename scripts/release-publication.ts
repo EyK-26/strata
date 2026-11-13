@@ -21,6 +21,16 @@ interface Manifest {
   tag: string;
   archives: Archive[];
 }
+export function assertReleaseProvenanceSource(
+  commit: string,
+  environment: Readonly<Record<string, string | undefined>>,
+): void {
+  if (environment.GITHUB_ACTIONS === "true" && environment.GITHUB_SHA !== commit) {
+    throw new Error(
+      "GitHub provenance source does not match the checked-out release commit. Dispatch this workflow at the release tag ref.",
+    );
+  }
+}
 export function archiveIntegrity(bytes: Uint8Array): string {
   return `sha512-${createHash("sha512").update(bytes).digest("base64")}`;
 }
@@ -63,6 +73,7 @@ async function main() {
   const [mode, directory = "release-archives"] = process.argv.slice(2);
   const tag = process.env.RELEASE_TAG ?? "";
   const commit = await command(["git", "rev-parse", "HEAD"]);
+  assertReleaseProvenanceSource(commit, process.env);
   const packages = await Promise.all(
     releasePackages.map(async (name) =>
       JSON.parse(await readFile(`packages/${name}/package.json`, "utf8")),

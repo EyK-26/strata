@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { archiveIntegrity, registryDisposition } from "../../scripts/release-publication.ts";
+import {
+  archiveIntegrity,
+  assertReleaseProvenanceSource,
+  registryDisposition,
+} from "../../scripts/release-publication.ts";
 import { type CIRun, hasAcceptedCI } from "../../scripts/verify-release-ci.ts";
 
 const archive = {
@@ -151,4 +155,16 @@ test("actual publication CLI validates all registry states before any npm mutati
   } finally {
     await rm(fixture, { recursive: true, force: true });
   }
+});
+
+test("Actions provenance refuses a dispatch source different from the checked-out tag", () => {
+  const commit = "a".repeat(40);
+  expect(() =>
+    assertReleaseProvenanceSource(commit, { GITHUB_ACTIONS: "true", GITHUB_SHA: commit }),
+  ).not.toThrow();
+  for (const sha of [undefined, "b".repeat(40), "", `${commit}\n`])
+    expect(() =>
+      assertReleaseProvenanceSource(commit, { GITHUB_ACTIONS: "true", GITHUB_SHA: sha }),
+    ).toThrow("provenance source");
+  expect(() => assertReleaseProvenanceSource(commit, {})).not.toThrow();
 });

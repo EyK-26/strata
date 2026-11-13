@@ -23,7 +23,8 @@ release once accepted; root owns GitHub and registry operations.
    `push` event at the exact merged SHA. A prior PR green run or earlier main SHA
    does not qualify. The release workflow checks this API evidence itself.
 4. Root tags that exact SHA with `v3.0.0` and pushes the tag, or dispatches `Release`
-   with an already verified existing tag. Tag pushes trigger publication. The
+   with an already verified existing tag and the workflow ref set to that tag.
+   Tag pushes trigger publication. The
    workflow repeats the release quality gate, packs each package once, records the
    source commit/tag/archive identity in `manifest.json`, then uploads the entire
    archive set before its first registry mutation.
@@ -45,7 +46,14 @@ record which effects occurred. Do not move a tag, unpublish packages, overwrite 
 version, or create new archive bytes to force progress.
 
 For an npm failure after archive upload, root dispatches the same `Release` workflow
-with the same tag and `recovery_run_id` set to the original Release run ID. It
+with the same tag, workflow ref set to that tag, and `recovery_run_id` set to the original Release run ID:
+
+```sh
+gh workflow run release.yml --ref v3.0.0 -f tag=v3.0.0 -f recovery_run_id=ORIGINAL_RUN_ID
+```
+
+The workflow rejects `GITHUB_SHA` differing from the checked-out release commit,
+so npm provenance cannot identify a newer default-branch commit as its source. It
 requires the source run to be this workflow at the exact tagged SHA, downloads its
 immutable `release-archives` artifact, and verifies its manifest and every archive
 hash. Already published package versions must have matching registry integrity;
