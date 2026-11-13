@@ -10,6 +10,14 @@ on:
         description: Git tag to release (example v1.0.0)
         required: true
         type: string
+      recovery_run_id:
+        description: Prior Release run containing the exact immutable release archives (optional)
+        required: false
+        type: string
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -33,11 +41,18 @@ jobs:
         with:
           ref: ${{ env.RELEASE_TAG }}
 
+      - name: Download publication evidence
+        uses: actions/download-artifact@v7
+        with:
+          name: release-archives
+          path: release-archives
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           generate_release_notes: true
+          files: release-archives/*
 
   container:
     needs: [publish-framework]
@@ -95,8 +110,8 @@ jobs:
 
   # npm publish must not wait on GHCR: an earlier image failure blocked publication.
   # Keep every framework package manifest in the Docker install stage.
-  # publish_package skips versions already on npm, so workflow_dispatch can
-  # retry a failed or partial publish without double-publishing.
+  # Recovery reuses retained archives and accepts existing versions only when
+  # registry integrity matches those exact bytes. Unknown registry state aborts.
   # npm trusted publishing (GitHub OIDC). Job permissions replace workflow
   # permissions: id-token: write is required; do not set NODE_AUTH_TOKEN.
   # setup-node registry-url writes an empty _authToken that blocks OIDC.
@@ -105,6 +120,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
       id-token: write
 
     steps:
@@ -123,6 +139,11 @@ jobs:
         with:
           node-version: "24"
           package-manager-cache: false
+
+      - name: Require successful CI for the exact release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun scripts/verify-release-ci.ts
 
       - name: Install npm CLI for trusted publishing
         run: npm install -g npm@latest
@@ -181,21 +202,42 @@ jobs:
           bun run --filter @getstrata/starter build
           bun run --filter create-strata build
 
-      - name: Publish to npm
-        run: |
-          publish_package() {
-            pkg_dir="$1"
-            name="$(node -p "require('./${pkg_dir}/package.json').name")"
-            version="$(node -p "require('./${pkg_dir}/package.json').version")"
-            if npm view "${name}@${version}" version >/dev/null 2>&1; then
-              echo "Skipping ${name}@${version} (already on npm)"
-              return 0
-            fi
-            npm publish --workspace "${name}" --access public --provenance
-          }
+      - name: Pack immutable release archives
+        if: ${{ inputs.recovery_run_id == '' }}
+        run: bun scripts/release-publication.ts pack
 
-          publish_package packages/strata-core
-          publish_package packages/strata-bootstrap
-          publish_package packages/strata-cli
-          publish_package packages/strata-starter
-          publish_package packages/create-strata
+      - name: Validate recovery source
+        if: ${{ inputs.recovery_run_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECOVERY_RUN_ID: ${{ inputs.recovery_run_id }}
+        run: |
+          bun -e '
+            const id = process.env.RECOVERY_RUN_ID;
+            if (!/^[1-9][0-9]*$/.test(id ?? "")) throw new Error("Invalid recovery run ID");
+            const result = Bun.spawnSync(["gh", "api", `repos/${process.env.GITHUB_REPOSITORY}/actions/runs/${id}`]);
+            if (result.exitCode !== 0) throw new Error("Cannot verify recovery source");
+            const run = JSON.parse(result.stdout.toString());
+            const sha = Bun.spawnSync(["git", "rev-parse", "HEAD"]).stdout.toString().trim();
+            if (run.path !== ".github/workflows/release.yml" || run.head_sha !== sha) throw new Error("Recovery source must be a Release run at the exact commit");
+          '
+
+      - name: Restore immutable release archives
+        if: ${{ inputs.recovery_run_id != '' }}
+        uses: actions/download-artifact@v7
+        with:
+          name: release-archives
+          path: release-archives
+          run-id: ${{ inputs.recovery_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Preserve release archives before publication
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-archives
+          path: release-archives/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish verified archives to npm
+        run: bun scripts/release-publication.ts publish
