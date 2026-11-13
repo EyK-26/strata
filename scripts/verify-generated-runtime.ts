@@ -164,9 +164,10 @@ try{
   assert.equal(await response.text(),'fixture');
   assert.equal(dnsCalls,1);
   assert.equal(requests[0].headers.get('host'),'owned-outbound.invalid');
-  const provider=new GitHubOAuthProvider({clientId:'fixture',clientSecret:'fixture-secret',redirectUri:'https://app.example.test/callback'});
+  const provider=new GitHubOAuthProvider({clientId:'fixture',clientSecret:'fixture-secret',redirectUri:'https://app.example.test/callback',production:true,userAgent:'acceptance-outbound'});
   assert.deepEqual(await provider.exchangeCode('fixture-code'),{providerUserId:'42',email:'verified@example.test',name:'fixture'});
   assert.equal(dnsCalls,4,'Provider token, profile and verified-email calls must share the same resolver.');
+  assert.deepEqual(requests.slice(2,4).map(row=>row.headers.get('user-agent')),['acceptance-outbound','acceptance-outbound'],'Provider consumers must use the explicit captured user agent.');
   assert.deepEqual(requests.slice(1).map(row=>row.headers.get('host')),['github.com','api.github.com','api.github.com']);
   address='2.2.2.2';
   assert.equal(await (await safeFetch('https://owned-outbound.invalid/changed')).text(),'fixture');
