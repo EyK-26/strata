@@ -5,7 +5,6 @@ import {
   type InitializedAppContext,
 } from "@getstrata/bootstrap/context";
 import type { AppModule } from "@getstrata/bootstrap/contracts";
-import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
 import type { QueueCommandApplication } from "@getstrata/cli/queueFailed";
 import type { ServiceContainerLike } from "@getstrata/core/contracts/container";
@@ -62,7 +61,7 @@ async function bootQueueApplication(
         registry: () => queueContainer.resolve(QUEUE_JOB_REGISTRY_TOKEN),
       })
     : undefined;
-  const modules = bootOptions.modules ?? (await ensureModulesLoaded());
+  const modules = bootOptions.modules ?? [];
   const context = await createAppContext(
     [
       ...collectProviders([...modules]),
