@@ -128,3 +128,50 @@ test("captured cookie policies preserve owner tokens and reject another owner's 
   expect(ownerless.csrfToken).toBe("");
   expect(ownerless.flash).toBeNull();
 });
+
+test("explicit request cannot borrow CSRF, flash, or nonce from another request context", async () => {
+  const { csrfTokenOptionsFromEnvironment, createCsrfTokenCookie } = await import(
+    "@getstrata/core/http/csrfToken"
+  );
+  const { runWithRequestMeta } = await import("@getstrata/core/http/requestMetaContext");
+  const { createWebLayoutDataResolver } = await import("@getstrata/core/view/webLayoutData");
+  const csrf = csrfTokenOptionsFromEnvironment({
+    APP_ENV: "development",
+    SESSION_SECRET: "shared-explicit-policy",
+  });
+  const proofA = createCsrfTokenCookie(csrf);
+  const proofB = createCsrfTokenCookie(csrf);
+  const requestA = new Request("https://app.test/a", {
+    headers: { cookie: proofA.cookie.split(";")[0] ?? "" },
+  });
+  const requestB = new Request("https://app.test/b", {
+    headers: { cookie: proofB.cookie.split(";")[0] ?? "" },
+  });
+  const container = {
+    has: () => false,
+    resolve: () => {
+      throw new Error("unused");
+    },
+  } as unknown as ServiceContainer;
+  const resolve = createWebLayoutDataResolver(container, { csrf });
+  await runWithRequestMeta(
+    {
+      ipAddress: null,
+      userAgent: null,
+      request: requestB,
+      csrfToken: proofB.token,
+      cspNonce: "nonce-b",
+      flash: { level: "info", message: "only-b" },
+    },
+    async () => {
+      const [explicitA, sameB] = await Promise.all([resolve(requestA), resolve(requestB)]);
+      expect(explicitA.csrfToken).toBe(proofA.token);
+      expect(explicitA.csrfToken).not.toBe(proofB.token);
+      expect(explicitA.cspNonce).toBe("");
+      expect(explicitA.flash).toBeNull();
+      expect(sameB.csrfToken).toBe(proofB.token);
+      expect(sameB.cspNonce).toBe("nonce-b");
+      expect(sameB.flash).toEqual({ level: "info", message: "only-b" });
+    },
+  );
+});

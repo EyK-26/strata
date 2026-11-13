@@ -133,7 +133,7 @@ async function loadWebLayoutData(
     [userKey]: user,
     csrfToken,
     flash,
-    cspNonce: currentRequestMeta().cspNonce ?? "",
+    cspNonce: established ? (meta.cspNonce ?? "") : "",
     ...extra,
   };
 }

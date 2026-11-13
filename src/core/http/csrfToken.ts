@@ -132,7 +132,8 @@ function verifyCsrfToken(
 }
 
 function resolveCsrfTokenForRequest(request: Request, options: CsrfTokenOptions): string {
-  const metaToken = currentRequestMeta().csrfToken;
+  const meta = currentRequestMeta();
+  const metaToken = meta.request === request ? meta.csrfToken : undefined;
 
   if (metaToken && verifyCsrfTokenValue(metaToken, options)) {
     return metaToken;
