@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { Job } from "@getstrata/core/queue";
-import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+
+const jobRegistry = new JobRegistry();
+
 import { parseQueueJobEnvelope, runQueueJob } from "@getstrata/core/queue/jobRunner";
 import { withQueuePersistence } from "../helpers/queuePersistence";
 
@@ -41,6 +44,7 @@ describe("runQueueJob", () => {
             attempts: 0,
           },
           failedJobs,
+          jobRegistry,
         ),
       ).rejects.toThrow("Job failed on purpose.");
 
@@ -63,6 +67,7 @@ describe("runQueueJob", () => {
             attempts: 0,
           },
           failedJobs,
+          jobRegistry,
         ),
       ).resolves.toBeUndefined();
 
@@ -81,6 +86,7 @@ describe("runQueueJob", () => {
             attempts: 0,
           },
           failedJobs,
+          jobRegistry,
         ),
       ).rejects.toThrow('Unknown job "missing.job".');
     });
@@ -115,6 +121,7 @@ describe("runQueueJob", () => {
           failures++;
         },
       } as never,
+      jobRegistry,
       { context: { jobId: "transport-id", signal: controller.signal } },
     );
     await started;
@@ -125,7 +132,7 @@ describe("runQueueJob", () => {
   });
   test("envelope validation rejects primitive and non-object payloads", () => {
     for (const raw of ["null", "1", "true", '"text"'])
-      expect(parseQueueJobEnvelope(raw)).toBeNull();
+      expect(parseQueueJobEnvelope(raw, jobRegistry)).toBeNull();
     jobRegistry.register("test.validated-envelope", () => new FlakyJob());
     for (const fields of [
       { cancellable: "true" },
@@ -143,6 +150,7 @@ describe("runQueueJob", () => {
       expect(
         parseQueueJobEnvelope(
           JSON.stringify({ name: "test.validated-envelope", payload: {}, ...fields }),
+          jobRegistry,
         ),
       ).toBeNull();
     expect(
@@ -153,11 +161,15 @@ describe("runQueueJob", () => {
           jobId: "stable",
           attempts: 2,
         }),
+        jobRegistry,
       ),
     ).toEqual({ name: "test.validated-envelope", payload: {}, jobId: "stable", attempts: 2 });
     for (const payload of [null, 1, "text"])
       expect(
-        parseQueueJobEnvelope(JSON.stringify({ name: "test.validated-envelope", payload })),
+        parseQueueJobEnvelope(
+          JSON.stringify({ name: "test.validated-envelope", payload }),
+          jobRegistry,
+        ),
       ).toBeNull();
   });
 });

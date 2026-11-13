@@ -10,7 +10,10 @@ import {
 import { runQueueWorkerCommand } from "@getstrata/cli/queueWorker";
 import { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
 import { Job, type Queue } from "@getstrata/core/queue";
-import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+
+const jobRegistry = new JobRegistry();
+
 import { createQueueWorkerTransport } from "@getstrata/core/queue/queueWorkerTransport";
 import { createApplication } from "@getstrata/core/runtime/application";
 import { createQueuePersistenceFixture } from "../../helpers/queuePersistence";
@@ -20,6 +23,7 @@ async function failedFixture(queue: Queue = { dispatch: async () => {} }) {
   const fixture = await createQueuePersistenceFixture();
   const app: QueueCommandApplication = {
     application: fixture.application,
+    registry: jobRegistry,
     invoke: fixture.invoke,
     queueServices: fixture.services,
     queue,
@@ -100,6 +104,7 @@ describe("queueWorkCommand", () => {
           await gate;
           return {
             application,
+            registry: jobRegistry,
             invoke: async () => {
               throw Error("unused");
             },
@@ -139,6 +144,7 @@ describe("queueWorkCommand", () => {
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
     const runtime = createQueueWorkerTransport({
+      registry: jobRegistry,
       redisUrl: "redis://unused",
       queueServices: {} as never,
       createWorker: () => ({
@@ -164,6 +170,7 @@ describe("queueWorkCommand", () => {
         lifecycle,
         boot: () => ({
           application,
+          registry: jobRegistry,
           invoke: async () => {
             throw Error("unused");
           },
@@ -378,6 +385,7 @@ test("application-owned bounded polling retains its actual work through shutdown
   let release!: () => void;
   const gate = new Promise<void>((resolve) => (release = resolve));
   const worker = createQueueWorkerTransport({
+    registry: jobRegistry,
     redisUrl: "redis://unused",
     queueServices: {} as never,
     createWorker: () => ({
@@ -426,6 +434,7 @@ test("queue worker factory failure retains unknown acquisition and never fabrica
   let factories = 0;
   let operatorCloses = 0;
   const worker = createQueueWorkerTransport({
+    registry: jobRegistry,
     redisUrl: "redis://unused",
     queueServices: persistence.services,
     createWorker: () => {
@@ -469,6 +478,7 @@ test("queue transport denies bounded polling without adapter capability and clos
   let stops = 0;
   let closes = 0;
   const worker = createQueueWorkerTransport({
+    registry: jobRegistry,
     redisUrl: "redis://unused",
     queueServices: persistence.services,
     createWorker: () => {

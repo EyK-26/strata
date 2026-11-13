@@ -32,11 +32,17 @@ describe("@getstrata/core published bundle singletons", () => {
     expect(main.hasOrgMembership).toBe(subpath.hasOrgMembership);
   });
 
-  test("main and queue/jobRegistry subpath share jobRegistry", async () => {
+  test("queue registries have explicit owners across package subpaths", async () => {
     const main = await import(join(CORE_DIST, "index.js"));
     const subpath = await import(join(CORE_DIST, "entries/queue/jobRegistry.js"));
 
-    expect(main.jobRegistry).toBe(subpath.jobRegistry);
+    expect("jobRegistry" in main).toBe(false);
+    expect("jobRegistry" in subpath).toBe(false);
+    const first = new main.JobRegistry();
+    const second = new subpath.JobRegistry();
+    first.register("owned", () => ({ handle: async () => {} }));
+    expect(first.has("owned")).toBe(true);
+    expect(second.has("owned")).toBe(false);
   });
 
   test("@getstrata/core workspace imports resolve through one tenantContext module", async () => {

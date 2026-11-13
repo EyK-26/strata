@@ -1,3 +1,7 @@
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+
+const jobRegistry = new JobRegistry();
+
 /** Compiled against packed public declarations in every generated-app/compiler combination. */
 import { discoverJobs, type JobManifestEntry } from "@getstrata/bootstrap/discoverJobs";
 import { discoverListeners } from "@getstrata/bootstrap/discoverListeners";
@@ -13,7 +17,7 @@ export async function infrastructureContract(): Promise<void> {
     Declared,
     { name: "injected", create: () => new Declared() },
   ];
-  const names: string[] = await discoverJobs({ manifest });
+  const names: string[] = await discoverJobs(jobRegistry, { manifest });
   const declarations = await discoverListeners({
     manifest: [{ services: [], repositoryEffects: [] }],
   });
@@ -25,7 +29,7 @@ export async function infrastructureContract(): Promise<void> {
     manifest: [{ name: "app", providers: [{ name: "service", boot: async () => {} }] }],
   });
   // @ts-expect-error Discovery must complete before its names are available.
-  const synchronous: string[] = discoverJobs();
+  const synchronous: string[] = discoverJobs(jobRegistry);
   // @ts-expect-error A DI factory must return a framework job.
   const badFactory: JobManifestEntry = { name: "bad", create: () => 1 };
   void names;

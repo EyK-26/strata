@@ -221,9 +221,9 @@ describe("coverage gap helpers", () => {
     expect(registry.names()).toEqual(["demo.job"]);
     expect(registry.create("missing.job")).toBeUndefined();
 
-    const { jobRegistry } = await import("@getstrata/core/queue/jobRegistry");
+    const jobRegistry = new JobRegistry();
     const { registerDefaultJobs } = await import("@getstrata/bootstrap/queue/defaultJobs");
-    registerDefaultJobs();
+    registerDefaultJobs(jobRegistry);
     const job = new CoverageJob();
     jobRegistry.track("coverage.job", job);
     expect(jobRegistry.resolveName(job)).toBe("coverage.job");

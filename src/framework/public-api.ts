@@ -659,7 +659,7 @@ export {
 } from "../core/queue/failedJobMetrics.ts";
 export type { Queue, QueuePriority } from "../core/queue/index.ts";
 export { AsyncQueue, createQueue, Job, SyncQueue } from "../core/queue/index.ts";
-export { JobRegistry } from "../core/queue/jobRegistry.ts";
+export { JobRegistry, QUEUE_JOB_REGISTRY_TOKEN } from "../core/queue/jobRegistry.ts";
 export {
   createFailedJobService,
   createProductionQueue,
@@ -667,7 +667,6 @@ export {
   createTrackedJob,
   FailedJobRepository,
   FailedJobService,
-  jobRegistry,
   QueueWorker,
   RedisQueue,
   ResilientQueue,

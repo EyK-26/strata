@@ -1,5 +1,6 @@
 import { FAILED_JOB_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import type { Queue } from "./index";
+import type { JobRegistry } from "./jobRegistry";
 import {
   createFailedJobService,
   createProductionQueue,
@@ -15,12 +16,12 @@ function createAppQueue(
   driver: "sync" | "async" | "redis",
   redisUrl: string | undefined,
   failedJobs: QueueServices,
-  registerJobs?: () => void,
+  registry: JobRegistry,
 ): Queue {
   return createProductionQueue(driver, {
     redisUrl,
     failedJobs,
-    registerJobs,
+    registry,
   });
 }
 

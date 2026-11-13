@@ -1,8 +1,13 @@
 import { RedisClient } from "bun";
 import type { Job, Queue } from "./index";
-import { jobRegistry } from "./jobRegistry";
+import type { JobRegistry } from "./jobRegistry";
 import { parseQueueJobEnvelope, type QueueJobEnvelope, runQueueJob } from "./jobRunner";
-import { readQueueVisibilityMs } from "./queueConfig";
+import {
+  type QueueRetryPolicy,
+  readQueueVisibilityMs,
+  resolveQueueConfig,
+  snapshotQueueRetryPolicy,
+} from "./queueConfig";
 import type { QueueServices } from "./queueServices";
 import { defaultQueueKeys, queueKeyForPriority } from "./redisQueueKeys";
 import {
@@ -317,8 +322,12 @@ async function reserveStreamJob(
 }
 
 class RedisStreamsQueue implements Queue {
+  private readonly queueKeys = Object.freeze(defaultQueueKeys());
   private readonly client: RedisClient;
-  constructor(redisUrl: string) {
+  constructor(
+    redisUrl: string,
+    private readonly registry: JobRegistry,
+  ) {
     this.client = new RedisClient(redisUrl);
   }
   close(): void {
@@ -339,7 +348,7 @@ class RedisStreamsQueue implements Queue {
     payload: TPayload,
     jobId: string,
   ): Promise<void> {
-    const prefix = defaultQueueKeys().find((key) => jobId.startsWith(`${streamQueueKey(key)}/`));
+    const prefix = this.queueKeys.find((key) => jobId.startsWith(`${streamQueueKey(key)}/`));
     if (
       !prefix ||
       !/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9]+-[0-9]+)$/.test(
@@ -364,9 +373,9 @@ class RedisStreamsQueue implements Queue {
         options.timeoutMs > MAX_TIMER_MS)
     )
       throw new Error("Streams timeoutMs must be an integer between 1 and 2147483647");
-    const name = jobRegistry.resolveName(job);
+    const name = this.registry.resolveName(job);
     if (!name) throw new Error("Job is not registered with the queue worker registry.");
-    const key = queueKeyForPriority(job.priority);
+    const key = queueKeyForPriority(job.priority, this.queueKeys);
     await assertLegacyDrained(this.client, key);
     const jobId = replayId ?? `${streamQueueKey(key)}/${crypto.randomUUID()}`;
     const deadlineAtMs =
@@ -393,13 +402,14 @@ class RedisStreamsQueue implements Queue {
     return jobId;
   }
   async cancel(jobId: string): Promise<boolean> {
-    const key = defaultQueueKeys().find((key) => jobId.startsWith(`${streamQueueKey(key)}/`));
+    const key = this.queueKeys.find((key) => jobId.startsWith(`${streamQueueKey(key)}/`));
     if (!key) throw new Error("Invalid cancellable Streams job ID");
     return cancelStreamJob(this.client, key, jobId);
   }
 }
 
 class RedisStreamsWorker {
+  private readonly retryPolicy: QueueRetryPolicy;
   private client: RedisClient;
   private readonly owner = crypto.randomUUID();
   private readonly cursors = new Map<string, string>();
@@ -411,9 +421,12 @@ class RedisStreamsWorker {
   constructor(
     private readonly redisUrl: string,
     private readonly failedJobs: Pick<QueueServices, "recordFailure" | "runAttempt">,
+    private readonly registry: JobRegistry,
     private readonly timeoutSeconds = 5,
     private readonly queueKeys: readonly string[] = defaultQueueKeys(),
+    retryPolicy: QueueRetryPolicy = resolveQueueConfig(),
   ) {
+    this.retryPolicy = snapshotQueueRetryPolicy(retryPolicy);
     readQueueVisibilityMs();
     this.client = new RedisClient(redisUrl);
   }
@@ -470,7 +483,7 @@ class RedisStreamsWorker {
     return false;
   }
   private async handle(key: string, reservation: StreamReservation): Promise<void> {
-    const envelope = parseQueueJobEnvelope(reservation.payload);
+    const envelope = parseQueueJobEnvelope(reservation.payload, this.registry);
     if (!envelope) {
       await this.failedJobs.recordFailure({
         jobName: "queue.invalid-envelope",
@@ -567,7 +580,8 @@ class RedisStreamsWorker {
       Math.max(1, Math.floor(readQueueVisibilityMs() / 3)),
     );
     try {
-      await runQueueJob(envelope, this.failedJobs, {
+      await runQueueJob(envelope, this.failedJobs, this.registry, {
+        retryPolicy: this.retryPolicy,
         context: {
           jobId: envelope.jobId,
           signal: controller.signal,

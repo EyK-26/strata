@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { Job } from "@getstrata/core/queue";
-import { JobRegistry, jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+
+const jobRegistry = new JobRegistry();
 
 class SampleJob extends Job<{ marker: string }> {
   override async handle(): Promise<void> {}
@@ -25,23 +27,27 @@ describe("JobRegistry", () => {
     expect(registry.resolveName(job)).toBe("sample.job");
   });
 
-  test("uses the shared job registry singleton", () => {
+  test("keeps explicitly created registries independent", () => {
     const job = new SampleJob();
 
-    jobRegistry.register("singleton.test", () => new SampleJob());
-    expect(jobRegistry.create("singleton.test")).toBeInstanceOf(SampleJob);
-    expect(jobRegistry.track("tracked.singleton", job)).toBe(job);
-    expect(jobRegistry.resolveName(job)).toBe("tracked.singleton");
-    expect(jobRegistry.names()).toContain("singleton.test");
+    jobRegistry.register("owner.test", () => new SampleJob());
+    expect(jobRegistry.create("owner.test")).toBeInstanceOf(SampleJob);
+    expect(jobRegistry.track("tracked.owner", job)).toBe(job);
+    expect(jobRegistry.resolveName(job)).toBe("tracked.owner");
+    expect(jobRegistry.names()).toContain("owner.test");
+    expect(new JobRegistry().has("owner.test")).toBe(false);
   });
 
-  test("tracks static jobName on construct", () => {
+  test("resolves static jobName only in the registering owner", () => {
     class NamedJob extends Job<{ marker: string }> {
       static override readonly jobName = "named.job";
       override async handle(): Promise<void> {}
     }
 
     const job = new NamedJob();
+    expect(jobRegistry.resolveName(job)).toBeUndefined();
+    jobRegistry.register("named.job", () => new NamedJob());
     expect(jobRegistry.resolveName(job)).toBe("named.job");
+    expect(new JobRegistry().resolveName(job)).toBeUndefined();
   });
 });

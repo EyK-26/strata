@@ -1,6 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { jobRegistry } from "./jobRegistry";
-import { queueConfig } from "./queueConfig";
+import type { JobRegistry } from "./jobRegistry";
+import { type QueueRetryPolicy, resolveQueueConfig, snapshotQueueRetryPolicy } from "./queueConfig";
 import type { QueueServices } from "./queueServices";
 
 interface QueueJobEnvelope {
@@ -12,7 +12,7 @@ interface QueueJobEnvelope {
   cancellable?: boolean;
 }
 
-function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
+function parseQueueJobEnvelope(rawPayload: string, registry: JobRegistry): QueueJobEnvelope | null {
   let parsed: unknown;
 
   try {
@@ -33,14 +33,16 @@ function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
     return null;
   }
 
-  if (!jobRegistry.create(envelope.name)) {
+  if (!registry.has(envelope.name)) {
     console.error(`[QueueWorker] Ignoring unknown job name: ${envelope.name}`);
     return null;
   }
 
   if (
     envelope.payload !== undefined &&
-    (typeof envelope.payload !== "object" || envelope.payload === null)
+    (typeof envelope.payload !== "object" ||
+      envelope.payload === null ||
+      Array.isArray(envelope.payload))
   ) {
     console.error("[QueueWorker] Ignoring queue payload with invalid payload object");
     return null;
@@ -82,16 +84,17 @@ function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
 async function runQueueJob(
   envelope: QueueJobEnvelope,
   failedJobs: Pick<QueueServices, "recordFailure" | "runAttempt">,
+  registry: JobRegistry,
   options: {
+    retryPolicy?: QueueRetryPolicy;
     onFailureRecorded?: () => void;
     context?: import("./index").JobContext;
     deferRetry?: (envelope: QueueJobEnvelope, delayMs: number) => Promise<void>;
   } = {},
 ): Promise<void> {
+  const retryPolicy = snapshotQueueRetryPolicy(options.retryPolicy ?? resolveQueueConfig());
   options.context?.signal.throwIfAborted();
-  const job = jobRegistry.create(envelope.name);
-
-  if (!job) {
+  if (!registry.has(envelope.name)) {
     throw new Error(`Unknown job "${envelope.name}".`);
   }
 
@@ -101,17 +104,23 @@ async function runQueueJob(
     signal: new AbortController().signal,
   };
 
+  let job: import("./index").Job | undefined;
   try {
-    await failedJobs.runAttempt(envelope, { ...context, attempt: attempts + 1 }, (scoped) =>
-      job.handle(envelope.payload, scoped),
-    );
+    await failedJobs.runAttempt(envelope, { ...context, attempt: attempts + 1 }, (scoped) => {
+      scoped.signal.throwIfAborted();
+      job = registry.create(envelope.name);
+      if (!job) throw new Error(`Unknown job "${envelope.name}".`);
+      return job.handle(envelope.payload, scoped);
+    });
   } catch (error) {
     options.context?.signal.throwIfAborted();
+    // Admission failures have no job attempt to retry or record as a business failure.
+    if (!job) throw error;
     const nextAttempt = attempts + 1;
-    const maxAttempts = job.maxAttempts ?? queueConfig.maxAttempts;
+    const maxAttempts = job.maxAttempts ?? retryPolicy.maxAttempts;
 
     if (nextAttempt < maxAttempts) {
-      const backoffMs = job.backoffMs ?? queueConfig.backoffMs;
+      const backoffMs = job.backoffMs ?? retryPolicy.backoffMs;
       if (options.deferRetry) {
         await options.deferRetry(
           { ...envelope, jobId: context.jobId, attempts: nextAttempt },
@@ -126,7 +135,8 @@ async function runQueueJob(
           attempts: nextAttempt,
         },
         failedJobs,
-        { ...options, context },
+        registry,
+        { ...options, context, retryPolicy },
       );
       return;
     }

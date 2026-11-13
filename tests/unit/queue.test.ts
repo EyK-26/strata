@@ -70,7 +70,8 @@ test("async queue close drains scheduled work and child jobs, then rejects dispa
 
 test("production async queue drains actual resilient job execution", async () => {
   const { ResilientQueue } = await import("@getstrata/core/queue/resilientQueue");
-  const { jobRegistry } = await import("@getstrata/core/queue/jobRegistry");
+  const { JobRegistry } = await import("@getstrata/core/queue/jobRegistry");
+  const jobRegistry = new JobRegistry();
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {
     release = resolve;
@@ -95,6 +96,7 @@ test("production async queue drains actual resilient job execution", async () =>
         throw new Error("unexpected failure");
       },
     } as never,
+    jobRegistry,
     true,
   );
   const job = jobRegistry.create(name);

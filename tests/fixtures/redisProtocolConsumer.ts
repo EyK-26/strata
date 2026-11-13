@@ -7,7 +7,10 @@ import { CacheRepository } from "@getstrata/core/cache/repository";
 import type { Application, TransportDefinition } from "@getstrata/core/contracts/application";
 import { Job } from "@getstrata/core/queue";
 import type { QueueServices } from "@getstrata/core/queue/createAppQueue";
-import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+
+const jobRegistry = new JobRegistry();
+
 import {
   createQueueWorkerTransport,
   type QueueWorkerTransport,
@@ -96,16 +99,18 @@ try {
     runAttempt: (...args) => selected().runAttempt(...args),
   };
   listWorker = createQueueWorkerTransport({
+    registry: jobRegistry,
     name: "qualification.list-worker",
     redisUrl: url,
     queueServices: services,
-    createWorker: (redis, services) => new QueueWorker(redis, services),
+    createWorker: (redis, services) => new QueueWorker(redis, services, jobRegistry),
   });
   streamWorker = createQueueWorkerTransport({
+    registry: jobRegistry,
     name: "qualification.stream-worker",
     redisUrl: url,
     queueServices: services,
-    createWorker: (redis, services) => new RedisStreamsWorker(redis, services),
+    createWorker: (redis, services) => new RedisStreamsWorker(redis, services, jobRegistry),
   });
   app = await application.createApp({
     migrate: false,
@@ -123,7 +128,7 @@ try {
   const jobName = `qualification.protocol.${crypto.randomUUID()}`;
   jobRegistry.register(jobName, () => job);
   jobRegistry.track(jobName, job);
-  list = new RedisQueue(url);
+  list = new RedisQueue(url, jobRegistry);
   const queueKey = queueKeyForPriority(job.priority);
   assert.equal(queueKey, QUEUE_LIST_KEY);
   assert.ok(queueKey.startsWith(`${scope}:`));
@@ -142,7 +147,7 @@ try {
   assert.equal(await updateQueueReservation(observer, queueKey, reservation, "ack"), false);
   assert.equal(await observer.llen(queueProcessingKey(queueKey)), 0);
 
-  streams = new RedisStreamsQueue(url);
+  streams = new RedisStreamsQueue(url, jobRegistry);
   const jobId = await streams.enqueue(
     job,
     { kind: "streams" },

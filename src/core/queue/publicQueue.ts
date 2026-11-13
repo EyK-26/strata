@@ -1,7 +1,7 @@
 import FailedJobRepository from "@getstrata/core/queue/failedJobRepository";
 import FailedJobService from "./failedJobService.ts";
 import type { Job, Queue } from "./index.ts";
-import { jobRegistry } from "./jobRegistry.ts";
+import type { JobRegistry } from "./jobRegistry.ts";
 import { runQueueJob } from "./jobRunner.ts";
 import { resolveRedisQueueTransport } from "./queueConfig";
 import {
@@ -15,10 +15,11 @@ import { RedisStreamsQueue, RedisStreamsWorker } from "./redisStreams";
 import { ResilientQueue } from "./resilientQueue.ts";
 
 function createTrackedJob<TPayload extends object>(
+  registry: JobRegistry,
   name: string,
   job: Job<TPayload>,
 ): Job<TPayload> {
-  return jobRegistry.track(name, job);
+  return registry.track(name, job);
 }
 
 function createProductionQueue(
@@ -26,11 +27,9 @@ function createProductionQueue(
   options: {
     redisUrl?: string;
     failedJobs: QueueServices;
-    registerJobs?: () => void;
+    registry: JobRegistry;
   },
 ): Queue {
-  options.registerJobs?.();
-
   const failedJobs = options.failedJobs;
 
   if (driver === "redis") {
@@ -39,20 +38,21 @@ function createProductionQueue(
     }
 
     return resolveRedisQueueTransport() === "streams"
-      ? new RedisStreamsQueue(options.redisUrl)
-      : new RedisQueue(options.redisUrl);
+      ? new RedisStreamsQueue(options.redisUrl, options.registry)
+      : new RedisQueue(options.redisUrl, options.registry);
   }
 
-  return new ResilientQueue(failedJobs, driver === "async");
+  return new ResilientQueue(failedJobs, options.registry, driver === "async");
 }
 
 function createQueueWorker(
   redisUrl: string,
   failedJobs: Pick<QueueServices, "recordFailure" | "runAttempt">,
+  registry: JobRegistry,
 ): QueueWorker | RedisStreamsWorker {
   return resolveRedisQueueTransport() === "streams"
-    ? new RedisStreamsWorker(redisUrl, failedJobs)
-    : new QueueWorker(redisUrl, failedJobs);
+    ? new RedisStreamsWorker(redisUrl, failedJobs, registry)
+    : new QueueWorker(redisUrl, failedJobs, registry);
 }
 
 export type { QueueInvocation, QueueInvocationConfig, QueueServices } from "./queueServices";
@@ -65,7 +65,6 @@ export {
   createTrackedJob,
   FailedJobRepository,
   FailedJobService,
-  jobRegistry,
   QueueWorker,
   RedisQueue,
   ResilientQueue,

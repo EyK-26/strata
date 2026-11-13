@@ -1,6 +1,6 @@
 import { join, resolve } from "node:path";
 import { Job } from "@getstrata/core/queue";
-import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import type { JobRegistry } from "@getstrata/core/queue/jobRegistry";
 import {
   type InfrastructureDiscoveryOptions,
   importInfrastructure,
@@ -16,11 +16,14 @@ interface DiscoverJobsState {
   registered: Map<string, { identity: unknown; location: string }>;
   loads: Map<string | readonly JobManifestEntry[], Promise<string[]>>;
 }
-const KEY = Symbol.for("@getstrata/discoverJobsState");
-function state(): DiscoverJobsState {
-  const globals = globalThis as Record<symbol, DiscoverJobsState | undefined>;
-  globals[KEY] ??= { loads: new Map(), registered: new Map() };
-  return globals[KEY];
+const states = new WeakMap<JobRegistry, DiscoverJobsState>();
+function state(registry: JobRegistry): DiscoverJobsState {
+  let value = states.get(registry);
+  if (!value) {
+    value = { loads: new Map(), registered: new Map() };
+    states.set(registry, value);
+  }
+  return value;
 }
 function validateClass(value: unknown, location: string): asserts value is DiscoveredJobClass {
   if (
@@ -33,7 +36,11 @@ function validateClass(value: unknown, location: string): asserts value is Disco
       `Invalid job at ${location}: expected a class with nonempty static jobName and handle().`,
     );
 }
-async function load(options: DiscoverJobsOptions, current: () => boolean): Promise<string[]> {
+async function load(
+  registry: JobRegistry,
+  options: DiscoverJobsOptions,
+  current: () => boolean,
+): Promise<string[]> {
   const jobs = new Map<string, { identity: unknown; create: () => Job; location: string }>();
   const add = (name: string, identity: unknown, create: () => Job, location: string) => {
     const previous = jobs.get(name);
@@ -89,7 +96,7 @@ async function load(options: DiscoverJobsOptions, current: () => boolean): Promi
   }
   // Validate the complete batch before publishing. Explicit application factories take precedence.
   if (!current()) return [...jobs.keys()];
-  const registered = state().registered;
+  const registered = state(registry).registered;
   for (const [name, entry] of jobs) {
     const previous = registered.get(name);
     if (previous && previous.identity !== entry.identity)
@@ -97,17 +104,17 @@ async function load(options: DiscoverJobsOptions, current: () => boolean): Promi
         `Duplicate discovered job "${name}" at ${entry.location}; first declared at ${previous.location}.`,
       );
   }
-  const existing = new Set(jobRegistry.names());
+  const existing = new Set(registry.names());
   for (const [name, entry] of jobs) {
     if (!existing.has(name)) {
-      jobRegistry.register(name, entry.create);
+      registry.register(name, entry.create);
       registered.set(name, entry);
     }
   }
   return [...jobs.keys()];
 }
-function discoverJobs(options: DiscoverJobsOptions = {}): Promise<string[]> {
-  const cache = state().loads;
+function discoverJobs(registry: JobRegistry, options: DiscoverJobsOptions = {}): Promise<string[]> {
+  const cache = state(registry).loads;
   const key =
     options.manifest ??
     JSON.stringify([
@@ -116,16 +123,16 @@ function discoverJobs(options: DiscoverJobsOptions = {}): Promise<string[]> {
     ]);
   const existing = cache.get(key);
   if (existing) return existing;
-  const pending = load(options, () => state().loads === cache).catch((error) => {
+  const pending = load(registry, options, () => state(registry).loads === cache).catch((error) => {
     if (cache.get(key) === pending) cache.delete(key);
     throw error;
   });
   cache.set(key, pending);
   return pending;
 }
-function resetDiscoverJobsForTests(): void {
-  state().loads = new Map();
-  state().registered = new Map();
+function resetDiscoverJobsForTests(registry: JobRegistry): void {
+  state(registry).loads = new Map();
+  state(registry).registered = new Map();
 }
 
 export type { DiscoveredJobClass, DiscoverJobsOptions, JobManifestEntry };

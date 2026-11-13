@@ -11,7 +11,6 @@ import {
 import type { DurableListener } from "@getstrata/core/events/outbox";
 import { InvalidateCacheTagsJob } from "@getstrata/core/jobs/invalidateCacheTagsJob";
 import type { Queue } from "@getstrata/core/queue";
-import { createTrackedJob } from "@getstrata/core/queue/createAppQueue";
 import type { CacheLike } from "../../types/services";
 import { cacheTagsForModelWrite } from "../cache/modelCacheTags";
 import type { AppModule } from "../contracts";
@@ -39,10 +38,7 @@ export function createModelCacheInvalidationEffects<C extends CacheLike>(
           lifetime: "application",
           dependencies: [tokens.cache, tokens.queue] as const,
           create: (cache, queue) => async () => {
-            await queue.dispatch(
-              createTrackedJob("cache.invalidate-tags", new InvalidateCacheTagsJob(cache)),
-              { tags: [...tags] },
-            );
+            await queue.dispatch(new InvalidateCacheTagsJob(cache), { tags: [...tags] });
           },
         }),
       );

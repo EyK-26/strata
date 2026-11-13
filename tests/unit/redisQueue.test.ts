@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { Job } from "@getstrata/core/queue";
-import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+
+const jobRegistry = new JobRegistry();
+
 import {
   QUEUE_HIGH_KEY,
   QUEUE_LIST_KEY,
@@ -33,7 +36,7 @@ describe("redis queue", () => {
 
   test("RedisQueue dispatches registered jobs to the configured priority list", async () => {
     const client = new RedisClient(redisUrl);
-    const queue = new RedisQueue(redisUrl);
+    const queue = new RedisQueue(redisUrl, jobRegistry);
 
     class EchoJob extends Job<{ message: string }> {
       override readonly priority = "low" as const;
@@ -54,7 +57,7 @@ describe("redis queue", () => {
   });
 
   test("RedisQueue rejects unregistered jobs", async () => {
-    const queue = new RedisQueue(redisUrl);
+    const queue = new RedisQueue(redisUrl, jobRegistry);
 
     class UntrackedJob extends Job<{ message: string }> {
       override async handle(): Promise<void> {}
@@ -64,4 +67,42 @@ describe("redis queue", () => {
       "Job is not registered with the queue worker registry.",
     );
   });
+});
+
+test("Redis producers retain their application namespace after process environment changes", async () => {
+  const { RedisStreamsQueue, streamQueueKey } = await import("@getstrata/core/queue/redisStreams");
+  const original = process.env.APP_KEY_PREFIX;
+  const prefix = `queue-owner-${crypto.randomUUID()}`;
+  const driftPrefix = `queue-drift-${crypto.randomUUID()}`;
+  const url = process.env.REDIS_URL;
+  if (!url) throw new Error("Owned Redis fixture is required");
+  const client = new RedisClient(url);
+  const registry = new JobRegistry();
+  class Owned extends Job {
+    static override readonly jobName = "owned-namespace";
+    async handle() {}
+  }
+  registry.register(Owned.jobName, () => new Owned());
+  process.env.APP_KEY_PREFIX = prefix;
+  const lists = new RedisQueue(url, registry);
+  const streams = new RedisStreamsQueue(url, registry);
+  const key = queueKeyForPriority();
+  process.env.APP_KEY_PREFIX = driftPrefix;
+  const driftKey = queueKeyForPriority();
+  try {
+    await lists.dispatch(new Owned(), {});
+    expect(await client.llen(key)).toBe(1);
+    expect(await client.llen(driftKey)).toBe(0);
+    await client.del(key);
+    await streams.dispatch(new Owned(), {});
+    expect(await client.send("XLEN", [streamQueueKey(key)])).toBe(1);
+    expect(await client.send("XLEN", [streamQueueKey(driftKey)])).toBe(0);
+  } finally {
+    await client.del(key, driftKey, streamQueueKey(key), streamQueueKey(driftKey));
+    lists.close();
+    streams.close();
+    client.close();
+    if (original === undefined) delete process.env.APP_KEY_PREFIX;
+    else process.env.APP_KEY_PREFIX = original;
+  }
 });

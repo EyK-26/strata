@@ -1,4 +1,5 @@
 import type { TransportDefinition } from "../contracts/application";
+import type { JobRegistry } from "./jobRegistry";
 import { createQueueWorker } from "./publicQueue";
 import type { QueueServices } from "./queueServices";
 
@@ -17,11 +18,13 @@ interface QueueWorkerTransport {
 }
 function createQueueWorkerTransport(options: {
   readonly redisUrl: string;
+  readonly registry: JobRegistry | (() => JobRegistry);
   readonly queueServices: Pick<QueueServices, "recordFailure" | "runAttempt">;
   readonly name?: string;
   readonly createWorker?: (
     redisUrl: string,
     services: Pick<QueueServices, "recordFailure" | "runAttempt">,
+    registry: JobRegistry,
   ) => QueueWorkerAdapter;
 }): QueueWorkerTransport {
   const { redisUrl, queueServices, createWorker = createQueueWorker } = options;
@@ -44,7 +47,11 @@ function createQueueWorkerTransport(options: {
           name,
           open: () => {
             try {
-              worker = createWorker(redisUrl, queueServices);
+              worker = createWorker(
+                redisUrl,
+                queueServices,
+                typeof options.registry === "function" ? options.registry() : options.registry,
+              );
               acquired = true;
               return { ok: true, value: worker };
             } catch (error) {

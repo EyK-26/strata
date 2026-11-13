@@ -20,15 +20,11 @@ function defaultQueueKeys(): readonly [string, string, string] {
   return [queueHighKey(), queueListKey(), queueLowKey()];
 }
 const QUEUE_KEYS = defaultQueueKeys();
-function queueKeyForPriority(priority: QueuePriority = "default"): string {
-  switch (priority) {
-    case "high":
-      return queueHighKey();
-    case "low":
-      return queueLowKey();
-    default:
-      return queueListKey();
-  }
+function queueKeyForPriority(
+  priority: QueuePriority = "default",
+  keys: readonly [string, string, string] = defaultQueueKeys(),
+): string {
+  return priority === "high" ? keys[0] : priority === "low" ? keys[2] : keys[1];
 }
 
 export {

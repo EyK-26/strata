@@ -1,16 +1,25 @@
 import { CORE_QUEUE_TOKEN } from "@getstrata/bootstrap/config";
-import { createAppContext, type InitializedAppContext } from "@getstrata/bootstrap/context";
+import {
+  collectProviders,
+  createAppContext,
+  type InitializedAppContext,
+} from "@getstrata/bootstrap/context";
+import type { AppModule } from "@getstrata/bootstrap/contracts";
+import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
 import type { QueueCommandApplication } from "@getstrata/cli/queueFailed";
+import type { ServiceContainerLike } from "@getstrata/core/contracts/container";
 import { createDatabaseBindings } from "@getstrata/core/database/bindings";
 import type { Queue } from "@getstrata/core/queue";
 import { FAILED_JOB_SERVICE_TOKEN, type QueueServices } from "@getstrata/core/queue/createAppQueue";
 import { failedJobRepository } from "@getstrata/core/queue/failedJobRepository";
+import { QUEUE_JOB_REGISTRY_TOKEN } from "@getstrata/core/queue/jobRegistry";
 import { createQueueWorkerTransport } from "@getstrata/core/queue/queueWorkerTransport";
 
 /** Process entrypoint snapshot; pool ownership belongs to this one application. */
 async function bootQueueApplication(
   withWorker = false,
+  bootOptions: { readonly modules?: readonly AppModule[] } = {},
 ): Promise<QueueCommandApplication & { context: InitializedAppContext }> {
   assertProductionSecrets();
   const url = process.env.DATABASE_URL;
@@ -38,10 +47,10 @@ async function bootQueueApplication(
             driver: "sqlite" as const,
             filename: url.slice("sqlite:".length).replace(/^\/\//, ""),
           };
-  let context: InitializedAppContext;
   const redisUrl = process.env.REDIS_URL;
   if (withWorker && !redisUrl) throw new Error("queue:work requires REDIS_URL to be set.");
-  const selectedServices = () => context.container.get<QueueServices>(FAILED_JOB_SERVICE_TOKEN);
+  let queueContainer: ServiceContainerLike;
+  const selectedServices = () => queueContainer.resolve(FAILED_JOB_SERVICE_TOKEN);
   const workerServices: Pick<QueueServices, "recordFailure" | "runAttempt"> = {
     recordFailure: (input) => selectedServices().recordFailure(input),
     runAttempt: (...args) => selectedServices().runAttempt(...args),
@@ -50,22 +59,36 @@ async function bootQueueApplication(
     ? createQueueWorkerTransport({
         redisUrl: redisUrl as string,
         queueServices: workerServices,
+        registry: () => queueContainer.resolve(QUEUE_JOB_REGISTRY_TOKEN),
       })
     : undefined;
-  context = await createAppContext(undefined, {
-    connection,
-    definition: {
-      providers: [],
-      transports: worker ? [worker.transport] : [],
-      services: createDatabaseBindings({
-        default: connection,
-        connections: { [connection]: options },
-        repositories: [failedJobRepository],
-      }),
+  const modules = bootOptions.modules ?? (await ensureModulesLoaded());
+  const context = await createAppContext(
+    [
+      ...collectProviders([...modules]),
+      {
+        name: "queue.command-bindings",
+        register({ container }) {
+          queueContainer = container;
+        },
+      },
+    ],
+    {
+      connection,
+      definition: {
+        providers: [],
+        transports: worker ? [worker.transport] : [],
+        services: createDatabaseBindings({
+          default: connection,
+          connections: { [connection]: options },
+          repositories: [failedJobRepository],
+        }),
+      },
     },
-  });
+  );
   return {
     context,
+    registry: context.container.get(QUEUE_JOB_REGISTRY_TOKEN),
     application: context.application,
     ...(worker ? { worker } : {}),
     invoke: context.invoke,

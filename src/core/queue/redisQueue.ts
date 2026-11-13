@@ -1,10 +1,13 @@
 import { RedisClient } from "bun";
 import type { Job, Queue } from "./index";
-import { jobRegistry } from "./jobRegistry";
+import type { JobRegistry } from "./jobRegistry";
 import { parseQueueJobEnvelope, type QueueJobEnvelope, runQueueJob } from "./jobRunner";
 import {
+  type QueueRetryPolicy,
   readQueueVisibilityMs as readVisibilityMs,
+  resolveQueueConfig,
   resolveRedisQueueTransport,
+  snapshotQueueRetryPolicy,
 } from "./queueConfig";
 import type { QueueServices } from "./queueServices";
 import {
@@ -164,9 +167,13 @@ async function reclaimExpiredQueueReservations(
 }
 
 class RedisQueue implements Queue {
+  private readonly queueKeys = Object.freeze(defaultQueueKeys());
   private readonly client: RedisClient;
 
-  constructor(redisUrl: string) {
+  constructor(
+    redisUrl: string,
+    private readonly registry: JobRegistry,
+  ) {
     this.client = new RedisClient(redisUrl);
   }
 
@@ -175,7 +182,7 @@ class RedisQueue implements Queue {
   }
 
   async dispatch<TPayload extends object>(job: Job<TPayload>, payload: TPayload): Promise<void> {
-    const name = jobRegistry.resolveName(job);
+    const name = this.registry.resolveName(job);
 
     if (!name) {
       throw new Error("Job is not registered with the queue worker registry.");
@@ -187,12 +194,13 @@ class RedisQueue implements Queue {
       attempts: 0,
     };
 
-    const queueKey = queueKeyForPriority(job.priority);
+    const queueKey = queueKeyForPriority(job.priority, this.queueKeys);
     await this.client.lpush(queueKey, JSON.stringify(envelope));
   }
 }
 
 class QueueWorker {
+  private readonly retryPolicy: QueueRetryPolicy;
   private readonly owner = crypto.randomUUID();
   private running = false;
   private stopping = false;
@@ -201,9 +209,12 @@ class QueueWorker {
   constructor(
     private readonly redisUrl: string,
     private readonly failedJobs: Pick<QueueServices, "recordFailure" | "runAttempt">,
+    private readonly registry: JobRegistry,
     private readonly timeoutSeconds = 5,
-    private readonly queueKeys: readonly string[] = QUEUE_KEYS,
+    private readonly queueKeys: readonly string[] = defaultQueueKeys(),
+    retryPolicy: QueueRetryPolicy = resolveQueueConfig(),
   ) {
+    this.retryPolicy = snapshotQueueRetryPolicy(retryPolicy);
     this.client = new RedisClient(redisUrl);
   }
 
@@ -240,7 +251,7 @@ class QueueWorker {
     const reserved = await this.reserve();
     if (!reserved) return false;
     const { queueKey, reservation } = reserved;
-    const envelope = parseQueueJobEnvelope(reservation.payload);
+    const envelope = parseQueueJobEnvelope(reservation.payload, this.registry);
     if (!envelope) {
       await updateQueueReservation(this.client, queueKey, reservation, "quarantine");
       return true;
@@ -268,7 +279,8 @@ class QueueWorker {
       Math.max(1, Math.floor(readVisibilityMs() / 3)),
     );
     try {
-      await runQueueJob(envelope, this.failedJobs, {
+      await runQueueJob(envelope, this.failedJobs, this.registry, {
+        retryPolicy: this.retryPolicy,
         onFailureRecorded: () => {
           acknowledge = true;
         },

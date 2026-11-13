@@ -4,6 +4,7 @@ import {
   createSystemQueueServices,
   FAILED_JOB_SERVICE_TOKEN,
 } from "@getstrata/core/queue/createAppQueue";
+import { JobRegistry, QUEUE_JOB_REGISTRY_TOKEN } from "@getstrata/core/queue/jobRegistry";
 import {
   CORE_CACHE_TOKEN,
   CORE_QUEUE_TOKEN,
@@ -40,15 +41,18 @@ const queueProvider: ServiceProvider = {
       }),
     });
     container.set(FAILED_JOB_SERVICE_TOKEN, failedJobs);
-    registerDefaultJobs();
-    await discoverJobs();
+    const registry = new JobRegistry();
+    registerDefaultJobs(registry);
+    await discoverJobs(registry);
     const queue = createAppQueue(
       driver,
       config.get<string>(REDIS_URL_CONFIG_KEY) ?? environment.REDIS_URL,
       failedJobs,
+      registry,
     );
     onCleanup(() => queue.close?.(), driver === "async" ? "drain" : "close");
     container.set(CORE_QUEUE_TOKEN, queue);
+    container.set(QUEUE_JOB_REGISTRY_TOKEN, registry);
   },
 };
 

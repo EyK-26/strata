@@ -1,7 +1,7 @@
 import type { Application } from "@getstrata/core/contracts/application";
 import type { Queue } from "@getstrata/core/queue";
 import type { QueueInvocation, QueueServices } from "@getstrata/core/queue/createAppQueue";
-import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import type { JobRegistry } from "@getstrata/core/queue/jobRegistry";
 import type { StrataCommand } from "./types.ts";
 
 interface QueueCommandApplication {
@@ -9,6 +9,7 @@ interface QueueCommandApplication {
   readonly invoke: QueueInvocation;
   readonly queueServices: QueueServices;
   readonly queue: Queue;
+  readonly registry: JobRegistry;
   readonly worker?: { start(): Promise<void> };
 }
 type QueueFailedBoot = () => QueueCommandApplication | Promise<QueueCommandApplication>;
@@ -47,11 +48,11 @@ async function queueRetryCommand(id: string | undefined, boot: QueueFailedBoot):
   const jobId = Number(id);
   if (!id || !Number.isSafeInteger(jobId) || jobId <= 0)
     throw new Error("queue:retry requires a positive integer failed job id.");
-  await withQueueApplication(boot, async ({ queueServices, queue }) => {
+  await withQueueApplication(boot, async ({ queueServices, queue, registry }) => {
     await queueServices.retry(jobId, async (failedJob) => {
-      const job = jobRegistry.create(failedJob.job_name);
+      const job = registry.create(failedJob.job_name);
       if (!job) throw new Error(`Unknown job "${failedJob.job_name}".`);
-      jobRegistry.track(failedJob.job_name, job);
+      registry.track(failedJob.job_name, job);
       if (failedJob.job_id !== null && failedJob.job_id !== undefined) {
         if (!queue.replay)
           throw new Error("Configured queue cannot preserve the failed-job identity");

@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 import { Job, type JobContext } from "@getstrata/core/queue";
-import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+
+const jobRegistry = new JobRegistry();
+
 import { runQueueJob } from "@getstrata/core/queue/jobRunner";
 import type { QueueServices } from "@getstrata/core/queue/queueServices";
 
@@ -32,7 +35,7 @@ test("one-based attempts share logical identity across synchronous retries", asy
       };
     },
   };
-  await runQueueJob({ name, payload: {} }, failedJobs);
+  await runQueueJob({ name, payload: {} }, failedJobs, jobRegistry);
   expect(seen.map((context) => context.attempt)).toEqual([1, 2, 3]);
   expect(new Set(seen.map((context) => context.jobId)).size).toBe(1);
   expect(new Set(seen.map((context) => context.signal)).size).toBe(1);

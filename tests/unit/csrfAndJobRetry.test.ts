@@ -1,6 +1,9 @@
 import { describe, expect, mock, test } from "bun:test";
 import { createCsrfProtection, DEFAULT_CSRF_TTL_MS } from "@getstrata/core/http/csrfProtection";
-import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+
+const jobRegistry = new JobRegistry();
+
 import { runQueueJob } from "@getstrata/core/queue/jobRunner";
 import { overrideQueueRecorder, withQueuePersistence } from "../helpers/queuePersistence";
 
@@ -74,6 +77,7 @@ describe("queue job retries", () => {
     await runQueueJob(
       { name: "test.ok", payload: {} },
       overrideQueueRecorder(persistence, service),
+      jobRegistry,
     );
 
     expect(handle).toHaveBeenCalledTimes(1);
@@ -96,6 +100,7 @@ describe("queue job retries", () => {
       runQueueJob(
         { name: "test.always-fails", payload: {} },
         overrideQueueRecorder(persistence, service),
+        jobRegistry,
       ),
     ).rejects.toThrow("boom");
 
@@ -121,6 +126,7 @@ describe("queue job retries", () => {
     await runQueueJob(
       { name: "test.recovers", payload: {} },
       overrideQueueRecorder(persistence, service),
+      jobRegistry,
     );
 
     expect(calls).toBe(2);
@@ -141,6 +147,7 @@ describe("queue job retries", () => {
       runQueueJob(
         { name: "test.single", payload: {} },
         overrideQueueRecorder(persistence, service),
+        jobRegistry,
       ),
     ).rejects.toThrow("nope");
 
@@ -166,6 +173,7 @@ describe("queue job retries", () => {
       runQueueJob(
         { name: "test.payload", payload: { id: 7 } },
         overrideQueueRecorder(persistence, service),
+        jobRegistry,
       ),
     ).rejects.toThrow();
 
@@ -180,6 +188,7 @@ describe("queue job retries", () => {
       runQueueJob(
         { name: "test.does-not-exist", payload: {} },
         overrideQueueRecorder(persistence, service),
+        jobRegistry,
       ),
     ).rejects.toThrow(/Unknown job/);
   });

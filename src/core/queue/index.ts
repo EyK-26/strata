@@ -1,5 +1,3 @@
-import { jobRegistry } from "./jobRegistry.ts";
-
 type QueuePriority = "high" | "default" | "low";
 
 /** Logical identity is stable across automatic recovery and supported manual replay. */
@@ -19,13 +17,6 @@ abstract class Job<TPayload extends object = object> {
   readonly maxAttempts?: number;
   readonly backoffMs?: number;
   readonly priority?: QueuePriority;
-
-  constructor() {
-    const jobName = (this.constructor as typeof Job).jobName;
-    if (jobName) {
-      jobRegistry.track(jobName, this);
-    }
-  }
 
   abstract handle(payload: TPayload, context?: JobContext): Promise<void>;
 }
