@@ -120,7 +120,11 @@ try {
   process.env.STRATA_TEST_PACKAGE_DIR = archives;
   receipt.archives = JSON.parse(await readFile(join(archives, "manifest.json"), "utf8"));
   const installs = new Map<string, string>();
-  const apps = [];
+  const apps: Array<{
+    profile: (typeof inventory.profiles)[number];
+    record: (typeof records)[number];
+    app: string;
+  }> = [];
   for (const profile of inventory.profiles) {
     assert.ok(!stopping, "Profile qualification interrupted");
     const record = {
