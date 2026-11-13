@@ -3,6 +3,8 @@
  * Import from `@getstrata/core` (workspace) or `src/framework/public-api`.
  */
 
+export type { PolicyAction, PolicyDecision } from "@getstrata/core/auth/policy";
+export { Policy, PolicyDeniedError, PolicyGate } from "@getstrata/core/auth/policy";
 export { CORE_CACHE_TOKEN } from "@getstrata/core/cache/tokens";
 export type {
   ConfigIntegerBounds,
@@ -14,6 +16,14 @@ export {
   configInteger,
   parseApplicationConfig,
 } from "@getstrata/core/config/applicationConfig";
+export type {
+  AuthAccountLookup,
+  AuthBearerResolver,
+  AuthCredentialVerifier,
+  AuthEmailLookup,
+  AuthSessionValidity,
+} from "@getstrata/core/contracts/authUserDirectory";
+export { AuthAccountNotFoundError } from "@getstrata/core/contracts/authUserDirectory";
 export {
   ConfigStore,
   createServiceToken,
@@ -138,22 +148,13 @@ export {
 } from "../core/auth/authContext.ts";
 export type { BasicAuthGuardOptions } from "../core/auth/basicAuthGuard.ts";
 export { BasicAuthGuard } from "../core/auth/basicAuthGuard.ts";
-export type {
-  AuthAccountLookup,
-  AuthBearerResolver,
-  AuthCredentialVerifier,
-  AuthEmailLookup,
-  AuthSessionValidity,
-} from "@getstrata/core/contracts/authUserDirectory";
-export { AuthAccountNotFoundError } from "@getstrata/core/contracts/authUserDirectory";
-export type { AuthOutcome } from "../core/auth/guard.ts";
-export type { AuthGuard } from "../core/auth/guard.ts";
+export type { AuthGuard, AuthOutcome } from "../core/auth/guard.ts";
 export {
   ApiTokenGuard,
+  AuthManager,
   absentAuth,
   authenticatedAuth,
   authenticateProof,
-  AuthManager,
   authUserFromOutcome,
   CompositeGuard,
   DatabaseTokenGuard,
@@ -197,8 +198,6 @@ export {
   hashOneTimeToken,
 } from "../core/auth/oneTimeToken.ts";
 export { completePasswordLogin } from "../core/auth/passwordLogin.ts";
-export type { PolicyAction, PolicyDecision } from "@getstrata/core/auth/policy";
-export { Policy, PolicyDeniedError, PolicyGate } from "@getstrata/core/auth/policy";
 export type {
   SamlAssertionReplayStore,
   SamlServiceProviderConfig,
