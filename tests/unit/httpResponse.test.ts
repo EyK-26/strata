@@ -112,3 +112,18 @@ test("private JSON preserves payload, status and multiple cookies without changi
   expect(headers.get("cache-control")).toBe("public, max-age=60");
   expect(jsonResponse({ public: true }).headers.get("cache-control")).toBeNull();
 });
+
+test("API context keeps throttle errors JSON inside HTML owners on custom prefixes and HTMX", async () => {
+  const { createWebErrorMiddleware } = await import("@getstrata/core/http/response");
+  const { tooManyRequestsResponse } = await import("@getstrata/core/http/throttleResponse");
+  for (const headers of [{ accept: "text/html" }, { accept: "text/html", "hx-request": "true" }]) {
+    const request = new Request("https://app.test/service/limits", { headers });
+    const response = await createWebErrorMiddleware({ enabled: true })(request, () =>
+      createJsonErrorMiddleware()(request, () => tooManyRequestsResponse(request, "limited", 23)),
+    );
+    expect(response.status).toBe(429);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect(response.headers.get("retry-after")).toBe("23");
+    expect(await response.json()).toEqual({ error: "limited" });
+  }
+});
