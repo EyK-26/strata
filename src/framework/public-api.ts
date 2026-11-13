@@ -152,6 +152,7 @@ export {
   CompositeGuard,
   DatabaseTokenGuard,
   GuestGuard,
+  requireAuthCapability,
 } from "../core/auth/guard.ts";
 export type { JwtPayload } from "../core/auth/jwt.ts";
 export { jwtTtlSeconds, signJwt, verifyJwt } from "../core/auth/jwt.ts";
