@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { bootstrapApp } from "./src/bootstrap/createApp.ts";
 import { hashPassword } from "@getstrata/core/auth/password";
 import { withMigrationDatabase } from "./src/db/migrationRuntime.ts";
-import { createWorkTracker } from "./src/domain/workTracker.ts";
+import { createWorkTracker, workTrackerListener } from "./src/domain/workTracker.ts";
 
 const postgres=process.env.WORK_TRACKER_DATABASE==="postgres";
 const cookieMode=process.env.WORK_TRACKER_TRANSPORT==="cookie";
@@ -19,7 +19,7 @@ function merge(response:Response,previous=""){
   return [...jar].map(([key,value])=>key+"="+value).join("; ");
 }
 type Selected=import("@getstrata/core/contracts/persistence").SelectedSession;
-const invoke=<T>(work:(db:Selected)=>Promise<T>)=>app.invoke({kind:"command",actor:{kind:"system",policy:"reference.acceptance"}},({database,policy})=>postgres?policy.run(database,{kind:"bypass"},work):database.transaction(work));
+const invoke=<T>(work:(db:Selected)=>Promise<T>)=>app.invoke({kind:"command",actor:{kind:"system",policy:"reference.acceptance"}},({database,policy})=>postgres?policy.run(database,{kind:"bypass"},work):work(database));
 const execute=<T>(db:Selected,text:string,params:readonly unknown[]=[])=>{let index=0;return db.execute<T>({text:text.replace(/\?/g,()=>db.dialect.placeholder(++index)),params});};
 const count=(table:string)=>invoke(async db=>Number((await db.execute<{n:number}>({text:`SELECT COUNT(*) AS n FROM ${table}`,params:[]}))[0]!.n));
 try {
@@ -111,6 +111,34 @@ try {
     if(postgres)await db.unsafe("DROP FUNCTION reject_reference_outbox()");
   });
   assert.deepEqual({tasks:await count("work_tasks"),audit:await count("work_audit"),events:await count("strata_outbox_event"),deliveries:await count("strata_outbox_delivery")},before,"outbox failure rolls back task and durable audit");
+  const workerApp=await bootstrapApp({mode:"outbox-worker",migrate:false});
+  const polling=workerApp.outboxWorker.start();
+  void polling.catch(error=>console.error("Worker polling error",error));
+  try {
+    const deadline=Date.now()+5000;
+    while(await count("work_notifications")!==before.events){
+      if(Date.now()>deadline)throw new Error("Owned outbox worker did not deliver the reference events.");
+      await new Promise(resolve=>setTimeout(resolve,25));
+    }
+    const completed=await invoke(async db=>Number((await db.execute<{n:number}>({text:"SELECT COUNT(*) AS n FROM strata_outbox_delivery WHERE status='completed'",params:[]}))[0]!.n));
+    assert.equal(completed,before.events,"public worker completed every durable delivery");
+  }finally{
+    const stopped=await workerApp.application.stop();
+    if(!stopped.successful)console.error("Worker cleanup",JSON.stringify(stopped.snapshot.errors.map(item=>({provider:item.provider,resource:item.resource,phase:item.phase,error:item.error instanceof Error?item.error.message:String(item.error)}))));
+    assert.equal(stopped.successful,true,"worker application owns polling cleanup");
+    await polling;
+  }
+  const [event]=await invoke(db=>db.execute<{id:string;name:string;version:number;tenant_id:number;payload:string}>({text:"SELECT id,name,version,tenant_id,payload FROM strata_outbox_event WHERE tenant_id=1 LIMIT 1",params:[]}));
+  assert.ok(event);
+  const duplicate={id:event.id,name:event.name,version:event.version,tenantId:event.tenant_id,payload:JSON.parse(event.payload)};
+  await app.invoke({kind:"command",actor:{kind:"system",policy:"reference.duplicate-delivery"},tenant:{id:1,slug:"alpha"}},async({database,policy})=>{
+    const deliver=async(selected:Selected)=>{
+      await workTrackerListener.handle(duplicate,{database:selected,signal:new AbortController().signal});
+      await workTrackerListener.handle(duplicate,{database:selected,signal:new AbortController().signal});
+    };
+    if(postgres)await policy.run(database,{kind:"tenant",tenantId:1},deliver);else await database.transaction(deliver);
+  });
+  assert.equal(await count("work_notifications"),before.events,"repeated durable delivery is idempotent");
   // The same domain service works in a deliberately owned command execution.
   await app.invoke({kind:"command",actor:{kind:"principal",claims:{id:2}},tenant:{id:1,slug:"alpha"}},async({database,policy})=>{
     const read=async(selected:Selected)=>{
@@ -127,7 +155,7 @@ try {
   const revoked=await fetch(origin+"/api/v1/work?organization="+organization.id,{headers:member.headers()});
   assert.equal(revoked.status,401,"revoked credential cannot reuse established membership");
   assert.ok(before.events>=7&&before.events===before.deliveries&&before.events===before.audit,"one durable audit/event/delivery per accepted mutation");
-  console.log(JSON.stringify({transport:cookieMode?"cookie":"token",domain:"work-tracker",database:postgres?"postgres":"sqlite",rls:postgres,twoTenants:true,roles:["owner","member","viewer"],rollback:true,revocation:true,durableEvents:before.events}));
+  console.log(JSON.stringify({transport:cookieMode?"cookie":"token",domain:"work-tracker",database:postgres?"postgres":"sqlite",rls:postgres,twoTenants:true,roles:["owner","member","viewer"],rollback:true,revocation:true,workerDelivery:true,idempotentRetry:true,durableEvents:before.events}));
 } finally {
   const result=await app.application.stop();
   assert.equal(result.successful,true,"owned application cleanup completes");

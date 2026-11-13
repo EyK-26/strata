@@ -61,6 +61,8 @@ for (const [database, transport, frontend] of [
       expect(result.exitCode, result.stdout.toString() + result.stderr.toString()).toBe(0);
       expect(result.stdout.toString()).toContain('"rollback":true');
       expect(result.stdout.toString()).toContain('"twoTenants":true');
+      expect(result.stdout.toString()).toContain('"workerDelivery":true');
+      expect(result.stdout.toString()).toContain('"idempotentRetry":true');
       if (database === "postgres") expect(result.stdout.toString()).toContain('"rls":true');
     } finally {
       await fixture.close();
