@@ -7,8 +7,9 @@ interface EtagVersioned {
   created_at?: Date | string | null;
 }
 
-function isEtagEnabled(): boolean {
-  return (process.env.FEATURE_ETAG ?? "true") !== "false";
+/** Parse an explicit entrypoint value; omission retains the enabled default. */
+function isEtagEnabled(value?: string): boolean {
+  return value !== "false";
 }
 
 function formatWeakEtag(digest: string): string {

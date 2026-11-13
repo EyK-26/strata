@@ -7,6 +7,7 @@ import {
   etagFromResource,
   ifMatchSatisfied,
   ifNoneMatchSatisfied,
+  isEtagEnabled,
 } from "@getstrata/core/http/etag";
 
 describe("etagFromResource", () => {
@@ -143,6 +144,29 @@ test("explicit conditional GET policy bypasses later ambient feature changes", (
     expect(applyConditionalGet(request, unchanged, 'W/"owned"', { etagEnabled: false })).toBe(
       unchanged,
     );
+  } finally {
+    if (previous === undefined) delete process.env.FEATURE_ETAG;
+    else process.env.FEATURE_ETAG = previous;
+  }
+});
+
+test("omitted conditional GET policy uses a stable default while entrypoints capture explicit settings", () => {
+  const previous = process.env.FEATURE_ETAG;
+  try {
+    process.env.FEATURE_ETAG = "false";
+    const disabled = Object.freeze({ etagEnabled: isEtagEnabled(process.env.FEATURE_ETAG) });
+    const request = new Request("https://etag.example.test", {
+      headers: { "if-none-match": 'W/"owned"' },
+    });
+    expect(isEtagEnabled()).toBe(true);
+    expect(applyConditionalGet(request, Response.json({ id: 1 }), 'W/"owned"').status).toBe(304);
+    process.env.FEATURE_ETAG = "true";
+    expect(isEtagEnabled()).toBe(true);
+    expect(applyConditionalGet(request, Response.json({ id: 1 }), 'W/"owned"').status).toBe(304);
+    const original = Response.json({ id: 1 });
+    expect(applyConditionalGet(request, original, 'W/"owned"', disabled)).toBe(original);
+    expect(isEtagEnabled("true")).toBe(true);
+    expect(isEtagEnabled("false")).toBe(false);
   } finally {
     if (previous === undefined) delete process.env.FEATURE_ETAG;
     else process.env.FEATURE_ETAG = previous;
