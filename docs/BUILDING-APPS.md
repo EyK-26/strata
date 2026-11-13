@@ -232,14 +232,12 @@ uses the provider default (otherwise the engine's existing `layouts/app.eta`).
 Eta continues to own escaping and includes; templates and navigation stay in
 the app. Direct `EtaViewEngine.render()` remains available for string output.
 
-The factory resolves auth/CSRF/flash/CSP data on each render using the existing
-request context and configured directory, without reading or changing legacy
-global layout configuration. Its options are local to that app; use it instead
-of registering the legacy `viewProvider` alongside it. It registers both the
-existing string-output `core.view` engine and the new typed response renderer.
-The legacy provider/global configuration APIs remain compatible, including
-their existing error-view setup. The factory does not change global error-view
-configuration or automatically negotiate HTMX fragments. Explicit scoped
+The factory captures the application's directory, layout, CSRF/flash policy and
+error renderer, then resolves request data from that owner's execution context.
+It registers the typed engine/response-renderer/error-renderer tokens. The static
+`viewProvider` and global layout/error configuration APIs are removed. HTMX fragment
+selection remains explicit; templates and navigation stay application-owned.
+Explicit scoped
 error rendering remains separate follow-up work. Generated HTML apps now register
 the factory and resolve the typed renderer directly; see [STARTER.md](STARTER.md).
 
@@ -648,7 +646,12 @@ Authentication and membership contexts remain request-local. Concurrent users mu
 
 ### Configured error rendering through response wrappers
 
-The error renderer configured through `configureWebErrorView` also applies to the published `withErrorHandling` and `createWebErrorMiddleware` wrappers, not only direct `webErrorResponse` calls. The application owns its templates and display data; the wrapper preserves the mapped status and per-request error input. Explicit `withJsonErrorHandling`/API error middleware retains the JSON error contract even when the client accepts HTML. `configureWebErrorView({})` restores default framework error rendering; use it for cleanup of isolated fixture configuration, not as a per-request layout switch.
+The error renderer supplied through `createViewProvider({ error: { render } })`
+is application-owned. The HTTP kernel carries its renderer, enabled mode and
+production redaction policy in request metadata; generic wrappers preserve that
+owner and mapped status. Explicit JSON/API boundaries retain JSON even when the
+client accepts HTML. Direct wrappers may receive explicit rendering options;
+ownerless wrappers default to JSON. There is no global configure/reset API.
 
 Framework HTML and JSON error responses use `Cache-Control: no-store`, including configured/fallback error renderers and custom-body `notFoundHtmlResponse` calls. Error views/details can contain request-specific data; neither cookies nor `Set-Cookie` are a cache-protection policy ([RFC 9111 section 7.3](https://www.rfc-editor.org/rfc/rfc9111.html#section-7.3)). This default does not change successful response caching or make malicious caches trustworthy. An application deliberately producing public, cacheable not-found content should create an explicit normal response with its reviewed headers rather than using the framework error boundary as a cache-control escape hatch.
 

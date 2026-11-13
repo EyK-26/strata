@@ -74,19 +74,18 @@ or include the CA in product images.
 
 Postgres RLS reads `app.tenant_id` on the connection that runs the query. With a pool (`DB_POOL_MAX > 1`), a session-level `SET app.tenant_id` is not reliable.
 
-Use `runWithTenantDatabase()` from `@getstrata/core/tenant/tenantDatabaseScope` when code talks to tenant tables outside HTTP middleware (tests, scripts, jobs):
+Enter an owned application invocation with the intended trusted actor and tenant.
+Use its selected session and explicit policy for tenant-table access:
 
 ```typescript
-import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
-
-await runWithTenantDatabase(tenant, async () => {
-  // ALS tenant context plus a pinned transaction with SET LOCAL app.tenant_id
-});
+await app.invoke({ kind: "command", actor: {kind:"system",policy:"test.tenant"}, tenant },
+  ({database,policy}) => policy.run(database, {kind:"tenant",tenantId:tenant.id}, async tx => {
+    // Queries through tx share SET LOCAL tenant settings and this transaction.
+  }));
 ```
 
-HTTP middleware uses the same helper. Jobs that touch RLS tables must too. See [TENANCY.md](./TENANCY.md).
-
-Cross-tenant migrate/seed work uses `runWithMigrationBypass()`.
+HTTP and workers use the same owned execution mechanics. Migration/seed fixtures
+request a separate trusted bypass policy. See [TENANCY.md](TENANCY.md).
 
 For HTML tests, set `FRONTEND_MODE=server-htmx` or `hybrid`. Do not flip `FRONTEND_MODE` inside a single test file while other files are running.
 
