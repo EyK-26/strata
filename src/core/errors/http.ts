@@ -1,4 +1,4 @@
-import { PolicyDeniedError } from "../auth/policy";
+import { PolicyDeniedError } from "@getstrata/core/auth/policy";
 
 class HttpError extends Error {
   readonly status: number;

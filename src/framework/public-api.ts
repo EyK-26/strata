@@ -189,8 +189,8 @@ export {
   hashOneTimeToken,
 } from "../core/auth/oneTimeToken.ts";
 export { completePasswordLogin } from "../core/auth/passwordLogin.ts";
-export type { PolicyAction, PolicyDecision } from "../core/auth/policy.ts";
-export { Policy, PolicyDeniedError, PolicyGate } from "../core/auth/policy.ts";
+export type { PolicyAction, PolicyDecision } from "@getstrata/core/auth/policy";
+export { Policy, PolicyDeniedError, PolicyGate } from "@getstrata/core/auth/policy";
 export type {
   SamlAssertionReplayStore,
   SamlServiceProviderConfig,
