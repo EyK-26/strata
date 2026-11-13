@@ -15,8 +15,8 @@ mutation, retains it as an Actions artifact, and publishes those archive bytes w
 OIDC provenance. A registry version is reusable only when its `dist.integrity`
 exactly matches the archived SHA-512. Registry errors or malformed metadata abort
 before publication; they never establish that a version is unused. The workflow
-requires successful main-push CI for the exact release commit before running its
-own release quality gate. See [release operator procedure](release-operator.md).
+runs its own mandatory release quality gate before publication; it does not query
+or wait for a separate main-branch CI run. See [release operator procedure](release-operator.md).
 
 Local acceptance must identify the source commit, package manifests, archive hashes,
 commands and fixture cleanup. Build fresh core/bootstrap/starter packages, verify public
@@ -33,11 +33,9 @@ The bounded profile inventory and capability map are described in
 [starter qualification](../STARTER-QUALIFICATION.md). Each release still requires
 acceptance for its own source commit.
 
-Before tagging, wait for the `CI` workflow triggered by a push to `main` to finish
-successfully at the exact commit being released. Green PR checks or an earlier
-main commit do not satisfy this requirement. The release workflow checks once and
-fails immediately if that evidence is missing; it does not wait for CI to finish.
-See the [release operator procedure](release-operator.md) for an early-tag retry.
+Tag the reviewed main commit with the matching package version. The release's
+own quality gate must pass before publication, even when a separate CI run is
+pending or failed. See the [release operator procedure](release-operator.md).
 
 Publication, hosted qualification and deployment remain separate decisions. Before a
 hosted run, specify provider/account, resource names, domains and cookie isolation,

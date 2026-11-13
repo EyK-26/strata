@@ -5,7 +5,6 @@ import {
   packedArchive,
   registryDisposition,
 } from "../../scripts/release-publication.ts";
-import { type CIRun, hasAcceptedCI } from "../../scripts/verify-release-ci.ts";
 
 const archive = {
   name: "@getstrata/core",
@@ -72,30 +71,6 @@ describe("immutable publication recovery", () => {
     expect(archiveIntegrity(new TextEncoder().encode("changed"))).not.toBe(archive.integrity);
   });
 });
-describe("release CI admission", () => {
-  const accepted: CIRun = {
-    head_sha: "a".repeat(40),
-    head_branch: "main",
-    event: "push",
-    status: "completed",
-    conclusion: "success",
-  };
-  test("requires completed successful main push at exact source commit", () => {
-    expect(hasAcceptedCI([accepted], accepted.head_sha)).toBe(true);
-    expect(hasAcceptedCI([], accepted.head_sha)).toBe(false);
-    for (const change of [
-      { head_sha: "b".repeat(40) },
-      { head_branch: "feature" },
-      { event: "pull_request" },
-      { status: "in_progress" },
-      { conclusion: "failure" },
-      { conclusion: null },
-    ]) {
-      expect(hasAcceptedCI([{ ...accepted, ...change }], accepted.head_sha)).toBe(false);
-    }
-  });
-});
-
 test("actual publication CLI validates all registry states before any npm mutation", async () => {
   const { mkdtemp, readFile, writeFile, rm } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");

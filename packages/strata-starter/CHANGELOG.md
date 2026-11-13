@@ -2,6 +2,8 @@
 
 ## 3.0.3
 
+Remove the separate successful-main-CI prerequisite; the release workflow still requires its own full quality gate before publication.
+
 Fix npm publication of local release archives by resolving paths absolutely, avoiding GitHub shorthand interpretation. Exercise archive publication dry-runs in CI and before live publication. Preserve the failed v3.0.2 tag; its first publish failed before any package was published.
 
 ## 3.0.2
