@@ -36,14 +36,11 @@ import {
   queueInvalidKey,
   queueProcessingKey,
   queueProcessingLeaseKey,
-} from "@getstrata/core/queue/redisQueue";
-import {
   RedisStreamsQueue,
   RedisStreamsWorker,
   streamDeadLetterKey,
   streamQueueKey,
-  streamRetryKey,
-} from "@getstrata/core/queue/redisStreams";
+} from "@getstrata/core/queue/redisQueue";
 import { createStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
 import { RedisClient } from "bun";
 
@@ -408,7 +405,7 @@ try {
             queueProcessingLeaseKey(key),
             queueInvalidKey(key),
             streamQueueKey(key),
-            streamRetryKey(key),
+            `${streamQueueKey(key)}:retries`,
             streamDeadLetterKey(key),
           );
       }
