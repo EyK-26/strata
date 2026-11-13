@@ -146,6 +146,45 @@ describe("selected authentication capabilities", () => {
     expect(sessionReads).toBe(0);
   });
 
+  test("Basic checks MFA only for the exact account authenticated by the verifier", async () => {
+    let consumed = 0;
+    const record = { id: 2, role: "admin", mfa_enabled: false };
+    const accounts = { findByIdOrThrow: async () => record };
+    const credentials = { verifyCredentials: async () => ({ id: 1, role: "admin" }) };
+    const request = new Request("http://example.test/", {
+      headers: { authorization: `Basic ${btoa("user:password")}` },
+    });
+    const persistRecovery = async () => {
+      consumed++;
+      return true;
+    };
+    const byId = new BasicAuthGuard({ accounts, credentials, persistRecovery });
+    const byEmail = new BasicAuthGuard({
+      accounts,
+      credentials,
+      emailLookup: { findByEmail: async () => record },
+      persistRecovery,
+    });
+    expect(await byId.resolve(request)).toBeNull();
+    expect(await byEmail.resolve(request)).toBeNull();
+    expect(consumed).toBe(0);
+    for (const id of ["invalid", "", 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      let lookups = 0;
+      const guard = new BasicAuthGuard({
+        accounts: {
+          findByIdOrThrow: async () => {
+            lookups++;
+            return record;
+          },
+        },
+        credentials: { verifyCredentials: async () => ({ id }) },
+        persistRecovery,
+      });
+      expect(await guard.resolve(request)).toBeNull();
+      expect(lookups).toBe(0);
+    }
+  });
+
   test("direct guards reject missing or malformed explicitly selected ports before requests", () => {
     for (const tokens of [undefined, {}, { resolveUserFromToken: true }]) {
       expect(() => new DatabaseTokenGuard(tokens as never)).toThrow(TypeError);

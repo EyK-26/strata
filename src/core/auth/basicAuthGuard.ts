@@ -107,16 +107,22 @@ class BasicAuthGuard implements AuthGuard {
         return null;
       }
 
+      const userId =
+        typeof user.id === "number" ? user.id : typeof user.id === "string" ? Number(user.id) : NaN;
+      if (!Number.isSafeInteger(userId) || userId <= 0) return null;
+
       let record = this.options.emailLookup
         ? await this.options.emailLookup.findByEmail(credentials.username)
         : null;
       if (!record) {
         try {
-          record = await this.options.accounts.findByIdOrThrow(Number(user.id));
+          record = await this.options.accounts.findByIdOrThrow(userId);
         } catch {
           return null;
         }
       }
+
+      if (record.id !== userId) return null;
 
       const mfa = completePasswordLogin(record, {
         mfaCode: request.headers.get("x-mfa-code"),

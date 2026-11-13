@@ -6,9 +6,9 @@ import {
   CompositeGuard,
   DatabaseTokenGuard,
   GuestGuard,
+  requireAuthCapability,
 } from "@getstrata/core/auth/guard";
 import { JwtGuard } from "@getstrata/core/auth/jwtGuard";
-import { requireAuthCapability } from "@getstrata/core/auth/requireAuthCapability";
 import type { readSession } from "@getstrata/core/auth/sessionCookie";
 import { SessionGuard } from "@getstrata/core/auth/sessionGuard";
 import type {

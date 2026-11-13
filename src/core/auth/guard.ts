@@ -294,4 +294,11 @@ function isBearerCapableGuard(guard: AuthGuard): boolean {
 }
 
 export type { AuthGuard, AuthUser };
-export { ApiTokenGuard, AuthManager, CompositeGuard, DatabaseTokenGuard, GuestGuard };
+export {
+  ApiTokenGuard,
+  AuthManager,
+  CompositeGuard,
+  DatabaseTokenGuard,
+  GuestGuard,
+  requireAuthCapability,
+};
