@@ -38,7 +38,6 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/bootstrap/public-api.ts",
   "src/bootstrap/queue/defaultJobs.ts",
   "src/bootstrap/rateLimit.ts",
-  "src/bootstrap/routeRegistry.ts",
   "src/bootstrap/routes.ts",
   "src/bootstrap/schedule.ts",
   "src/bootstrap/schemaTarget.ts",
