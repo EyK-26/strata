@@ -43,3 +43,43 @@ mail/storage), execute the bounded adapter/profile qualification inventory, revi
 generated route/OpenAPI/SDK snapshots, and pass the complete distribution, E2E,
 smoke, and CI gates on the integrated revision. Publication and hosted deployment
 remain separate decisions.
+
+## Additional ownership migrations
+
+- Pass an explicit coordinator to `installGracefulShutdownSignals(signals, lifecycle)`.
+  Register and shut down through that coordinator. Process-wide shutdown/reset helpers
+  have been removed.
+- Discover modules with `createModuleDiscovery({ modulesDir | manifest }).load()` or
+  `ensureModulesLoaded(options)`. Each owner caches its own immutable result list;
+  builders receive that list explicitly. Global discovery configuration and preload
+  side effects have been removed.
+- Give each queue its own `JobRegistry`. Register factories explicitly; constructors
+  do not register themselves. Queue validation does not construct a job; an admitted
+  attempt invokes its owner's factory. Retry policies are copied and validated.
+- Use `createCoreProviders(environment)` to capture core configuration before startup.
+  Config/cache/queue factories capture settings rather than reading environment getters
+  during registration. The prior `legacyCache` bridge has been removed.
+- Use explicit `Mailer`/`StorageManager` instances or `createMailBindings` and
+  `createStorageBindings`. Resolve their canonical tokens from
+  `@getstrata/core/contracts/serviceTokens`. `resolveStorageConfig(environment)` captures
+  local paths and S3 settings; constructors and operations do not select a global owner.
+- Create a new `createTracingProvider(options)` for each context. Its definition is
+  single-use; reuse rejects before another runtime is acquired. Exporter configuration
+  is captured at declaration, and the runtime is acquired during registration. The
+  context owns flush and shutdown. A kernel without that provider is untraced;
+  middleware used directly requires an explicit runtime. The OpenTelemetry API context
+  manager remains a process-level propagation facility, not an exporter owner.
+- Starter renderers accept an explicit `StarterFeaturePlan`. Direct renderer callers
+  compile raw choices with `compileStarterFeatures` first. There is no global plan cache.
+  Generated signing placeholders are development-only and rejected in production.
+
+`bun scripts/verify-starter-pairwise.ts --output=/absolute/path/receipt.json` runs the
+25-profile backend generation/install/type/migration/boot inventory with bounded
+concurrency and owned local databases. The generator is source code; its consumers
+install packed core/bootstrap/CLI candidates. See [qualification limits](../STARTER-QUALIFICATION.md)
+for install reuse, credential fixtures and the separate deeper behavioral inventory.
+
+The refactor is not deletion-complete yet: legacy view layout/error configuration
+remains process-wide, queue actor/tenant propagation still needs an explicit transport
+contract, and remaining queue visibility/maintenance settings need reconciliation.
+Passing the bounded profile inventory does not close those architectural gaps.

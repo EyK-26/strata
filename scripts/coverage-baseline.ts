@@ -259,6 +259,6 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/testing/webViewSmoke.ts",
 ] as const;
 
-export const COVERAGE_EXEMPT_LIMIT = 260;
+export const COVERAGE_EXEMPT_LIMIT = 259;
 
 export const COVERAGE_EXEMPT_SET: ReadonlySet<string> = new Set(COVERAGE_EXEMPT_FILES);
