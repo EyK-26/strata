@@ -732,7 +732,7 @@ describe("create-strata generate", () => {
     expect(authModule).not.toContain("INTO users");
     expect(authModule).not.toContain("INTO api_tokens");
     expect(await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8")).toContain(
-      "createMetadataAuthManager(directory, { ...snapshot, mechanisms:",
+      "createMetadataAuthManager(directory, { ...snapshot, mfaSecrets, mechanisms:",
     );
     expect(existsSync(join(app, "src/bootstrap/ensureDatabase.ts"))).toBe(true);
     const ensure = await readFile(join(app, "src/bootstrap/ensureDatabase.ts"), "utf8");

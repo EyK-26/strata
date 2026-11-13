@@ -354,11 +354,12 @@ test(
         expect(await outcome).toBe("aborted");
         release();
         expect(forwards).toBe(1);
-        expect(await actor.statuses()).toEqual([401, 401, 401]);
+        // Replay the supplied revoked proof before a status response expires its cookie.
         // Enrollment revoked this supplied session proof; reject replay without a login loop.
         const replay = await actor.submit(secret);
         expect(replay.status).toBe(401);
         expect(replay.headers.get("location")).toBeNull();
+        expect(await actor.statuses()).toEqual([401, 401, 401]);
         expect(await replay.text()).not.toContain("<h2>Recovery codes</h2>");
         expect(
           (await run(async (database) => selectedUsers(database).findOrFail(id))).get(
