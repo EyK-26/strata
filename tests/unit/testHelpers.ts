@@ -4,6 +4,7 @@ import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import type { HttpPersistenceOptions } from "@getstrata/bootstrap/persistenceContracts";
 import { createPersistenceInvocation } from "@getstrata/bootstrap/persistenceInvocation";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { intendedUrlCookieOptionsFromEnvironment } from "@getstrata/core/auth/intendedUrlCookie";
 import {
   passwordConfirmCookieName,
   passwordConfirmTtlSeconds,
@@ -12,6 +13,8 @@ import type { Application } from "@getstrata/core/contracts/application";
 import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
 import { CORE_HTTP_CLEANUP_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { createDatabaseBindings } from "@getstrata/core/database/bindings";
+import { csrfMiddlewareOptionsFromEnvironment } from "@getstrata/core/http/csrfMiddleware";
+import { flashSessionOptionsFromEnvironment } from "@getstrata/core/http/flashSession";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
 import { createApplication } from "@getstrata/core/runtime/application";
@@ -144,6 +147,17 @@ function createMockDependencies(
     );
     const passwordSecret = secret(["SESSION_SECRET", "OAUTH_STATE_SECRET"], "session-secret");
     const options: HttpPersistenceOptions = http ?? {
+      features: {
+        emailVerificationRequired: environment.FEATURE_EMAIL_VERIFICATION === "true",
+        viewsEnabled: ["server-htmx", "hybrid"].includes(environment.FRONTEND_MODE ?? "api"),
+        publicReadsEnabled: environment.FEATURE_PUBLIC_READS === "true",
+        etagEnabled: environment.FEATURE_ETAG !== "false",
+      },
+      intendedUrl: intendedUrlCookieOptionsFromEnvironment(environment),
+      ...(passwordSecret ? { flash: flashSessionOptionsFromEnvironment(environment) } : {}),
+      ...(secret(["SESSION_SECRET", "CSRF_SECRET"], "csrf-secret")
+        ? { csrf: csrfMiddlewareOptionsFromEnvironment(environment) }
+        : {}),
       ...(signatureSecret ? { signatureSecret } : {}),
       ...(passwordSecret
         ? {

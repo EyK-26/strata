@@ -71,6 +71,7 @@ class HttpKernel {
   private readonly viewsEnabled: boolean;
   private readonly publicReadsEnabled: boolean;
   private readonly etagEnabled: boolean;
+  private readonly httpOptions: HttpPersistenceOptions | undefined;
   private readonly configuredCsrfMiddleware: Middleware;
   private readonly responses: Readonly<Record<"json" | "web", readonly Middleware[]>>;
   private readonly persistence: ReturnType<typeof createHttpPersistence> | undefined;
@@ -78,8 +79,9 @@ class HttpKernel {
     const http = dependencies.container.has(HTTP_PERSISTENCE_OPTIONS)
       ? dependencies.container.resolve<HttpPersistenceOptions>(HTTP_PERSISTENCE_OPTIONS)
       : undefined;
+    this.httpOptions = http;
     this.emailVerificationRequired =
-      http?.features?.emailVerificationRequired ?? isEmailVerificationRequired();
+      http?.features?.emailVerificationRequired ?? isEmailVerificationRequired({});
     this.viewsEnabled = http?.features?.viewsEnabled ?? isViewsEnabled();
     this.publicReadsEnabled = http?.features?.publicReadsEnabled ?? isPublicReadsEnabled();
     this.etagEnabled = http?.features?.etagEnabled ?? true;
@@ -102,6 +104,19 @@ class HttpKernel {
     }
   }
 
+  private requireFlashOptions() {
+    const options = this.httpOptions?.flash;
+    if (!options) throw new TypeError("Explicit flash configuration is required for web routes.");
+    return options;
+  }
+  private requireIntendedOptions() {
+    const options = this.httpOptions?.intendedUrl;
+    if (!options)
+      throw new TypeError(
+        "Explicit intended URL cookie configuration is required for web authentication.",
+      );
+    return options;
+  }
   routeModelBindingPorts(auth: Pick<AuthReader, "resolve">): RouteModelBindingPorts {
     const gate = this.dependencies.container.resolve(CORE_POLICY_GATE_TOKEN);
     const authorize = gate.authorize;
@@ -264,7 +279,9 @@ class HttpKernel {
       case "authenticated":
         return [createRequireAuthMiddleware(auth)];
       case "web":
-        return this.viewsEnabled ? [createFlashMiddleware(), this.configuredCsrfMiddleware] : [];
+        return this.viewsEnabled
+          ? [createFlashMiddleware(this.requireFlashOptions()), this.configuredCsrfMiddleware]
+          : [];
       case "api": {
         const csrf = this.configuredCsrfMiddleware;
 
@@ -433,7 +450,7 @@ class HttpKernel {
     const abilityChecker = resolveAbilityChecker(this.dependencies.container);
     const requireAbility = createRequireAbilityMiddleware(abilityChecker, this.viewsEnabled);
     const middleware = [
-      createRequireWebAuthMiddleware(auth),
+      createRequireWebAuthMiddleware(auth, this.requireIntendedOptions()),
       ...this.verifiedMiddleware(),
       requireAbility(ability),
     ];
@@ -454,7 +471,7 @@ class HttpKernel {
     assertHttpHandler(handler);
     const auth = establishedAuthReader;
     const middleware = [
-      createRequireWebAuthMiddleware(auth),
+      createRequireWebAuthMiddleware(auth, this.requireIntendedOptions()),
       ...this.verifiedMiddleware(),
       createRequireGlobalAdminMiddleware(),
     ];
@@ -589,7 +606,7 @@ class HttpKernel {
     assertHttpHandler(handler);
     const auth = establishedAuthReader;
     const middleware = [
-      createRequireWebAuthMiddleware(auth),
+      createRequireWebAuthMiddleware(auth, this.requireIntendedOptions()),
       ...(options.verified ? this.verifiedMiddleware() : []),
     ];
 
@@ -605,7 +622,13 @@ class HttpKernel {
 
   private verifiedMiddleware(): Middleware[] {
     const auth = establishedAuthReader;
-    return [createRequireVerifiedMiddleware(auth, this.emailVerificationRequired)];
+    return [
+      createRequireVerifiedMiddleware(
+        auth,
+        this.emailVerificationRequired,
+        this.requireIntendedOptions(),
+      ),
+    ];
   }
 
   private wrapThrottle<TRequest extends Request = Request>(

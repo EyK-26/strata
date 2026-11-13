@@ -8,6 +8,7 @@ import {
   clearSessionCookie,
   createSessionCookie,
   readSessionUserId,
+  sessionCookieOptionsFromEnvironment,
 } from "@getstrata/core/auth/sessionCookie";
 import { hashApiToken } from "@getstrata/core/auth/tokenHash";
 import {
@@ -105,14 +106,21 @@ describe("coverage gap helpers", () => {
   });
 
   test("covers session cookie and oauth state edge branches", () => {
-    const cookie = createSessionCookie(5);
+    const cookie = createSessionCookie(5, {}, sessionCookieOptionsFromEnvironment(process.env));
     const request = new Request("http://example.test/", {
       headers: { cookie: cookie.split(";")[0] ?? "" },
     });
 
-    expect(readSessionUserId(request)).toBe(5);
-    expect(readSessionUserId(new Request("http://example.test/"))).toBeNull();
-    expect(clearSessionCookie()).toContain("Max-Age=0");
+    expect(readSessionUserId(request, sessionCookieOptionsFromEnvironment(process.env))).toBe(5);
+    expect(
+      readSessionUserId(
+        new Request("http://example.test/"),
+        sessionCookieOptionsFromEnvironment(process.env),
+      ),
+    ).toBeNull();
+    expect(clearSessionCookie(sessionCookieOptionsFromEnvironment(process.env))).toContain(
+      "Max-Age=0",
+    );
 
     const decoded = decodeURIComponent(cookie.split("=")[1]?.split(";")[0] ?? "");
     const [userIdRaw, issuedAtRaw] = decoded.split(".");
@@ -123,6 +131,7 @@ describe("coverage gap helpers", () => {
             cookie: `strata_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.`)}`,
           },
         }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBeNull();
 

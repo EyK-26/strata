@@ -12,6 +12,7 @@ import {
   SESSION_REMEMBER_TTL_SECONDS,
   SESSION_TTL_SECONDS,
   sessionCookieName,
+  sessionCookieOptionsFromEnvironment,
   sessionRememberTtlSeconds,
   sessionTtlSeconds,
 } from "@getstrata/core/auth/sessionCookie";
@@ -71,36 +72,52 @@ describe("sessionCookie", () => {
   });
 
   test("creates and reads a signed session cookie", () => {
-    const cookiePair = createSessionCookie(42).split(";")[0] ?? "";
+    const cookiePair =
+      createSessionCookie(42, {}, sessionCookieOptionsFromEnvironment(process.env)).split(";")[0] ??
+      "";
     const request = new Request("http://example.test/login", {
       headers: {
         cookie: cookiePair,
       },
     });
 
-    expect(readSessionUserId(request)).toBe(42);
-    const session = readSession(request);
+    expect(readSessionUserId(request, sessionCookieOptionsFromEnvironment(process.env))).toBe(42);
+    const session = readSession(request, sessionCookieOptionsFromEnvironment(process.env));
     expect(session?.userId).toBe(42);
     expect(session?.issuedAt).toBeGreaterThan(0);
   });
 
   test("createSessionCookieDetails exposes issuedAt and ttl", () => {
-    const details = createSessionCookieDetails(11);
+    const details = createSessionCookieDetails(
+      11,
+      {},
+      sessionCookieOptionsFromEnvironment(process.env),
+    );
     const cookiePair = details.header.split(";")[0] ?? "";
     const session = readSession(
       new Request("http://example.test/", { headers: { cookie: cookiePair } }),
+      sessionCookieOptionsFromEnvironment(process.env),
     );
 
     expect(details.userId).toBe(11);
-    expect(details.ttlSeconds).toBe(sessionTtlSeconds());
+    expect(details.ttlSeconds).toBe(sessionTtlSeconds(process.env));
     expect(session?.issuedAt).toBe(details.issuedAt);
 
-    const remembered = createSessionCookieDetails(11, { remember: true });
-    expect(remembered.ttlSeconds).toBe(sessionRememberTtlSeconds());
+    const remembered = createSessionCookieDetails(
+      11,
+      { remember: true },
+      sessionCookieOptionsFromEnvironment(process.env),
+    );
+    expect(remembered.ttlSeconds).toBe(sessionRememberTtlSeconds(process.env));
   });
 
   test("rejects tampered session cookies", () => {
-    expect(readSessionUserId(new Request("http://example.test/login"))).toBeNull();
+    expect(
+      readSessionUserId(
+        new Request("http://example.test/login"),
+        sessionCookieOptionsFromEnvironment(process.env),
+      ),
+    ).toBeNull();
 
     const request = new Request("http://example.test/login", {
       headers: {
@@ -108,7 +125,7 @@ describe("sessionCookie", () => {
       },
     });
 
-    expect(readSessionUserId(request)).toBeNull();
+    expect(readSessionUserId(request, sessionCookieOptionsFromEnvironment(process.env))).toBeNull();
   });
 
   test("rejects malformed, expired, and invalid signature cookies", () => {
@@ -117,6 +134,7 @@ describe("sessionCookie", () => {
         new Request("http://example.test/", {
           headers: { cookie: "strata_session=1.2" },
         }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBeNull();
 
@@ -125,6 +143,7 @@ describe("sessionCookie", () => {
         new Request("http://example.test/", {
           headers: { cookie: "strata_session=0.123.sig" },
         }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBeNull();
 
@@ -136,10 +155,14 @@ describe("sessionCookie", () => {
             cookie: `strata_session=${encodeURIComponent(`42.${expiredIssuedAt}.deadbeef`)}`,
           },
         }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBeNull();
 
-    const validCookie = createSessionCookie(42).split(";")[0]?.split("=")[1] ?? "";
+    const validCookie =
+      createSessionCookie(42, {}, sessionCookieOptionsFromEnvironment(process.env))
+        .split(";")[0]
+        ?.split("=")[1] ?? "";
     const decoded = decodeURIComponent(validCookie);
     const [userIdRaw, issuedAtRaw] = decoded.split(".");
     const tampered = `${userIdRaw}.${issuedAtRaw}.short`;
@@ -149,6 +172,7 @@ describe("sessionCookie", () => {
         new Request("http://example.test/", {
           headers: { cookie: `strata_session=${encodeURIComponent(tampered)}` },
         }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBeNull();
 
@@ -159,43 +183,61 @@ describe("sessionCookie", () => {
             cookie: `strata_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.`)}`,
           },
         }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBeNull();
   });
 
   test("adds secure cookie flags in production", () => {
     process.env.APP_ENV = "production";
+    process.env.SESSION_SECRET = "explicit-production-test-session-secret";
 
-    expect(createSessionCookie(1)).toContain("; Secure");
-    expect(clearSessionCookie()).toContain("; Secure");
+    expect(createSessionCookie(1, {}, sessionCookieOptionsFromEnvironment(process.env))).toContain(
+      "; Secure",
+    );
+    expect(clearSessionCookie(sessionCookieOptionsFromEnvironment(process.env))).toContain(
+      "; Secure",
+    );
   });
 
   test("falls back through session secret environment variables", () => {
     delete process.env.SESSION_SECRET;
     process.env.OAUTH_STATE_SECRET = "oauth-secret";
 
-    const cookie = createSessionCookie(7);
-    expect(readSessionUserId(new Request("http://example.test/", { headers: { cookie } }))).toBe(7);
+    const cookie = createSessionCookie(7, {}, sessionCookieOptionsFromEnvironment(process.env));
+    expect(
+      readSessionUserId(
+        new Request("http://example.test/", { headers: { cookie } }),
+        sessionCookieOptionsFromEnvironment(process.env),
+      ),
+    ).toBe(7);
 
     delete process.env.OAUTH_STATE_SECRET;
     process.env.ADMIN_API_TOKEN = "admin-secret";
 
-    const fallbackCookie = createSessionCookie(8);
+    const fallbackCookie = createSessionCookie(
+      8,
+      {},
+      sessionCookieOptionsFromEnvironment(process.env),
+    );
     expect(
       readSessionUserId(
         new Request("http://example.test/", { headers: { cookie: fallbackCookie } }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBe(8);
   });
 
   test("reads cookie values that contain equals signs and rejects equal-length bad signatures", () => {
-    const cookiePair = createSessionCookie(42).split(";")[0] ?? "";
+    const cookiePair =
+      createSessionCookie(42, {}, sessionCookieOptionsFromEnvironment(process.env)).split(";")[0] ??
+      "";
     const encoded = cookiePair.split("=")[1] ?? "";
     const request = new Request("http://example.test/", {
-      headers: { cookie: `${sessionCookieName()}=${encoded}` },
+      headers: { cookie: `${sessionCookieName(process.env)}=${encoded}` },
     });
 
-    expect(readSessionUserId(request)).toBe(42);
+    expect(readSessionUserId(request, sessionCookieOptionsFromEnvironment(process.env))).toBe(42);
 
     const decoded = decodeURIComponent(encoded);
     const [userIdRaw, issuedAtRaw, signature] = decoded.split(".");
@@ -205,9 +247,10 @@ describe("sessionCookie", () => {
       readSessionUserId(
         new Request("http://example.test/", {
           headers: {
-            cookie: `${sessionCookieName()}=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.${badSignature}`)}`,
+            cookie: `${sessionCookieName(process.env)}=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.${badSignature}`)}`,
           },
         }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBeNull();
   });
@@ -216,9 +259,13 @@ describe("sessionCookie", () => {
     delete process.env.SESSION_COOKIE_NAME;
 
     expect(SESSION_COOKIE).toBe(appCookieName("session"));
-    expect(sessionCookieName()).toBe(appCookieName("session"));
-    expect(createSessionCookie(1)).toContain(`${appCookieName("session")}=`);
-    expect(clearSessionCookie()).toContain(`${appCookieName("session")}=`);
+    expect(sessionCookieName(process.env)).toBe(appCookieName("session"));
+    expect(createSessionCookie(1, {}, sessionCookieOptionsFromEnvironment(process.env))).toContain(
+      `${appCookieName("session")}=`,
+    );
+    expect(clearSessionCookie(sessionCookieOptionsFromEnvironment(process.env))).toContain(
+      `${appCookieName("session")}=`,
+    );
   });
 
   test("derives the session cookie name from APP_KEY_PREFIX", () => {
@@ -227,8 +274,10 @@ describe("sessionCookie", () => {
     process.env.APP_KEY_PREFIX = "forum";
 
     try {
-      expect(sessionCookieName()).toBe("forum_session");
-      expect(createSessionCookie(11)).toContain("forum_session=");
+      expect(sessionCookieName(process.env)).toBe("forum_session");
+      expect(
+        createSessionCookie(11, {}, sessionCookieOptionsFromEnvironment(process.env)),
+      ).toContain("forum_session=");
     } finally {
       if (previousPrefix === undefined) {
         delete process.env.APP_KEY_PREFIX;
@@ -241,9 +290,9 @@ describe("sessionCookie", () => {
   test("overrides the HMAC session cookie name from SESSION_COOKIE_NAME", () => {
     process.env.SESSION_COOKIE_NAME = "hiring_session";
 
-    expect(sessionCookieName()).toBe("hiring_session");
+    expect(sessionCookieName(process.env)).toBe("hiring_session");
 
-    const cookie = createSessionCookie(11);
+    const cookie = createSessionCookie(11, {}, sessionCookieOptionsFromEnvironment(process.env));
     expect(cookie).toContain("hiring_session=");
     expect(cookie).not.toContain(`${appCookieName("session")}=`);
 
@@ -252,6 +301,7 @@ describe("sessionCookie", () => {
         new Request("http://example.test/", {
           headers: { cookie: cookie.split(";")[0] ?? "" },
         }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBe(11);
 
@@ -260,20 +310,25 @@ describe("sessionCookie", () => {
         new Request("http://example.test/", {
           headers: { cookie: `${appCookieName("session")}=11.1.deadbeef` },
         }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBeNull();
 
     process.env.SESSION_COOKIE_NAME = "   ";
-    expect(sessionCookieName()).toBe(appCookieName("session"));
+    expect(sessionCookieName(process.env)).toBe(appCookieName("session"));
   });
 
   test("creates a longer remember-me cookie that stays valid past the session TTL", () => {
-    const cookie = createSessionCookie(42, { remember: true });
+    const cookie = createSessionCookie(
+      42,
+      { remember: true },
+      sessionCookieOptionsFromEnvironment(process.env),
+    );
     expect(cookie).toContain(`Max-Age=${SESSION_REMEMBER_TTL_SECONDS}`);
 
     const pair = cookie.split(";")[0] ?? "";
     const request = new Request("http://example.test/", { headers: { cookie: pair } });
-    expect(readSessionUserId(request)).toBe(42);
+    expect(readSessionUserId(request, sessionCookieOptionsFromEnvironment(process.env))).toBe(42);
 
     const encoded = pair.split("=")[1] ?? "";
     const decoded = decodeURIComponent(encoded);
@@ -290,6 +345,7 @@ describe("sessionCookie", () => {
         new Request("http://example.test/", {
           headers: { cookie: `strata_session=${encodeURIComponent(`42.${now}.0.deadbeef`)}` },
         }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBeNull();
 
@@ -298,6 +354,7 @@ describe("sessionCookie", () => {
         new Request("http://example.test/", {
           headers: { cookie: `strata_session=${encodeURIComponent(`42.${now}.abc.deadbeef`)}` },
         }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBeNull();
 
@@ -309,6 +366,7 @@ describe("sessionCookie", () => {
             cookie: `strata_session=${encodeURIComponent(`${42}.${expiredIssuedAt}.${SESSION_REMEMBER_TTL_SECONDS}.deadbeef`)}`,
           },
         }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBeNull();
 
@@ -319,11 +377,14 @@ describe("sessionCookie", () => {
             cookie: `strata_session=${encodeURIComponent(`42.${now}.${SESSION_REMEMBER_TTL_SECONDS}.`)}`,
           },
         }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBeNull();
 
     const validCookie =
-      createSessionCookie(42, { remember: true }).split(";")[0]?.split("=")[1] ?? "";
+      createSessionCookie(42, { remember: true }, sessionCookieOptionsFromEnvironment(process.env))
+        .split(";")[0]
+        ?.split("=")[1] ?? "";
     const decoded = decodeURIComponent(validCookie);
     const [userIdRaw, issuedAtRaw, ttlRaw, signature] = decoded.split(".");
     const shortSignature = "ab";
@@ -335,6 +396,7 @@ describe("sessionCookie", () => {
             cookie: `strata_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.${ttlRaw}.${shortSignature}`)}`,
           },
         }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBeNull();
 
@@ -346,6 +408,7 @@ describe("sessionCookie", () => {
             cookie: `strata_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.${ttlRaw}.${badSignature}`)}`,
           },
         }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBeNull();
 
@@ -356,6 +419,7 @@ describe("sessionCookie", () => {
             cookie: `strata_session=${encodeURIComponent(`0.${now}.${SESSION_REMEMBER_TTL_SECONDS}.deadbeef`)}`,
           },
         }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBeNull();
   });
@@ -364,15 +428,19 @@ describe("sessionCookie", () => {
     process.env.SESSION_TTL_SECONDS = "120";
     process.env.SESSION_REMEMBER_TTL_SECONDS = "3600";
 
-    expect(sessionTtlSeconds()).toBe(120);
-    expect(sessionRememberTtlSeconds()).toBe(3600);
-    expect(createSessionCookie(3)).toContain("Max-Age=120");
-    expect(createSessionCookie(3, { remember: true })).toContain("Max-Age=3600");
+    expect(sessionTtlSeconds(process.env)).toBe(120);
+    expect(sessionRememberTtlSeconds(process.env)).toBe(3600);
+    expect(createSessionCookie(3, {}, sessionCookieOptionsFromEnvironment(process.env))).toContain(
+      "Max-Age=120",
+    );
+    expect(
+      createSessionCookie(3, { remember: true }, sessionCookieOptionsFromEnvironment(process.env)),
+    ).toContain("Max-Age=3600");
 
     process.env.SESSION_TTL_SECONDS = "0";
     process.env.SESSION_REMEMBER_TTL_SECONDS = "nope";
-    expect(sessionTtlSeconds()).toBe(SESSION_TTL_SECONDS);
-    expect(sessionRememberTtlSeconds()).toBe(SESSION_REMEMBER_TTL_SECONDS);
+    expect(sessionTtlSeconds(process.env)).toBe(SESSION_TTL_SECONDS);
+    expect(sessionRememberTtlSeconds(process.env)).toBe(SESSION_REMEMBER_TTL_SECONDS);
   });
 
   test("isSessionInvalidated compares issuedAt against session_valid_after", () => {

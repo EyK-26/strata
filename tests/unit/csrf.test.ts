@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { runWithAuthContext } from "@getstrata/core/auth/authContext";
 import { ForbiddenError } from "@getstrata/core/errors/http";
-import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
+import {
+  createCsrfMiddleware,
+  csrfMiddlewareOptionsFromEnvironment,
+} from "@getstrata/core/http/csrfMiddleware";
 import {
   createCsrfTokenCookie,
   csrfCookieName,
+  csrfTokenOptionsFromEnvironment,
   resolveCsrfToken,
   resolveCsrfTokenForRequest,
   verifyCsrfToken,
@@ -15,7 +19,7 @@ import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("csrfToken", () => {
   test("creates and verifies a csrf token", () => {
-    const { token, cookie } = createCsrfTokenCookie();
+    const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
     const request = new Request("http://example.test/login", {
       headers: { cookie: cookie.split(";")[0] ?? "" },
     });
@@ -23,17 +27,23 @@ describe("csrfToken", () => {
     expect(cookie).toContain("HttpOnly");
     expect(cookie).toContain("SameSite=Lax");
     expect(cookie).not.toContain("SameSite=None");
-    expect(verifyCsrfToken(request, token)).toBe(true);
-    expect(verifyCsrfToken(request, "wrong-token")).toBe(false);
+    expect(verifyCsrfToken(request, token, csrfTokenOptionsFromEnvironment(process.env))).toBe(
+      true,
+    );
+    expect(
+      verifyCsrfToken(request, "wrong-token", csrfTokenOptionsFromEnvironment(process.env)),
+    ).toBe(false);
   });
 
   test("resolveCsrfToken reuses a valid cookie token", () => {
-    const created = createCsrfTokenCookie();
+    const created = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
     const request = new Request("http://example.test/", {
       headers: { cookie: created.cookie.split(";")[0] ?? "" },
     });
 
-    expect(resolveCsrfToken(request).token).toBe(created.token);
+    expect(resolveCsrfToken(request, csrfTokenOptionsFromEnvironment(process.env)).token).toBe(
+      created.token,
+    );
   });
 
   test("marks the CSRF cookie Secure in production", () => {
@@ -43,7 +53,9 @@ describe("csrfToken", () => {
     process.env.SESSION_SECRET = "production-csrf-secret-at-least-32-chars";
 
     try {
-      expect(createCsrfTokenCookie().cookie).toContain("; Secure");
+      expect(createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env)).cookie).toContain(
+        "; Secure",
+      );
     } finally {
       restoreEnvVar("APP_ENV", previousEnv);
       restoreEnvVar("SESSION_SECRET", previousSecret);
@@ -55,8 +67,12 @@ describe("csrfToken", () => {
     delete process.env.CSRF_COOKIE_NAME;
 
     try {
-      expect(csrfCookieName()).toBe(appCookieName("csrf"));
-      expect(createCsrfTokenCookie().cookie).toContain(`${appCookieName("csrf")}=`);
+      expect(csrfCookieName(csrfTokenOptionsFromEnvironment(process.env))).toBe(
+        appCookieName("csrf"),
+      );
+      expect(createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env)).cookie).toContain(
+        `${appCookieName("csrf")}=`,
+      );
     } finally {
       restoreEnvVar("CSRF_COOKIE_NAME", previous);
     }
@@ -67,15 +83,17 @@ describe("csrfToken", () => {
     process.env.CSRF_COOKIE_NAME = "hiring_csrf";
 
     try {
-      expect(csrfCookieName()).toBe("hiring_csrf");
-      const created = createCsrfTokenCookie();
+      expect(csrfCookieName(csrfTokenOptionsFromEnvironment(process.env))).toBe("hiring_csrf");
+      const created = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
       expect(created.cookie).toContain("hiring_csrf=");
       expect(created.cookie).not.toContain(`${appCookieName("csrf")}=`);
 
       const request = new Request("http://example.test/", {
         headers: { cookie: created.cookie.split(";")[0] ?? "" },
       });
-      expect(verifyCsrfToken(request, created.token)).toBe(true);
+      expect(
+        verifyCsrfToken(request, created.token, csrfTokenOptionsFromEnvironment(process.env)),
+      ).toBe(true);
     } finally {
       restoreEnvVar("CSRF_COOKIE_NAME", previous);
     }
@@ -84,7 +102,7 @@ describe("csrfToken", () => {
 
 describe("createCsrfMiddleware", () => {
   test("allows safe methods and sets csrf cookie when needed", async () => {
-    const middleware = createCsrfMiddleware();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
     const response = await middleware(
       new Request("http://example.test/login"),
       async () => new Response("ok"),
@@ -95,8 +113,8 @@ describe("createCsrfMiddleware", () => {
   });
 
   test("rejects mutating requests without a csrf token", async () => {
-    const middleware = createCsrfMiddleware();
-    const { cookie } = createCsrfTokenCookie();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+    const { cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
 
     await expect(
       middleware(
@@ -110,8 +128,8 @@ describe("createCsrfMiddleware", () => {
   });
 
   test("accepts mutating requests with matching form token", async () => {
-    const middleware = createCsrfMiddleware();
-    const { token, cookie } = createCsrfTokenCookie();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+    const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
     const body = new URLSearchParams({ _token: token, name: "Acme" });
 
     const response = await middleware(
@@ -131,7 +149,7 @@ describe("createCsrfMiddleware", () => {
   });
 
   test("successful bearer or basic skips CSRF", async () => {
-    const middleware = createCsrfMiddleware();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
     const bearer = await runWithAuthContext({ id: 9 }, "bearer", () =>
       middleware(
         new Request("http://example.test/api/applications", {
@@ -159,7 +177,7 @@ describe("createCsrfMiddleware", () => {
   });
 
   test("failed Bearer header does not skip CSRF when credentialSource is null", async () => {
-    const middleware = createCsrfMiddleware();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
 
     await expect(
       runWithAuthContext(null, null, () =>
@@ -187,7 +205,7 @@ describe("createCsrfMiddleware", () => {
   });
 
   test("skips CSRF on the SAML ACS callback path", async () => {
-    const middleware = createCsrfMiddleware();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
     const response = await middleware(
       new Request("http://example.test/auth/saml/acs", { method: "POST" }),
       async () => new Response("ok"),
@@ -196,7 +214,7 @@ describe("createCsrfMiddleware", () => {
   });
 
   test("skips CSRF on inbound Stripe billing webhook paths", async () => {
-    const middleware = createCsrfMiddleware();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
     const response = await middleware(
       new Request("http://example.test/billing/webhooks/stripe", { method: "POST" }),
       async () => new Response("ok"),
@@ -205,7 +223,7 @@ describe("createCsrfMiddleware", () => {
   });
 
   test("skips CSRF on SCIM mutating paths that use their own bearer", async () => {
-    const middleware = createCsrfMiddleware();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
     const response = await middleware(
       new Request("http://example.test/scim/v2/Users", { method: "POST" }),
       async () => new Response("ok"),
@@ -217,7 +235,7 @@ describe("createCsrfMiddleware", () => {
     const previous = process.env.SAML_ACS_URL;
     process.env.SAML_ACS_URL = "https://app.example.test/sso/acs";
     try {
-      const middleware = createCsrfMiddleware();
+      const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
       const response = await middleware(
         new Request("http://example.test/sso/acs", { method: "POST" }),
         async () => new Response("ok"),
@@ -236,7 +254,7 @@ describe("createCsrfMiddleware", () => {
     const previous = process.env.SAML_ACS_URL;
     process.env.SAML_ACS_URL = "http://%";
     try {
-      const middleware = createCsrfMiddleware();
+      const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
       const response = await middleware(
         new Request("http://example.test/auth/saml/acs", { method: "POST" }),
         async () => new Response("ok"),
@@ -252,7 +270,7 @@ describe("createCsrfMiddleware", () => {
   });
 
   test("rejects guest mutating requests without a csrf token", async () => {
-    const middleware = createCsrfMiddleware();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
     await expect(
       middleware(
         new Request("http://example.test/api/v1/auth/login", { method: "POST" }),
@@ -262,8 +280,8 @@ describe("createCsrfMiddleware", () => {
   });
 
   test("accepts guest JSON mutating requests with a matching CSRF header", async () => {
-    const middleware = createCsrfMiddleware();
-    const { token, cookie } = createCsrfTokenCookie();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+    const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
     const response = await middleware(
       new Request("http://example.test/api/v1/auth/login", {
         method: "POST",
@@ -281,8 +299,8 @@ describe("createCsrfMiddleware", () => {
   });
 
   test("rejects a foreign Origin on cookie mutating requests after CSRF verifies", async () => {
-    const middleware = createCsrfMiddleware();
-    const { token, cookie } = createCsrfTokenCookie();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+    const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
     await expect(
       middleware(
         new Request("http://example.test/api/v1/auth/login", {
@@ -301,8 +319,8 @@ describe("createCsrfMiddleware", () => {
   });
 
   test("rejects an unparsable Origin on cookie mutating requests", async () => {
-    const middleware = createCsrfMiddleware();
-    const { token, cookie } = createCsrfTokenCookie();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+    const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
     await expect(
       middleware(
         new Request("http://example.test/api/v1/auth/login", {
@@ -321,8 +339,8 @@ describe("createCsrfMiddleware", () => {
   });
 
   test("allows a same-origin Origin after CSRF verifies", async () => {
-    const middleware = createCsrfMiddleware();
-    const { token, cookie } = createCsrfTokenCookie();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+    const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
     const response = await middleware(
       new Request("http://example.test/api/v1/auth/login", {
         method: "POST",
@@ -340,8 +358,8 @@ describe("createCsrfMiddleware", () => {
   });
 
   test("rejects a missing Origin on cookie mutating requests after CSRF verifies", async () => {
-    const middleware = createCsrfMiddleware();
-    const { token, cookie } = createCsrfTokenCookie();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+    const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
     await expect(
       middleware(
         new Request("http://example.test/api/v1/auth/login", {
@@ -359,7 +377,7 @@ describe("createCsrfMiddleware", () => {
   });
 
   test("does not require Origin on GET", async () => {
-    const middleware = createCsrfMiddleware();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
     const response = await middleware(
       new Request("http://example.test/login"),
       async () => new Response("ok"),
@@ -368,7 +386,7 @@ describe("createCsrfMiddleware", () => {
   });
 
   test("requires a token after cookie login", async () => {
-    const middleware = createCsrfMiddleware();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
     await expect(
       runWithAuthContext({ id: 3 }, "session", () =>
         middleware(
@@ -380,12 +398,17 @@ describe("createCsrfMiddleware", () => {
   });
 
   test("nested GET CSRF reuses the first issued token instead of minting a second cookie", async () => {
-    const middleware = createCsrfMiddleware();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
     const request = new Request("http://example.test/api/v1/auth/csrf");
     const response = await runWithRequestMeta({ ipAddress: null, userAgent: null }, async () =>
       middleware(request, async () =>
         middleware(request, async () =>
-          Response.json({ token: resolveCsrfTokenForRequest(request) }),
+          Response.json({
+            token: resolveCsrfTokenForRequest(
+              request,
+              csrfTokenOptionsFromEnvironment(process.env),
+            ),
+          }),
         ),
       ),
     );
@@ -399,12 +422,13 @@ describe("createCsrfMiddleware", () => {
       verifyCsrfToken(
         new Request("http://example.test/", { headers: { cookie: cookiePair } }),
         body.token,
+        csrfTokenOptionsFromEnvironment(process.env),
       ),
     ).toBe(true);
   });
 
   test("does not skip CSRF for an unused Authorization header", async () => {
-    const middleware = createCsrfMiddleware();
+    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
 
     await expect(
       runWithAuthContext(null, null, () =>

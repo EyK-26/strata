@@ -53,6 +53,8 @@ export interface HttpPersistenceOptions {
     publicReadsEnabled: boolean;
     etagEnabled?: boolean;
   }>;
+  readonly intendedUrl?: import("@getstrata/core/auth/intendedUrlCookie").IntendedUrlCookieOptions;
+  readonly flash?: import("@getstrata/core/http/flashSession").FlashSessionOptions;
   readonly csrf?: import("@getstrata/core/http/csrfMiddleware").CsrfOptions;
   readonly scim?: (
     request: Request,

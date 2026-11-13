@@ -31,25 +31,25 @@ describe("scimTenantTokens", () => {
 
   test("resolves tenant from SCIM_TENANT_TOKENS", () => {
     process.env.SCIM_TENANT_TOKENS = "2:tenant-two-token,3:tenant-three-token";
-    expect(resolveScimTenantFromToken("tenant-two-token")).toBe(2);
-    expect(resolveScimTenantFromToken("tenant-three-token")).toBe(3);
+    expect(resolveScimTenantFromToken("tenant-two-token", process.env)).toBe(2);
+    expect(resolveScimTenantFromToken("tenant-three-token", process.env)).toBe(3);
   });
 
   test("falls back to default tenant for global SCIM token", () => {
     delete process.env.SCIM_TENANT_TOKENS;
     process.env.SCIM_BEARER_TOKEN = TEST_SCIM_BEARER_TOKEN;
-    expect(resolveScimTenantFromToken(TEST_SCIM_BEARER_TOKEN)).toBe(1);
+    expect(resolveScimTenantFromToken(TEST_SCIM_BEARER_TOKEN, process.env)).toBe(1);
   });
 
   test("rejects empty presented tokens and empty fallback secrets", () => {
     delete process.env.SCIM_TENANT_TOKENS;
     delete process.env.SCIM_BEARER_TOKEN;
-    expect(resolveScimTenantFromToken("")).toBeNull();
-    expect(resolveScimTenantFromToken("   ")).toBeNull();
+    expect(resolveScimTenantFromToken("", process.env)).toBeNull();
+    expect(resolveScimTenantFromToken("   ", process.env)).toBeNull();
     process.env.SCIM_BEARER_TOKEN = "";
-    expect(resolveScimTenantFromToken("non-empty-presented")).toBeNull();
+    expect(resolveScimTenantFromToken("non-empty-presented", process.env)).toBeNull();
     process.env.SCIM_BEARER_TOKEN = "   ";
-    expect(resolveScimTenantFromToken("non-empty-presented")).toBeNull();
+    expect(resolveScimTenantFromToken("non-empty-presented", process.env)).toBeNull();
   });
 
   test("ignores malformed tenant token entries and unknown tokens", () => {
@@ -59,8 +59,8 @@ describe("scimTenantTokens", () => {
     expect(parseScimTenantTokens("")).toEqual(new Map());
     expect(parseScimTenantTokens("   ")).toEqual(new Map());
     expect(parseScimTenantTokens("0:zero,abc:token,-2:neg")).toEqual(new Map());
-    expect(resolveScimTenantFromToken("unknown-token")).toBeNull();
+    expect(resolveScimTenantFromToken("unknown-token", process.env)).toBeNull();
     process.env.SCIM_BEARER_TOKEN = "global-scim-token";
-    expect(resolveScimTenantFromToken("unknown-token")).toBeNull();
+    expect(resolveScimTenantFromToken("unknown-token", process.env)).toBeNull();
   });
 });

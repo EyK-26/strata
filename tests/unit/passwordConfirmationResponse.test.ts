@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import { passwordConfirmOptionsFromEnvironment } from "@getstrata/core/auth/passwordConfirmCookie";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { createRequirePasswordConfirmMiddleware } from "@getstrata/core/http/requirePasswordConfirmMiddleware";
 
@@ -9,7 +10,9 @@ for (const authenticated of [false, true]) {
       { ipAddress: null, userAgent: null, errorFormat: "json" },
       () =>
         runWithAuthUser(authenticated ? { id: 1, role: "member", authVersion: 0 } : null, () =>
-          createRequirePasswordConfirmMiddleware()(
+          createRequirePasswordConfirmMiddleware(
+            passwordConfirmOptionsFromEnvironment(process.env),
+          )(
             new Request("http://example.test/api/v1/auth/mfa", {
               method: "POST",
               headers: { "HX-Request": "true", accept: "text/html" },

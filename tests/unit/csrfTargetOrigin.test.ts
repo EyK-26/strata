@@ -5,8 +5,14 @@ import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { runWithAuthContext } from "@getstrata/core/auth/authContext";
 import { AuthManager } from "@getstrata/core/auth/guard";
 import { ForbiddenError } from "@getstrata/core/errors/http";
-import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
-import { createCsrfTokenCookie } from "@getstrata/core/http/csrfToken";
+import {
+  createCsrfMiddleware,
+  csrfMiddlewareOptionsFromEnvironment,
+} from "@getstrata/core/http/csrfMiddleware";
+import {
+  createCsrfTokenCookie,
+  csrfTokenOptionsFromEnvironment,
+} from "@getstrata/core/http/csrfToken";
 import { createConfigProvider } from "../../src/bootstrap/providers/config";
 import { authFixtureOutcome } from "../helpers/authOutcome";
 import { createMockDependencies } from "./testHelpers";
@@ -42,7 +48,7 @@ function submission(
   host = "forms.example.test",
   url = "http://forms.example.test/submit",
 ) {
-  const csrf = createCsrfTokenCookie();
+  const csrf = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
   const request = new Request(url, {
     method: "POST",
     headers: {
@@ -60,7 +66,10 @@ function submission(
 
 test("explicit target origin admits an HTTPS form on an HTTP upstream without transforming Request", async () => {
   const request = submission();
-  const middleware = createCsrfMiddleware({ targetOrigin });
+  const middleware = createCsrfMiddleware({
+    ...csrfMiddlewareOptionsFromEnvironment(process.env),
+    targetOrigin,
+  });
   const response = await middleware(request, async () => {
     expect(request.url).toBe("http://forms.example.test/submit");
     expect(request.headers.get("origin")).toBe(targetOrigin);
@@ -93,7 +102,12 @@ for (const value of [
   "https://forms%2eexample.test",
 ])
   test(`configured target origin fails before request admission: ${JSON.stringify(value)}`, () => {
-    expect(() => createCsrfMiddleware({ targetOrigin: value })).toThrow(TypeError);
+    expect(() =>
+      createCsrfMiddleware({
+        ...csrfMiddlewareOptionsFromEnvironment(process.env),
+        targetOrigin: value,
+      }),
+    ).toThrow(TypeError);
   });
 
 for (const host of [
@@ -113,10 +127,13 @@ for (const host of [
     let called = false;
     const request = new Request("http://forms.example.test/form", { headers: { Host: host } });
     await expect(
-      createCsrfMiddleware({ targetOrigin })(request, async () => {
-        called = true;
-        return new Response("must not issue a cookie");
-      }),
+      createCsrfMiddleware({ ...csrfMiddlewareOptionsFromEnvironment(process.env), targetOrigin })(
+        request,
+        async () => {
+          called = true;
+          return new Response("must not issue a cookie");
+        },
+      ),
     ).rejects.toBeInstanceOf(ForbiddenError);
     expect(called).toBe(false);
   });
@@ -127,7 +144,10 @@ test("missing Host and conflicts between Host and URL are rejected", async () =>
     submission(targetOrigin, "forms.example.test", "http://evil.example.test/submit"),
   ])
     await expect(
-      createCsrfMiddleware({ targetOrigin })(request, async () => new Response("bad")),
+      createCsrfMiddleware({ ...csrfMiddlewareOptionsFromEnvironment(process.env), targetOrigin })(
+        request,
+        async () => new Response("bad"),
+      ),
     ).rejects.toBeInstanceOf(ForbiddenError);
 });
 
@@ -146,7 +166,10 @@ for (const origin of [
 ])
   test(`configured policy refuses browser Origin ${JSON.stringify(origin)}`, async () => {
     await expect(
-      createCsrfMiddleware({ targetOrigin })(submission(origin), async () => new Response("bad")),
+      createCsrfMiddleware({ ...csrfMiddlewareOptionsFromEnvironment(process.env), targetOrigin })(
+        submission(origin),
+        async () => new Response("bad"),
+      ),
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
@@ -155,18 +178,30 @@ test("all existing token requirements remain active with a configured target", a
     const request = submission();
     request.headers.delete(missing);
     await expect(
-      createCsrfMiddleware({ targetOrigin })(request, async () => new Response("bad")),
+      createCsrfMiddleware({ ...csrfMiddlewareOptionsFromEnvironment(process.env), targetOrigin })(
+        request,
+        async () => new Response("bad"),
+      ),
     ).rejects.toBeInstanceOf(ForbiddenError);
   }
   const wrong = submission();
   wrong.headers.set("x-csrf-token", "invalid");
   await expect(
-    createCsrfMiddleware({ targetOrigin })(wrong, async () => new Response("bad")),
+    createCsrfMiddleware({ ...csrfMiddlewareOptionsFromEnvironment(process.env), targetOrigin })(
+      wrong,
+      async () => new Response("bad"),
+    ),
   ).rejects.toBeInstanceOf(ForbiddenError);
   const mismatch = submission();
-  mismatch.headers.set("cookie", createCsrfTokenCookie().cookie.split(";")[0] ?? "");
+  mismatch.headers.set(
+    "cookie",
+    createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env)).cookie.split(";")[0] ?? "",
+  );
   await expect(
-    createCsrfMiddleware({ targetOrigin })(mismatch, async () => new Response("bad")),
+    createCsrfMiddleware({ ...csrfMiddlewareOptionsFromEnvironment(process.env), targetOrigin })(
+      mismatch,
+      async () => new Response("bad"),
+    ),
   ).rejects.toBeInstanceOf(ForbiddenError);
 });
 
@@ -174,14 +209,14 @@ test("host admission is not bypassed by verified non-cookie credentials or a CSR
   for (const source of ["bearer", "basic"] as const)
     await expect(
       runWithAuthContext({ id: 1 }, source, () =>
-        createCsrfMiddleware({ targetOrigin })(
-          submission(targetOrigin, "evil.example.test"),
-          async () => new Response("bad"),
-        ),
+        createCsrfMiddleware({
+          ...csrfMiddlewareOptionsFromEnvironment(process.env),
+          targetOrigin,
+        })(submission(targetOrigin, "evil.example.test"), async () => new Response("bad")),
       ),
     ).rejects.toBeInstanceOf(ForbiddenError);
   await expect(
-    createCsrfMiddleware({ targetOrigin })(
+    createCsrfMiddleware({ ...csrfMiddlewareOptionsFromEnvironment(process.env), targetOrigin })(
       new Request("http://evil.example.test/billing/webhooks/test"),
       async () => new Response("bad"),
     ),
@@ -189,7 +224,10 @@ test("host admission is not bypassed by verified non-cookie credentials or a CSR
 });
 
 test("equivalent target authority casing and default ports are normalized without widening host admission", async () => {
-  const response = await createCsrfMiddleware({ targetOrigin: "https://FORMS.example.test:443/" })(
+  const response = await createCsrfMiddleware({
+    ...csrfMiddlewareOptionsFromEnvironment(process.env),
+    targetOrigin: "https://FORMS.example.test:443/",
+  })(
     submission(targetOrigin, "FORMS.example.test:443", "http://forms.example.test:443/submit"),
     async () => new Response("validation", { status: 422 }),
   );
@@ -197,7 +235,7 @@ test("equivalent target authority casing and default ports are normalized withou
 });
 
 test("the validated target is captured instead of following later caller mutation", async () => {
-  const options = { targetOrigin };
+  const options = { ...csrfMiddlewareOptionsFromEnvironment(process.env), targetOrigin };
   const middleware = createCsrfMiddleware(options);
   options.targetOrigin = "https://evil.example.test";
   expect((await middleware(submission(), async () => new Response("ok"))).status).toBe(200);
@@ -268,7 +306,12 @@ for (const host of [
   `${"x".repeat(63)}.${"x".repeat(63)}.${"x".repeat(63)}.${"x".repeat(63)}`,
 ])
   test(`invalid DNS target authority is rejected: ${host}`, () => {
-    expect(() => createCsrfMiddleware({ targetOrigin: `https://${host}` })).toThrow(TypeError);
+    expect(() =>
+      createCsrfMiddleware({
+        ...csrfMiddlewareOptionsFromEnvironment(process.env),
+        targetOrigin: `https://${host}`,
+      }),
+    ).toThrow(TypeError);
   });
 
 for (const origin of ["http://localhost:8312", "https://[::1]:8312", "https://forms.example.test."])
@@ -276,10 +319,10 @@ for (const origin of ["http://localhost:8312", "https://[::1]:8312", "https://fo
     const request = submission(origin, new URL(origin).host, `${origin}/submit`);
     expect(
       (
-        await createCsrfMiddleware({ targetOrigin: origin })(
-          request,
-          async () => new Response("ok"),
-        )
+        await createCsrfMiddleware({
+          ...csrfMiddlewareOptionsFromEnvironment(process.env),
+          targetOrigin: origin,
+        })(request, async () => new Response("ok"))
       ).status,
     ).toBe(200);
   });
@@ -288,7 +331,10 @@ test("custom transports with invalid request URL metadata fail closed", async ()
   const request = submission();
   Object.defineProperty(request, "url", { value: "invalid" });
   await expect(
-    createCsrfMiddleware({ targetOrigin })(request, async () => new Response("bad")),
+    createCsrfMiddleware({ ...csrfMiddlewareOptionsFromEnvironment(process.env), targetOrigin })(
+      request,
+      async () => new Response("bad"),
+    ),
   ).rejects.toBeInstanceOf(ForbiddenError);
   const otherProtocol = submission(
     targetOrigin,
@@ -296,6 +342,9 @@ test("custom transports with invalid request URL metadata fail closed", async ()
     "ftp://forms.example.test/form",
   );
   await expect(
-    createCsrfMiddleware({ targetOrigin })(otherProtocol, async () => new Response("bad")),
+    createCsrfMiddleware({ ...csrfMiddlewareOptionsFromEnvironment(process.env), targetOrigin })(
+      otherProtocol,
+      async () => new Response("bad"),
+    ),
   ).rejects.toBeInstanceOf(ForbiddenError);
 });

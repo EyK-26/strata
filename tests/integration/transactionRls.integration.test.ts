@@ -15,8 +15,14 @@ import type { DatabaseDefinition } from "@getstrata/core/database/driverPorts";
 import { Model } from "@getstrata/core/database/model";
 import type { DatabaseSession, TransactionSession } from "@getstrata/core/database/session";
 import { defineTable } from "@getstrata/core/database/table";
-import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
-import { createCsrfTokenCookie } from "@getstrata/core/http/csrfToken";
+import {
+  createCsrfMiddleware,
+  csrfMiddlewareOptionsFromEnvironment,
+} from "@getstrata/core/http/csrfMiddleware";
+import {
+  createCsrfTokenCookie,
+  csrfTokenOptionsFromEnvironment,
+} from "@getstrata/core/http/csrfToken";
 import { currentRequestMeta, runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import {
   currentTenantId,
@@ -220,7 +226,7 @@ describe.skipIf(!rlsUrl)("real Postgres transaction/RLS composition", () => {
             },
           ),
         );
-        const csrf = createCsrfMiddleware();
+        const csrf = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
         const business = async (
           request: Request,
           ports: import("@getstrata/bootstrap/persistenceContracts").BusinessRequestPorts,
@@ -280,7 +286,7 @@ describe.skipIf(!rlsUrl)("real Postgres transaction/RLS composition", () => {
             }),
           );
           expect(responses).toEqual([200, 200, 200, 200, 200, 200]);
-          const csrf = createCsrfTokenCookie();
+          const csrf = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
           await Promise.all(
             Array.from({ length: 6 }, async (_, index) => {
               const id = index + 1;

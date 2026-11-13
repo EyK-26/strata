@@ -14,8 +14,14 @@ import { AuthManager } from "@getstrata/core/auth/guard";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
-import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
-import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
+import {
+  createCsrfMiddleware,
+  csrfMiddlewareOptionsFromEnvironment,
+} from "@getstrata/core/http/csrfMiddleware";
+import {
+  csrfTokenOptionsFromEnvironment,
+  resolveCsrfTokenForRequest,
+} from "@getstrata/core/http/csrfToken";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { createStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
 import { createTenantMiddleware } from "@getstrata/core/tenant/tenantMiddleware";
@@ -121,7 +127,7 @@ async function fixture(
   } = {},
 ) {
   const observations: Observation[] = [];
-  let csrf = createCsrfMiddleware();
+  let csrf = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
   let kernel: ReturnType<typeof createHttpKernel> | undefined;
   let publicOrigin = "";
   const selectTenant = options.trustedTenantProxy
@@ -166,7 +172,7 @@ async function fixture(
         csrf(request, async () => {
           if (request.method === "GET")
             return new Response(
-              `<form method="post"><input name="_token" value="${resolveCsrfTokenForRequest(request)}"><input name="email" value="invalid"><button>Submit</button></form>`,
+              `<form method="post"><input name="_token" value="${resolveCsrfTokenForRequest(request, csrfTokenOptionsFromEnvironment(process.env))}"><input name="email" value="invalid"><button>Submit</button></form>`,
               {
                 headers: {
                   "Content-Type": "text/html; charset=utf-8",
@@ -253,7 +259,11 @@ async function fixture(
     );
     const ownedKernel = kernel;
     csrf = async (request, next) => await ownedKernel.wrapWeb(async () => next())(request);
-  } else if (options.targetOrigin) csrf = createCsrfMiddleware({ targetOrigin: publicOrigin });
+  } else if (options.targetOrigin)
+    csrf = createCsrfMiddleware({
+      ...csrfMiddlewareOptionsFromEnvironment(process.env),
+      targetOrigin: publicOrigin,
+    });
   Object.assign(process.env, { APP_URL: publicOrigin, CORS_ALLOWED_ORIGINS: publicOrigin });
   return {
     backend,

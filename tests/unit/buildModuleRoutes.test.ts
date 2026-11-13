@@ -14,7 +14,10 @@ import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { CORE_ABILITY_CHECKER_TOKEN } from "@getstrata/core/contracts/serviceTokens";
-import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
+import {
+  csrfTokenOptionsFromEnvironment,
+  resolveCsrfTokenForRequest,
+} from "@getstrata/core/http/csrfToken";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { SyncQueue } from "@getstrata/core/queue";
 import { guestGuardOptions } from "../helpers/devAuthHeaders";
@@ -54,7 +57,12 @@ const loginModule: AppModule = {
     return {
       "/api/v1/auth/csrf": {
         GET: kernel.wrap("api", async (request) =>
-          Response.json({ token: resolveCsrfTokenForRequest(request) }),
+          Response.json({
+            token: resolveCsrfTokenForRequest(
+              request,
+              csrfTokenOptionsFromEnvironment(process.env),
+            ),
+          }),
         ),
       },
       "/api/v1/auth/login": {

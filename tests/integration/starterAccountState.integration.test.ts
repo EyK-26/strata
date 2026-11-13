@@ -3,7 +3,7 @@ import { createHash, createSign, generateKeyPairSync } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { signJwt } from "@getstrata/core/auth/jwt";
+import { jwtOptionsFromEnvironment, signJwt } from "@getstrata/core/auth/jwt";
 import { oidcAccessTokenHash } from "@getstrata/core/auth/oauth/oidcIdToken";
 import { hashPassword } from "@getstrata/core/auth/password";
 import type {
@@ -561,7 +561,12 @@ for (const driver of ["sqlite", "postgres"] as const) {
           expect(mfaSetup.headers.get("location")).toContain("/confirm-password");
           await mfaSetup.text();
           // Missing authVersion never upgrades an old stateless proof after adoption.
-          expect(await authStatus(undefined, signJwt({ sub: id, role: "member" }))).toBe(401);
+          expect(
+            await authStatus(
+              undefined,
+              signJwt({ sub: id, role: "member" }, jwtOptionsFromEnvironment(process.env)),
+            ),
+          ).toBe(401);
           // Hold the same official account lock used by issuance and SCIM. The epoch
           // changes before the queued login is admitted, so it must use fresh state.
           let entered = () => {};

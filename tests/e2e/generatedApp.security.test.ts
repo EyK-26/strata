@@ -5,6 +5,7 @@ import type { Application } from "@getstrata/core/contracts/application";
 import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
 import { createMfaSecretCodec, protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import { absoluteTemporarySignedUrl } from "@getstrata/core/http/signedUrl";
+import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
 import { generateTotp, generateTotpSecret } from "@getstrata/core/security/totp";
 import { createGeneratedSecurityApp } from "../helpers/generatedSecurityApp";
 import { jsonCsrfHeaders } from "../helpers/jsonCsrf";
@@ -786,10 +787,20 @@ describe("Generated application security", () => {
       "INSERT INTO auth_one_time_tokens (purpose, user_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)",
       ["password_reset", 1, issued.hash, new Date(Date.now() + 3600_000).toISOString()],
     );
-    const resetUrl = absoluteTemporarySignedUrl("/reset-password", 3600, {
-      email: "demo@example.com",
-      token: issued.plain,
-    });
+    const resetUrl = absoluteTemporarySignedUrl(
+      "/reset-password",
+      3600,
+      {
+        email: "demo@example.com",
+        token: issued.plain,
+      },
+      process.env.APP_URL ?? "http://localhost:3000",
+      requireConfiguredSecret(
+        ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+        "signed-url-secret",
+        process.env,
+      ),
+    );
     const resetParsed = new URL(resetUrl, origin);
     const resetPath = `${resetParsed.pathname}${resetParsed.search}`;
     const resetPage = await fetch(`${origin}${resetPath}`);

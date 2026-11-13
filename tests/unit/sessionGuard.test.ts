@@ -4,6 +4,7 @@ import {
   createSessionCookie,
   createSessionReader,
   sessionCookieName,
+  sessionCookieOptionsFromEnvironment,
   sessionTtlSeconds,
 } from "@getstrata/core/auth/sessionCookie";
 import { SessionGuard } from "@getstrata/core/auth/sessionGuard";
@@ -15,7 +16,10 @@ import {
 import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
 
 function requestWithSession(userId = 1): Request {
-  const cookie = createSessionCookie(userId).split(";")[0] ?? "";
+  const cookie =
+    createSessionCookie(userId, {}, sessionCookieOptionsFromEnvironment(process.env)).split(
+      ";",
+    )[0] ?? "";
 
   return new Request("http://example.test/account", {
     headers: { cookie },
@@ -34,8 +38,8 @@ function directoryWith(directory: Partial<AuthUserDirectory> | null): AuthUserDi
 function sessionPorts(validity: AuthSessionValidity | null = null) {
   return {
     read: createSessionReader({
-      cookieName: sessionCookieName(),
-      ttlSeconds: sessionTtlSeconds(),
+      cookieName: sessionCookieName(process.env),
+      ttlSeconds: sessionTtlSeconds(process.env),
       secret: requireConfiguredSecret(["SESSION_SECRET"], "session-secret"),
     }),
     abilities: resolveAbilitiesForRole,

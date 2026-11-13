@@ -10,7 +10,10 @@ import {
   createPendingMfaCookie,
   readPendingMfaCookie,
 } from "@getstrata/core/auth/pendingMfaCookie";
-import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
+import {
+  createCsrfMiddleware,
+  csrfMiddlewareOptionsFromEnvironment,
+} from "@getstrata/core/http/csrfMiddleware";
 import {
   createCsrfTokenCookie,
   csrfTokenOptionsFromEnvironment,
@@ -118,11 +121,16 @@ test("BP7 explicit per-app crypto options remain isolated after ambient secret a
       false,
     );
     const middlewareOne = createCsrfMiddleware({
+      ...csrfMiddlewareOptionsFromEnvironment(process.env),
       token: csrfOne,
       allowDevelopmentHeaders: true,
       samlAcsUrl: "https://one.test/explicit-acs",
     });
-    const middlewareTwo = createCsrfMiddleware({ token: csrfTwo, allowDevelopmentHeaders: false });
+    const middlewareTwo = createCsrfMiddleware({
+      ...csrfMiddlewareOptionsFromEnvironment(process.env),
+      token: csrfTwo,
+      allowDevelopmentHeaders: false,
+    });
     process.env.SESSION_SECRET = "unrelated-after-csrf-capture";
     process.env.NODE_ENV = "development";
     process.env.BUN_ENV = "development";

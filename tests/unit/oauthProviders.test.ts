@@ -46,6 +46,8 @@ afterEach(() => {
 
 describe("GitHubOAuthProvider", () => {
   const options = {
+    production: true,
+    userAgent: "strata",
     clientId: "github-client",
     clientSecret: "github-secret",
     redirectUri: "https://app.example.com/auth/github/callback",
@@ -306,6 +308,8 @@ test("a malformed GitHub email response cannot supply a verified identity", asyn
     emails: { email: "spoof@example.test", verified: true },
   });
   const provider = new GitHubOAuthProvider({
+    production: true,
+    userAgent: "strata-test",
     clientId: "client",
     clientSecret: "secret",
     redirectUri: "https://app.example.com/callback",

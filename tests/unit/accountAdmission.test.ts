@@ -21,6 +21,7 @@ import {
   createSessionReader,
   readSession,
   sessionCookieName,
+  sessionCookieOptionsFromEnvironment,
 } from "@getstrata/core/auth/sessionCookie";
 import { SessionGuard } from "@getstrata/core/auth/sessionGuard";
 import type {
@@ -45,7 +46,7 @@ afterEach(() => {
 function sessionGuard(directory: AuthUserDirectory) {
   return new SessionGuard(directory, {
     read: createSessionReader({
-      cookieName: sessionCookieName(),
+      cookieName: sessionCookieName(process.env),
       secret,
       ttlSeconds: 60 * 60 * 24 * 30,
     }),
@@ -137,30 +138,61 @@ test("versioned signed sessions reject stale or missing versions while legacy se
   process.env.SESSION_SECRET = secret;
   const record = { id: 1, role: "member", is_active: true, auth_version: 0 };
   const guard = sessionGuard(directoryFor(record));
-  const old = createSessionCookie(1, { authVersion: 0 });
-  expect(readSession(cookieRequest(old))).toMatchObject({ userId: 1, authVersion: 0 });
+  const old = createSessionCookie(
+    1,
+    { authVersion: 0 },
+    sessionCookieOptionsFromEnvironment(process.env),
+  );
+  expect(
+    readSession(cookieRequest(old), sessionCookieOptionsFromEnvironment(process.env)),
+  ).toMatchObject({ userId: 1, authVersion: 0 });
   expect(await guard.resolve(cookieRequest(old))).toMatchObject({ id: 1 });
   record.is_active = false;
   expect(await guard.resolve(cookieRequest(old))).toBeNull();
   record.is_active = true;
   record.auth_version = 1;
   expect(await guard.resolve(cookieRequest(old))).toBeNull();
-  expect(await guard.resolve(cookieRequest(createSessionCookie(1)))).toBeNull();
+  expect(
+    await guard.resolve(
+      cookieRequest(createSessionCookie(1, {}, sessionCookieOptionsFromEnvironment(process.env))),
+    ),
+  ).toBeNull();
   for (const remember of [false, true]) {
-    const fresh = createSessionCookie(1, { authVersion: 1, remember });
+    const fresh = createSessionCookie(
+      1,
+      { authVersion: 1, remember },
+      sessionCookieOptionsFromEnvironment(process.env),
+    );
     expect(await guard.resolve(cookieRequest(fresh))).toMatchObject({ id: 1 });
     const encoded = fresh.split(";")[0] ?? "";
     const damaged = encoded.replace(/.$/, (x) => (x === "0" ? "1" : "0"));
     expect(
-      readSession(new Request("http://localhost", { headers: { cookie: damaged } })),
+      readSession(
+        new Request("http://localhost", { headers: { cookie: damaged } }),
+        sessionCookieOptionsFromEnvironment(process.env),
+      ),
     ).toBeNull();
   }
   for (const authVersion of [-1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])
-    expect(() => createSessionCookie(1, { authVersion })).toThrow();
+    expect(() =>
+      createSessionCookie(1, { authVersion }, sessionCookieOptionsFromEnvironment(process.env)),
+    ).toThrow();
   const legacy = sessionGuard(directoryFor({ id: 1, role: "member" }));
-  expect(await legacy.resolve(cookieRequest(createSessionCookie(1)))).toMatchObject({ id: 1 });
   expect(
-    await legacy.resolve(cookieRequest(createSessionCookie(1, { remember: true }))),
+    await legacy.resolve(
+      cookieRequest(createSessionCookie(1, {}, sessionCookieOptionsFromEnvironment(process.env))),
+    ),
+  ).toMatchObject({ id: 1 });
+  expect(
+    await legacy.resolve(
+      cookieRequest(
+        createSessionCookie(
+          1,
+          { remember: true },
+          sessionCookieOptionsFromEnvironment(process.env),
+        ),
+      ),
+    ),
   ).toMatchObject({ id: 1 });
 });
 
@@ -396,7 +428,11 @@ test("versioned session parsing rejects malformed fields, expires and preserves 
     now = originalNow();
   Date.now = () => now;
   try {
-    const cookie = createSessionCookie(1, { authVersion: 0 });
+    const cookie = createSessionCookie(
+      1,
+      { authVersion: 0 },
+      sessionCookieOptionsFromEnvironment(process.env),
+    );
     expect(cookie).toContain("account-fixture=");
     expect(cookie).toContain("HttpOnly; SameSite=Lax");
     expect(cookie).toContain("; Secure");
@@ -417,11 +453,14 @@ test("versioned session parsing rejects malformed fields, expires and preserves 
       expect(
         readSession(
           cookieRequest(`${pair.slice(0, separator + 1)}${encodeURIComponent(mutated.join("."))}`),
+          sessionCookieOptionsFromEnvironment(process.env),
         ),
       ).toBeNull();
     }
     Date.now = () => now + 61000;
-    expect(readSession(cookieRequest(cookie))).toBeNull();
+    expect(
+      readSession(cookieRequest(cookie), sessionCookieOptionsFromEnvironment(process.env)),
+    ).toBeNull();
   } finally {
     Date.now = originalNow;
   }
@@ -471,7 +510,12 @@ test("malformed session cookie encoding is denied through native HTTP and shared
           });
           expect(response.status).toBe(401);
           await response.text();
-          expect(readSession(cookieRequest(`malformed-fixture=${value}`))).toBeNull();
+          expect(
+            readSession(
+              cookieRequest(`malformed-fixture=${value}`),
+              sessionCookieOptionsFromEnvironment(process.env),
+            ),
+          ).toBeNull();
         }
       } finally {
         await server.stop(true);

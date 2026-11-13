@@ -12,7 +12,10 @@ import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { wrapWebLogin } from "@getstrata/bootstrap/web/routing";
 import { establishedAuthReader } from "@getstrata/core/auth/authReader";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
-import { createPasswordConfirmCookie } from "@getstrata/core/auth/passwordConfirmCookie";
+import {
+  createPasswordConfirmCookie,
+  passwordConfirmOptionsFromEnvironment,
+} from "@getstrata/core/auth/passwordConfirmCookie";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
@@ -21,10 +24,14 @@ import {
   CORE_TRACING_RUNTIME_TOKEN,
 } from "@getstrata/core/contracts/serviceTokens";
 import { ForbiddenError } from "@getstrata/core/errors/http";
-import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
+import {
+  csrfTokenOptionsFromEnvironment,
+  resolveCsrfTokenForRequest,
+} from "@getstrata/core/http/csrfToken";
 import { resetMemoryLoginThrottleForTests } from "@getstrata/core/http/loginThrottleMiddleware";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { temporarySignedUrl } from "@getstrata/core/http/signedUrl";
+import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
 import { createTracingRuntime } from "@getstrata/core/tracing/tracingMiddleware";
 import { InMemorySpanExporter } from "@opentelemetry/sdk-trace-base";
 import {
@@ -341,7 +348,9 @@ describe("HttpKernel", () => {
       expect(await response.json()).toEqual({ error: "Invalid or missing CSRF token." });
 
       const get = kernel.wrap("api", async (request) =>
-        Response.json({ token: resolveCsrfTokenForRequest(request) }),
+        Response.json({
+          token: resolveCsrfTokenForRequest(request, csrfTokenOptionsFromEnvironment(process.env)),
+        }),
       );
       const issued = await runWithRequestMeta({ ipAddress: null, userAgent: null }, async () =>
         get(new Request("http://example.test/api/v1/auth/csrf")),
@@ -498,7 +507,7 @@ describe("HttpKernel", () => {
 
       const signed = await handler(
         new Request(
-          `http://example.test${temporarySignedUrl("/reset-password", 120, { email: "a@strata.test" })}`,
+          `http://example.test${temporarySignedUrl("/reset-password", 120, { email: "a@strata.test" }, requireConfiguredSecret(["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"], "signed-url-secret", process.env))}`,
         ),
       );
       expect(signed.status).toBe(200);
@@ -662,7 +671,11 @@ describe("HttpKernel", () => {
         new Request("http://example.test/account/export", {
           headers: {
             "x-authenticated-user-id": "1",
-            cookie: createPasswordConfirmCookie(1),
+            cookie: createPasswordConfirmCookie(
+              1,
+              undefined,
+              passwordConfirmOptionsFromEnvironment(process.env),
+            ),
           },
         }),
       );

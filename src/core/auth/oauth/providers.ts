@@ -1,4 +1,3 @@
-import { appUserAgent } from "../../runtime/appKeyPrefix";
 import { safeFetch } from "../../security/safeFetch";
 import type { OAuthProfile, OAuthProvider } from "./types";
 
@@ -6,19 +5,24 @@ interface GitHubOAuthOptions {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
+  readonly production: boolean;
+  readonly userAgent: string;
 }
 
-async function githubVerifiedEmail(accessToken: string): Promise<string | null> {
+async function githubVerifiedEmail(
+  accessToken: string,
+  options: Readonly<GitHubOAuthOptions>,
+): Promise<string | null> {
   const emailsResponse = await safeFetch(
     "https://api.github.com/user/emails",
     {
       headers: {
         authorization: `Bearer ${accessToken}`,
         accept: "application/json",
-        "user-agent": appUserAgent(),
+        "user-agent": options.userAgent,
       },
     },
-    { timeoutMs: 10_000, maxRedirects: 0 },
+    { timeoutMs: 10_000, maxRedirects: 0, production: options.production },
   );
 
   const emails = (await emailsResponse.json()) as unknown;
@@ -41,7 +45,10 @@ async function githubVerifiedEmail(accessToken: string): Promise<string | null> 
 class GitHubOAuthProvider implements OAuthProvider {
   readonly name = "github";
 
-  constructor(private readonly options: GitHubOAuthOptions) {}
+  private readonly options: Readonly<GitHubOAuthOptions>;
+  constructor(options: GitHubOAuthOptions) {
+    this.options = Object.freeze({ ...options });
+  }
 
   getAuthorizationUrl(state: string, redirectUri = this.options.redirectUri): string {
     const params = new URLSearchParams({
@@ -70,7 +77,7 @@ class GitHubOAuthProvider implements OAuthProvider {
           redirect_uri: redirectUri,
         }),
       },
-      { timeoutMs: 10_000, maxRedirects: 0 },
+      { timeoutMs: 10_000, maxRedirects: 0, production: this.options.production },
     );
 
     const tokenBody = (await tokenResponse.json()) as { access_token?: string };
@@ -85,10 +92,10 @@ class GitHubOAuthProvider implements OAuthProvider {
         headers: {
           authorization: `Bearer ${tokenBody.access_token}`,
           accept: "application/json",
-          "user-agent": appUserAgent(),
+          "user-agent": this.options.userAgent,
         },
       },
-      { timeoutMs: 10_000, maxRedirects: 0 },
+      { timeoutMs: 10_000, maxRedirects: 0, production: this.options.production },
     );
 
     const profile = (await profileResponse.json()) as {
@@ -98,7 +105,7 @@ class GitHubOAuthProvider implements OAuthProvider {
       name?: string | null;
     };
 
-    const email = await githubVerifiedEmail(tokenBody.access_token);
+    const email = await githubVerifiedEmail(tokenBody.access_token, this.options);
     if (!email) {
       throw new Error("GitHub OAuth profile did not include a verified email address.");
     }

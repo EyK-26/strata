@@ -68,7 +68,7 @@ function buildSignedSearchParams(
 function signedUrl(
   path: string,
   query: Record<string, string | number> = {},
-  secret?: string,
+  secret: string,
 ): string {
   const normalizedPath = normalizeSignedPath(path);
   const params = buildSignedSearchParams(normalizedPath, query, undefined, secret);
@@ -80,7 +80,7 @@ function temporarySignedUrl(
   path: string,
   expiresInSeconds: number,
   query: Record<string, string | number> = {},
-  secret?: string,
+  secret: string,
 ): string {
   if (!Number.isInteger(expiresInSeconds) || expiresInSeconds <= 0) {
     throw new Error("Signed URL expiry must be a positive integer number of seconds.");
@@ -98,7 +98,7 @@ function absoluteTemporarySignedUrl(
   expiresInSeconds: number,
   query: Record<string, string | number> = {},
   origin: string,
-  secret?: string,
+  secret: string,
 ): string {
   return `${origin.replace(/\/$/, "")}${temporarySignedUrl(path, expiresInSeconds, query, secret)}`;
 }
@@ -115,7 +115,7 @@ function readSignedRequestUrl(input: Request | URL | string): URL {
   return new URL(input.url);
 }
 
-function hasValidSignature(input: Request | URL | string, secret?: string): boolean {
+function hasValidSignature(input: Request | URL | string, secret: string): boolean {
   const url = readSignedRequestUrl(input);
   const signature = url.searchParams.get("signature");
 
@@ -140,7 +140,7 @@ function hasValidSignature(input: Request | URL | string, secret?: string): bool
   return timingSafeCompareString(signature, expected);
 }
 
-function assertValidSignature(input: Request | URL | string, secret?: string): void {
+function assertValidSignature(input: Request | URL | string, secret: string): void {
   if (!hasValidSignature(input, secret)) {
     throw new ForbiddenError("Invalid or expired signed URL.");
   }

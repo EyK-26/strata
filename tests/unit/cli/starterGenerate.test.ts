@@ -1,3 +1,5 @@
+import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
+
 function requiredServer<T>(server: T | undefined): T {
   if (!server) throw new Error("Expected application-owned HTTP server");
   return server;
@@ -2141,10 +2143,20 @@ export default probeModule;
                 expires_at: new Date(expires).toISOString(),
               }),
             );
-            const link = absoluteTemporarySignedUrl(path, 60, {
-              token: issued.plain,
-              id: String(id),
-            });
+            const link = absoluteTemporarySignedUrl(
+              path,
+              60,
+              {
+                token: issued.plain,
+                id: String(id),
+              },
+              process.env.APP_URL ?? "http://localhost:3000",
+              requireConfiguredSecret(
+                ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+                "signed-url-secret",
+                process.env,
+              ),
+            );
             return { row, link };
           };
           const submit = (link: string, withCsrf = true) =>
@@ -2260,10 +2272,20 @@ export default probeModule;
               expires_at: new Date(Date.now() + 60000).toISOString(),
             }),
           );
-          const link = absoluteTemporarySignedUrl(path, 60, {
-            token: issued.plain,
-            id: String(nextId),
-          });
+          const link = absoluteTemporarySignedUrl(
+            path,
+            60,
+            {
+              token: issued.plain,
+              id: String(nextId),
+            },
+            process.env.APP_URL ?? "http://localhost:3000",
+            requireConfiguredSecret(
+              ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+              "signed-url-secret",
+              process.env,
+            ),
+          );
           const attempts = await Promise.all([submit(link), submit(link)]);
           expect(attempts.map((r) => r.status).sort()).toEqual(html ? [302, 302] : [200, 403]);
           expect(
@@ -2428,6 +2450,12 @@ export default probeModule;
             html ? "/reset-password" : "/api/v1/auth/reset-password",
             60,
             { token: issued.plain, email: String(user.get("email")) },
+            process.env.APP_URL ?? "http://localhost:3000",
+            requireConfiguredSecret(
+              ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+              "signed-url-secret",
+              process.env,
+            ),
           );
           const consumed = async () =>
             (

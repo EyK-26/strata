@@ -11,13 +11,13 @@ describe("emailVerification", () => {
 
     try {
       delete process.env.FEATURE_EMAIL_VERIFICATION;
-      expect(isEmailVerificationRequired()).toBe(false);
+      expect(isEmailVerificationRequired(process.env)).toBe(false);
 
       process.env.FEATURE_EMAIL_VERIFICATION = "true";
-      expect(isEmailVerificationRequired()).toBe(true);
+      expect(isEmailVerificationRequired(process.env)).toBe(true);
 
       process.env.FEATURE_EMAIL_VERIFICATION = "false";
-      expect(isEmailVerificationRequired()).toBe(false);
+      expect(isEmailVerificationRequired(process.env)).toBe(false);
     } finally {
       restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previous);
     }

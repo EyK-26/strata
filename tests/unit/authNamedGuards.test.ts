@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
 import { BasicAuthGuard } from "@getstrata/core/auth/basicAuthGuard";
 import { AuthManager, DatabaseTokenGuard } from "@getstrata/core/auth/guard";
-import { signJwt, verifyJwt } from "@getstrata/core/auth/jwt";
+import { jwtOptionsFromEnvironment, signJwt, verifyJwt } from "@getstrata/core/auth/jwt";
 import { JwtGuard } from "@getstrata/core/auth/jwtGuard";
 import { hashPassword } from "@getstrata/core/auth/password";
 import { persistConsumedRecoveryHash } from "@getstrata/core/auth/passwordLogin";
@@ -14,6 +14,7 @@ import type {
 } from "@getstrata/core/contracts/authUserDirectory";
 import { AuthAccountNotFoundError } from "@getstrata/core/contracts/authUserDirectory";
 import { createMfaSecretCodec } from "@getstrata/core/crypto/mfaSecret";
+import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
 import { generateRecoveryCodes, hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
 import { authFixtureOutcome } from "../helpers/authOutcome";
 import { withBoundDatabase } from "../helpers/boundRepositoryHarness";
@@ -90,8 +91,14 @@ describe("JWT tokens", () => {
     const previous = process.env.JWT_SECRET;
     process.env.JWT_SECRET = "unit-test-jwt-secret-unit-test-jwt";
     try {
-      const token = signJwt({ sub: 42, role: "recruiter", abilities: ["applications:read"] });
-      const payload = verifyJwt(token);
+      const token = signJwt(
+        { sub: 42, role: "recruiter", abilities: ["applications:read"] },
+        jwtOptionsFromEnvironment(process.env),
+      );
+      const payload = verifyJwt(
+        token,
+        requireConfiguredSecret(["JWT_SECRET", "SESSION_SECRET"], "jwt-secret", process.env),
+      );
       expect(payload?.sub).toBe(42);
       expect(payload?.role).toBe("recruiter");
       expect(payload?.abilities).toEqual(["applications:read"]);
@@ -151,12 +158,15 @@ describe("JWT tokens", () => {
     const previous = process.env.JWT_SECRET;
     process.env.JWT_SECRET = "unit-test-jwt-secret-unit-test-jwt";
     try {
-      const token = signJwt({
-        sub: 9,
-        role: "admin",
-        abilities: ["*"],
-        emailVerifiedAt: null,
-      });
+      const token = signJwt(
+        {
+          sub: 9,
+          role: "admin",
+          abilities: ["*"],
+          emailVerifiedAt: null,
+        },
+        jwtOptionsFromEnvironment(process.env),
+      );
       const guard = new JwtGuard({
         secret: process.env.JWT_SECRET ?? "explicit-test-secret-at-least-32-characters",
         directory: jwtDirectory(),
@@ -269,7 +279,7 @@ describe("named auth guards", () => {
         ),
       ).toEqual({ id: 3, role: "recruiter", abilities: ["*"] });
 
-      const jwt = signJwt({ sub: 11, role: "admin" });
+      const jwt = signJwt({ sub: 11, role: "admin" }, jwtOptionsFromEnvironment(process.env));
       expect(
         await auth.resolve(
           new Request("http://example.test", { headers: { authorization: `Bearer ${jwt}` } }),
