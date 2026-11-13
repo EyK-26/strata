@@ -2,22 +2,21 @@ import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
 import { createLegacyCachedJson } from "./legacyCache";
 import { enterModuleRoutes } from "./moduleRouteMiddleware";
-import { discoverModules } from "./modules";
 import type { BusinessRouteHandler } from "./persistenceContracts";
 import type { RouteSource } from "./routeCompiler";
 import { compileRoutePlan } from "./routeCompiler";
 import { publishRoutePlan } from "./routeMetadata";
 
 interface BuildWebModuleRoutesOptions {
-  modules?: AppModule[];
+  modules: readonly AppModule[];
   seedRoutes?: Record<string, unknown>;
 }
 
 function buildWebModuleRoutes(
   dependencies: AppDependencies,
-  options: BuildWebModuleRoutesOptions = {},
+  options: BuildWebModuleRoutesOptions,
 ): AppRouteMap {
-  const { modules = discoverModules(), seedRoutes = {} } = options;
+  const { modules, seedRoutes = {} } = options;
 
   const kernel = createHttpKernel(dependencies);
   const cachedJson = createLegacyCachedJson(dependencies);

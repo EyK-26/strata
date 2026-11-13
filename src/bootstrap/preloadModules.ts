@@ -1,5 +1,2 @@
-import { join } from "node:path";
-import { configureModulesDirectory, ensureModulesLoaded } from "./discoverModules.ts";
-
-configureModulesDirectory(join(import.meta.dir, "../../tests/fixtures/empty-modules"));
-await ensureModulesLoaded();
+// Module discovery is explicit and owned by each application.
+export {};

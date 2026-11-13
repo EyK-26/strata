@@ -1,6 +1,1 @@
-export {
-  configureModulesDirectory,
-  configureModulesManifest,
-  discoverModules,
-  ensureModulesLoaded,
-} from "./discoverModules";
+export { createModuleDiscovery, ensureModulesLoaded } from "./discoverModules";

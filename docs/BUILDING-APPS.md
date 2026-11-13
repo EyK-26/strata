@@ -82,7 +82,7 @@ Bind an `AuthUserDirectory` that can `resolveUserFromToken`, `findByEmail`, and 
 
 ## Module providers and infra defaults
 
-After `ensureModulesLoaded()`, generated apps run each module's `providers` through the same `register` / `boot` phases as `starterProviders`. Module DI (services, policies) therefore works without calling `collectProviders()` (which would swap in the monorepo `coreProviders` auth stack).
+After `const modules = await ensureModulesLoaded({ modulesDir })`, generated apps run each module's `providers` through the same `register` / `boot` phases as `starterProviders`. Module DI (services, policies) therefore works without calling `collectProviders()` (which would swap in the monorepo `coreProviders` auth stack).
 
 Starter apps also call `registerDefaultJobs` and `await discoverJobs()` when wiring the queue and `registerInvalidateCacheOnModelWriteListeners` during provider boot so cache tags flush through the default invalidation job. `src/listeners/*.ts` registrars are loaded via `await discoverListeners()` in the same boot phase (registration-owned cleanup, same pattern as the monorepo `core.listeners` provider). `src/jobs/*.ts` classes with `static jobName` are registered the same way.
 

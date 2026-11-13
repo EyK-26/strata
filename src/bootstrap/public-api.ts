@@ -66,12 +66,7 @@ export { discoverJobs, resetDiscoverJobsForTests } from "./discoverJobs.ts";
 export type { DiscoverModelsOptions } from "./discoverModels.ts";
 export { discoverModels } from "./discoverModels.ts";
 export type { DiscoverModulesOptions } from "./discoverModules.ts";
-export {
-  configureModulesDirectory,
-  configureModulesManifest,
-  discoverModules,
-  ensureModulesLoaded,
-} from "./discoverModules.ts";
+export { createModuleDiscovery, ensureModulesLoaded } from "./discoverModules.ts";
 export type { CreateHealthRoutesOptions } from "./health.ts";
 export { checkDatabase, checkRedis, createHealthRoutes, pingDatabase } from "./health.ts";
 export {

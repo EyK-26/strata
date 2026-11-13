@@ -8,7 +8,7 @@ import { compileRoutePlan } from "./routeCompiler";
 import { publishRoutePlan } from "./routeMetadata";
 
 interface CreateWebRoutesOptions {
-  modules?: AppModule[];
+  modules?: readonly AppModule[];
 }
 
 function createWebRoutes(
@@ -16,7 +16,7 @@ function createWebRoutes(
   options: CreateWebRoutesOptions = {},
 ): AppRouteMap {
   const wrappedRoutes = buildWebModuleRoutes(dependencies, {
-    modules: options.modules,
+    modules: options.modules ?? [],
   });
 
   const assetHandler = async (request: Request) => {

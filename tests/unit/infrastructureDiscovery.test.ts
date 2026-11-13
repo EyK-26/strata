@@ -4,13 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { discoverJobs, resetDiscoverJobsForTests } from "@getstrata/bootstrap/discoverJobs";
 import { discoverListeners } from "@getstrata/bootstrap/discoverListeners";
-import {
-  configureModulesDirectory,
-  configureModulesManifest,
-  discoverModules,
-  ensureModulesLoaded,
-  resetDiscoverModulesForTests,
-} from "@getstrata/bootstrap/discoverModules";
+import { createModuleDiscovery, ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import { Job } from "@getstrata/core/queue";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 
@@ -27,7 +21,6 @@ async function fixture(files: Record<string, string>): Promise<string> {
 }
 afterEach(async () => {
   resetDiscoverJobsForTests();
-  resetDiscoverModulesForTests();
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
 const name = () => `test.discovery.${crypto.randomUUID()}`;
@@ -165,12 +158,11 @@ test("module loading is stable, validated, supports JS/named re-export entrypoin
     "a/index.mts": "await Bun.sleep(20); export default {name:'a',order:5};",
     "excluded/index.ts": "throw new Error('excluded');",
   });
-  configureModulesDirectory(directory);
-  const pending = ensureModulesLoaded({ exclude: ["excluded"] });
-  expect(ensureModulesLoaded({ exclude: ["excluded"] })).toBe(pending);
-  expect(discoverModules()).toEqual([]);
+  const discovery = createModuleDiscovery({ modulesDir: directory, exclude: ["excluded"] });
+  const pending = discovery.load();
+  expect(discovery.load()).toBe(pending);
   expect((await pending).map((value) => value.name)).toEqual(["a", "b"]);
-  expect(discoverModules()).toHaveLength(2);
+  expect(await discovery.load()).toHaveLength(2);
   const bad = await fixture({ "bad/index.ts": "export default {name:'bad',routes:1};" });
   await expect(ensureModulesLoaded({ modulesDir: bad })).rejects.toThrow("Invalid routes");
   await expect(ensureModulesLoaded({ modulesDir: bad })).rejects.toThrow("Invalid routes");
@@ -191,11 +183,9 @@ test("module manifests validate identity and lifecycle hooks without running the
       ],
     },
   ];
-  configureModulesManifest(manifest);
-  expect(await ensureModulesLoaded()).toEqual(manifest);
+  expect(await ensureModulesLoaded({ manifest })).toEqual(manifest);
   expect(boots).toBe(0);
-  configureModulesManifest(manifest);
-  expect(await ensureModulesLoaded()).toEqual(manifest);
+  expect(await ensureModulesLoaded({ manifest })).toEqual(manifest);
   await expect(
     ensureModulesLoaded({ manifest: [{ name: "duplicate" }, { name: "duplicate" }] }),
   ).rejects.toThrow("Duplicate module");
@@ -207,24 +197,26 @@ test("module manifests validate identity and lifecycle hooks without running the
     { name: "ok", providers: [{ name: "bad", boot: 1 }] },
   ])
     await expect(ensureModulesLoaded({ manifest: [value] as never })).rejects.toThrow("Invalid");
-  configureModulesDirectory(await fixture({}));
-  expect(await ensureModulesLoaded()).toEqual([]);
+  expect(await ensureModulesLoaded({ modulesDir: await fixture({}) })).toEqual([]);
 });
 
-test("a changed or reset module source cannot be overwritten by an older pending import", async () => {
+test("interleaved discovery owners retain completed results and pending imports", async () => {
   const directory = await fixture({
     "pending/index.ts": "await Bun.sleep(30); export default {name:'old'};",
   });
-  configureModulesDirectory(directory);
-  const pending = ensureModulesLoaded();
-  configureModulesManifest([{ name: "new" }]);
-  expect((await ensureModulesLoaded()).map((value) => value.name)).toEqual(["new"]);
-  expect((await pending).map((value) => value.name)).toEqual(["old"]);
-  expect(discoverModules().map((value) => value.name)).toEqual(["new"]);
-  resetDiscoverModulesForTests();
-  await expect(ensureModulesLoaded()).rejects.toThrow("configureModules");
-  configureModulesManifest([]);
-  expect(await ensureModulesLoaded()).toEqual([]);
+  const first = createModuleDiscovery({ modulesDir: directory });
+  const second = createModuleDiscovery({ manifest: [{ name: "new" }] });
+  const pending = first.load();
+  const completed = await second.load();
+  expect(completed.map((value) => value.name)).toEqual(["new"]);
+  const old = await pending;
+  expect(old.map((value) => value.name)).toEqual(["old"]);
+  await ensureModulesLoaded({ manifest: [{ name: "third" }] });
+  expect(await first.load()).toBe(old);
+  expect(await second.load()).toBe(completed);
+  expect(completed.map((value) => value.name)).toEqual(["new"]);
+  expect(Object.isFrozen(old)).toBe(true);
+  expect(Object.isFrozen(completed)).toBe(true);
 });
 
 test("missing roots are optional, invalid directories and ambiguous module entrypoints fail", async () => {
@@ -254,12 +246,12 @@ test("independent job sources cannot silently replace discovered identities", as
 test("a repaired module directory retries the same source after filesystem failure", async () => {
   const root = await fixture({ modules: "not a directory" });
   const modulesDir = join(root, "modules");
-  configureModulesDirectory(modulesDir);
-  await expect(ensureModulesLoaded()).rejects.toThrow();
+  const discovery = createModuleDiscovery({ modulesDir });
+  await expect(discovery.load()).rejects.toThrow();
   await rm(modulesDir);
   await mkdir(join(modulesDir, "valid"), { recursive: true });
   await writeFile(join(modulesDir, "valid/index.ts"), "export default {name:'repaired'};");
-  expect((await ensureModulesLoaded()).map((module) => module.name)).toEqual(["repaired"]);
+  expect((await discovery.load()).map((module) => module.name)).toEqual(["repaired"]);
 });
 
 test("bundled explicit manifests load once and prepare listener services once with public bootstrap contracts", async () => {
@@ -267,7 +259,7 @@ test("bundled explicit manifests load once and prepare listener services once wi
     "entry.ts": `
 import {discoverJobs} from '@getstrata/bootstrap/discoverJobs';
 import {discoverListeners} from '@getstrata/bootstrap/discoverListeners';
-import {configureModulesManifest,ensureModulesLoaded} from '@getstrata/bootstrap/discoverModules';
+import {createModuleDiscovery} from '@getstrata/bootstrap/discoverModules';
 import {collectProviders,createAppContext} from '@getstrata/bootstrap/context';
 import {jobRegistry} from '@getstrata/core/queue/jobRegistry';
 import {service} from '@getstrata/core/contracts/services';
@@ -281,8 +273,8 @@ const jobManifest=[Example];
 const listenerToken=createServiceToken('fixture.listener');
 const repository=defineRepository({name:'Fixture',table:{name:'fixture',primaryKey:'id',columns:['id']},dependencies:[],create:binding=>new BaseRepository(binding)});
 const listenerManifest=[{services:[service(listenerToken,{lifetime:'application',dependencies:[],async create(){await Bun.sleep(5);listeners++;return async()=>{};}})],repositoryEffects:[repositoryEffects(repository,[{action:'created',afterCommit:listenerToken}])]}];
-configureModulesManifest([{name:'feature',providers:[{name:'feature.boot',async boot(){boots++;}}]}]);
-const [modules,again] = await Promise.all([ensureModulesLoaded(),ensureModulesLoaded()]);
+const discovery=createModuleDiscovery({manifest:[{name:'feature',providers:[{name:'feature.boot',async boot(){boots++;}}]}]});
+const [modules,again] = await Promise.all([discovery.load(),discovery.load()]);
 await Promise.all([discoverJobs({manifest:jobManifest}),discoverJobs({manifest:jobManifest})]);
 const before={boots,listeners};
 const providers=collectProviders(modules).filter(provider=>['core.config','core.cache','core.storage','feature.boot'].includes(provider.name));

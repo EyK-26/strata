@@ -1,5 +1,4 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
-import { configureModulesManifest } from "@getstrata/bootstrap/discoverModules";
+import { afterAll, describe, expect, mock, test } from "bun:test";
 import type { Mailer } from "@getstrata/core/mail/mailer";
 import type { StorageManager } from "@getstrata/core/storage/storage";
 import { restoreEnvVar } from "../../helpers/restoreEnv";
@@ -12,7 +11,6 @@ afterAll(async () => {
 });
 
 describe("createTinkerContext", () => {
-  beforeEach(() => configureModulesManifest([]));
   test("exposes container and facades", async () => {
     mock.restore();
     const { createTinkerContext: createContext } = await import("../../../src/cli/commands/tinker");
@@ -43,8 +41,6 @@ describe("createTinkerContext", () => {
 describe("tinker preload script", () => {
   test("runs a one-liner against the tinker context", async () => {
     const script = `
-      import { configureModulesDirectory } from "@getstrata/bootstrap/discoverModules";
-      configureModulesDirectory("./tests/fixtures/empty-modules");
       import { createTinkerContext } from "./src/cli/commands/tinker.ts";
       const ctx = await createTinkerContext();
       console.log(JSON.stringify({

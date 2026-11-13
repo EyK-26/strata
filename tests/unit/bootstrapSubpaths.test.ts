@@ -60,9 +60,10 @@ describe("@getstrata/bootstrap published subpaths", () => {
   test("discoverModules exports discovery helpers", async () => {
     const discover = await import(join(BOOTSTRAP_DIST, "entries/discoverModules.js"));
 
-    expect(typeof discover.configureModulesDirectory).toBe("function");
+    expect(typeof discover.createModuleDiscovery).toBe("function");
     expect(typeof discover.ensureModulesLoaded).toBe("function");
-    expect(typeof discover.discoverModules).toBe("function");
+    expect("discoverModules" in discover).toBe(false);
+    expect("configureModulesDirectory" in discover).toBe(false);
   });
 
   test("discoverListeners exports listener registrars", async () => {

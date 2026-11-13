@@ -1,11 +1,6 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import {
-  configureModulesDirectory,
-  discoverModules,
-  ensureModulesLoaded,
-  resetDiscoverModulesForTests,
-} from "@getstrata/bootstrap/discoverModules";
+import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import { createModelCacheInvalidationEffects } from "@getstrata/bootstrap/listeners/invalidateCacheOnModelWrite";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
@@ -20,11 +15,7 @@ import type { CacheLike } from "../../src/types/services";
 
 const FIXTURE_MODULES = join(import.meta.dir, "../fixtures/discover-modules");
 
-beforeAll(async () => {
-  resetDiscoverModulesForTests();
-  configureModulesDirectory(FIXTURE_MODULES);
-  await ensureModulesLoaded();
-});
+const modules = await ensureModulesLoaded({ modulesDir: FIXTURE_MODULES });
 
 describe("createModelCacheInvalidationEffects", () => {
   test("registers organization write listeners", () => {
@@ -34,7 +25,7 @@ describe("createModelCacheInvalidationEffects", () => {
       dependencies: [],
       create: (binding) => new BaseRepository(binding),
     });
-    const declarations = createModelCacheInvalidationEffects([definition], discoverModules(), {
+    const declarations = createModelCacheInvalidationEffects([definition], modules, {
       cache: createServiceToken<CacheLike>("cache"),
       queue: createServiceToken<Queue>("queue"),
     });

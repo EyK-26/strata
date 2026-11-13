@@ -1,78 +1,52 @@
-import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import {
-  configureModulesDirectory,
-  discoverModules,
-  ensureModulesLoaded,
-  resetDiscoverModulesForTests,
-} from "@getstrata/bootstrap/discoverModules";
+import { createModuleDiscovery, ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 
 const FIXTURE_MODULES = join(import.meta.dir, "../fixtures/discover-modules");
 const EMPTY_MODULES = join(import.meta.dir, "../fixtures/empty-modules");
 
 describe("discoverModules", () => {
-  beforeAll(async () => {
-    resetDiscoverModulesForTests();
-    configureModulesDirectory(FIXTURE_MODULES);
-    await ensureModulesLoaded();
-  });
-
-  afterEach(() => {
-    resetDiscoverModulesForTests();
-    configureModulesDirectory(EMPTY_MODULES);
-  });
-
   test("discovers fixture modules in route priority order", async () => {
-    resetDiscoverModulesForTests();
-    configureModulesDirectory(FIXTURE_MODULES);
-    await ensureModulesLoaded();
-
-    const modules = discoverModules();
-    const orders = modules.map((module) => module.order ?? 100);
-
-    expect(orders).toEqual([...orders].sort((left, right) => left - right));
+    const modules = await ensureModulesLoaded({ modulesDir: FIXTURE_MODULES });
+    expect(modules.map((module) => module.order ?? 100)).toEqual([5, 10, 20]);
     expect(modules.map((module) => module.name)).toEqual(["organization", "pages", "reports"]);
+    expect(Object.isFrozen(modules)).toBe(true);
   });
 
   test("returns modules that expose routes or web routes", async () => {
-    resetDiscoverModulesForTests();
-    configureModulesDirectory(FIXTURE_MODULES);
-    await ensureModulesLoaded();
-
-    const modules = discoverModules();
-
+    const modules = await ensureModulesLoaded({ modulesDir: FIXTURE_MODULES });
     expect(modules.every((module) => module.name.length > 0)).toBe(true);
     expect(modules.some((module) => module.routes !== undefined)).toBe(true);
     expect(modules.some((module) => module.webRoutes !== undefined)).toBe(true);
   });
 
-  test("reloads when the configured modules directory changes", async () => {
-    resetDiscoverModulesForTests();
-    configureModulesDirectory(EMPTY_MODULES);
-    await ensureModulesLoaded();
-    expect(discoverModules()).toEqual([]);
-
-    configureModulesDirectory(FIXTURE_MODULES);
-    await ensureModulesLoaded();
-    expect(discoverModules().map((module) => module.name)).toEqual([
-      "organization",
-      "pages",
-      "reports",
-    ]);
+  test("independent application owners retain their results when another loads", async () => {
+    const appA = createModuleDiscovery({ modulesDir: FIXTURE_MODULES });
+    const pendingA = appA.load();
+    const appB = createModuleDiscovery({ modulesDir: EMPTY_MODULES });
+    const pendingB = appB.load();
+    expect(appA.load()).toBe(pendingA);
+    const [modulesA, modulesB] = await Promise.all([pendingA, pendingB]);
+    expect(modulesA.map((module) => module.name)).toEqual(["organization", "pages", "reports"]);
+    expect(modulesB).toEqual([]);
+    const appC = createModuleDiscovery({ manifest: [{ name: "third" }] });
+    expect(await appC.load()).toEqual([{ name: "third" }]);
+    expect(await appA.load()).toBe(modulesA);
+    expect(modulesA.map((module) => module.name)).toEqual(["organization", "pages", "reports"]);
+    expect(await appB.load()).toBe(modulesB);
   });
 
-  test("requires an explicit modules directory", async () => {
-    resetDiscoverModulesForTests();
+  test("an owner captures manifest membership before discovery starts", async () => {
+    const manifest = [{ name: "original" }];
+    const discovery = createModuleDiscovery({ manifest });
+    manifest.splice(0, 1, { name: "replacement" });
+    const modules = await discovery.load();
+    expect(modules.map((module) => module.name)).toEqual(["original"]);
+    expect(() => (modules as Array<unknown>).push({ name: "injected" })).toThrow();
+    expect(await discovery.load()).toBe(modules);
+  });
 
-    try {
-      await ensureModulesLoaded();
-      throw new Error("expected configureModulesDirectory to be required");
-    } catch (error) {
-      expect((error as Error).message).toMatch(/configureModulesDirectory/);
-    } finally {
-      resetDiscoverModulesForTests();
-      configureModulesDirectory(EMPTY_MODULES);
-      await ensureModulesLoaded();
-    }
+  test("requires an explicit source", async () => {
+    await expect(ensureModulesLoaded({})).rejects.toThrow("explicit modulesDir or manifest");
   });
 });

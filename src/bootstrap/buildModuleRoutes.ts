@@ -4,7 +4,6 @@ import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
 import { createLegacyCachedJson } from "./legacyCache";
 import { enterModuleRoutes } from "./moduleRouteMiddleware";
-import { discoverModules } from "./modules";
 import type { BusinessRouteHandler } from "./persistenceContracts";
 import type { RouteSource } from "./routeCompiler";
 import { compileRoutePlan } from "./routeCompiler";
@@ -12,14 +11,14 @@ import { publishRoutePlan } from "./routeMetadata";
 
 interface BuildModuleRoutesOptions {
   apiPrefix?: string;
-  modules?: AppModule[];
+  modules: readonly AppModule[];
 }
 
 function buildModuleRoutes(
   dependencies: AppDependencies,
-  options: BuildModuleRoutesOptions = {},
+  options: BuildModuleRoutesOptions,
 ): AppRouteMap {
-  const { apiPrefix = "", modules = discoverModules() } = options;
+  const { apiPrefix = "", modules } = options;
 
   const kernel = createHttpKernel(dependencies);
   const middleware = kernel.group("api");

@@ -243,16 +243,14 @@ test("HTTP startup rejects a delayed provider before socket admission and cleans
   const repo = join(import.meta.dir, "../..");
   const script = `
     import App from ${JSON.stringify(join(repo, "src/bootstrap/app.ts"))};
-    import { configureModulesDirectory } from ${JSON.stringify(join(repo, "src/bootstrap/discoverModules.ts"))};
-    import { ensureModulesLoaded, discoverModules } from ${JSON.stringify(join(repo, "src/bootstrap/discoverModules.ts"))};
+    import { ensureModulesLoaded } from ${JSON.stringify(join(repo, "src/bootstrap/discoverModules.ts"))};
     import { collectProviders } from ${JSON.stringify(join(repo, "src/bootstrap/context.ts"))};
     import { createDatabaseBindings } from ${JSON.stringify(join(repo, "src/core/database/bindings.ts"))};
-    configureModulesDirectory(${JSON.stringify(root)});
     globalThis.acquired = 0; globalThis.closed = 0;
     let bound = 0;
     Bun.serve = () => { bound++; throw new Error("unexpected socket admission"); };
-    await ensureModulesLoaded();
-    const app=new App({port:0,providers:collectProviders(discoverModules()),connection:"main",definition:{providers:[],services:createDatabaseBindings({default:"main",connections:{main:{driver:"sqlite",filename:":memory:"}}})}});
+    const modules = await ensureModulesLoaded({modulesDir:${JSON.stringify(root)}});
+    const app=new App({port:0,providers:collectProviders(modules),connection:"main",definition:{providers:[],services:createDatabaseBindings({default:"main",connections:{main:{driver:"sqlite",filename:":memory:"}}})}});
     let failure;
     try { await app.serve(); } catch (error) { failure = error.message; }
     await app.shutdown();
