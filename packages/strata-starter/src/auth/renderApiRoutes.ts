@@ -37,7 +37,7 @@ ${renderMfaChallengeRoutes()}
           POST: kernel.wrap("api", kernel.wrapLogin(async (request, _ports) => {
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
             return runWithLoginUser(_ports, email, async (candidate, _ports) => {
-            const mfaResult = await authenticatePasswordUser(_ports, candidate, password, mfa_code);
+            const mfaResult = await authenticatePasswordUser(_ports, authServices, candidate, password, mfa_code);
             if (!mfaResult.ok) {
               if (mfaResult.error === "invalid_credentials") {
                 return privateJsonResponse({ error: "Invalid credentials" }, { status: 422 });
@@ -114,7 +114,7 @@ ${renderMfaChallengeRoutes()}
           POST: kernel.wrap("api", kernel.wrapLogin(async (request, _ports) => {
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
             return runWithLoginUser(_ports, email, async (candidate, _ports) => {
-            const mfaResult = await authenticatePasswordUser(_ports, candidate, password, mfa_code);
+            const mfaResult = await authenticatePasswordUser(_ports, authServices, candidate, password, mfa_code);
             if (!mfaResult.ok) {
               if (mfaResult.error === "invalid_credentials") {
                 return privateJsonResponse({ error: "Invalid credentials" }, { status: 422 });
@@ -243,7 +243,7 @@ ${renderMfaChallengeRoutes()}
             const fields = await parseJsonBody(request, (payload) => validateObject(payload, { secret: [required(), stringRule()], code: [required(), stringRule()] }));
             const secret = String(fields.secret).trim();
             if (!verifyTotp(secret, String(fields.code).trim())) return privateJsonResponse({ error: "Could not confirm that code." }, { status: 422 });
-            const recoveryCodes = await enrollMfa(_ports, user, secret);
+            const recoveryCodes = await enrollMfa(_ports, authServices, user, secret);
             return privateJsonResponse({ recoveryCodes });
           }))),
         },`
@@ -264,7 +264,7 @@ ${renderMfaChallengeRoutes()}
           POST: kernel.wrap("api", kernel.wrapLogin(async (request, _ports) => {
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
             return runWithLoginUser(_ports, email, async (candidate, _ports) => {
-            const mfaResult = await authenticatePasswordUser(_ports, candidate, password, mfa_code);
+            const mfaResult = await authenticatePasswordUser(_ports, authServices, candidate, password, mfa_code);
             if (!mfaResult.ok) {
               if (mfaResult.error === "invalid_credentials") {
                 return privateJsonResponse({ error: "Invalid credentials" }, { status: 422 });
@@ -351,7 +351,7 @@ ${renderMfaChallengeRoutes()}
             }
             const redirectUri = authServices.config.github.redirectUri;
             const issued = createOAuthState(authServices.config.oauth);
-            const url = new GitHubOAuthProvider({ clientId, clientSecret, redirectUri }).getAuthorizationUrl(issued.state);
+            const url = new GitHubOAuthProvider({ clientId, clientSecret, redirectUri, production: authServices.config.github.production, userAgent: authServices.config.github.userAgent }).getAuthorizationUrl(issued.state);
             return new Response(null, { status: 302, headers: { location: url } });
           }),
         },
@@ -372,7 +372,7 @@ ${renderMfaChallengeRoutes()}
               return privateJsonResponse({ error: "Invalid GitHub OAuth state." }, { status: 403 });
             }
             const redirectUri = authServices.config.github.redirectUri;
-            const profile = await new GitHubOAuthProvider({ clientId, clientSecret, redirectUri })
+            const profile = await new GitHubOAuthProvider({ clientId, clientSecret, redirectUri, production: authServices.config.github.production, userAgent: authServices.config.github.userAgent })
               .exchangeCode(code)
               .catch(() => null);
             if (!profile) {

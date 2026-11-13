@@ -32,11 +32,15 @@ The pairwise planning command `bun scripts/report-starter-pairwise.ts` reports
 The reference application's cookie/server and token/API workflows are separate
 behavioral acceptance cases.
 
+The [completion ledger](refactor-completion-ledger.md) maps every retained capability
+to deeper executable acceptance and records intentionally retired assertions. The
+25-profile health campaign cannot substitute for those workflows.
+
 ## Release readiness
 
-Breaking API removals warrant a new major candidate, proposed as `3.0.0-rc.1`
-after qualification. This document neither changes package versions nor publishes
-anything. Local archives must remain tied to their source and integrity receipts.
+Breaking API removals warrant the approved stable `3.0.0` release after qualification.
+This guide does not certify that qualification or publication occurred. Local
+archives must remain tied to their exact source and integrity receipts.
 
 Before release, reconcile remaining provider/configuration adapters (including
 view rendering), execute the bounded adapter/profile qualification inventory, review
@@ -69,6 +73,17 @@ remain separate decisions.
   context owns flush and shutdown. A kernel without that provider is untraced;
   middleware used directly requires an explicit runtime. The OpenTelemetry API context
   manager remains a process-level propagation facility, not an exporter owner.
+- OIDC clients/providers own their discovery and JWKS caches. Pass a captured
+  `networkPolicy: { production, allowPrivate }`; direct providers default to
+  production-safe networking. Environment changes cannot alter an existing client
+  or lend its cache to another owner. Global cache-reset helpers are removed.
+- The unused mutable `abilityCatalog`/`configureAbilityCatalog` API is removed.
+  Default role constants remain; custom ability/policy resolution belongs to the
+  application guard, directory and policy ports.
+- Declare repository/model construction with `defineRepository`/`defineModel` from
+  `@getstrata/core/database/definitions`. Select them through the current
+  `DatabaseSession`; protected clone/serialization overrides and global model
+  registration are replaced by explicit construction and attribute functions.
 - Starter renderers accept an explicit `StarterFeaturePlan`. Direct renderer callers
   compile raw choices with `compileStarterFeatures` first. There is no global plan cache.
   Generated signing placeholders are development-only and rejected in production.
@@ -79,7 +94,8 @@ concurrency and owned local databases. The generator is source code; its consume
 install packed core/bootstrap/CLI candidates. See [qualification limits](../STARTER-QUALIFICATION.md)
 for install reuse, credential fixtures and the separate deeper behavioral inventory.
 
-The refactor is not deletion-complete yet: legacy view layout/error configuration
-remains process-wide, queue actor/tenant propagation still needs an explicit transport
-contract, and remaining queue visibility/maintenance settings need reconciliation.
-Passing the bounded profile inventory does not close those architectural gaps.
+Completion requires the integrated view, queue actor/tenant transport, HTTP/security
+configuration and crypto ownership cuts, followed by final executable acceptance.
+Use the completion ledger and exact-revision integration receipt to determine their
+status. Source-level removal alone and historical health boots do not certify the
+final application, package or release contract.

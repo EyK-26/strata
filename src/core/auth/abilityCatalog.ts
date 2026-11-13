@@ -1,19 +1,19 @@
-const MEMBER_ABILITIES = [
+const MEMBER_ABILITIES = Object.freeze([
   "profile:read",
   "auth:tokens:read",
   "auth:tokens:write",
   "auth:tokens:delete",
-] as const;
+] as const);
 
-const ADMIN_ABILITIES = [
+const ADMIN_ABILITIES = Object.freeze([
   ...MEMBER_ABILITIES,
   "webhooks:read",
   "webhooks:write",
   "audit:read",
   "audit:export",
-] as const;
+] as const);
 
-const PLATFORM_ADMIN_ABILITIES = ["*"] as const;
+const PLATFORM_ADMIN_ABILITIES = Object.freeze(["*"] as const);
 
 function resolveAbilitiesForRole(role: string | null | undefined): string[] {
   if (role === "admin") {

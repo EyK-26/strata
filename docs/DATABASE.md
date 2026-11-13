@@ -1,6 +1,7 @@
 # Databases
 
-Set `DATABASE_URL` (and optionally `DB_CONNECTION`) before the app queries.
+Capture database settings in the application definition and select an owned execution
+`DatabaseSession` before querying. Environment variables are entrypoint inputs.
 
 ## What we actually run
 
@@ -201,7 +202,7 @@ Declare the model key as `string` and allow assignment explicitly when the app s
 
 Models with declared record fields infer column names and value types for `create`, `firstOrNew`, `firstOrCreate`, `updateOrCreate`, filters, ordering and primary-key lookups. Concrete subclasses and explicit custom repositories remain supported. Writes accept partial records so generated IDs, nullable fields and database defaults can be omitted. TypeScript interfaces do not describe DDL defaults or required inserts: the database remains responsible for those constraints, and `$fillable`/`$guarded` still control mass assignment. These contracts do not validate untrusted HTTP input at runtime. Declare field types to match casts/driver values, or normalize inputs before calling the model; cast metadata does not automatically infer different write types.
 
-Models created with `defineModel(defineTable<Record, Key>(...))` also retain that record and key when calling `Model.repository()`, including inherited models and non-`id` keys. Repository upsert conflict/update columns, input values and returned records keep their declared types. Existing explicit `Model.repository<Record, Key>()` calls and custom repository overrides remain supported. This is a declaration correction; it does not change runtime upsert, transaction or conflict behavior. Explicit generics remain a supported alternative on older packages.
+Repository and model definitions retain their record and key types, including non-`id` keys. Select them through `database.repository(definition)` or `database.model(definition)`; upsert conflict/update columns, inputs and results retain those declared types. Static global `Model.repository()` registration is retired.
 
 ```ts
 await Product.create({ title: "Notebook", price: 12 });
@@ -224,133 +225,55 @@ Move partial `all({ select: ... })` and `firstWhere(..., { select: ... })` reads
 
 ### Models
 
-Mass assignment is opt-in. A model must declare `static $fillable = [...]` to allow specific columns, or `static $guarded = []` to allow all of them. A model that declares neither throws on `create`/`update` rather than silently discarding every attribute.
+Models are selected from an application-owned execution session. Their bound facade
+provides queries, create/find, casts, observers, relationships and instance writes.
+There is no per-class global repository cache. Owner selection, model state and
+transaction scope are explicit; use after execution expiration rejects.
 
-`$casts` supports `date`, `datetime`, `json`, `bool`/`boolean`, `integer`/`int`, and `hashed`. `hashed` hashes the value with bcrypt on write and leaves an already-hashed value untouched, so re-saving a loaded model does not double-hash.
-
-Model `create`, new/existing instance `save`, and `update` await write casts before issuing SQL. The `hashed` cast uses the same asynchronous Bun bcrypt helper as authentication (cost 12); construction, hydration and `mergeAttributes` do not hash. Null/undefined and recognized bcrypt/Argon2 strings keep their existing behavior. Hash-prefix recognition is compatibility behavior, not validation of an imported hash.
-
-**Low-level helper migration:** await `applyCasts(values, casts, "dehydrate")` (always a promise) and `dehydrateValue(value, "hashed")` (now a promise, including null/undefined and existing hashes). `applyCasts(..., "hydrate")` and individual non-hashed `dehydrateValue` casts stay synchronous. If the cast or direction is dynamic, await the result before using it. Existing model write callers already await their writes and need no changes. Protected `dehydrateAttributes` overrides may return a record or a promise; overrides that call `super` must await its result before modifying it.
-
-Observer order is preserved: static `create` resolves casts before its pre-write observers; instance `save` runs pre-write observers before casting, so cancellation skips hashing. Hash rejection prevents that model's SQL. Use `runInTransaction` to roll back earlier business writes and deferred events when hashing or an observer fails; this change does not add an implicit transaction around arbitrary model operations. Direct repository/SQL/bulk writes bypass model casts and must supply prepared values.
-
-Loaded instances keep a snapshot of their hydrated attributes. Existing-instance `save()` writes only changed fields, including changes from `saving`/`updating` observers and in-place JSON, date and binary mutations. This prevents a stale instance's unchanged fields from overwriting another writer's updates. Unchanged passwords do not enter the write-cast pipeline. Inserts still write their full assignable payload; repository, bulk and direct SQL operations retain their explicit write behavior.
-
-Existing-instance writes invoke the protected `dehydrateAttributes` override with
-only those changed fields, just as insertion invokes it with the assignable insert
-payload. Overrides may be synchronous or asynchronous and must accept partial
-attribute records. No-op saves skip this write hook. A serialization failure occurs
-before SQL and keeps the same instance's edits available for a later save. Custom
-serializers should preserve omitted fields rather than reconstruct a stale full row.
-
-A no-op `save()` runs `saving`, `updating` and `saved`, but skips SQL, timestamps, `updated` observers and repository update events. A real update sets `updated_at` when timestamps are enabled. Successful writes replace the snapshot with the returned database row; edits from post-write observers remain dirty for the next save. Re-query the model to reload external changes without writing.
-
-Framework transactions and savepoints restore snapshot bookkeeping on rollback, retaining intended edits so the same instance can retry. Changes pulled in by the rolled-back write's returned row are discarded. Newly inserted instances saved through `save()` return to their previous existence state on rollback. Raw `pool.begin()` callers must wrap the transaction with `runWithDeferredModelEvents()` for this bookkeeping, just as for deferred events. A listener failure after commit does not reset the snapshot. No-op saves do not check whether an unchanged row still exists.
-
-Changed-field writes are not optimistic locking: competing changes to the same field still require explicit locking, a conditional update or a version check. No version column or schema migration is required.
-
-
-### Eager loading (`with` / `load`)
-
-`Product.with("category")` and `cartItem.load("product")` take **relation method names**, not model class names. `category()` is `with("category")`. `with("Category")` throws unless you defined `Category()`. Laravel-style arrays work: `with(["category"])` and `load(["product"])`.
-
-Hydrated relations live on `loaded("category")`. There is no magic `product.category` property.
-
-Nested polymorphic paths such as `Comment.with("subject.owner")` hydrate each
-concrete `subject` model so its own `owner()` method and target scopes participate.
-Targets are batched by concrete class identity, including when class names or IDs
-overlap. A missing nested method reports the concrete target class. Scoped-out
-targets remain absent and are not queried again during the same eager traversal.
-Flat eager `with("subject")` keeps its existing plain-record result; flat lazy
-`load("subject")` keeps its existing concrete model result. Registering both a flat
-and nested path uses nested hydration regardless of registration order.
-Requesting `load("subject.owner")` after a flat eager load upgrades that cached
-record for traversal without refreshing its attributes from the database.
-Retrieved observers can still invalidate a previously present relation with
-`setLoaded(name, undefined)` before nested traversal; that relation is reloaded.
-Absence caching is disabled for models with registered observers, so a retrieved
-hook can also materialize a missing target through the ORM before traversal.
-Cache bookkeeping does not evaluate observer callback getters; normal hydration
-retains one accessor read per dispatched hook.
-
-String related models (`belongsTo("Category")`, `hasMany("Product")`) use the class name or `$morphClass` registered at startup. Generated apps await framework model discovery before handling requests. `registerModelClass("catalog-category", Category)` remains available for a distinct alias; keep alternate aliases in startup code before any boot hook that uses them.
+`attributes.dehydrate` on the model definition accepts a record or promise. Await
+asynchronous casts and hashing before SQL. A thrown serialization hook prevents
+that write. Dirty-only saves retain intended edits after rollback; a post-commit
+listener failure does not undo the committed row. Raw native transaction users must
+retain the documented deferred-event boundary.
 
 ### Declarative model binding
 
 ```typescript
-import { defineModel } from "@getstrata/core/database/model";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineModel, defineRepository } from "@getstrata/core/database/definitions";
+import { Model } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 
-interface ProductRecord { sku: string; title: string }
+type ProductRecord = { sku: string; title: string };
 const products = defineTable<ProductRecord, "sku">({
   name: "products", primaryKey: "sku", columns: ["sku", "title"],
 });
-class Product extends defineModel(products) {
-  static $fillable = ["sku", "title"] as const;
-  static $timestamps = false;
-}
-export { Product };
+const productRepository = defineRepository({
+  name: "products", table: products, dependencies: [],
+  create: binding => new BaseRepository(binding),
+});
+class Product extends Model<ProductRecord, "sku"> {}
+const productModel = defineModel({
+  name: "Product", repository: productRepository, dependencies: [],
+  attributes: { fillable: ["sku", "title"], timestamps: false },
+  construct: (state, binding) => new Product(state, binding),
+});
 ```
 
-`defineModel(table)` supplies a typed model base. The framework creates and caches one default repository per concrete class on first use or startup initialization. Subclasses inherit table metadata, with separate repository and boot state. Concrete model results, casts, observers, scopes, SQL projections, bulk operations and locking continue to use existing APIs. This definition does not generate migrations or infer a schema from erased TypeScript interfaces.
+Include `productRepository` and `productModel` in the `repositories` and `models`
+arrays passed to `createDatabaseBindings`. Inside the owned execution, use
+`database.model(productModel).find(sku)` or
+`database.repository(productRepository).query()`. Definition names and aliases
+are validated within that registry. Relationships reference declared model
+identities; register all definitions before the application starts.
 
-In generated `src/models/register.ts`:
-
-```typescript
-import { discoverModels } from "@getstrata/bootstrap/discoverModels";
-await discoverModels(import.meta.dir);
-```
-
-Discovery recursively imports `.ts`, `.js`, `.mts` and `.mjs` files from the trusted application directory, collects named/default exported Model subclasses, registers all class names and morph aliases, then initializes repositories and boot hooks. It deduplicates re-exports, rejects ambiguous names, and propagates import, definition and boot errors to startup. Symlinks, declaration files, and reserved `register.ts`/`register.js`/`index.ts`/`index.js` orchestration/barrel files are skipped. Use `exclude` for additional orchestration files. No request or tenant controls the discovery directory. Await discovery before HTTP, worker or scheduled work begins.
-
-For bundled deployments or models outside `src/models`, use a static manifest instead: `bootModels([Product, Category])` from `@getstrata/core/database/model`. Import all model modules first. Class-reference or lazy-reference relationships do not require name discovery; string references do. Framework discovery cannot see a class whose module has never been imported. Alternate aliases must be registered before boot if hooks depend on them.
-
-Existing `class Product extends Model<ProductRecord, "sku">` plus `registerModelRepository(Product, repository)` remains supported. To customize a declarative model, call `registerModelRepository(Product, customRepository)` before startup initialization. Explicit bindings take precedence over defaults. Custom repository methods stay available on the repository itself; registration does not add methods to the model. Keep startup bindings stable rather than rebinding per request. The default connection still resolves the framework's active request/transaction scope; discovery never selects tenants, opens a database connection, or bypasses RLS.
-
-### Model-first development and custom repositories
-
-For ordinary persistence, use `defineModel(table)` and the model's `create`, `find`, query and instance write APIs. `Model.repository()` exposes its automatically supplied repository when a repository operation is appropriate. Do not create a boilerplate repository merely to make the model work. A custom `BaseRepository` remains useful for reusable query methods, explicit connection behavior or repository-specific state; bind it explicitly before boot when needed.
-
-`make:module` generates a repository/service/controller API resource, not an Active Record model. That scaffold originated before declarative model binding (module generator commit `5e3cf78`; declarative binding and discovery commit `1468cde`). Both workflows remain supported. There is no separate `make:repository` command in the current command registry; the repository file is part of the module scaffold. Models outside the discovery directory still need explicit imports and boot/registration.
-
-`strata make:model Invoice` creates an id-only, typed declarative model under `src/models/Invoice.ts`. Nested `Billing/Invoice` produces `src/models/Billing/Invoice.ts` with the distinct class name `BillingInvoice`. The default table name is the snake-case path plus `s`; use `--table` for an existing or irregular table name. Explicit key metadata is supported:
-
-```bash
-bunx strata make:model ExperimentLead --table=experiment_lead --key-type=string
-bunx strata make:migration create_experiment_lead
-```
-
-The model generator does not create a migration, infer domain fields, enable timestamp columns, create routes, or generate a repository. Add domain fields consistently to the record, table columns and explicit `$fillable` allowlist. Numeric generated keys are not mass assignable by default; a string key is explicitly assignable so the app can supply its identifier. Empty inserts retain the existing repository rejection. Use the separate migration command and fill its up/down callbacks deliberately; generating a model never changes a database. `--primary-key=lead_id` supports a different simple key name.
-
-Generation refuses unsafe paths, reserved orchestration names, symlinked output parents, unknown options and existing files; there is no force-overwrite option. Discovery still rejects ambiguous exported class names, including collisions with manually authored models. Existing applications must add the new command to their app-owned CLI registry after upgrading a release containing it; a package install does not rewrite that file.
-
-Normal model reads, `Model.chunk()` and `Model.cursorPaginate()` retain global scopes. Each scope is grouped separately and ANDed with caller predicates, including top-level or callback OR conditions. Repeated `where()` predicates compose with AND; they no longer replace an earlier filter on the same column. Callback `where()` predicates form a group. Cursor bounds also intersect existing filters rather than overwriting a key condition or allowing an OR branch to escape the cursor. To intentionally read without model global scopes, use the explicit repository API. This does not disable database RLS or the repository's soft-delete policy.
-
-Model-defined relations apply the **related target model's** global filters to lazy reads, batched eager loads, existence/absence predicates and projected counts. This covers hasMany/hasOne, belongsTo, belongsToMany, hasManyThrough and polymorphic relations. Relation `where()` filters also compose with AND and are retained during eager loading; association keys and morph discriminators cannot be overwritten by those filters. Target soft-delete filters apply to existence and count subqueries as well as normal reads.
-
-Eager loads reuse the parent repository connection (`withConnection`), preserving Postgres RLS `SET LOCAL` on the request transaction. Collection loading stays batched, with one target query per known morph type. Morph targets match both type and ID, so a missing or filtered target cannot borrow another type's row with the same ID. Eager hasOne selects the first visible row per parent, rather than limiting the entire batch to one row.
-
-`belongsToMany().attach(ids)` batches inserts and `detach(ids)` batches deletion with the active SQL dialect's bound parameters. `toggle(ids)` batches unique canonical integer identifiers within JavaScript's safe integer range. Repeated IDs retain sequential flip semantics, including equivalent numeric, string and bigint IDs such as `2`, `"2"` and `2n`. Other inputs use sequential database comparisons inside the same transaction: an integer column can equate `2` and `"02"`, while a text column can keep `"2"` and `"02"` distinct or apply case-insensitive collation. The framework does not normalize those IDs globally or infer column types/collations from TypeScript model types.
-
-Configured/default repositories reuse the active transaction for pivot writes; nested `attach` and `toggle` use framework savepoints. A caught failed toggle rolls back its earlier deletions. An independent custom repository keeps its own connection and transaction, so it does not become part of another database's transaction. Custom connections without `begin()` cannot provide atomic multi-statement toggles.
-
-`hasManyThrough` applies target model scopes to the far table; intermediate/pivot tables are joins, not hydrated related models, and their model boot scopes are not automatically applied. Use RLS on every tenant-owned table or explicit scoped join constraints. Explicit low-level repository relation loaders remain unscoped with respect to model global filters. Legacy raw morph indexing helpers key their map by ID; callers mixing types with overlapping IDs must partition by type, as the model eager loader does.
-
-`Model.scopeQuery(repository.query())` applies model filters to a query on an explicitly selected repository/connection. `RepositoryQuery.getOptions()` exposes the compiled filters for the framework's batched loaders; `QueryOptions.whereNodes` carries grouped predicates through those loaders. Scopes that constrain rows with predicates and joins participate in existence queries. A scope join that collides with the outer parent or a fixed pivot/through table is rejected in correlated queries rather than silently binding to the wrong table; use an explicitly aliased correlated predicate for those policies. Projection, ordering, pagination and grouped aggregates are query transformations, not row-visibility guarantees, and are not a substitute for policies or database RLS.
-
-```typescript
-import { registerModelClass, registerModelRepository } from "@getstrata/core/database/model";
-
-// Only alternate aliases need registerModelClass.
-registerModelClass("catalog-category", Category);
-registerModelRepository(Category, new CategoryRepository());
-registerModelRepository(Product, new ProductRepository());
-
-const products = await Product.with("category").get();
-products[0]?.loaded<{ get: (key: string) => unknown }>("category")?.get("name");
-
-const lines = await CartItem.with(["product"]).get();
-```
+Custom repository state belongs in `create(binding, ...dependencies)`. Model
+construction belongs in `construct(state, binding, source, ...dependencies)`;
+serialization belongs in `attributes.dehydrate`. These replace protected cloning
+and serialization overrides. `discoverModels`, `bootModels`, `registerModelClass`
+and `registerModelRepository` global registration APIs are removed. Generated
+modules emit definitions for the application registry; discovery must not acquire
+connections or infer an application owner.
 
 ## Named connections
 

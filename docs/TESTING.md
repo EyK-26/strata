@@ -192,7 +192,7 @@ SQLite, MySQL and PostgreSQL. The consumer creates its business table through a
 normal framework migration. Runtime connections use the restricted fixture URLs;
 only the migration command receives administrative credentials. The consumer uses
 public connection factories, `BaseRepository`, transactions and model events. It
-checks native private state, legacy constructor behavior, independent bindings,
+checks native private state, explicit constructor behavior, independent owner/session bindings,
 rollback, deferred events and reads through separate native connections.
 
 After building core and bootstrap, run the three cases sequentially with:
@@ -342,7 +342,7 @@ extraction is a separate follow-up.
 `tests/e2e/modelWriteHooks.test.ts` runs the existing generated-app repository
 harness for SQLite, MySQL and PostgreSQL with `--model-write-hooks`. After every
 original private-state repository, connection, transaction and event assertion,
-the opt-in fixture checks synchronous/asynchronous protected model serialization,
+the opt-in fixture checks synchronous/asynchronous model definition serialization,
 dirty-only updates, unchanged saves, stale unrelated fields, rejection before SQL
 and retry on the same instance. It uses the same migrated application table and
 restricted runtime credentials; no runtime DDL, extra grant or package patch.
@@ -355,32 +355,13 @@ profiles and assertions remain. The old published 2.2.48 fails this new contract
 on all three engines; the corrected candidate passes all three. Historical
 113-profile published acceptance remains a record of its original selected scope.
 
-Model registration and observer bookkeeping now live in an internal owner with
-type-only references to the public Model and repository classes. Boot admission and
-scope application retain their public Model facade. `model.registration.test.ts` first
-characterizes duplicate-name admission, failed-boot observer restoration, async
-observer cancellation before SQL and concrete-class ownership on the original
-implementation. The same assertions pass after extraction. Existing Model query,
-projection, protected extension and write bodies are preserved; no registry maps or
-new public package entrypoints are exposed.
-
-`verify-repository-rebinding.ts --database=sqlite --model-registry-contracts` runs
-every original installed repository/transaction/event assertion before a separate
-public Model consumer. Exact published 2.2.48 and fresh candidate packages both
-pass duplicate alias, boot retry, per-class repository identity and observer
-admission checks. This adds one installed E2E and one next-release profile; it
-does not replace the earlier attribute, protected write-hook or lifecycle profiles.
-
-Model query/projection forwarding and relation-path hydration now live in a separate
-internal owner. Boot admission and global-scope state share the existing registration
-owner; both owners refer to Model through type-only imports. Query, projection,
-boot and observer behavior is unchanged by this extraction, including every defensive
-branch and all seven typed relation-forwarding contracts. The public Model facade,
-protected extension dispatch and legacy export identities remain supported.
-The database suite checks both extracted owners at full function/line coverage,
-and the installed `--model-query-contracts` consumer still runs all original
-repository, private-state, transaction and event assertions before its Model checks.
-Moving these owners adds no public entrypoint, new scenario or coverage exemption.
+The current refactor replaces per-class registration, protected cloning and global
+repository selection with explicit application-owned definitions. Installed model
+query, projection, serialization, rollback and observer assertions remain required;
+construction functions supply native private state. See the
+[completion ledger](architecture/refactor-completion-ledger.md) for removed legacy
+assertions and their behavioral replacements. Published 2.x receipts above retain
+their historical scope and do not qualify the breaking candidate.
 
 Relation through-join and pivot lookup SQL now have an internal compiler owner
 that reuses the existing dialect, predicate and join compilers. Repository methods

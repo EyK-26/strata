@@ -367,14 +367,13 @@ MySQL has no native mutation `RETURNING`. Entity-returning repository creates, u
 
 Injected repositories can select a root pool through `runInTransaction(operation, { connection })`; default repository queries inside the callback share that active connection. Nested calls use savepoints and reject switching to an unrelated pool. The callback connection works with `repository.withConnection(db)`, including row locks. A transaction callback must not outlive its owning scope. Transactional observers still require an explicit outer framework transaction; do not use repository readback transactions as an implicit business transaction.
 
-Repositories with constructor-initialized state or JavaScript `#private` fields must override
-`protected cloneWithConnection(connection): this` to construct a valid instance using that
-state and the supplied connection. `withConnection` delegates to this hook and leaves the
-original repository unchanged. The default hook preserves the existing shallow copy and
-prototype behavior for ordinary repositories; it cannot create native private-field brands.
-An override must return the same concrete repository type, carry all required state and
-use the supplied connection. Subclasses that introduce additional private state must extend
-that contract rather than relying on an inherited constructor for a different concrete type.
+Repositories with constructor-initialized state or JavaScript `#private` fields
+use a `defineRepository` construction function. Its `create(binding, ...dependencies)`
+returns a new valid instance using the supplied owner/session binding. Declare
+those definitions in `createDatabaseBindings` and select them with
+`database.repository(definition)`. The framework does not copy prototypes or invoke
+`cloneWithConnection`; the former protected override and `withConnection` rebinding
+contract are removed. See [explicit model binding](DATABASE.md#declarative-model-binding).
 
 MySQL upsert uses the engine's native unique-index semantics, which do not target a single named conflict constraint. Supply non-null conflict-column values so zero-insert-ID results can be resolved deterministically; an unresolved row rolls back instead of returning metadata. An explicit empty update-column list returns null for an existing conflict and a row for a new insert. This path locks the conflict lookup and may deadlock under contention, like other transactional MySQL upserts; callers must handle transaction failures rather than retry external effects blindly.
 
@@ -581,7 +580,12 @@ Writes and filters infer declared field names and value types. Use `Product.quer
 
 ### Model composition
 
-For ordinary SQL models, extend `defineModel(table)` from `@getstrata/core/database/model` with a typed `defineTable` definition. Generated startup awaits `discoverModels` from `@getstrata/bootstrap/discoverModels`; the framework supplies default repositories and registers relationship names before boot. Use `bootModels([...])` with static imports when filesystem discovery is unsuitable, and retain `registerModelRepository` only for explicit custom repository bindings. Existing manually registered models are compatible. See [DATABASE.md](./DATABASE.md#declarative-model-binding) for startup ordering, aliases and migration guidance.
+For ordinary SQL models, declare `defineRepository({ name, table, dependencies, create })`
+and `defineModel({ name, repository, dependencies, attributes, construct })`, then
+register those definitions with the application's `createDatabaseBindings`. An owned
+execution selects `database.model(definition)`; that bound facade provides query,
+create and instance write APIs. There is no global model discovery, registration or
+default repository. See [DATABASE.md](DATABASE.md#declarative-model-binding).
 
 ### Graceful lifecycle
 

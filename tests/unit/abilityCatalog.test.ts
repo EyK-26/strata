@@ -12,5 +12,7 @@ describe("abilityCatalog", () => {
     expect(MEMBER_ABILITIES).toContain("profile:read");
     expect(MEMBER_ABILITIES).toContain("auth:tokens:delete");
     expect(ADMIN_ABILITIES).toContain("webhooks:write");
+    expect(Object.isFrozen(MEMBER_ABILITIES)).toBe(true);
+    expect(Object.isFrozen(ADMIN_ABILITIES)).toBe(true);
   });
 });
