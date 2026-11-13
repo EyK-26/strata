@@ -24,6 +24,10 @@ import {
   renderAuthProvider,
 } from "../../../packages/strata-starter/src/renderAuth.ts";
 import {
+  renderCreateAppTs,
+  renderRoutesTs,
+} from "../../../packages/strata-starter/src/renderBootstrap.ts";
+import {
   renderEnvExample,
   renderPackageJson,
 } from "../../../packages/strata-starter/src/renderEnv.ts";
@@ -237,3 +241,41 @@ describe("compiled decision consumption", () => {
     },
   );
 });
+
+test.each([false, true])(
+  "route assembly passes the resolved module list to every enabled builder (views=%s)",
+  (views) => {
+    const source = renderRoutesTs()
+      .replace(/^import .*;\n/gm, "")
+      .replace("export function", "function");
+    const javascript = new Bun.Transpiler({ loader: "ts" }).transformSync(source);
+    const modules = [{ name: "owned-api-and-browser-module" }];
+    const seen: unknown[] = [];
+    const build = new Function(
+      "buildModuleRoutes",
+      "buildWebModuleRoutes",
+      "composeRouteMaps",
+      "isViewsEnabled",
+      `${javascript}; return buildRoutes;`,
+    )(
+      (_dependencies: unknown, options: { modules: unknown }) => {
+        seen.push(options.modules);
+        return { "/api/owned": true };
+      },
+      (_dependencies: unknown, options: { modules: unknown }) => {
+        seen.push(options.modules);
+        return { "/owned": true };
+      },
+      (...maps: object[]) => Object.assign({}, ...maps),
+      () => views,
+    );
+    const routes = build({}, modules);
+    expect(routes["/api/owned"]).toBe(true);
+    expect(routes["/owned"]).toBe(views ? true : undefined);
+    expect(seen).toHaveLength(views ? 2 : 1);
+    for (const observed of seen) expect(observed).toBe(modules);
+    expect(renderCreateAppTs(compileStarterFeatures(defaultLayers()))).toContain(
+      "buildRoutes(dependencies, modules)",
+    );
+  },
+);

@@ -319,7 +319,7 @@ export async function bootstrapApp(options:BootstrapOptions={}):Promise<Bootstra
     ${layers.extras.metrics ? 'const {failedJobs,outbox,...runtime}=options.runtimeMetrics??{};metrics=createMetricsRuntime({...runtime,...(failedJobs?{failedJobs:{...failedJobs,observeReadOnly:createOwnedReadOnlyObservation(handle.application,"main",dbOptions)}}:{}),...(outbox?{outbox:{...outbox,observeReadOnly:createOwnedReadOnlyObservation(handle.application,"main",dbOptions,{postgresPolicy:"bypass"})}}:{})});onCleanup(()=>metrics!.close(),"drain");' : "void onCleanup;"}
     routes=mergeSpaRoutes(dependencies,composeRouteMaps(
       Object.fromEntries(Object.entries(createHealthRoutes(dependencies,{pingOnHealth:true,healthFormat:"text",schemaCheck:()=>dependencies.invoke({kind:"request",actor:{kind:"system",policy:"http.schema-health"}},async({database})=>{try{await database.model(Note).query().limit(1).select("id").get();return true;}catch{return false;}})})).map(([path,handler])=>[path,kernel!.wrapPublicDocument(handler)])),
-      buildRoutes(dependencies),${layers.extras.metrics ? "\n      Object.fromEntries(Object.entries(createMetricsRoutes({...metrics?.options,authorization:{token:env.METRICS_TOKEN,production}})).map(([path,handler])=>[path,kernel!.wrapPublicDocument(handler)]))," : ""}
+      buildRoutes(dependencies, modules),${layers.extras.metrics ? "\n      Object.fromEntries(Object.entries(createMetricsRoutes({...metrics?.options,authorization:{token:env.METRICS_TOKEN,production}})).map(([path,handler])=>[path,kernel!.wrapPublicDocument(handler)]))," : ""}
     ),{distDirectory:join(import.meta.dir,"../../frontend/dist"),wrap:handler=>kernel!.wrapPublicDocument(handler)});
   }};
   const handle=createApplicationContext([],{
@@ -355,12 +355,12 @@ function renderRoutesTs(): string {
 import { buildWebModuleRoutes } from "@getstrata/bootstrap/buildWebModuleRoutes";
 import { composeRouteMaps } from "@getstrata/bootstrap/routePlan";
 import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
-import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
+import type { AppDependencies, AppModule, AppRouteMap } from "@getstrata/bootstrap/contracts";
 
-export function buildRoutes(dependencies: AppDependencies): AppRouteMap {
-  const api = buildModuleRoutes(dependencies);
+export function buildRoutes(dependencies: AppDependencies, modules: readonly AppModule[]): AppRouteMap {
+  const api = buildModuleRoutes(dependencies, { modules });
   return composeRouteMaps(
-    ...(isViewsEnabled() ? [buildWebModuleRoutes(dependencies)] : []),
+    ...(isViewsEnabled() ? [buildWebModuleRoutes(dependencies, { modules })] : []),
     api,
   );
 }
