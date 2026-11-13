@@ -49,3 +49,9 @@ Discover registered commands with `bunx strata help`. `dev` and `start` run HTTP
 - [Getting started](https://github.com/EyK-26/strata/blob/main/docs/GETTING-STARTED.md)
 - [Starter and layers](https://github.com/EyK-26/strata/blob/main/docs/STARTER.md)
 - [Building apps](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md)
+
+## Work tracker reference
+
+The programmatic generator accepts `reference: "work-tracker"` alongside user authentication and tenant isolation. It emits the same organization/member/project/task domain for cookie/server and token/API applications. Owners manage memberships and projects, members create and complete tasks, and viewers read. `/work` provides cookie-authenticated forms with CSRF protection; `/api/v1/work` exposes the shared workflow for API clients. An authenticated request supplies the tenant and actor; payload fields cannot override them.
+
+Every accepted mutation writes a durable audit record and publishes through the framework SQL outbox inside the same transaction. The included `work.notification` listener records delivery idempotently; run the ordinary outbox worker to consume pending events. The reference uses explicit tenant predicates and composite foreign keys on every driver, and adds PostgreSQL RLS policies when selected. This is a bounded reference workflow, not a complete project-management product.

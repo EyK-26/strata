@@ -94,6 +94,12 @@ import {
   renderUserModel,
 } from "./renderModels.ts";
 import { renderScimModule } from "./renderScim.ts";
+import {
+  renderWorkTrackerDomain,
+  renderWorkTrackerMigration,
+  renderWorkTrackerModels,
+  renderWorkTrackerModule,
+} from "./renderWorkTracker.ts";
 import type { GenerateOptions, StarterLayers } from "./types.ts";
 import {
   dockerComposeUpCommand,
@@ -255,7 +261,10 @@ export const TENANCY_ENABLED = ${decisions.tenantTable};
   } else {
     removeIfExists(join(src, "bootstrap/ensureDatabase.ts"));
   }
-  writeText(join(src, "bootstrap/createApp.ts"), renderCreateAppTs(layers));
+  writeText(
+    join(src, "bootstrap/createApp.ts"),
+    renderCreateAppTs(layers, plan.reference === "work-tracker"),
+  );
   writeText(join(src, "bootstrap/schedule.ts"), renderScheduleTs());
   writeText(join(src, "cli/register.ts"), renderCliRegisterTs(layers));
   const initialAdminCommand = renderInitialAdminCommand(layers);
@@ -269,7 +278,10 @@ export const TENANCY_ENABLED = ${decisions.tenantTable};
   }
   writeText(join(src, "cli/queueWork.ts"), renderCliQueueWorkTs());
   writeText(join(src, "cli/outboxWork.ts"), renderCliOutboxWorkTs());
-  writeText(join(src, "outbox/registry.ts"), renderOutboxRegistryTs());
+  writeText(
+    join(src, "outbox/registry.ts"),
+    renderOutboxRegistryTs(plan.reference === "work-tracker"),
+  );
   writeText(join(src, "cli/queueFailed.ts"), renderCliQueueFailedTs());
   writeText(join(src, "cli/openapi.ts"), renderCliOpenApiTs());
   writeText(join(src, "cli/scheduleRun.ts"), renderCliScheduleRunTs());
@@ -291,7 +303,10 @@ export const TENANCY_ENABLED = ${decisions.tenantTable};
   } else {
     removeIfExists(join(src, "models/ApiToken.ts"));
   }
-  writeText(join(src, "models/register.ts"), renderModelsRegister(layers));
+  writeText(
+    join(src, "models/register.ts"),
+    renderModelsRegister(layers, plan.reference === "work-tracker"),
+  );
   writeText(join(src, "db/migrate.ts"), renderMigrateTs(layers));
   writeText(join(src, "db/migrationRuntime.ts"), renderMigrationRuntimeTs(layers));
   writeText(
@@ -409,6 +424,13 @@ export const TENANCY_ENABLED = ${decisions.tenantTable};
     }
   }
 
+  if (plan.reference === "work-tracker") {
+    writeText(join(src, "domain/workTracker.ts"), renderWorkTrackerDomain());
+    writeText(join(src, "models/workTracker.ts"), renderWorkTrackerModels());
+    writeText(join(src, "modules/workTracker/index.ts"), renderWorkTrackerModule());
+    writeText(join(src, "db/migrations/0007_work_tracker.ts"), renderWorkTrackerMigration(layers));
+  }
+
   mkdirSync(join(targetDir, "storage"), { recursive: true });
   writeText(join(targetDir, "storage/.gitkeep"), "");
 }
@@ -453,7 +475,7 @@ function printNextSteps(
 
 function generateProject(options: GenerateOptions): void {
   assertProjectName(options.projectName);
-  const plan = compileStarterFeatures(options.layers);
+  const plan = compileStarterFeatures(options.layers, options.reference);
   mkdirSync(dirname(options.targetDir), { recursive: true });
   // mkdir is the ownership boundary: it refuses files, directories and dangling symlinks.
   // --force never authorizes deleting an existing application's data.

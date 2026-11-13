@@ -191,7 +191,7 @@ export function createStarterProviders(env:Readonly<Record<string,string|undefin
 `;
 }
 
-function renderCreateAppTs(layers: StarterLayers): string {
+function renderCreateAppTs(layers: StarterLayers, workTracker = false): string {
   const ensure = needsEnsure(layers)
     ? 'import { ensureAppDatabase } from "./ensureDatabase.ts";\n'
     : "";
@@ -199,7 +199,7 @@ function renderCreateAppTs(layers: StarterLayers): string {
     ? 'import { createMetricsRoutes, createMetricsRuntime, type MetricsRuntime, type MetricsRuntimeOptions } from "@getstrata/bootstrap/metricsRoutes";\nimport { createOwnedReadOnlyObservation } from "@getstrata/core/database/ownedReadOnlyObservation";\n'
     : "";
   return `import "./preload.ts";
-import { join } from "node:path";
+${workTracker ? 'import { WORK_TRACKER_OUTBOX } from "../domain/workTracker.ts";\n' : ""}import { join } from "node:path";
 import { createApplicationContext, type InitializedAppContext } from "@getstrata/bootstrap/context";
 import { assertAppDependenciesComplete, type AppRouteMap, type ServiceProvider } from "@getstrata/bootstrap/contracts";
 import type { Application } from "@getstrata/core/contracts/application";
@@ -317,7 +317,7 @@ export async function bootstrapApp(options:BootstrapOptions={}):Promise<Bootstra
       ...(production?{publicTenancy:{resolveTenantId:async(host:string)=>host===new URL(config.appUrl).hostname?1:null}}:{}),${layers.extras.scim ? "\n      scim:createScimAuthenticator({resolveToken:token=>resolveScimTenantFromToken(token,env),resolveTenant})," : ""}
     },
     onConstructed:owner=>{invoke=owner.invoke;options.onConstructed?.(owner.application);return undefined;},
-    providersFromScope:scope=>{auditExport=scope.resolve(STARTER_AUDIT_EXPORT_TOKEN);readyQueueServices=scope.resolve(STARTER_QUEUE_SERVICES_TOKEN);const coordinator=scope.resolve(outbox.token);const publish=coordinator.publish;publisher=Object.freeze({publish:(...args:Parameters<SqlOutbox["publish"]>)=>publish.call(coordinator,...args)});return [...createStarterProviders(env,auth,scope.resolve(STARTER_CACHE_TOKEN),scope.resolve(STARTER_QUEUE_TOKEN),scope.resolve(STARTER_QUEUE_SERVICES_TOKEN),scope.resolve(APPLICATION_EVENT_BUS_TOKEN),scope.resolve(STARTER_BILLING_OPTIONS_TOKEN)),...modules.flatMap(module=>module.providers??[]),assembly];},
+    providersFromScope:scope=>{auditExport=scope.resolve(STARTER_AUDIT_EXPORT_TOKEN);readyQueueServices=scope.resolve(STARTER_QUEUE_SERVICES_TOKEN);const coordinator=scope.resolve(outbox.token);const publish=coordinator.publish;publisher=Object.freeze({publish:(...args:Parameters<SqlOutbox["publish"]>)=>publish.call(coordinator,...args)});return [...createStarterProviders(env,auth,scope.resolve(STARTER_CACHE_TOKEN),scope.resolve(STARTER_QUEUE_TOKEN),scope.resolve(STARTER_QUEUE_SERVICES_TOKEN),scope.resolve(APPLICATION_EVENT_BUS_TOKEN),scope.resolve(STARTER_BILLING_OPTIONS_TOKEN)),${workTracker ? '{name:"starter.workTracker",register({container}){container.set(WORK_TRACKER_OUTBOX,publisher!);}},' : ""}...modules.flatMap(module=>module.providers??[]),assembly];},
     definition:{config:{application:{url:config.appUrl,production}},services:[
       ...(options.services??[]),...outbox.services,...createStarterServices(env,run),...createDatabaseReadinessBindings("main",env),...catalog.flatMap(declaration=>declaration.services),
       ...createDatabaseBindings({default:"main",connections:{main:dbOptions},preparation:[outbox.token],repositories:[...repositoryDefinitions,failedJobRepository,...(options.persistence?.repositories??[])],models:[...modelDefinitions,...(options.persistence?.models??[])],repositoryEffects:[...catalog.flatMap(declaration=>declaration.repositoryEffects),...(options.persistence?.repositoryEffects??[])]}),
@@ -355,11 +355,11 @@ export function buildRoutes(dependencies: AppDependencies): AppRouteMap {
 `;
 }
 
-function renderOutboxRegistryTs(): string {
+function renderOutboxRegistryTs(workTracker = false): string {
   return `import type { DurableListener } from "@getstrata/core/events/outbox";
-
+${workTracker ? 'import { workTrackerListener } from "../domain/workTracker.ts";\n' : ""}
 /** Add listeners before publishing. An empty registry can run, and publish rejects unknown events. */
-const listeners: readonly DurableListener[] = [];
+const listeners: readonly DurableListener[] = [${workTracker ? "workTrackerListener" : ""}];
 
 export { listeners };
 `;

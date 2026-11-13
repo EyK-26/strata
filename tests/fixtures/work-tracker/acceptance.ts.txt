@@ -1,0 +1,134 @@
+import assert from "node:assert/strict";
+import { bootstrapApp } from "./src/bootstrap/createApp.ts";
+import { hashPassword } from "@getstrata/core/auth/password";
+import { withMigrationDatabase } from "./src/db/migrationRuntime.ts";
+import { createWorkTracker } from "./src/domain/workTracker.ts";
+
+const postgres=process.env.WORK_TRACKER_DATABASE==="postgres";
+const cookieMode=process.env.WORK_TRACKER_TRANSPORT==="cookie";
+const probe=Bun.serve({hostname:"127.0.0.1",port:0,fetch:()=>new Response(null)});
+const port=probe.port!;
+await probe.stop(true);
+const origin=`http://127.0.0.1:${port}`;
+process.env.APP_URL=origin;
+process.env.PORT=String(port);
+const app=await bootstrapApp({mode:"http",server:{port,native:{hostname:"127.0.0.1"}}});
+function merge(response:Response,previous=""){
+  const jar=new Map(previous.split(";").filter(Boolean).map(part=>{const [key,...value]=part.trim().split("=");return [key!,value.join("=")] as const;}));
+  for(const cookie of response.headers.getSetCookie()){const [key,...value]=cookie.split(";")[0]!.split("=");jar.set(key!,value.join("="));}
+  return [...jar].map(([key,value])=>key+"="+value).join("; ");
+}
+type Selected=import("@getstrata/core/contracts/persistence").SelectedSession;
+const invoke=<T>(work:(db:Selected)=>Promise<T>)=>app.invoke({kind:"command",actor:{kind:"system",policy:"reference.acceptance"}},({database,policy})=>postgres?policy.run(database,{kind:"bypass"},work):database.transaction(work));
+const execute=<T>(db:Selected,text:string,params:readonly unknown[]=[])=>{let index=0;return db.execute<T>({text:text.replace(/\?/g,()=>db.dialect.placeholder(++index)),params});};
+const count=(table:string)=>invoke(async db=>Number((await db.execute<{n:number}>({text:`SELECT COUNT(*) AS n FROM ${table}`,params:[]}))[0]!.n));
+try {
+  const password=await hashPassword("Reference-password-2026!");
+  await invoke(async db=>{
+    await execute(db,"INSERT INTO tenant(id,slug) VALUES(1,'alpha'),(2,'beta')");
+    for(const [id,tenant] of [[1,1],[2,1],[3,1],[4,2]])await execute(db,"INSERT INTO users(id,name,email,password,is_admin,tenant_id) VALUES(?,?,?,?,FALSE,?)",[id,"Actor "+id,`actor${id}@example.test`,password,tenant]);
+  });
+  async function credential(id:number){
+    const tenant=id===4?2:1;
+    let cookie="",token="",csrf="";
+    if(cookieMode){
+      const page=await fetch(origin+"/login",{headers:{"x-tenant-id":String(tenant)}});
+      assert.equal(page.status,200,await page.clone().text());
+      cookie=merge(page);
+      const html=await page.text();
+      csrf=html.match(/name="_token"\s+value="([^"]+)"/)?.[1]??"";
+      assert.ok(csrf,"login form carries CSRF");
+      const response=await fetch(origin+"/login",{method:"POST",redirect:"manual",headers:{cookie,origin,"x-tenant-id":String(tenant),"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({_token:csrf,email:`actor${id}@example.test`,password:"Reference-password-2026!"})});
+      assert.equal(response.status,302,await response.clone().text());
+      cookie=merge(response,cookie);
+    }else{
+      const challenge=await fetch(origin+"/api/v1/auth/csrf",{headers:{"x-tenant-id":String(tenant)}});
+      cookie=merge(challenge);
+      csrf=(await challenge.json() as {token:string}).token;
+      const response=await fetch(origin+"/api/v1/auth/login",{method:"POST",headers:{cookie,origin,"x-tenant-id":String(tenant),"x-csrf-token":csrf,"content-type":"application/json"},body:JSON.stringify({email:`actor${id}@example.test`,password:"Reference-password-2026!"})});
+      assert.equal(response.status,200,await response.clone().text());
+      token=(await response.json() as {token:string}).token;
+      assert.ok(token);
+    }
+    const headers=()=>cookieMode?{cookie,origin,"x-csrf-token":csrf,"content-type":"application/json"}:{authorization:"Bearer "+token,"content-type":"application/json"};
+    return {cookie,csrf,headers,
+      async request(input:Record<string,unknown>,expected=200){
+        const response=await fetch(origin+"/api/v1/work",{method:"POST",headers:headers(),body:JSON.stringify(input)});
+        assert.equal(response.status,expected,await response.clone().text());
+        return response;
+      },
+      async tasks(organization:string,expected=200){
+        const response=await fetch(origin+"/api/v1/work?organization="+organization,{headers:headers()});
+        assert.equal(response.status,expected,await response.clone().text());
+        return response;
+      },
+    };
+  }
+  const owner=await credential(1),member=await credential(2),viewer=await credential(3),other=await credential(4);
+  const organization=await(await owner.request({action:"organization",name:"Alpha"})).json() as {id:string};
+  const otherOrganization=await(await other.request({action:"organization",name:"Beta"})).json() as {id:string};
+  await owner.request({action:"member",organization:organization.id,userId:2,role:"member"});
+  await owner.request({action:"member",organization:organization.id,userId:3,role:"viewer"});
+  await member.request({action:"member",organization:organization.id,userId:4,role:"member"},403);
+  await owner.request({action:"member",organization:organization.id,userId:4,role:"owner"},400);
+  await viewer.request({action:"project",organization:organization.id,name:"Denied"},403);
+  const project=await(await owner.request({action:"project",organization:organization.id,name:"Launch"})).json() as {id:string};
+  const otherProject=await(await other.request({action:"project",organization:otherOrganization.id,name:"Other launch"})).json() as {id:string};
+  await other.request({action:"task",organization:otherOrganization.id,project:otherProject.id,title:"Other private task"});
+  const task=await(await member.request({action:"task",organization:organization.id,project:project.id,title:"Ship <safe>",tenantId:2,userId:4})).json() as {id:string;tenant_id:number};
+  assert.equal(task.tenant_id,1,"payload cannot override established tenant/actor");
+  assert.equal((await(await viewer.tasks(organization.id)).json() as unknown[]).length,1);
+  await viewer.request({action:"complete",organization:organization.id,task:task.id},403);
+  await other.tasks(organization.id,403);
+  await owner.tasks(otherOrganization.id,403);
+  await other.request({action:"task",organization:otherOrganization.id,project:project.id,title:"Cross project"},404);
+  const wrongTenant=await fetch(origin+"/api/v1/work?organization="+organization.id,{headers:{...owner.headers(),"x-tenant-id":"2"}});
+  assert.ok([403,404].includes(wrongTenant.status),"cannot replace established tenant with development header");
+  if(cookieMode){
+    const page=await fetch(origin+"/work?organization="+organization.id,{headers:{cookie:member.cookie}});
+    assert.equal(page.status,200,await page.clone().text());
+    const html=await page.text();
+    assert.ok(html.includes("Ship &lt;safe&gt;"),"HTML escapes task titles");
+    const formToken=html.match(/name="_token"\s+value="([^"]+)"/)?.[1]??"";
+    const cookie=merge(page,member.cookie);
+    const denied=await fetch(origin+"/work",{method:"POST",redirect:"manual",headers:{cookie,origin},body:new URLSearchParams({action:"complete",organization:organization.id,task:task.id})});
+    assert.equal(denied.status,403,"cookie form requires CSRF");
+    const completed=await fetch(origin+"/work",{method:"POST",redirect:"manual",headers:{cookie,origin},body:new URLSearchParams({_token:formToken,action:"complete",organization:organization.id,task:task.id})});
+    assert.equal(completed.status,303,await completed.clone().text());
+  }else await member.request({action:"complete",organization:organization.id,task:task.id});
+  assert.equal((await(await owner.tasks(organization.id)).json() as {status:string}[])[0]!.status,"done");
+  const before={tasks:await count("work_tasks"),audit:await count("work_audit"),events:await count("strata_outbox_event"),deliveries:await count("strata_outbox_delivery")};
+  // A real SQL failure after the task and audit insert must roll back all three writes.
+  await withMigrationDatabase(async db=>{
+    if(postgres){
+      await db.unsafe("CREATE FUNCTION reject_reference_outbox() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'reference outbox failure' USING ERRCODE='23514'; END; $$");
+      await db.unsafe("CREATE TRIGGER reject_reference_outbox BEFORE INSERT ON strata_outbox_event FOR EACH ROW EXECUTE FUNCTION reject_reference_outbox()");
+    }else await db.unsafe("CREATE TRIGGER reject_reference_outbox BEFORE INSERT ON strata_outbox_event BEGIN SELECT RAISE(ABORT,'reference outbox failure'); END");
+  });
+  await member.request({action:"task",organization:organization.id,project:project.id,title:"Must roll back"},400);
+  await withMigrationDatabase(async db=>{
+    await db.unsafe(postgres?"DROP TRIGGER reject_reference_outbox ON strata_outbox_event":"DROP TRIGGER reject_reference_outbox");
+    if(postgres)await db.unsafe("DROP FUNCTION reject_reference_outbox()");
+  });
+  assert.deepEqual({tasks:await count("work_tasks"),audit:await count("work_audit"),events:await count("strata_outbox_event"),deliveries:await count("strata_outbox_delivery")},before,"outbox failure rolls back task and durable audit");
+  // The same domain service works in a deliberately owned command execution.
+  await app.invoke({kind:"command",actor:{kind:"principal",claims:{id:2}},tenant:{id:1,slug:"alpha"}},async({database,policy})=>{
+    const read=async(selected:Selected)=>{
+      const records=await createWorkTracker(selected,app.outbox,{tenantId:1,userId:2}).tasks(organization.id);
+      assert.equal(records.length,1);
+      if(postgres){
+        const visible=await selected.execute<{tenant_id:number}>({text:"SELECT DISTINCT tenant_id FROM work_tasks",params:[]});
+        assert.deepEqual(visible.map(row=>row.tenant_id),[1],"restricted Postgres raw SQL enforces RLS");
+      }
+    };
+    if(postgres)await policy.run(database,{kind:"tenant",tenantId:1},read);else await read(database);
+  });
+  await invoke(db=>db.execute({text:"UPDATE users SET is_active=FALSE,auth_version=auth_version+1 WHERE id=2",params:[]}));
+  const revoked=await fetch(origin+"/api/v1/work?organization="+organization.id,{headers:member.headers()});
+  assert.equal(revoked.status,401,"revoked credential cannot reuse established membership");
+  assert.ok(before.events>=7&&before.events===before.deliveries&&before.events===before.audit,"one durable audit/event/delivery per accepted mutation");
+  console.log(JSON.stringify({transport:cookieMode?"cookie":"token",domain:"work-tracker",database:postgres?"postgres":"sqlite",rls:postgres,twoTenants:true,roles:["owner","member","viewer"],rollback:true,revocation:true,durableEvents:before.events}));
+} finally {
+  const result=await app.application.stop();
+  assert.equal(result.successful,true,"owned application cleanup completes");
+}

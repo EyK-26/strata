@@ -26,13 +26,14 @@ import {
 type Immutable<T> = { readonly [K in keyof T]: Immutable<T[K]> };
 
 export interface FeatureRequirement {
-  readonly feature: keyof CorporateExtras | "tenancy:rls";
-  readonly capability: "database:postgres" | "auth:cookie" | "auth:users";
+  readonly feature: keyof CorporateExtras | "tenancy:rls" | "reference:work-tracker";
+  readonly capability: "database:postgres" | "auth:cookie" | "auth:users" | "tenancy:enabled";
 }
 
 /** Known starter capabilities, compiled once before generation acquires an output directory. */
 export interface StarterFeaturePlan {
   readonly version: 1;
+  readonly reference?: "work-tracker";
   readonly layers: Immutable<StarterLayers>;
   readonly requirements: readonly FeatureRequirement[];
   readonly conflicts: readonly string[];
@@ -67,7 +68,12 @@ const EXTRA_KEYS: readonly (keyof CorporateExtras)[] = [
   "webhooks",
 ];
 
-export function compileStarterFeatures(input: StarterLayers): StarterFeaturePlan {
+export function compileStarterFeatures(
+  input: StarterLayers,
+  reference?: "work-tracker",
+): StarterFeaturePlan {
+  if (reference !== undefined && reference !== "work-tracker")
+    throw new Error("Unknown reference domain.");
   if (!input || typeof input !== "object") throw new Error("Starter layers are required.");
   const choices = {
     frontend: FRONTENDS,
@@ -110,6 +116,14 @@ export function compileStarterFeatures(input: StarterLayers): StarterFeaturePlan
     }
     if (!extraApplies(key, input.auth))
       conflicts.push(`${key} is unsupported with ${input.auth} authentication.`);
+  }
+  if (reference === "work-tracker") {
+    requirements.push(
+      { feature: "reference:work-tracker", capability: "auth:users" },
+      { feature: "reference:work-tracker", capability: "tenancy:enabled" },
+    );
+    if (!authNeedsUsers(input.auth) || !usesTenantTable(input.tenancy))
+      conflicts.push("Work tracker requires user authentication and tenant isolation.");
   }
   if (conflicts.length) throw new Error(`Invalid starter feature plan: ${conflicts.join(" ")}`);
   const layers = Object.freeze({
@@ -190,8 +204,16 @@ export function compileStarterFeatures(input: StarterLayers): StarterFeaturePlan
       "src/jobs/dispatchOutboundWebhookJob.ts",
       "src/listeners/noteCreatedWebhookListener.ts",
     );
+  if (reference === "work-tracker")
+    artifacts.push(
+      "src/domain/workTracker.ts",
+      "src/models/workTracker.ts",
+      "src/modules/workTracker/index.ts",
+      "src/db/migrations/0007_work_tracker.ts",
+    );
   return Object.freeze({
     version: 1,
+    ...(reference ? { reference } : {}),
     layers,
     decisions,
     requirements: Object.freeze(requirements.map((rule) => Object.freeze(rule))),
