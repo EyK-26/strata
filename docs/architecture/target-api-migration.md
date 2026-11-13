@@ -38,7 +38,7 @@ to deeper executable acceptance and records intentionally retired assertions. Th
 
 ## Release readiness
 
-Breaking API removals warrant the approved stable `3.0.0` release after qualification.
+Breaking API removals require the stable 3.x release line after qualification.
 This guide does not certify that qualification or publication occurred. Local
 archives must remain tied to their exact source and integrity receipts.
 

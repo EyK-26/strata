@@ -1,10 +1,10 @@
-# Stable major release operator procedure
+# Stable release operator procedure
 
-The corrected stable release is `3.0.1`. The publisher selects it only after the complete
-breaking-refactor acceptance inventory passes. A failed or incomplete gate blocks
-merge/publication. Local fixtures do not qualify hosted providers or authorize
-provisioning/deployment. The completion-sprint authorization covers merge and a new
-release once accepted; root owns GitHub and registry operations.
+The release version is the shared version in the five package manifests. The
+publisher selects it only after the required acceptance inventory passes. A failed
+or incomplete gate blocks merge/publication. Local fixtures do not qualify hosted
+providers or authorize provisioning/deployment. The release maintainer monitors
+CI, creates the tag and initiates publication.
 
 ## Admission and publication
 
@@ -21,8 +21,10 @@ release once accepted; root owns GitHub and registry operations.
 3. Complete the full required local gate, independent review and exact-head PR CI.
    Merge the reviewed result into actual `main`. Wait for successful `CI` from the
    `push` event at the exact merged SHA. A prior PR green run or earlier main SHA
-   does not qualify. The release workflow checks this API evidence itself.
-4. Root tags that exact SHA with `v3.0.1` and pushes the tag, or dispatches `Release`
+   does not qualify. The release workflow checks this API evidence itself once;
+   it fails immediately if no successful run exists and does not wait for CI.
+4. The maintainer tags that exact SHA with `v` followed by the package version and
+   pushes the tag, or dispatches `Release`
    with an already verified existing tag and the workflow ref set to that tag.
    Tag pushes trigger publication. The
    workflow repeats the release quality gate, packs each package once, records the
@@ -39,6 +41,17 @@ release once accepted; root owns GitHub and registry operations.
    URLs and publication run ID. A container failure can coexist with successful
    npm and GitHub publication; report each outcome independently.
 
+## Tag created before main CI passed
+
+`No successful main CI run for <commit>` means release admission failed before
+dependency installation, package packing or npm publication. Wait for successful
+main-push CI at that exact commit, then rerun the failed release job or dispatch
+`Release` with both its workflow ref and `tag` input set to the existing tag. Do
+not supply `recovery_run_id`: this early failure did not upload release archives.
+The same tag can be retried once its commit qualifies; moving the tag is unnecessary.
+If additional source changes are needed, merge them with a new package version and
+wait for that commit's main CI before creating a new tag.
+
 ## Partial publication and recovery
 
 The `v3.0.0` attempt passed its quality gate and builds, then failed before archive
@@ -52,11 +65,13 @@ Publication is not atomic across registries or packages. If any step fails, firs
 record which effects occurred. Do not move a tag, unpublish packages, overwrite a
 version, or create new archive bytes to force progress.
 
-For an npm failure after archive upload, root dispatches the same `Release` workflow
+For an npm failure after archive upload, the maintainer dispatches the same `Release` workflow
 with the same tag, workflow ref set to that tag, and `recovery_run_id` set to the original Release run ID:
 
 ```sh
-gh workflow run release.yml --ref v3.0.1 -f tag=v3.0.1 -f recovery_run_id=ORIGINAL_RUN_ID
+# Set this to the original failed run's tag, not a newer local package version.
+RELEASE_TAG=v3.0.2
+gh workflow run release.yml --ref "$RELEASE_TAG" -f tag="$RELEASE_TAG" -f recovery_run_id=ORIGINAL_RUN_ID
 ```
 
 The workflow rejects `GITHUB_SHA` differing from the checked-out release commit,

@@ -30,6 +30,8 @@ if (import.meta.main) {
   if (result.exitCode !== 0) throw new Error("Cannot establish exact-head CI success");
   const response = JSON.parse(result.stdout.toString());
   if (!Array.isArray(response.workflow_runs) || !hasAcceptedCI(response.workflow_runs, commit))
-    throw new Error(`No successful main CI run for ${commit}`);
+    throw new Error(
+      `No successful main CI run for ${commit}. Wait for the CI workflow from a main-branch push at this exact commit to complete successfully, then retry this release at the same tag. A PR run or another commit does not qualify.`,
+    );
   console.log(`Exact-head CI accepted: ${commit}`);
 }

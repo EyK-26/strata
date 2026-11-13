@@ -15,5 +15,9 @@ reintroduction. Coverage exclusions are removed only for deleted files.
 
 String service keys and the process-wide route registry are also retired. Use
 canonical service tokens and the immutable inventory carried by each compiled route
-map. The provider adapter and mail/storage configuration ownership still require
-separate reconciliation; this is not a claim that every adapter is migrated.
+map. Provider adapters now capture application configuration, and mail/storage
+services use explicit application-owned bindings rather than global accessors.
+The remaining runtime ownership migrations, including views and queue identity
+handoffs, are recorded in the [completion ledger](refactor-completion-ledger.md).
+Its acceptance map and frozen-source receipts distinguish completed implementation
+from release publication and external-provider qualification.
