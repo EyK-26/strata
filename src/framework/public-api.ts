@@ -136,7 +136,15 @@ export {
   runWithAuthContext,
   runWithAuthUser,
 } from "../core/auth/authContext.ts";
+export type { BasicAuthGuardOptions } from "../core/auth/basicAuthGuard.ts";
 export { BasicAuthGuard } from "../core/auth/basicAuthGuard.ts";
+export type {
+  AuthAccountLookup,
+  AuthBearerResolver,
+  AuthCredentialVerifier,
+  AuthEmailLookup,
+  AuthSessionValidity,
+} from "../core/contracts/authUserDirectory.ts";
 export type { AuthGuard } from "../core/auth/guard.ts";
 export {
   ApiTokenGuard,
