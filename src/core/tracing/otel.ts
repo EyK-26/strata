@@ -16,6 +16,7 @@ import { otelServiceName } from "../runtime/appKeyPrefix";
 import { createTracingHealth, type TracingMetricsSnapshot } from "./health";
 
 type TracingOptions = {
+  env?: Readonly<Record<string, string | undefined>>;
   exporter?: SpanExporter;
   endpoint?: string;
   serviceName?: string;
@@ -56,42 +57,14 @@ function ensureContextManager(): void {
   state[key] = true;
 }
 
-function createTracingRuntime(options: TracingOptions = {}): TracingRuntime {
-  ensureContextManager();
-  const disabled = process.env.OTEL_SDK_DISABLED === "true";
-  const samplerName =
-    options.sampleRatio === undefined
-      ? (process.env.OTEL_TRACES_SAMPLER ?? "parentbased_traceidratio")
-      : "parentbased_traceidratio";
-  const rootName = samplerName.replace(/^parentbased_/, "");
-  if (!["always_on", "always_off", "traceidratio"].includes(rootName))
-    throw new TypeError("Unsupported tracing sampler.");
-  const ratio = options.sampleRatio ?? Number(process.env.OTEL_TRACES_SAMPLER_ARG ?? "1");
-  if (!Number.isFinite(ratio) || ratio < 0 || ratio > 1)
-    throw new TypeError("Invalid tracing sampleRatio.");
-  const rootSampler =
-    rootName === "always_on"
-      ? new AlwaysOnSampler()
-      : rootName === "always_off"
-        ? new AlwaysOffSampler()
-        : new TraceIdRatioBasedSampler(ratio);
-  const sampler = disabled
-    ? new AlwaysOffSampler()
-    : samplerName.startsWith("parentbased_")
-      ? new ParentBasedSampler({ root: rootSampler })
-      : rootSampler;
-  const queueSize = numberOption(options.maxQueueSize, 2048, "maxQueueSize");
-  const batchSize = numberOption(
-    options.maxExportBatchSize,
-    Math.min(512, queueSize),
-    "maxExportBatchSize",
-    queueSize,
-  );
+/** Prepare SDK transport configuration for one runtime owner; do not reuse the exporter. */
+function captureTracingOptions(options: TracingOptions = {}): TracingOptions {
+  const env = Object.freeze({ ...(options.env ?? process.env) });
   const timeout = numberOption(options.exportTimeoutMillis, 5000, "exportTimeoutMillis", 60_000);
-  const delay = numberOption(options.scheduledDelayMillis, 5000, "scheduledDelayMillis", 60_000);
-  let endpoint = options.endpoint ?? process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT?.trim();
+  const disabled = env.OTEL_SDK_DISABLED === "true";
+  let endpoint = options.endpoint ?? env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT?.trim();
   if (!endpoint) {
-    const base = process.env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim();
+    const base = env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim();
     if (base)
       endpoint = base.endsWith("/v1/traces") ? base : `${base.replace(/\/$/, "")}/v1/traces`;
   }
@@ -117,9 +90,50 @@ function createTracingRuntime(options: TracingOptions = {}): TracingRuntime {
       (endpoint
         ? new OTLPTraceExporter({ url: endpoint, timeoutMillis: timeout, concurrencyLimit: 1 })
         : undefined));
+
+  return Object.freeze({ ...options, env, exporter });
+}
+
+function createTracingRuntime(options: TracingOptions = {}): TracingRuntime {
+  ensureContextManager();
+  const env = options.env ?? process.env;
+  const disabled = env.OTEL_SDK_DISABLED === "true";
+  const samplerName =
+    options.sampleRatio === undefined
+      ? (env.OTEL_TRACES_SAMPLER ?? "parentbased_traceidratio")
+      : "parentbased_traceidratio";
+  const rootName = samplerName.replace(/^parentbased_/, "");
+  if (!["always_on", "always_off", "traceidratio"].includes(rootName))
+    throw new TypeError("Unsupported tracing sampler.");
+  const ratio = options.sampleRatio ?? Number(env.OTEL_TRACES_SAMPLER_ARG ?? "1");
+  if (!Number.isFinite(ratio) || ratio < 0 || ratio > 1)
+    throw new TypeError("Invalid tracing sampleRatio.");
+  const rootSampler =
+    rootName === "always_on"
+      ? new AlwaysOnSampler()
+      : rootName === "always_off"
+        ? new AlwaysOffSampler()
+        : new TraceIdRatioBasedSampler(ratio);
+  const sampler = disabled
+    ? new AlwaysOffSampler()
+    : samplerName.startsWith("parentbased_")
+      ? new ParentBasedSampler({ root: rootSampler })
+      : rootSampler;
+  const queueSize = numberOption(options.maxQueueSize, 2048, "maxQueueSize");
+  const batchSize = numberOption(
+    options.maxExportBatchSize,
+    Math.min(512, queueSize),
+    "maxExportBatchSize",
+    queueSize,
+  );
+  const timeout = numberOption(options.exportTimeoutMillis, 5000, "exportTimeoutMillis", 60_000);
+  const delay = numberOption(options.scheduledDelayMillis, 5000, "scheduledDelayMillis", 60_000);
+  const exporter = captureTracingOptions(options).exporter;
   const health = createTracingHealth(!disabled, exporter !== undefined, timeout);
   const provider = new NodeTracerProvider({
-    resource: resourceFromAttributes({ "service.name": options.serviceName ?? otelServiceName() }),
+    resource: resourceFromAttributes({
+      "service.name": options.serviceName ?? otelServiceName(env),
+    }),
     sampler,
     spanProcessors: exporter
       ? [
@@ -168,37 +182,5 @@ function createTracingRuntime(options: TracingOptions = {}): TracingRuntime {
   };
 }
 
-const runtimeKey = Symbol.for("@getstrata/otel-runtime");
-function runtimeState(): { runtime?: TracingRuntime; owners: number } {
-  const state = globalThis as Record<
-    symbol,
-    { runtime?: TracingRuntime; owners: number } | undefined
-  >;
-  state[runtimeKey] ??= { owners: 0 };
-  return state[runtimeKey];
-}
-function getTracingRuntime(): TracingRuntime {
-  const state = runtimeState();
-  state.runtime ??= createTracingRuntime();
-  return state.runtime;
-}
-function acquireTracingRuntime(): { flush(): Promise<void>; release(): Promise<void> } {
-  const state = runtimeState();
-  const runtime = getTracingRuntime();
-  state.owners++;
-  let released = false;
-  return {
-    flush: () => runtime.forceFlush(),
-    async release() {
-      if (released) return;
-      released = true;
-      if (--state.owners === 0) {
-        if (state.runtime === runtime) state.runtime = undefined;
-        await runtime.shutdown();
-      }
-    },
-  };
-}
-
 export type { TracingOptions, TracingRuntime };
-export { acquireTracingRuntime, createTracingRuntime, getTracingRuntime };
+export { captureTracingOptions, createTracingRuntime };

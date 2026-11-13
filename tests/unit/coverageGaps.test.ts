@@ -8,9 +8,11 @@ import {
   clearSessionCookie,
   createSessionCookie,
   readSessionUserId,
+  sessionCookieOptionsFromEnvironment,
 } from "@getstrata/core/auth/sessionCookie";
 import { hashApiToken } from "@getstrata/core/auth/tokenHash";
 import {
+  createFieldEncryptionCodec,
   isFieldEncryptionEnabled,
   normalizeEmail,
   protectEmail,
@@ -83,15 +85,15 @@ describe("coverage gap helpers", () => {
     }
   });
 
-  test("covers base policy defaults and factory definitions", () => {
+  test("covers base policy defaults and factory definitions", async () => {
     const gate = new PolicyGate();
     gate.register("base", new DefaultPolicy());
     const basePolicy = new DefaultPolicy();
 
-    expect(gate.allows("base", "view")).toBe(false);
-    expect(gate.allows("base", "create")).toBe(false);
-    expect(gate.allows("base", "update")).toBe(false);
-    expect(gate.allows("base", "delete")).toBe(false);
+    expect(await gate.allows("base", "view", undefined)).toBe(false);
+    expect(await gate.allows("base", "create", undefined)).toBe(false);
+    expect(await gate.allows("base", "update", undefined)).toBe(false);
+    expect(await gate.allows("base", "delete", undefined)).toBe(false);
     expect(basePolicy.create()).toBe(false);
     expect(basePolicy.delete()).toBe(false);
     expect(WidgetFactory().make({ name: "custom" }).name).toBe("custom");
@@ -104,14 +106,21 @@ describe("coverage gap helpers", () => {
   });
 
   test("covers session cookie and oauth state edge branches", () => {
-    const cookie = createSessionCookie(5);
+    const cookie = createSessionCookie(5, {}, sessionCookieOptionsFromEnvironment(process.env));
     const request = new Request("http://example.test/", {
       headers: { cookie: cookie.split(";")[0] ?? "" },
     });
 
-    expect(readSessionUserId(request)).toBe(5);
-    expect(readSessionUserId(new Request("http://example.test/"))).toBeNull();
-    expect(clearSessionCookie()).toContain("Max-Age=0");
+    expect(readSessionUserId(request, sessionCookieOptionsFromEnvironment(process.env))).toBe(5);
+    expect(
+      readSessionUserId(
+        new Request("http://example.test/"),
+        sessionCookieOptionsFromEnvironment(process.env),
+      ),
+    ).toBeNull();
+    expect(clearSessionCookie(sessionCookieOptionsFromEnvironment(process.env))).toContain(
+      "Max-Age=0",
+    );
 
     const decoded = decodeURIComponent(cookie.split("=")[1]?.split(";")[0] ?? "");
     const [userIdRaw, issuedAtRaw] = decoded.split(".");
@@ -122,6 +131,7 @@ describe("coverage gap helpers", () => {
             cookie: `strata_session=${encodeURIComponent(`${userIdRaw}.${issuedAtRaw}.`)}`,
           },
         }),
+        sessionCookieOptionsFromEnvironment(process.env),
       ),
     ).toBeNull();
 
@@ -173,9 +183,11 @@ describe("coverage gap helpers", () => {
     expect(parseScimTenantTokens("   ")).toEqual(new Map());
     expect(normalizeEmail("  A@B.COM ")).toBe("a@b.com");
     expect(hashApiToken("token")).toMatch(/^[a-f0-9]{64}$/);
-    expect(isFieldEncryptionEnabled()).toBeTypeOf("boolean");
-    expect(resolveEncryptionKey()).toBeNull();
-    expect(protectEmail("plain@example.com").storedEmail).toBe("plain@example.com");
+    expect(isFieldEncryptionEnabled(createFieldEncryptionCodec(process.env))).toBeTypeOf("boolean");
+    expect(resolveEncryptionKey(process.env)).toBeNull();
+    expect(
+      protectEmail("plain@example.com", createFieldEncryptionCodec(process.env)).storedEmail,
+    ).toBe("plain@example.com");
   });
 
   test("covers validation rule branches and query null equality", () => {
@@ -221,9 +233,9 @@ describe("coverage gap helpers", () => {
     expect(registry.names()).toEqual(["demo.job"]);
     expect(registry.create("missing.job")).toBeUndefined();
 
-    const { jobRegistry } = await import("@getstrata/core/queue/jobRegistry");
+    const jobRegistry = new JobRegistry();
     const { registerDefaultJobs } = await import("@getstrata/bootstrap/queue/defaultJobs");
-    registerDefaultJobs();
+    registerDefaultJobs(jobRegistry);
     const job = new CoverageJob();
     jobRegistry.track("coverage.job", job);
     expect(jobRegistry.resolveName(job)).toBe("coverage.job");
@@ -305,6 +317,6 @@ describe("coverage gap helpers", () => {
     expect(isBlockedHostname("127.0.0.2")).toBe(true);
 
     process.env.FEATURE_FIELD_ENCRYPTION = "true";
-    expect(isFieldEncryptionEnabled()).toBe(true);
+    expect(isFieldEncryptionEnabled(createFieldEncryptionCodec(process.env))).toBe(true);
   });
 });

@@ -3,7 +3,7 @@ import { jsonResponse } from "@getstrata/core/http/response";
 import { envFlagEnabled } from "@getstrata/core/runtime/appEnv";
 import { RedisClient } from "bun";
 import { CORE_CONFIG_TOKEN, REDIS_URL_CONFIG_KEY } from "./config";
-import type { AppDependencies, ConfigStore } from "./contracts";
+import type { AppDependencies } from "./contracts";
 
 interface CreateHealthRoutesOptions {
   pingOnHealth?: boolean;
@@ -21,7 +21,7 @@ function resolveRedisUrl(dependencies: AppDependencies): string | undefined {
     return process.env.REDIS_URL?.trim() || undefined;
   }
 
-  const config = dependencies.container.resolve<ConfigStore>(CORE_CONFIG_TOKEN);
+  const config = dependencies.container.resolve(CORE_CONFIG_TOKEN);
   const redisUrl = config.get<string>(REDIS_URL_CONFIG_KEY)?.trim();
 
   return redisUrl || undefined;
@@ -93,7 +93,12 @@ function createHealthRoutes(
   options: CreateHealthRoutesOptions = {},
 ) {
   const redisUrl = resolveRedisUrl(dependencies);
-  const debug = envFlagEnabled(process.env.APP_DEBUG);
+  const config = dependencies.container.has(CORE_CONFIG_TOKEN)
+    ? dependencies.container.resolve(CORE_CONFIG_TOKEN)
+    : undefined;
+  const debug = config
+    ? config.get<boolean>("app.debug") === true
+    : envFlagEnabled(process.env.APP_DEBUG);
   return {
     "/health": async (request?: Request) => {
       if (request && request.method !== "GET" && request.method !== "HEAD") {

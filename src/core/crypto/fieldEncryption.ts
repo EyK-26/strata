@@ -4,8 +4,8 @@ const ENCRYPTION_PREFIX = "enc:v1:";
 const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
 
-function resolveEncryptionKey(): Buffer | null {
-  const raw = process.env.KMS_ENCRYPTION_KEY?.trim();
+function resolveEncryptionKey(env: Readonly<Record<string, string | undefined>>): Buffer | null {
+  const raw = env.KMS_ENCRYPTION_KEY?.trim();
 
   if (!raw) {
     return null;
@@ -24,18 +24,58 @@ function resolveEncryptionKey(): Buffer | null {
   throw new Error("KMS_ENCRYPTION_KEY must be 32 bytes (hex or base64).");
 }
 
-function isFieldEncryptionEnabled(): boolean {
-  const featureFlag = process.env.FEATURE_FIELD_ENCRYPTION;
+interface FieldEncryptionCodec {
+  isFieldEncryptionEnabled(): boolean;
+  protectEmail(email: string): { storedEmail: string; emailLookup: string };
+  revealEmail(storedEmail: string): string;
+  emailLookupForQuery(email: string): string;
+}
 
-  if (featureFlag === "false") {
-    return false;
-  }
+/** Resolve and copy key material at owner construction, never during a request. */
+function createFieldEncryptionCodec(
+  env: Readonly<Record<string, string | undefined>>,
+): FieldEncryptionCodec {
+  const configured = resolveFieldEncryptionKeyring(env);
+  const key = resolveEncryptionKey(env);
+  const enabled =
+    env.FEATURE_FIELD_ENCRYPTION === "false"
+      ? false
+      : env.FEATURE_FIELD_ENCRYPTION === "true"
+        ? true
+        : Boolean(configured || key);
+  return Object.freeze({
+    isFieldEncryptionEnabled: () => enabled,
+    protectEmail(email: string) {
+      const normalized = normalizeEmail(email);
+      if (configured && enabled)
+        return {
+          storedEmail: configured.encrypt(normalized, "email"),
+          emailLookup: configured.keyring.lookup(normalized),
+        };
+      if (!key || !enabled) return { storedEmail: normalized, emailLookup: normalized };
+      return {
+        storedEmail: encryptField(normalized, key),
+        emailLookup: hashLookupValue(normalized, key),
+      };
+    },
+    revealEmail(storedEmail: string) {
+      if (configured && storedEmail.startsWith("enc:"))
+        return configured.keyring.decrypt(storedEmail, "email");
+      if (storedEmail.startsWith("enc:") && !storedEmail.startsWith(ENCRYPTION_PREFIX))
+        throw new Error("Identified encrypted fields require KMS_ENCRYPTION_KEYRING.");
+      if (!key || !storedEmail.startsWith(ENCRYPTION_PREFIX)) return storedEmail;
+      return decryptField(storedEmail, key);
+    },
+    emailLookupForQuery(email: string) {
+      const normalized = normalizeEmail(email);
+      if (configured && enabled) return configured.keyring.lookup(normalized);
+      return !key || !enabled ? normalized : hashLookupValue(normalized, key);
+    },
+  });
+}
 
-  if (featureFlag === "true") {
-    return true;
-  }
-
-  return Boolean(resolveFieldEncryptionKeyring() || resolveEncryptionKey());
+function isFieldEncryptionEnabled(codec: FieldEncryptionCodec): boolean {
+  return codec.isFieldEncryptionEnabled();
 }
 
 function encryptField(plaintext: string, key: Buffer): string {
@@ -71,56 +111,19 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-function protectEmail(email: string): { storedEmail: string; emailLookup: string } {
-  const normalized = normalizeEmail(email);
-  const configured = resolveFieldEncryptionKeyring();
-  if (configured && isFieldEncryptionEnabled()) {
-    return {
-      storedEmail: configured.encrypt(normalized, "email"),
-      emailLookup: configured.keyring.lookup(normalized),
-    };
-  }
-  const key = resolveEncryptionKey();
-
-  if (!key || !isFieldEncryptionEnabled()) {
-    return { storedEmail: normalized, emailLookup: normalized };
-  }
-
-  return {
-    storedEmail: encryptField(normalized, key),
-    emailLookup: hashLookupValue(normalized, key),
-  };
+function protectEmail(email: string, codec: FieldEncryptionCodec) {
+  return codec.protectEmail(email);
+}
+function revealEmail(storedEmail: string, codec: FieldEncryptionCodec) {
+  return codec.revealEmail(storedEmail);
+}
+function emailLookupForQuery(email: string, codec: FieldEncryptionCodec) {
+  return codec.emailLookupForQuery(email);
 }
 
-function revealEmail(storedEmail: string): string {
-  const configured = resolveFieldEncryptionKeyring();
-  if (configured && storedEmail.startsWith("enc:"))
-    return configured.keyring.decrypt(storedEmail, "email");
-  if (storedEmail.startsWith("enc:") && !storedEmail.startsWith(ENCRYPTION_PREFIX))
-    throw new Error("Identified encrypted fields require KMS_ENCRYPTION_KEYRING.");
-  const key = resolveEncryptionKey();
-
-  if (!key || !storedEmail.startsWith(ENCRYPTION_PREFIX)) {
-    return storedEmail;
-  }
-
-  return decryptField(storedEmail, key);
-}
-
-function emailLookupForQuery(email: string): string {
-  const normalized = normalizeEmail(email);
-  const configured = resolveFieldEncryptionKeyring();
-  if (configured && isFieldEncryptionEnabled()) return configured.keyring.lookup(normalized);
-  const key = resolveEncryptionKey();
-
-  if (!key || !isFieldEncryptionEnabled()) {
-    return normalized;
-  }
-
-  return hashLookupValue(normalized, key);
-}
-
+export type { FieldEncryptionCodec };
 export {
+  createFieldEncryptionCodec,
   decryptField,
   emailLookupForQuery,
   encryptField,
@@ -239,7 +242,7 @@ interface ConfiguredFieldEncryption {
 }
 /** Stateless resolution keeps separately bundled auth entrypoints on the same configuration. */
 function resolveFieldEncryptionKeyring(
-  env: Record<string, string | undefined> = process.env,
+  env: Readonly<Record<string, string | undefined>>,
 ): ConfiguredFieldEncryption | null {
   const raw = env.KMS_ENCRYPTION_KEYRING;
   if (raw === undefined) return null;

@@ -1,5 +1,4 @@
 import { createHmac, randomBytes } from "node:crypto";
-import { appDisplayName } from "../runtime/appKeyPrefix";
 import { timingSafeCompareString } from "./timingSafeCompare";
 
 function decodeBase32(input: string): Buffer {
@@ -49,7 +48,7 @@ function generateTotpSecret(byteLength = 20): string {
 }
 
 function buildOtpauthUrl(options: { secret: string; account: string; issuer?: string }): string {
-  const issuer = options.issuer?.trim() || appDisplayName();
+  const issuer = options.issuer?.trim() || "Strata";
   const label = `${issuer}:${options.account}`;
   const params = new URLSearchParams({
     secret: options.secret,

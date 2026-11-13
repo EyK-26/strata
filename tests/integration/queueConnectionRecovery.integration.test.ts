@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 import { Job } from "@getstrata/core/queue";
-import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+
+const jobRegistry = new JobRegistry();
+
 import { QueueWorker, RedisStreamsWorker, streamQueueKey } from "@getstrata/core/queue/redisQueue";
 import { RedisClient } from "bun";
 import { withQueuePersistence } from "../helpers/queuePersistence";
@@ -21,8 +24,8 @@ for (const transport of ["lists", "streams"] as const) {
       await withQueuePersistence(async ({ services: failedJobs }) => {
         const worker =
           transport === "streams"
-            ? new RedisStreamsWorker(url, failedJobs, 0, [key])
-            : new QueueWorker(url, failedJobs, 0, [key]);
+            ? new RedisStreamsWorker(url, failedJobs, jobRegistry, 0, [key])
+            : new QueueWorker(url, failedJobs, jobRegistry, 0, [key]);
         let effects = 0;
         class Effect extends Job {
           override async handle() {
@@ -82,8 +85,8 @@ for (const transport of ["lists", "streams"] as const) {
     await withQueuePersistence(async ({ services: failedJobs }) => {
       const worker =
         transport === "streams"
-          ? new RedisStreamsWorker(url, failedJobs)
-          : new QueueWorker(url, failedJobs);
+          ? new RedisStreamsWorker(url, failedJobs, jobRegistry)
+          : new QueueWorker(url, failedJobs, jobRegistry);
       const original = connection(worker);
       await original.connect();
       original.close();
@@ -105,8 +108,8 @@ for (const transport of ["lists", "streams"] as const) {
       await withQueuePersistence(async ({ services: failedJobs }) => {
         const worker =
           transport === "streams"
-            ? new RedisStreamsWorker(url, failedJobs)
-            : new QueueWorker(url, failedJobs);
+            ? new RedisStreamsWorker(url, failedJobs, jobRegistry)
+            : new QueueWorker(url, failedJobs, jobRegistry);
         worker.processNext = async () => {
           throw error;
         };

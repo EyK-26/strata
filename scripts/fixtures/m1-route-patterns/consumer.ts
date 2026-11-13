@@ -5,7 +5,7 @@ import { request as httpRequest } from "node:http";
 import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
 import type { InitializedAppContext } from "@getstrata/bootstrap/context";
 import type { AppModule } from "@getstrata/bootstrap/contracts";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
+import { compileRouteMap, getRouteInventory } from "@getstrata/bootstrap/routePlan";
 import { routeParams } from "@getstrata/bootstrap/web/routing";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
@@ -123,6 +123,7 @@ const report: Record<string, unknown> = {
 };
 try {
   let selectedRoutes = routes;
+  let previousRoutes = compileRouteMap({});
   if (probe.family === "collector") {
     assert.equal(mode, "framework");
     const application: {
@@ -149,10 +150,10 @@ try {
       modules.splice(0, modules.length, { name: "precomposed", routes: () => routes });
     }
     if (probe.collector === "orphan") {
-      buildModuleRoutes(context.dependencies, {
+      previousRoutes = buildModuleRoutes(context.dependencies, {
         modules: [{ name: "previous", routes: () => ({ "/previous": callback("previous") }) }],
       });
-      report.registryBeforeFailure = routeRegistry.list();
+      report.registryBeforeFailure = getRouteInventory(previousRoutes);
       modules.push({
         name: "orphan",
         routes: () => ({}),
@@ -168,9 +169,8 @@ try {
         buildModuleRoutes(context.dependencies, {
           apiPrefix: "/contracts/",
           modules,
-          clearRegistry: false,
         });
-      const registry = routeRegistry.list();
+      const registry = getRouteInventory(selectedRoutes);
       report.registry = registry;
       if (probe.classification === "contract-control") {
         const owner =
@@ -203,7 +203,7 @@ try {
     } catch (error) {
       if (probe.collector !== "orphan") throw error;
       assert.ok(error instanceof Error && error.message.includes("no API route"));
-      report.registryAfterFailure = routeRegistry.list();
+      report.registryAfterFailure = getRouteInventory(previousRoutes);
       report.startup = { outcome: "collector-rejected", error: error.message };
       assert.equal(calls.length, 0);
     }
@@ -263,7 +263,6 @@ try {
               routes: () => ({ "/issue": callback("issuer") }),
             },
           ],
-          clearRegistry: false,
         });
         const issuerServer = createWebServer({
           port: 0,

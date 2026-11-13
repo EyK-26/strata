@@ -26,15 +26,19 @@ describe("@getstrata/bootstrap published subpaths", () => {
     expect(typeof tags.discoverModelTableNames).toBe("function");
   });
 
-  test("routeRegistry exports shared singleton", async () => {
-    const first = await import(join(BOOTSTRAP_DIST, "entries/routeRegistry.js"));
-    const second = await import(join(BOOTSTRAP_DIST, "entries/routeRegistry.js"));
-
-    first.routeRegistry.register({ method: "GET", path: "/loop-17", middleware: [] });
-    const paths = second.routeRegistry.list().map((route: { path: string }) => route.path);
-    expect(paths).toContain("/loop-17");
-    expect(first.routeRegistry).toBe(second.routeRegistry);
-    second.routeRegistry.clear();
+  test("routePlan retrieves immutable owned metadata across separately bundled entries", async () => {
+    const plan = await import(join(BOOTSTRAP_DIST, "entries/routePlan.js"));
+    const spa = await import(join(BOOTSTRAP_DIST, "entries/createSpaRoutes.js"));
+    const routes = spa.createSpaRoutes({}, { prefix: "/isolated-plan", distDirectory: "/missing" });
+    const inventory = plan.getRouteInventory(routes);
+    expect(inventory.some((route: { path: string }) => route.path === "/isolated-plan")).toBe(true);
+    const composed = plan.composeRouteMaps(routes, {
+      "/unrelated": { POST: () => new Response() },
+    });
+    expect(plan.getRouteInventory(composed)).toHaveLength(inventory.length + 1);
+    expect(plan.getRouteInventory(routes)).toBe(inventory);
+    expect(Object.isFrozen(inventory)).toBe(true);
+    expect(Object.keys(routes)).not.toContain("inventory");
   });
 
   test("dependencies exports createAppDependencies", async () => {
@@ -56,9 +60,10 @@ describe("@getstrata/bootstrap published subpaths", () => {
   test("discoverModules exports discovery helpers", async () => {
     const discover = await import(join(BOOTSTRAP_DIST, "entries/discoverModules.js"));
 
-    expect(typeof discover.configureModulesDirectory).toBe("function");
+    expect(typeof discover.createModuleDiscovery).toBe("function");
     expect(typeof discover.ensureModulesLoaded).toBe("function");
-    expect(typeof discover.discoverModules).toBe("function");
+    expect("discoverModules" in discover).toBe(false);
+    expect("configureModulesDirectory" in discover).toBe(false);
   });
 
   test("discoverListeners exports listener registrars", async () => {

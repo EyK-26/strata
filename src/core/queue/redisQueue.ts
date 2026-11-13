@@ -1,10 +1,17 @@
+import { QueueHandoffError } from "@getstrata/core/queue/queueHandoff";
 import { RedisClient } from "bun";
-import type { Job, Queue } from "./index";
-import { jobRegistry } from "./jobRegistry";
+import type { Job, Queue, QueueDispatchOptions } from "./index";
+import type { JobRegistry } from "./jobRegistry";
 import { parseQueueJobEnvelope, type QueueJobEnvelope, runQueueJob } from "./jobRunner";
 import {
+  DEFAULT_QUEUE_VISIBILITY_MS,
+  type QueueRetryPolicy,
+  type QueueRuntimeConfig,
   readQueueVisibilityMs as readVisibilityMs,
-  resolveRedisQueueTransport,
+  resolveQueueConfig,
+  resolveQueueRuntimeConfig,
+  snapshotQueueRetryPolicy,
+  snapshotQueueRuntimeConfig,
 } from "./queueConfig";
 import type { QueueServices } from "./queueServices";
 import {
@@ -59,6 +66,7 @@ async function reserveQueueJob(
   client: RedisClient,
   queueKey: string,
   owner: string,
+  visibilityMs = DEFAULT_QUEUE_VISIBILITY_MS,
 ): Promise<QueueReservation | null> {
   const raw = await client.send("EVAL", [
     RESERVE_JOB,
@@ -68,7 +76,7 @@ async function reserveQueueJob(
     queueProcessingLeaseKey(queueKey),
     crypto.randomUUID(),
     owner,
-    String(readVisibilityMs()),
+    String(visibilityMs),
   ]);
   if (typeof raw !== "string") return null;
   const reservation = JSON.parse(raw) as Omit<QueueReservation, "record">;
@@ -80,6 +88,7 @@ async function updateQueueReservation(
   queueKey: string,
   reservation: QueueReservation,
   action: "renew" | "ack" | "quarantine",
+  visibilityMs = DEFAULT_QUEUE_VISIBILITY_MS,
 ): Promise<boolean> {
   return (
     Number(
@@ -93,7 +102,7 @@ async function updateQueueReservation(
         reservation.owner,
         reservation.record,
         action,
-        String(readVisibilityMs()),
+        String(visibilityMs),
         reservation.payload,
       ]),
     ) === 1
@@ -106,6 +115,7 @@ async function pollListPriorities(
   owner: string,
   reservationId: string,
   reclaim: boolean,
+  visibilityMs = DEFAULT_QUEUE_VISIBILITY_MS,
 ): Promise<{ queueKey: string; reservation: QueueReservation } | null> {
   const keys: string[] = [];
   for (const key of queueKeys) {
@@ -116,7 +126,7 @@ async function pollListPriorities(
     String(keys.length),
     ...keys,
     owner,
-    String(readVisibilityMs()),
+    String(visibilityMs),
     reservationId,
     reclaim ? "1" : "0",
   ]);
@@ -146,6 +156,7 @@ async function pollListPriorities(
 async function reclaimExpiredQueueReservations(
   client: RedisClient,
   queueKeys: readonly string[] = QUEUE_KEYS,
+  visibilityMs = DEFAULT_QUEUE_VISIBILITY_MS,
 ): Promise<number> {
   let reclaimed = 0;
   for (const key of queueKeys) {
@@ -156,7 +167,7 @@ async function reclaimExpiredQueueReservations(
         key,
         queueProcessingKey(key),
         queueProcessingLeaseKey(key),
-        String(readVisibilityMs()),
+        String(visibilityMs),
       ]),
     );
   }
@@ -166,7 +177,12 @@ async function reclaimExpiredQueueReservations(
 class RedisQueue implements Queue {
   private readonly client: RedisClient;
 
-  constructor(redisUrl: string) {
+  constructor(
+    redisUrl: string,
+    private readonly registry: JobRegistry,
+    private readonly queueKeys: readonly [string, string, string] = defaultQueueKeys(),
+  ) {
+    this.queueKeys = Object.freeze([...queueKeys]) as readonly [string, string, string];
     this.client = new RedisClient(redisUrl);
   }
 
@@ -174,8 +190,32 @@ class RedisQueue implements Queue {
     this.client.close();
   }
 
-  async dispatch<TPayload extends object>(job: Job<TPayload>, payload: TPayload): Promise<void> {
-    const name = jobRegistry.resolveName(job);
+  async dispatch<TPayload extends object>(
+    job: Job<TPayload>,
+    payload: TPayload,
+    options?: QueueDispatchOptions,
+  ): Promise<void> {
+    await this.admit(job, payload, options);
+  }
+
+  async replay<TPayload extends object>(
+    job: Job<TPayload>,
+    payload: TPayload,
+    jobId: string,
+    options?: QueueDispatchOptions,
+  ): Promise<void> {
+    if (typeof jobId !== "string" || !jobId.length)
+      throw new TypeError("Replay identity is required.");
+    await this.admit(job, payload, options, jobId);
+  }
+
+  private async admit<TPayload extends object>(
+    job: Job<TPayload>,
+    payload: TPayload,
+    options?: QueueDispatchOptions,
+    jobId?: string,
+  ): Promise<void> {
+    const name = this.registry.resolveName(job);
 
     if (!name) {
       throw new Error("Job is not registered with the queue worker registry.");
@@ -183,16 +223,19 @@ class RedisQueue implements Queue {
 
     const envelope: QueueJobEnvelope = {
       name,
+      jobId: jobId ?? crypto.randomUUID(),
       payload: payload as Record<string, unknown>,
       attempts: 0,
+      ...(options?.handoff === undefined ? {} : { handoff: options.handoff }),
     };
 
-    const queueKey = queueKeyForPriority(job.priority);
+    const queueKey = queueKeyForPriority(job.priority, this.queueKeys);
     await this.client.lpush(queueKey, JSON.stringify(envelope));
   }
 }
 
 class QueueWorker {
+  private readonly retryPolicy: QueueRetryPolicy;
   private readonly owner = crypto.randomUUID();
   private running = false;
   private stopping = false;
@@ -201,9 +244,15 @@ class QueueWorker {
   constructor(
     private readonly redisUrl: string,
     private readonly failedJobs: Pick<QueueServices, "recordFailure" | "runAttempt">,
+    private readonly registry: JobRegistry,
     private readonly timeoutSeconds = 5,
-    private readonly queueKeys: readonly string[] = QUEUE_KEYS,
+    private readonly queueKeys: readonly string[] = defaultQueueKeys(),
+    retryPolicy: QueueRetryPolicy = resolveQueueConfig(),
+    private readonly visibilityMs = readVisibilityMs(),
   ) {
+    this.queueKeys = Object.freeze([...queueKeys]);
+    this.retryPolicy = snapshotQueueRetryPolicy(retryPolicy);
+    readVisibilityMs({ QUEUE_VISIBILITY_MS: String(this.visibilityMs) });
     this.client = new RedisClient(redisUrl);
   }
 
@@ -226,6 +275,7 @@ class QueueWorker {
         this.owner,
         crypto.randomUUID(),
         reclaim,
+        this.visibilityMs,
       );
       reclaim = false;
       if (reserved) return reserved;
@@ -240,13 +290,20 @@ class QueueWorker {
     const reserved = await this.reserve();
     if (!reserved) return false;
     const { queueKey, reservation } = reserved;
-    const envelope = parseQueueJobEnvelope(reservation.payload);
+    const envelope = parseQueueJobEnvelope(reservation.payload, this.registry);
     if (!envelope) {
-      await updateQueueReservation(this.client, queueKey, reservation, "quarantine");
+      await updateQueueReservation(
+        this.client,
+        queueKey,
+        reservation,
+        "quarantine",
+        this.visibilityMs,
+      );
       return true;
     }
 
     let acknowledge = false;
+    let invalidHandoff = false;
     let ownershipLost = false;
     let renewal: Promise<void> | undefined;
     const heartbeat = setInterval(
@@ -254,7 +311,15 @@ class QueueWorker {
         if (renewal || ownershipLost) return;
         renewal = (async () => {
           try {
-            if (!(await updateQueueReservation(this.client, queueKey, reservation, "renew"))) {
+            if (
+              !(await updateQueueReservation(
+                this.client,
+                queueKey,
+                reservation,
+                "renew",
+                this.visibilityMs,
+              ))
+            ) {
               ownershipLost = true;
             }
           } catch (error) {
@@ -265,23 +330,35 @@ class QueueWorker {
           renewal = undefined;
         });
       },
-      Math.max(1, Math.floor(readVisibilityMs() / 3)),
+      Math.max(1, Math.floor(this.visibilityMs / 3)),
     );
     try {
-      await runQueueJob(envelope, this.failedJobs, {
+      await runQueueJob(envelope, this.failedJobs, this.registry, {
+        retryPolicy: this.retryPolicy,
         onFailureRecorded: () => {
           acknowledge = true;
         },
       });
       acknowledge = true;
     } catch (error) {
-      console.error("[QueueWorker] Job failed:", error);
+      if (error instanceof QueueHandoffError) invalidHandoff = true;
+      else console.error("[QueueWorker] Job failed:", error);
     } finally {
       clearInterval(heartbeat);
       await renewal;
     }
+    if (invalidHandoff && !ownershipLost) {
+      await updateQueueReservation(
+        this.client,
+        queueKey,
+        reservation,
+        "quarantine",
+        this.visibilityMs,
+      );
+      return true;
+    }
     if (acknowledge && !ownershipLost) {
-      await updateQueueReservation(this.client, queueKey, reservation, "ack");
+      await updateQueueReservation(this.client, queueKey, reservation, "ack", this.visibilityMs);
     }
     return true;
   }
@@ -322,17 +399,19 @@ class QueueWorker {
   }
 }
 
-async function countPendingQueueJobs(redisUrl: string): Promise<number> {
+async function countPendingQueueJobs(
+  redisUrl: string,
+  config: QueueRuntimeConfig = resolveQueueRuntimeConfig({}),
+): Promise<number> {
+  const { transport, queueKeys } = snapshotQueueRuntimeConfig(config);
   const client = new RedisClient(redisUrl);
 
   try {
     let total = 0;
 
-    for (const queueKey of resolveRedisQueueTransport() === "streams"
-      ? defaultQueueKeys()
-      : QUEUE_KEYS) {
+    for (const queueKey of queueKeys) {
       total +=
-        resolveRedisQueueTransport() === "streams"
+        transport === "streams"
           ? await readStreamQueueDepth(client, queueKey)
           : await client.llen(queueKey);
     }

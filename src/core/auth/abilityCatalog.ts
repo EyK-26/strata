@@ -1,25 +1,19 @@
-const MEMBER_ABILITIES = [
+const MEMBER_ABILITIES = Object.freeze([
   "profile:read",
   "auth:tokens:read",
   "auth:tokens:write",
   "auth:tokens:delete",
-] as const;
+] as const);
 
-const ADMIN_ABILITIES = [
+const ADMIN_ABILITIES = Object.freeze([
   ...MEMBER_ABILITIES,
   "webhooks:read",
   "webhooks:write",
   "audit:read",
   "audit:export",
-] as const;
+] as const);
 
-const PLATFORM_ADMIN_ABILITIES = ["*"] as const;
-
-interface AbilityCatalog {
-  member: readonly string[];
-  admin: readonly string[];
-  resolveForRole(role: string | null | undefined): string[];
-}
+const PLATFORM_ADMIN_ABILITIES = Object.freeze(["*"] as const);
 
 function resolveAbilitiesForRole(role: string | null | undefined): string[] {
   if (role === "admin") {
@@ -29,28 +23,4 @@ function resolveAbilitiesForRole(role: string | null | undefined): string[] {
   return [...MEMBER_ABILITIES];
 }
 
-const defaultCatalog: AbilityCatalog = {
-  member: MEMBER_ABILITIES,
-  admin: ADMIN_ABILITIES,
-  resolveForRole: resolveAbilitiesForRole,
-};
-
-let catalog: AbilityCatalog = defaultCatalog;
-
-function configureAbilityCatalog(next: AbilityCatalog): void {
-  catalog = next;
-}
-
-function abilityCatalog(): AbilityCatalog {
-  return catalog;
-}
-
-export type { AbilityCatalog };
-export {
-  ADMIN_ABILITIES,
-  abilityCatalog,
-  configureAbilityCatalog,
-  MEMBER_ABILITIES,
-  PLATFORM_ADMIN_ABILITIES,
-  resolveAbilitiesForRole,
-};
+export { ADMIN_ABILITIES, MEMBER_ABILITIES, PLATFORM_ADMIN_ABILITIES, resolveAbilitiesForRole };

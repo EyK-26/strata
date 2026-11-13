@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { registerDefaultJobs } from "@getstrata/bootstrap/queue/defaultJobs";
 import { Job } from "@getstrata/core/queue";
-import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+
+const jobRegistry = new JobRegistry();
+
 import { runQueueJob } from "@getstrata/core/queue/jobRunner";
 import { createQueuePersistenceFixture } from "../helpers/queuePersistence";
 
@@ -11,7 +14,7 @@ interface EchoPayload {
 
 describe("QueueWorker", () => {
   test("runs a tracked job envelope through the queue runner", async () => {
-    registerDefaultJobs();
+    registerDefaultJobs(jobRegistry);
 
     const messages: string[] = [];
 
@@ -30,6 +33,7 @@ describe("QueueWorker", () => {
       await runQueueJob(
         { name: "test.echo", payload: { message: "hello-worker" }, attempts: 0 },
         fixture.services,
+        jobRegistry,
       );
     } finally {
       expect((await fixture.application.stop()).successful).toBe(true);

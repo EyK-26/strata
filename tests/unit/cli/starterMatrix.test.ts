@@ -88,13 +88,14 @@ test("all 2688 supported starter core/infrastructure shapes generate consistent,
                       } finally {
                         console.warn = warn;
                       }
+                      // Each matrix case owns and clears this fixture path explicitly.
+                      await rm(app, { recursive: true, force: true });
                       generateProject({
                         projectName: "sanity-app",
                         targetDir: app,
                         layers,
                         templateRoot: resolveTemplateRoot(),
                         overlayRoot: resolveOverlayRoot(),
-                        force: true,
                       });
                       const env = await readFile(join(app, ".env.example"), "utf8"),
                         manifest = JSON.parse(await readFile(join(app, "package.json"), "utf8"));

@@ -3,8 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { registerOpenApiRouteMap } from "@getstrata/bootstrap/buildModuleRoutes";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
+import { compileRouteMap, composeRouteMaps } from "@getstrata/bootstrap/routePlan";
 import { generateOpenApiSpec } from "@getstrata/core/openapi/generator";
 import {
   createOpenApiGenerateCommand,
@@ -17,7 +16,6 @@ const tempDirectories: string[] = [];
 
 afterEach(async () => {
   process.chdir(repoRoot);
-  routeRegistry.clear();
 
   while (tempDirectories.length > 0) {
     const directory = tempDirectories.pop();
@@ -84,85 +82,91 @@ describe("createOpenApiGenerateCommand", () => {
 });
 
 describe("registerAppOpenApiRoutes", () => {
-  test("excludes HTML and hybrid SPA routes while keeping API and health routes", async () => {
+  test("returns explicit immutable metadata excluding HTML and hybrid SPA routes", async () => {
     const previousPrefix = process.env.SPA_PREFIX;
     process.env.SPA_PREFIX = "/app";
-
     try {
-      await registerAppOpenApiRoutes(async () => {
-        const routes = {
-          "/api/v1/products": async () => new Response("ok"),
-          "/admin/notes": async () => new Response("<html></html>"),
-          "/app": async () => new Response("<html></html>"),
-          "/app/": async () => new Response("<html></html>"),
-          "/app/*": async () => new Response("<html></html>"),
-          "/*": async () => new Response("not found"),
-          "/health": async () => new Response("ok"),
-        };
-
-        registerOpenApiRouteMap({ "/api/v1/products": routes["/api/v1/products"] }, [
-          "global",
-          "api",
-        ]);
-        registerOpenApiRouteMap({ "/admin/notes": routes["/admin/notes"] }, ["global", "web"]);
-
-        return { routes };
-      });
-
-      const spec = generateOpenApiSpec(routeRegistry.list());
-      expect(Object.keys(spec.paths).sort()).toEqual(["/api/v1/products", "/health"]);
+      const inventory = await registerAppOpenApiRoutes(async () => ({
+        routes: composeRouteMaps(
+          compileRouteMap(
+            { "/api/v1/products": () => new Response("ok") },
+            { middleware: ["global", "api"] },
+          ),
+          compileRouteMap(
+            { "/admin/notes": () => new Response("html") },
+            { middleware: ["global", "web"] },
+          ),
+          {
+            "/app": () => new Response(),
+            "/app/": () => new Response(),
+            "/app/*": () => new Response(),
+            "/*": () => new Response(),
+            "/health": () => new Response(),
+          },
+        ),
+      }));
+      expect(Object.keys(generateOpenApiSpec(inventory).paths).sort()).toEqual([
+        "/api/v1/products",
+        "/health",
+      ]);
+      expect(Object.isFrozen(inventory)).toBe(true);
+      expect(Object.isFrozen(inventory[0]?.middleware)).toBe(true);
     } finally {
       restoreEnvVar("SPA_PREFIX", previousPrefix);
     }
   });
 
-  test("keeps a path that is registered as both web and api", async () => {
-    await registerAppOpenApiRoutes(async () => {
-      const routes = {
-        "/notes": {
-          GET: async () => new Response("<html></html>"),
-          POST: async () => new Response("{}"),
-        },
-      };
-
-      registerOpenApiRouteMap({ "/notes": { GET: routes["/notes"].GET } }, ["global", "web"]);
-      registerOpenApiRouteMap({ "/notes": { POST: routes["/notes"].POST } }, ["global", "api"]);
-
-      return { routes };
-    });
-
-    const spec = generateOpenApiSpec(routeRegistry.list());
+  test("keeps a path shared by explicit web and api operations", async () => {
+    const inventory = await registerAppOpenApiRoutes(async () => ({
+      routes: composeRouteMaps(
+        compileRouteMap(
+          { "/notes": { GET: () => new Response("html") } },
+          { middleware: ["global", "web"] },
+        ),
+        compileRouteMap(
+          { "/notes": { POST: () => new Response("{}") } },
+          { middleware: ["global", "api"] },
+        ),
+      ),
+    }));
+    const spec = generateOpenApiSpec(inventory);
     expect(Object.keys(spec.paths)).toEqual(["/notes"]);
     expect(spec.paths["/notes"]?.get).toBeDefined();
     expect(spec.paths["/notes"]?.post).toBeDefined();
   });
 
-  test("drops a custom SPA_PREFIX instead of the default /app", async () => {
+  test("drops a custom SPA_PREFIX and isolates concurrent CLI bootstraps", async () => {
     const previousPrefix = process.env.SPA_PREFIX;
     process.env.SPA_PREFIX = "/portal";
-
     try {
-      await registerAppOpenApiRoutes(async () => {
-        const routes = {
-          "/api/v1/products": async () => new Response("ok"),
-          "/portal": async () => new Response("<html></html>"),
-          "/portal/dashboard": async () => new Response("<html></html>"),
-          "/app/legacy": async () => new Response("ok"),
-        };
-
-        registerOpenApiRouteMap(
-          {
-            "/api/v1/products": routes["/api/v1/products"],
-            "/app/legacy": routes["/app/legacy"],
-          },
-          ["global", "api"],
-        );
-
-        return { routes };
-      });
-
-      const spec = generateOpenApiSpec(routeRegistry.list());
-      expect(Object.keys(spec.paths).sort()).toEqual(["/api/v1/products", "/app/legacy"]);
+      const [first, second] = await Promise.all([
+        registerAppOpenApiRoutes(
+          async () => ({
+            routes: {
+              "/api/v1/products": () => new Response(),
+              "/portal": () => new Response(),
+              "/portal/dashboard": () => new Response(),
+              "/app/legacy": () => new Response(),
+            },
+          }),
+          "/portal",
+        ),
+        registerAppOpenApiRoutes(
+          async () => ({
+            routes: { "/other": { POST: () => new Response() } },
+          }),
+          "/portal",
+        ),
+      ]);
+      expect(Object.keys(generateOpenApiSpec(first).paths).sort()).toEqual([
+        "/api/v1/products",
+        "/app/legacy",
+      ]);
+      expect(Object.keys(generateOpenApiSpec(second).paths)).toEqual(["/other"]);
+      expect(Object.keys(generateOpenApiSpec(first).paths).sort()).toEqual([
+        "/api/v1/products",
+        "/app/legacy",
+      ]);
     } finally {
       restoreEnvVar("SPA_PREFIX", previousPrefix);
     }
@@ -199,4 +203,19 @@ test("OpenAPI closes after bootstrap or output failure and propagates cleanup fa
       )(),
     ).rejects.toBe(failure);
   });
+});
+
+test("OpenAPI SPA filtering keeps the selected owner across asynchronous bootstrap", async () => {
+  const previous = process.env.SPA_PREFIX;
+  try {
+    process.env.SPA_PREFIX = "/other";
+    const routes = await registerAppOpenApiRoutes(async () => {
+      await Promise.resolve();
+      process.env.SPA_PREFIX = "/api";
+      return { routes: { "/portal": () => new Response(), "/api": () => new Response() } };
+    }, "/portal");
+    expect(routes.map((route) => route.path)).toEqual(["/api"]);
+  } finally {
+    restoreEnvVar("SPA_PREFIX", previous);
+  }
 });

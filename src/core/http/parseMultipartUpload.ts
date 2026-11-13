@@ -1,5 +1,5 @@
 import { BadRequestError, PayloadTooLargeError } from "@getstrata/core/errors/http";
-import { isAllowedMimeType, resolveMaxUploadBytes } from "./uploads";
+import { DEFAULT_UPLOAD_POLICY, isAllowedMimeType, type UploadPolicy } from "./uploads";
 
 function normalizeMimeType(mimeType: string): string {
   return mimeType.split(";")[0]?.trim().toLowerCase() || "application/octet-stream";
@@ -19,7 +19,13 @@ function sanitizeUploadFileName(name: string): string {
   return sanitized.length > 0 ? sanitized : "upload";
 }
 
-async function validateUploadFile(file: File, fieldName = "file"): Promise<ParsedUpload> {
+async function validateUploadFile(
+  file: File,
+  fieldName = "file",
+  policy: UploadPolicy = DEFAULT_UPLOAD_POLICY,
+): Promise<ParsedUpload> {
+  if (!Number.isSafeInteger(policy.maxBytes) || policy.maxBytes <= 0)
+    throw new RangeError("Upload limit must be a positive safe integer.");
   if (!(file instanceof File)) {
     throw new BadRequestError(`Missing upload field "${fieldName}".`);
   }
@@ -28,7 +34,7 @@ async function validateUploadFile(file: File, fieldName = "file"): Promise<Parse
     throw new BadRequestError("Uploaded file is empty.");
   }
 
-  const maxBytes = resolveMaxUploadBytes();
+  const maxBytes = policy.maxBytes;
 
   if (file.size > maxBytes) {
     throw new PayloadTooLargeError(`Upload exceeds the ${maxBytes} byte limit.`);
@@ -36,7 +42,7 @@ async function validateUploadFile(file: File, fieldName = "file"): Promise<Parse
 
   const mimeType = normalizeMimeType(file.type.trim() || "application/octet-stream");
 
-  if (!isAllowedMimeType(mimeType)) {
+  if (!isAllowedMimeType(mimeType, policy.allowUnknownMime)) {
     throw new BadRequestError(`File type "${mimeType}" is not allowed.`);
   }
 
@@ -48,7 +54,11 @@ async function validateUploadFile(file: File, fieldName = "file"): Promise<Parse
   };
 }
 
-async function parseMultipartUpload(request: Request, fieldName = "file"): Promise<ParsedUpload> {
+async function parseMultipartUpload(
+  request: Request,
+  fieldName = "file",
+  policy: UploadPolicy = DEFAULT_UPLOAD_POLICY,
+): Promise<ParsedUpload> {
   const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
 
   if (!contentType.includes("multipart/form-data")) {
@@ -62,7 +72,7 @@ async function parseMultipartUpload(request: Request, fieldName = "file"): Promi
     throw new BadRequestError(`Missing upload field "${fieldName}".`);
   }
 
-  return validateUploadFile(value, fieldName);
+  return validateUploadFile(value, fieldName, policy);
 }
 
 export type { ParsedUpload };

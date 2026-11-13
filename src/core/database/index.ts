@@ -55,9 +55,7 @@ export type { SqlDialect } from "./dialect.ts";
 export {
   currentSqlDialect,
   dialectFor,
-  resetSqlDialect,
   runWithSqlDialect,
-  useSqlDialect,
 } from "./dialect.ts";
 export { foreignKeyFromTable, pivotTableName, singularize } from "./inflection.ts";
 export type { CastType } from "./model.ts";
@@ -73,15 +71,6 @@ export {
   createMysqlConnectionFromPool,
   createMysqlPool,
 } from "./mysqlConnection.ts";
-export type { NamedConnectionEntry } from "./namedConnections.ts";
-export {
-  getNamedConnection,
-  hasNamedConnection,
-  registerNamedConnection,
-  resetNamedConnections,
-  runOnNamedConnection,
-  unregisterNamedConnection,
-} from "./namedConnections.ts";
 export { projectPluck, uniqueColumnSelect } from "./pluck.ts";
 export {
   buildAdvancedWhereClause,

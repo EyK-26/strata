@@ -1,4 +1,5 @@
 import { afterAll, afterEach, describe, expect, mock, test } from "bun:test";
+import { createMfaSecretCodec } from "@getstrata/core/crypto/mfaSecret";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 const previousEncryptionKey = process.env.KMS_ENCRYPTION_KEY;
@@ -29,10 +30,14 @@ describe("mfaSecret", () => {
 
     const { protectMfaSecret, revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
 
-    expect(() => protectMfaSecret("JBSWY3DPEHPK3PXP")).toThrow("KMS_ENCRYPTION_KEY");
-    expect(revealMfaSecret("JBSWY3DPEHPK3PXP")).toBe("JBSWY3DPEHPK3PXP");
-    expect(revealMfaSecret(null)).toBeNull();
-    expect(revealMfaSecret(undefined)).toBeNull();
+    expect(() => protectMfaSecret("JBSWY3DPEHPK3PXP", createMfaSecretCodec(process.env))).toThrow(
+      "KMS_ENCRYPTION_KEY",
+    );
+    expect(revealMfaSecret("JBSWY3DPEHPK3PXP", createMfaSecretCodec(process.env))).toBe(
+      "JBSWY3DPEHPK3PXP",
+    );
+    expect(revealMfaSecret(null, createMfaSecretCodec(process.env))).toBeNull();
+    expect(revealMfaSecret(undefined, createMfaSecretCodec(process.env))).toBeNull();
   });
 
   test("encrypts MFA secrets whenever a key is present", async () => {
@@ -40,10 +45,12 @@ describe("mfaSecret", () => {
     delete process.env.FEATURE_FIELD_ENCRYPTION;
 
     const { protectMfaSecret, revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
-    const protectedSecret = protectMfaSecret("JBSWY3DPEHPK3PXP");
+    const protectedSecret = protectMfaSecret("JBSWY3DPEHPK3PXP", createMfaSecretCodec(process.env));
 
     expect(protectedSecret.startsWith("enc:v1:")).toBe(true);
-    expect(revealMfaSecret(protectedSecret)).toBe("JBSWY3DPEHPK3PXP");
+    expect(revealMfaSecret(protectedSecret, createMfaSecretCodec(process.env))).toBe(
+      "JBSWY3DPEHPK3PXP",
+    );
   });
 
   test("returns stored plaintext when decrypt is not available", async () => {
@@ -52,8 +59,10 @@ describe("mfaSecret", () => {
 
     const { revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
 
-    expect(revealMfaSecret("plain-secret")).toBe("plain-secret");
-    expect(() => revealMfaSecret("enc:v1:ciphertext")).toThrow("KMS_ENCRYPTION_KEY");
+    expect(revealMfaSecret("plain-secret", createMfaSecretCodec(process.env))).toBe("plain-secret");
+    expect(() => revealMfaSecret("enc:v1:ciphertext", createMfaSecretCodec(process.env))).toThrow(
+      "KMS_ENCRYPTION_KEY",
+    );
   });
 
   test("decrypts MFA secrets even when FEATURE_FIELD_ENCRYPTION is false", async () => {
@@ -61,9 +70,11 @@ describe("mfaSecret", () => {
     process.env.FEATURE_FIELD_ENCRYPTION = "false";
 
     const { protectMfaSecret, revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
-    const protectedSecret = protectMfaSecret("JBSWY3DPEHPK3PXP");
+    const protectedSecret = protectMfaSecret("JBSWY3DPEHPK3PXP", createMfaSecretCodec(process.env));
     expect(protectedSecret.startsWith("enc:v1:")).toBe(true);
-    expect(revealMfaSecret(protectedSecret)).toBe("JBSWY3DPEHPK3PXP");
+    expect(revealMfaSecret(protectedSecret, createMfaSecretCodec(process.env))).toBe(
+      "JBSWY3DPEHPK3PXP",
+    );
   });
 
   test("refuses stored plaintext when an encryption key is set", async () => {
@@ -74,7 +85,9 @@ describe("mfaSecret", () => {
 
     try {
       const { revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
-      expect(() => revealMfaSecret("legacy-plain-secret")).toThrow("must be encrypted");
+      expect(() =>
+        revealMfaSecret("legacy-plain-secret", createMfaSecretCodec(process.env)),
+      ).toThrow("must be encrypted");
     } finally {
       restoreEnvVar("APP_ENV", previous);
     }
@@ -86,7 +99,9 @@ describe("mfaSecret", () => {
     process.env.KMS_ENCRYPTION_KEY = "d".repeat(64);
     try {
       const { revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
-      expect(() => revealMfaSecret("legacy-plain-secret")).toThrow("must be encrypted");
+      expect(() =>
+        revealMfaSecret("legacy-plain-secret", createMfaSecretCodec(process.env)),
+      ).toThrow("must be encrypted");
     } finally {
       restoreEnvVar("APP_ENV", previous);
     }

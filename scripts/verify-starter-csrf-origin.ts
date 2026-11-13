@@ -135,9 +135,11 @@ try {
     join(module, "index.ts"),
     `import type { AppModule } from '@getstrata/bootstrap/contracts';
 import {resolveCsrfTokenForRequest} from '@getstrata/core/http/csrfToken';
-const app: AppModule={name:'proxy-form',webRoutes({kernel}){
+import {STARTER_AUTH_SERVICES} from '../../bootstrap/providers/auth.ts';
+const app: AppModule={name:'proxy-form',webRoutes({kernel,dependencies}){
+ const csrf=dependencies.container.resolve(STARTER_AUTH_SERVICES).csrf;
  const form=kernel.wrapWeb(async (request: Request & {params?:{id?:string}})=>{
-  if(request.method==='GET')return new Response('<form method="post"><input name="_token" value="'+resolveCsrfTokenForRequest(request)+'"><input name="email" value="invalid"><button>Submit</button></form>',{headers:{'Content-Type':'text/html; charset=utf-8'}});
+  if(request.method==='GET')return new Response('<form method="post"><input name="_token" value="'+resolveCsrfTokenForRequest(request,csrf)+'"><input name="email" value="invalid"><button>Submit</button></form>',{headers:{'Content-Type':'text/html; charset=utf-8'}});
   const body=await request.formData();return Response.json({email:body.get('email'),id:request.params?.id,protocol:new URL(request.url).protocol,origin:request.headers.get('origin')},{status:422});
  });return {'/proxy-form/:id':{GET:form,POST:form}};
 }};export default app;

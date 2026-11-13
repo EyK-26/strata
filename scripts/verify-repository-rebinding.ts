@@ -106,11 +106,12 @@ try {
   await writeFile(
     join(fixture.app, "src/db/migrations/9999_rebinding_items.ts"),
     `import type { Migration } from "@getstrata/core/database/migrations/types";
-import { Schema, resolveDatabaseDriver } from "@getstrata/core/database/schema";
+import { currentSqlDialect } from "@getstrata/core/database/dialect";
+import { Schema } from "@getstrata/core/database/schema";
 const migration: Migration = {
   name: "9999_rebinding_items",
-  async up(db) { await Schema.run(db, resolveDatabaseDriver(), schema => { schema.create("rebinding_items", table => { table.id(); table.string("scope"); table.string("label"); }); }); },
-  async down(db) { await Schema.run(db, resolveDatabaseDriver(), schema => { schema.drop("rebinding_items"); }); },
+  async up(db) { await Schema.run(db, currentSqlDialect().driver, schema => { schema.create("rebinding_items", table => { table.id(); table.string("scope"); table.string("label"); }); }); },
+  async down(db) { await Schema.run(db, currentSqlDialect().driver, schema => { schema.drop("rebinding_items"); }); },
 };
 export default migration;
 `,
@@ -119,15 +120,16 @@ export default migration;
     await writeFile(
       join(fixture.app, "src/db/migrations/9998_relation_queries.ts"),
       `import type { Migration } from "@getstrata/core/database/migrations/types";
-import { Schema, resolveDatabaseDriver } from "@getstrata/core/database/schema";
+import { currentSqlDialect } from "@getstrata/core/database/dialect";
+import { Schema } from "@getstrata/core/database/schema";
 const migration: Migration = {
   name: "9998_relation_queries",
-  async up(db) { await Schema.run(db, resolveDatabaseDriver(), schema => {
+  async up(db) { await Schema.run(db, currentSqlDialect().driver, schema => {
     schema.create("relation_bridges", table => { table.id(); table.integer("parent_id"); });
     schema.create("relation_far", table => { table.id(); table.integer("bridge_id"); table.integer("tenant_id"); table.string("name"); table.softDeletes(); });
     schema.create("relation_pivot", table => { table.id(); table.integer("parent_id"); table.integer("far_id"); });
   }); },
-  async down(db) { await Schema.run(db, resolveDatabaseDriver(), schema => {
+  async down(db) { await Schema.run(db, currentSqlDialect().driver, schema => {
     schema.drop("relation_pivot"); schema.drop("relation_far"); schema.drop("relation_bridges");
   }); },
 };
@@ -139,10 +141,11 @@ export default migration;
     await writeFile(
       join(fixture.app, "src/db/migrations/9998_audit_export.ts"),
       `import type { Migration } from "@getstrata/core/database/migrations/types";
-import { Schema, resolveDatabaseDriver } from "@getstrata/core/database/schema";
+import { currentSqlDialect } from "@getstrata/core/database/dialect";
+import { Schema } from "@getstrata/core/database/schema";
 const migration: Migration = {
   name: "9998_audit_export",
-  async up(db) { await Schema.run(db, resolveDatabaseDriver(), schema => {
+  async up(db) { await Schema.run(db, currentSqlDialect().driver, schema => {
     schema.create("audit_log", table => {
       table.id(); table.integer("user_id").nullable(); table.string("action"); table.string("subject_type");
       table.integer("subject_id").nullable(); table.json("payload"); table.string("ip_address").nullable();
@@ -150,7 +153,7 @@ const migration: Migration = {
       table.string("trace_id").nullable(); table.timestamp("created_at"); table.timestamp("exported_at").nullable();
     });
   }); },
-  async down(db) { await Schema.run(db, resolveDatabaseDriver(), schema => { schema.drop("audit_log"); }); },
+  async down(db) { await Schema.run(db, currentSqlDialect().driver, schema => { schema.drop("audit_log"); }); },
 };
 export default migration;
 `,

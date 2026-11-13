@@ -1,4 +1,6 @@
+import { FAILED_JOB_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import type { Queue } from "./index";
+import type { JobRegistry } from "./jobRegistry";
 import {
   createFailedJobService,
   createProductionQueue,
@@ -8,23 +10,28 @@ import {
   createTrackedJob,
   type QueueServices,
 } from "./publicQueue";
+import type { QueueRetryPolicy, QueueRuntimeConfig } from "./queueConfig";
 import { resolveQueueConfig } from "./queueConfig";
-
-const FAILED_JOB_SERVICE_TOKEN = "core.failedJobs";
 
 function createAppQueue(
   driver: "sync" | "async" | "redis",
   redisUrl: string | undefined,
   failedJobs: QueueServices,
-  registerJobs?: () => void,
+  registry: JobRegistry,
+  retryPolicy?: QueueRetryPolicy,
+  runtime?: QueueRuntimeConfig,
 ): Queue {
   return createProductionQueue(driver, {
     redisUrl,
     failedJobs,
-    registerJobs,
+    registry,
+    retryPolicy,
+    runtime,
   });
 }
 
+export type { QueueHandoff, QueueIdentity } from "@getstrata/core/queue/queueHandoff";
+export { createIdentityQueue, createQueueHandoff } from "@getstrata/core/queue/queueHandoff";
 export type { QueueInvocation, QueueInvocationConfig, QueueServices } from "./queueServices";
 export {
   createAppQueue,

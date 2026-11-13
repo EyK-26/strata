@@ -24,11 +24,11 @@ describe("signWebhookBody", () => {
     });
   });
 
-  test("header name follows WEBHOOK_SIGNATURE_HEADER", () => {
+  test("header name is explicitly selected", () => {
     const previous = process.env.WEBHOOK_SIGNATURE_HEADER;
     process.env.WEBHOOK_SIGNATURE_HEADER = "x-shop-signature";
     try {
-      expect(signedWebhookHeaders("s", "{}")["x-shop-signature"]).toBeDefined();
+      expect(signedWebhookHeaders("s", "{}", "x-shop-signature")["x-shop-signature"]).toBeDefined();
     } finally {
       restoreEnvVar("WEBHOOK_SIGNATURE_HEADER", previous);
     }

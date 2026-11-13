@@ -4,7 +4,7 @@ import { appCookieName, requireConfiguredSecret } from "../runtime/appKeyPrefix"
 import { readRequestCookie } from "./cookies.ts";
 import { currentRequestMeta } from "./requestMetaContext";
 
-const CSRF_COOKIE = appCookieName("csrf");
+const CSRF_COOKIE = "strata_csrf";
 const CSRF_TTL_MS = 60 * 60 * 1000;
 
 interface CsrfTokenOptions {
@@ -22,8 +22,8 @@ function csrfTokenOptionsFromEnvironment(env: EnvRecord): CsrfTokenOptions {
   });
 }
 
-function csrfCookieName(options?: CsrfTokenOptions): string {
-  return options?.cookieName ?? (process.env.CSRF_COOKIE_NAME?.trim() || appCookieName("csrf"));
+function csrfCookieName(options: CsrfTokenOptions): string {
+  return options.cookieName;
 }
 
 function csrfVerifyOptions(options: CsrfTokenOptions) {
@@ -45,9 +45,7 @@ function tokensMatch(left: string, right: string): boolean {
   return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-function createCsrfTokenCookie(
-  options: CsrfTokenOptions = csrfTokenOptionsFromEnvironment(process.env),
-): { token: string; cookie: string } {
+function createCsrfTokenCookie(options: CsrfTokenOptions): { token: string; cookie: string } {
   const token = Bun.CSRF.generate(options.secret, { expiresIn: CSRF_TTL_MS });
 
   const secure = options.production ? "; Secure" : "";
@@ -60,7 +58,7 @@ function createCsrfTokenCookie(
 
 function resolveCsrfToken(
   request: Request,
-  options: CsrfTokenOptions = csrfTokenOptionsFromEnvironment(process.env),
+  options: CsrfTokenOptions,
 ): { token: string; cookie?: string } {
   const cookieValue = readRequestCookie(request, csrfCookieName(options));
 
@@ -114,7 +112,7 @@ async function readSubmittedCsrfTokenFromBody(request: Request): Promise<string 
 function verifyCsrfToken(
   request: Request,
   submittedToken: string | null,
-  options: CsrfTokenOptions = csrfTokenOptionsFromEnvironment(process.env),
+  options: CsrfTokenOptions,
 ): boolean {
   if (!submittedToken) {
     return false;
@@ -133,11 +131,9 @@ function verifyCsrfToken(
   return verifyCsrfTokenValue(submittedToken, options);
 }
 
-function resolveCsrfTokenForRequest(
-  request: Request,
-  options: CsrfTokenOptions = csrfTokenOptionsFromEnvironment(process.env),
-): string {
-  const metaToken = currentRequestMeta().csrfToken;
+function resolveCsrfTokenForRequest(request: Request, options: CsrfTokenOptions): string {
+  const meta = currentRequestMeta();
+  const metaToken = meta.request === request ? meta.csrfToken : undefined;
 
   if (metaToken && verifyCsrfTokenValue(metaToken, options)) {
     return metaToken;

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
+import type { ServiceToken } from "@getstrata/core/contracts/token";
 
 const CORE_DIST = join(process.cwd(), "packages/strata-core/dist");
 
@@ -32,11 +33,17 @@ describe("@getstrata/core published bundle singletons", () => {
     expect(main.hasOrgMembership).toBe(subpath.hasOrgMembership);
   });
 
-  test("main and queue/jobRegistry subpath share jobRegistry", async () => {
+  test("queue registries have explicit owners across package subpaths", async () => {
     const main = await import(join(CORE_DIST, "index.js"));
     const subpath = await import(join(CORE_DIST, "entries/queue/jobRegistry.js"));
 
-    expect(main.jobRegistry).toBe(subpath.jobRegistry);
+    expect("jobRegistry" in main).toBe(false);
+    expect("jobRegistry" in subpath).toBe(false);
+    const first = new main.JobRegistry();
+    const second = new subpath.JobRegistry();
+    first.register("owned", () => ({ handle: async () => {} }));
+    expect(first.has("owned")).toBe(true);
+    expect(second.has("owned")).toBe(false);
   });
 
   test("@getstrata/core workspace imports resolve through one tenantContext module", async () => {
@@ -94,11 +101,11 @@ describe("@getstrata/core published bundle singletons", () => {
     expect(await Bun.file(join(CORE_DIST, "entries/database/transaction.js")).exists()).toBe(false);
   });
 
-  test("main and view subpath share configureWebErrorView", async () => {
+  test("main and view subpath share createWebErrorView", async () => {
     const main = await import(join(CORE_DIST, "index.js"));
     const subpath = await import(join(CORE_DIST, "entries/view.js"));
 
-    expect(main.configureWebErrorView).toBe(subpath.configureWebErrorView);
+    expect(main.createWebErrorView).toBe(subpath.createWebErrorView);
   });
 
   test("shared shims keep subpath-only helpers reachable at runtime", async () => {
@@ -127,4 +134,20 @@ describe("@getstrata/core published bundle singletons", () => {
     expect(typeof view.renderWebErrorHtml).toBe("function");
     expect(view.renderWebErrorHtml).toBe(main.renderWebErrorHtml);
   });
+});
+
+test("published queue registry token uses canonical opaque token ownership", async () => {
+  const registry = await import(join(CORE_DIST, "entries/queue/jobRegistry.js"));
+  const tokens = await import("@getstrata/core/contracts/token");
+  const services = await import("@getstrata/core/contracts/services");
+  const value = new registry.JobRegistry();
+  expect(tokens.isServiceToken(registry.QUEUE_JOB_REGISTRY_TOKEN)).toBe(true);
+  expect(() =>
+    services.valueService(registry.QUEUE_JOB_REGISTRY_TOKEN as ServiceToken<unknown>, value),
+  ).not.toThrow();
+  const forged = { name: "core.queueJobRegistry" };
+  expect(tokens.isServiceToken(forged)).toBe(false);
+  expect(() => services.valueService(forged as unknown as ServiceToken<unknown>, value)).toThrow(
+    "Expected an opaque service token",
+  );
 });

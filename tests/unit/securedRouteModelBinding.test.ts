@@ -1,12 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
-import { Policy, PolicyGate } from "@getstrata/core/auth/policy";
-import {
-  ForbiddenError,
-  NotFoundError,
-  PreconditionFailedError,
-} from "@getstrata/core/errors/http";
+import { Policy, PolicyDeniedError, PolicyGate } from "@getstrata/core/auth/policy";
+import { NotFoundError, PreconditionFailedError } from "@getstrata/core/errors/http";
 import { etagFromResource } from "@getstrata/core/http/etag";
 import {
   type RouteModelBindingPorts,
@@ -71,7 +67,7 @@ describe("securedBindRouteModel", () => {
         params: { id: "1" },
         headers: new Headers(),
       } as Request & { params: WidgetParams }),
-    ).rejects.toThrow(ForbiddenError);
+    ).rejects.toThrow(PolicyDeniedError);
 
     const model = {
       id: 1,

@@ -1,17 +1,15 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { runWithSqlDialect } from "@getstrata/core/database/dialect";
 import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
 import { Schema } from "@getstrata/core/database/schema";
 import { SQL } from "bun";
 import { createPool } from "mysql2/promise";
 import fixtureMigration from "../../src/db/migrations/0038_add_failed_job_identity";
 import migration from "../fixtures/migrations/failedJobIdentity";
-import { restoreEnvVar } from "../helpers/restoreEnv";
 
 async function upgrade(db: MigrationDatabase, driver: "pgsql" | "mysql" | "sqlite") {
-  const previous = process.env.DB_CONNECTION;
-  process.env.DB_CONNECTION = driver;
-  try {
+  return runWithSqlDialect(driver, async () => {
     await Schema.run(db, driver, (schema) => {
       schema.create("failed_job", (table) => {
         table.integer("id").primary();
@@ -40,9 +38,7 @@ async function upgrade(db: MigrationDatabase, driver: "pgsql" | "mysql" | "sqlit
       { id: 1, payload: "old payload" },
       { id: 2, payload: "old writer" },
     ]);
-  } finally {
-    restoreEnvVar("DB_CONNECTION", previous);
-  }
+  });
 }
 
 test("failed-job identity upgrade preserves populated SQLite recovery tables", async () => {

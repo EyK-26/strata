@@ -13,22 +13,18 @@ function queueLowKey(): string {
   return namespacedRedisKey("queue:low");
 }
 
-const QUEUE_LIST_KEY = queueListKey();
-const QUEUE_HIGH_KEY = queueHighKey();
-const QUEUE_LOW_KEY = queueLowKey();
+const QUEUE_LIST_KEY = "strata:queue:default";
+const QUEUE_HIGH_KEY = "strata:queue:high";
+const QUEUE_LOW_KEY = "strata:queue:low";
 function defaultQueueKeys(): readonly [string, string, string] {
   return [queueHighKey(), queueListKey(), queueLowKey()];
 }
-const QUEUE_KEYS = defaultQueueKeys();
-function queueKeyForPriority(priority: QueuePriority = "default"): string {
-  switch (priority) {
-    case "high":
-      return queueHighKey();
-    case "low":
-      return queueLowKey();
-    default:
-      return queueListKey();
-  }
+const QUEUE_KEYS = Object.freeze([QUEUE_HIGH_KEY, QUEUE_LIST_KEY, QUEUE_LOW_KEY]);
+function queueKeyForPriority(
+  priority: QueuePriority = "default",
+  keys: readonly [string, string, string] = defaultQueueKeys(),
+): string {
+  return priority === "high" ? keys[0] : priority === "low" ? keys[2] : keys[1];
 }
 
 export {

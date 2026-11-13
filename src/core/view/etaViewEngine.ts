@@ -1,10 +1,10 @@
-import { join, relative } from "node:path";
+import { relative, resolve } from "node:path";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { missingOptionalPeer } from "../runtime/optionalPeer.ts";
 import { assertEtaHtmlSource } from "./assertEtaHtmlSource";
 import type { ViewEngine } from "./viewEngine";
 
-const DEFAULT_VIEWS_DIRECTORY = join(process.cwd(), "resources/views");
+const DEFAULT_VIEWS_DIRECTORY = "resources/views";
 const DEFAULT_LAYOUT = "layouts/app.eta";
 
 interface RenderOptions {
@@ -33,7 +33,7 @@ class EtaViewEngine implements ViewEngine {
     viewsDirectory: string = DEFAULT_VIEWS_DIRECTORY,
     resolveLayoutData?: LayoutDataResolver,
   ) {
-    this.viewsDirectory = viewsDirectory;
+    this.viewsDirectory = resolve(viewsDirectory);
     this.resolveLayoutData = resolveLayoutData;
   }
 

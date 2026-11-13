@@ -2,15 +2,21 @@ import { describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
 import { BasicAuthGuard } from "@getstrata/core/auth/basicAuthGuard";
 import { AuthManager, DatabaseTokenGuard } from "@getstrata/core/auth/guard";
-import { signJwt, verifyJwt } from "@getstrata/core/auth/jwt";
+import { jwtOptionsFromEnvironment, signJwt, verifyJwt } from "@getstrata/core/auth/jwt";
 import { JwtGuard } from "@getstrata/core/auth/jwtGuard";
 import { hashPassword } from "@getstrata/core/auth/password";
 import { persistConsumedRecoveryHash } from "@getstrata/core/auth/passwordLogin";
 import type {
+  AuthCredentialVerifier,
+  AuthEmailLookup,
   AuthUserDirectory,
   AuthUserRecord,
 } from "@getstrata/core/contracts/authUserDirectory";
+import { AuthAccountNotFoundError } from "@getstrata/core/contracts/authUserDirectory";
+import { createMfaSecretCodec } from "@getstrata/core/crypto/mfaSecret";
+import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
 import { generateRecoveryCodes, hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
+import { authFixtureOutcome } from "../helpers/authOutcome";
 import { withBoundDatabase } from "../helpers/boundRepositoryHarness";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -18,8 +24,25 @@ function basic(
   directory: AuthUserDirectory | null,
   persistRecovery: (record: AuthUserRecord, hash: string) => Promise<boolean> = async () => false,
 ) {
-  // Deliberately malformed JS input retains the existing fail-closed runtime witness.
-  return new BasicAuthGuard({ directory: directory as AuthUserDirectory, persistRecovery });
+  const accounts = directory as AuthUserDirectory;
+  const emailLookup = directory?.findByEmail ? (directory as AuthEmailLookup) : undefined;
+  const credentials = directory?.verifyCredentials
+    ? (directory as AuthCredentialVerifier)
+    : undefined;
+  return emailLookup
+    ? new BasicAuthGuard({
+        mfaSecrets: createMfaSecretCodec(process.env),
+        accounts,
+        emailLookup,
+        credentials,
+        persistRecovery,
+      })
+    : new BasicAuthGuard({
+        mfaSecrets: createMfaSecretCodec(process.env),
+        accounts,
+        credentials: credentials as AuthCredentialVerifier,
+        persistRecovery,
+      });
 }
 async function withRecoverySql<T>(
   connection: { unsafe: <R>(sql: string, params?: readonly unknown[]) => Promise<R[]> },
@@ -68,8 +91,14 @@ describe("JWT tokens", () => {
     const previous = process.env.JWT_SECRET;
     process.env.JWT_SECRET = "unit-test-jwt-secret-unit-test-jwt";
     try {
-      const token = signJwt({ sub: 42, role: "recruiter", abilities: ["applications:read"] });
-      const payload = verifyJwt(token);
+      const token = signJwt(
+        { sub: 42, role: "recruiter", abilities: ["applications:read"] },
+        jwtOptionsFromEnvironment(process.env),
+      );
+      const payload = verifyJwt(
+        token,
+        requireConfiguredSecret(["JWT_SECRET", "SESSION_SECRET"], "jwt-secret", process.env),
+      );
       expect(payload?.sub).toBe(42);
       expect(payload?.role).toBe("recruiter");
       expect(payload?.abilities).toEqual(["applications:read"]);
@@ -129,12 +158,15 @@ describe("JWT tokens", () => {
     const previous = process.env.JWT_SECRET;
     process.env.JWT_SECRET = "unit-test-jwt-secret-unit-test-jwt";
     try {
-      const token = signJwt({
-        sub: 9,
-        role: "admin",
-        abilities: ["*"],
-        emailVerifiedAt: null,
-      });
+      const token = signJwt(
+        {
+          sub: 9,
+          role: "admin",
+          abilities: ["*"],
+          emailVerifiedAt: null,
+        },
+        jwtOptionsFromEnvironment(process.env),
+      );
       const guard = new JwtGuard({
         secret: process.env.JWT_SECRET ?? "explicit-test-secret-at-least-32-characters",
         directory: jwtDirectory(),
@@ -174,13 +206,12 @@ describe("JWT tokens", () => {
         ),
       ).toEqual({ id: 5 });
       expect(
-        await new JwtGuard({
-          secret: process.env.JWT_SECRET ?? "explicit-test-secret-at-least-32-characters",
-          directory: undefined as unknown as AuthUserDirectory,
-        }).resolve(
-          new Request("http://example.test", { headers: { authorization: `Bearer ${token}` } }),
-        ),
-      ).toBeNull();
+        () =>
+          new JwtGuard({
+            secret: process.env.JWT_SECRET ?? "explicit-test-secret-at-least-32-characters",
+            directory: undefined as unknown as AuthUserDirectory,
+          }),
+      ).toThrow(TypeError);
       const enrolled = new JwtGuard({
         secret: process.env.JWT_SECRET ?? "explicit-test-secret-at-least-32-characters",
         directory: jwtDirectory(() => ({
@@ -248,7 +279,7 @@ describe("named auth guards", () => {
         ),
       ).toEqual({ id: 3, role: "recruiter", abilities: ["*"] });
 
-      const jwt = signJwt({ sub: 11, role: "admin" });
+      const jwt = signJwt({ sub: 11, role: "admin" }, jwtOptionsFromEnvironment(process.env));
       expect(
         await auth.resolve(
           new Request("http://example.test", { headers: { authorization: `Bearer ${jwt}` } }),
@@ -269,8 +300,12 @@ describe("named auth guards", () => {
       ).toThrow("Auth guard name must not be empty.");
 
       const bearerMiss = new AuthManager({
-        resolve() {
-          return { id: 99, role: "fallback" };
+        authenticate() {
+          return authFixtureOutcome(
+            (async () => {
+              return { id: 99, role: "fallback" };
+            })(),
+          );
         },
       });
       expect(
@@ -503,29 +538,13 @@ describe("HTTP Basic guard", () => {
     ).toBeNull();
   });
 
-  test("returns null without a user directory", async () => {
-    const guard = basic(null);
-    const encoded = Buffer.from("a:b").toString("base64");
-    expect(
-      await guard.resolve(
-        new Request("http://example.test", { headers: { authorization: `Basic ${encoded}` } }),
-      ),
-    ).toBeNull();
-
+  test("rejects missing account or credential capabilities during construction", () => {
+    expect(() => basic(null)).toThrow(TypeError);
     const emptyDirectory: AuthUserDirectory = {
-      async resolveUserFromToken() {
-        return null;
-      },
-      async findByIdOrThrow(id) {
-        return { id, role: "admin" };
-      },
+      resolveUserFromToken: async () => null,
+      findByIdOrThrow: async (id) => ({ id, role: "admin" }),
     };
-    const withoutLookup = basic(emptyDirectory);
-    expect(
-      await withoutLookup.resolve(
-        new Request("http://example.test", { headers: { authorization: `Basic ${encoded}` } }),
-      ),
-    ).toBeNull();
+    expect(() => basic(emptyDirectory)).toThrow(TypeError);
   });
 
   test("rejects malformed basic headers and unknown users", async () => {
@@ -609,7 +628,7 @@ test("legacy basic directories deny missing, inactive and deleted principals", a
       },
       async findByIdOrThrow() {
         lookups++;
-        throw new Error("deleted");
+        throw new AuthAccountNotFoundError();
       },
     };
     expect(await basic(directory).resolve(request)).toBeNull();
@@ -629,7 +648,7 @@ test("signed JWTs still require finite issuance, a usable subject and a current 
     secret,
     directory: jwtDirectory(() => {
       lookups++;
-      throw new Error("deleted");
+      throw new AuthAccountNotFoundError();
     }),
   });
   const now = Math.floor(Date.now() / 1000);

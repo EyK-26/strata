@@ -88,7 +88,7 @@ This is an explicit **platform-wide** observation using the framework's existing
 
 All values are shared-schema platform gauges: use one designated collector or `max`, not sum across replicas. No tenant, event, listener, SQL, payload or secret labels are exposed. Metrics routes remain bearer-authenticated, and the default is still HTTP-only.
 
-A 1–5,000ms deadline (default 1,000ms) bounds the scrape result. Collection uses a read-only transaction with a transaction-local [Postgres statement timeout](https://www.postgresql.org/docs/16/runtime-config-client.html), restored automatically on transaction completion/rollback. The collector passes its deadline signal through `runInTransaction` native cancellable acquisition. A timed-out Bun pool wait is removed without admitting a later callback; unsupported checkout adapters fail collection explicitly. It still refuses another transaction while cancellation/rollback/release is settling. `close()` stops new collection and waits for release; integrate it before pool closure and within the application's hard shutdown deadline. Admission/SQL/rollback network operations can still outlast the response deadline; this is not a claim that every underlying resource is released at that instant. Native connection/network timeout and infrastructure supervision still matter during a server outage.
+A 1–5,000ms deadline (default 1,000ms) bounds the scrape result. Collection uses a read-only transaction with a transaction-local [Postgres statement timeout](https://www.postgresql.org/docs/16/runtime-config-client.html), restored automatically on transaction completion/rollback. The collector passes its deadline signal through the selected session transaction's native cancellable acquisition. A timed-out Bun pool wait is removed without admitting a later callback; unsupported checkout adapters fail collection explicitly. It still refuses another transaction while cancellation/rollback/release is settling. `close()` stops new collection and waits for release; integrate it before pool closure and within the application's hard shutdown deadline. Admission/SQL/rollback network operations can still outlast the response deadline; this is not a claim that every underlying resource is released at that instant. Native connection/network timeout and infrastructure supervision still matter during a server outage.
 
 Three independent restricted-role processes, SQL table-lock, saturated-pool, cancellation/rollback, scope restoration, read-only source state, recovery, unsupported-dialect and authenticated failure regressions accompany the collector. The remaining #139 items include additional SQL dialects and deployment qualification. This addition does not close #139 or address encryption-key rotation (#140).
 
@@ -97,10 +97,11 @@ Three independent restricted-role processes, SQL table-lock, saturated-pool, can
 
 ```ts
 import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
-import { getTracingRuntime } from "@getstrata/core/tracing/tracingMiddleware";
+import { CORE_TRACING_RUNTIME_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 
 // After tracing initialization, use the existing provider-owned runtime.
-const metrics = createMetricsRoutes({ tracing: getTracingRuntime() });
+const tracing = appContext.container.resolve(CORE_TRACING_RUNTIME_TOKEN);
+const metrics = createMetricsRoutes({ tracing });
 ```
 
 The route reads `runtime.metrics()` after bearer authorization. It never initializes a runtime, flushes spans, contacts a collector or takes ownership of shutdown. Default routes remain HTTP-only. Observation failures emit `strata_tracing_collector_success 0`, omit tracing observations and preserve other metrics. Success emits 1. An explicit runtime also exposes the same typed snapshot and `renderTracingMetrics(snapshot)` through root and tracing subpath exports.
@@ -122,13 +123,13 @@ Tests exercise real Bun HTTP collector outage and callback deadlines, 10,000 ove
 ## Opt-in transaction acquisition observations
 
 ```ts
-import { createTransactionAcquisitionMetrics, runInTransaction } from "@getstrata/core/database/transaction";
+import { createTransactionAcquisitionMetrics } from "@getstrata/core/database/acquisitionMetrics";
 import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
 
 const acquisitionMetrics = createTransactionAcquisitionMetrics();
 const routes = createMetricsRoutes({ transactionAcquisition: acquisitionMetrics });
-await runInTransaction(async db => {
-  await db.unsafe("SELECT 1");
+await database.transaction(async tx => {
+  await tx.execute({ text: "SELECT 1", params: [] });
 }, { acquisitionMetrics, acquisitionSignal: AbortSignal.timeout(1000) });
 ```
 
@@ -142,7 +143,7 @@ Timing uses a monotonic clock immediately around native checkout. It includes wa
 
 Snapshots contain three fixed outcome records and twelve finite buckets each, cloned on read. No samples, connection identities, tenants, request paths or unbounded label registry are retained. The metrics route reads only local state after bearer authorization; it never checks out a connection, queries a server, or registers cleanup. Idle zero counts mean **no observed checkout attempts**, not healthy zero latency. Metrics are absent unless explicitly configured.
 
-These are process-local observations of **selected `runInTransaction` outer reservations**, not a global Bun pool statistic. Direct SQL, unobserved transactions and tenant scopes that already own their connection are outside this boundary. Actual server connection capacity, connection establishment versus pool wait, all driver operations and deployment-wide availability require other supported instrumentation/infrastructure exporters. Do not infer total pool occupancy or connection capacity from the inflight gauge. Apply `rate` to per-target histogram counters before aggregation; preserve the monitored boundary/database in deployment target labels. No arbitrary per-tenant/pool label API is provided.
+These are process-local observations of **selected session transaction outer checkouts**, not a global Bun pool statistic. Direct SQL, unobserved transactions and tenant scopes that already own their connection are outside this boundary. Actual server connection capacity, connection establishment versus pool wait, all driver operations and deployment-wide availability require other supported instrumentation/infrastructure exporters. Do not infer total pool occupancy or connection capacity from the inflight gauge. Apply `rate` to per-target histogram counters before aggregation; preserve the monitored boundary/database in deployment target labels. No arbitrary per-tenant/pool label API is provided.
 
 Tests cover saturated restricted-role Postgres waits, native cancellation without late admission, unchanged tenant scopes/savepoints, error identity, release and business failure boundaries, simultaneous waits, immutable snapshots, 10,000 observations with constant histogram/scrape cardinality, authenticated no-SQL scraping and invalid observation rejection. The API/type fixtures compile against source and packed root/subpath exports. Operational alert thresholds and sustained multi-process load/recovery qualification remain #139 work, rather than additional SQL dialect implementation. #140 remains separate.
 

@@ -91,17 +91,18 @@ Drain older Streams workers before admitting cancellable jobs: older versions ig
 **Before upgrading runtime/CLI packages, add nullable `failed_job.job_id` to every existing application's SQL schema, even if its queue is local or list-based.** New generated schemas include this column; existing applications need a new file migration using the published Schema API:
 
 ```ts
-import { Schema, resolveDatabaseDriver } from "@getstrata/core/database/schema";
+import { currentSqlDialect } from "@getstrata/core/database/dialect";
+import { Schema } from "@getstrata/core/database/schema";
 import type { Migration } from "@getstrata/core/database/migrations/types";
 const migration: Migration = {
   name: "add_failed_job_identity", // Use your application's next migration filename/name.
   async up(db) {
-    await Schema.run(db, resolveDatabaseDriver(), schema => {
+    await Schema.run(db, currentSqlDialect().driver, schema => {
       schema.table("failed_job", table => { table.text("job_id").nullable(); });
     });
   },
   async down(db) {
-    await Schema.run(db, resolveDatabaseDriver(), schema => {
+    await Schema.run(db, currentSqlDialect().driver, schema => {
       schema.table("failed_job", table => { table.dropColumn("job_id"); });
     });
   },

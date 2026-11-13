@@ -25,7 +25,7 @@ describe("resolveLoginRateLimit", () => {
     delete process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS;
     delete process.env.LOGIN_RATE_LIMIT_WINDOW_MS;
 
-    expect(resolveLoginRateLimit()).toEqual(LOCAL_LOGIN_RATE_LIMIT);
+    expect(resolveLoginRateLimit(process.env)).toEqual(LOCAL_LOGIN_RATE_LIMIT);
   });
 
   test("uses strict defaults outside local env", () => {
@@ -34,7 +34,7 @@ describe("resolveLoginRateLimit", () => {
     delete process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS;
     delete process.env.LOGIN_RATE_LIMIT_WINDOW_MS;
 
-    expect(resolveLoginRateLimit()).toEqual(PRODUCTION_LOGIN_RATE_LIMIT);
+    expect(resolveLoginRateLimit(process.env)).toEqual(PRODUCTION_LOGIN_RATE_LIMIT);
   });
 
   test("allows explicit overrides", () => {
@@ -42,7 +42,7 @@ describe("resolveLoginRateLimit", () => {
     process.env.LOGIN_RATE_LIMIT_PER_WINDOW = "7";
     process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS = "120";
 
-    expect(resolveLoginRateLimit()).toEqual({
+    expect(resolveLoginRateLimit(process.env)).toEqual({
       maxAttempts: 7,
       decaySeconds: 120,
     });
@@ -54,7 +54,7 @@ describe("resolveLoginRateLimit", () => {
     delete process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS;
     process.env.LOGIN_RATE_LIMIT_WINDOW_MS = "45000";
 
-    expect(resolveLoginRateLimit()).toEqual({
+    expect(resolveLoginRateLimit(process.env)).toEqual({
       maxAttempts: LOCAL_LOGIN_RATE_LIMIT.maxAttempts,
       decaySeconds: 45,
     });

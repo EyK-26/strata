@@ -1,4 +1,4 @@
-import { authUsesJwt, authUsesToken, htmlAuthKit, type StarterLayers } from "./types.ts";
+import type { StarterFeaturePlan } from "./featurePlan.ts";
 
 function renderSiteCss(): string {
   return `:root {
@@ -142,8 +142,9 @@ code { font-size: 0.9em; }
 `;
 }
 
-function renderLayout(layers: StarterLayers, projectName: string): string {
-  const kit = htmlAuthKit(layers.auth);
+function renderLayout(plan: StarterFeaturePlan, projectName: string): string {
+  const layers = plan.layers;
+  const kit = plan.decisions.htmlAuth;
   const guestNav = kit
     ? `<a href="/login">Sign in</a>
         <a href="/register">Create account</a>`
@@ -191,12 +192,13 @@ function renderLayout(layers: StarterLayers, projectName: string): string {
 `;
 }
 
-function renderHomeView(projectName: string, layers: StarterLayers): string {
-  const kit = htmlAuthKit(layers.auth);
-  const tokenHint = authUsesToken(layers.auth)
+function renderHomeView(projectName: string, plan: StarterFeaturePlan): string {
+  const layers = plan.layers;
+  const kit = plan.decisions.htmlAuth;
+  const tokenHint = plan.decisions.token
     ? '<p class="muted">API token: <code>POST /api/v1/auth/login</code> with email and password.</p>'
     : "";
-  const jwtHint = authUsesJwt(layers.auth)
+  const jwtHint = plan.decisions.jwt
     ? '<p class="muted">JWT: <code>POST /api/auth/token</code> with email and password.</p>'
     : "";
   const guest = kit
@@ -255,17 +257,15 @@ function textField(name: string, label: string, type: string, extra = ""): strin
     </label>`;
 }
 
-function renderLoginView(layers: StarterLayers): string {
-  const githubLink =
-    layers.extras.oauthGithub && htmlAuthKit(layers.auth)
-      ? `
+function renderLoginView(plan: StarterFeaturePlan): string {
+  const githubLink = plan.decisions.github
+    ? `
     <a href="/auth/github">Sign in with GitHub</a>`
-      : "";
-  const oidcLink =
-    layers.extras.oidc && htmlAuthKit(layers.auth)
-      ? `
+    : "";
+  const oidcLink = plan.decisions.oidc
+    ? `
     <% if (it.oidcLogin) { %><a href="/auth/oidc">Sign in with OIDC</a><% } %>`
-      : "";
+    : "";
   return renderFormView(
     "Sign in",
     `${textField("email", "Email", "email", 'required autocomplete="username"')}

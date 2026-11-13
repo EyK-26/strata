@@ -46,6 +46,8 @@ afterEach(() => {
 
 describe("GitHubOAuthProvider", () => {
   const options = {
+    production: true,
+    userAgent: "strata",
     clientId: "github-client",
     clientSecret: "github-secret",
     redirectUri: "https://app.example.com/auth/github/callback",
@@ -306,9 +308,37 @@ test("a malformed GitHub email response cannot supply a verified identity", asyn
     emails: { email: "spoof@example.test", verified: true },
   });
   const provider = new GitHubOAuthProvider({
+    production: true,
+    userAgent: "strata-test",
     clientId: "client",
     clientSecret: "secret",
     redirectUri: "https://app.example.com/callback",
   });
   await expect(provider.exchangeCode("code")).rejects.toThrow("verified email");
+});
+
+test("GitHub OAuth snapshots explicit outbound policy and refuses incomplete configuration", async () => {
+  expect(
+    () =>
+      new GitHubOAuthProvider({
+        clientId: "id",
+        clientSecret: "secret",
+        redirectUri: "https://app.test/callback",
+        production: undefined as unknown as boolean,
+        userAgent: "owned",
+      }),
+  ).toThrow("Explicit GitHub OAuth");
+  const options = {
+    clientId: "id",
+    clientSecret: "secret",
+    redirectUri: "https://app.test/callback",
+    production: true,
+    userAgent: "owned",
+  };
+  const provider = new GitHubOAuthProvider(options);
+  options.production = false;
+  options.userAgent = "changed";
+  setDnsLookupForTests(async () => [{ address: "127.0.0.1", family: 4 }]);
+  // The caller cannot weaken this provider's captured production policy after creation.
+  await expect(provider.exchangeCode("code")).rejects.toThrow();
 });

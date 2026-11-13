@@ -9,14 +9,15 @@ import {
 import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createWebRoutes, mergeWebRoutes } from "@getstrata/bootstrap/createWebRoutes";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
+import { getRouteInventory } from "@getstrata/bootstrap/routePlan";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { PolicyGate } from "@getstrata/core/auth/policy";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
-import { CORE_TOKEN_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import { CORE_ABILITY_CHECKER_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { SyncQueue } from "@getstrata/core/queue";
+import { createRoutes } from "../../src/bootstrap/createRoutes";
 import { guestGuardOptions } from "../helpers/devAuthHeaders";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 import { createMockDependencies } from "./testHelpers";
@@ -33,7 +34,7 @@ function createTestDependencies(): AppDependencies {
   dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard(guestGuardOptions())));
   dependencies.container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
   dependencies.container.set(CORE_QUEUE_TOKEN, new SyncQueue());
-  dependencies.container.set(CORE_TOKEN_SERVICE_TOKEN, {
+  dependencies.container.set(CORE_ABILITY_CHECKER_TOKEN, {
     requireAbility: () => undefined,
     tokenCan: () => true,
   });
@@ -45,7 +46,6 @@ describe("createWebRoutes", () => {
   const previousFrontendMode = process.env.FRONTEND_MODE;
 
   beforeEach(async () => {
-    routeRegistry.clear();
     process.env.FRONTEND_MODE = "server-htmx";
     await mkdir(PUBLIC_ASSETS_DIR, { recursive: true });
   });
@@ -70,7 +70,10 @@ describe("createWebRoutes", () => {
       throw new Error("Expected /assets/* route handler");
     }
 
+    const before = getRouteInventory(routes);
     const response = await handler(new Request("http://localhost/assets/coverage-test.css"));
+    expect(getRouteInventory(routes)).toEqual(before);
+    expect(before).toEqual([{ method: "*", path: "/assets/*", middleware: [] }]);
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("body { color: black; }");
   });
@@ -127,7 +130,7 @@ describe("mergeWebRoutes", () => {
     expect(merged["/assets/*"]).toBeDefined();
     expect(merged["/health"]).toBeDefined();
   });
-  test("explicit API routes retain precedence over colliding module web routes", () => {
+  test("API and module web methods compose without losing operations", () => {
     process.env.FRONTEND_MODE = "server-htmx";
     const apiRoute = { GET: () => new Response("api") };
     const merged = mergeWebRoutes(
@@ -139,7 +142,27 @@ describe("mergeWebRoutes", () => {
         ],
       },
     );
-    expect(merged["/shared"]).toBe(apiRoute);
-    expect(Object.keys(merged["/shared"])).toEqual(["GET"]);
+    expect(Object.keys(merged["/shared"])).toEqual(["POST", "GET"]);
+    expect(merged["/shared"].GET).toBe(apiRoute.GET);
   });
+});
+
+test("fallback handlers never mutate their construction-time route inventory", async () => {
+  const previous = process.env.FRONTEND_MODE;
+  process.env.FRONTEND_MODE = "api";
+  try {
+    const routes = createRoutes(createTestDependencies());
+    const before = getRouteInventory(routes);
+    for (const path of ["/api/*", "/*"]) {
+      expect((await routes[path](new Request("http://localhost/missing"))).status).toBe(404);
+      expect((await routes[path](new Request("http://localhost/missing"))).status).toBe(404);
+    }
+    expect(getRouteInventory(routes)).toEqual(before);
+    expect(before.filter((route) => route.path === "/").map((route) => route.method)).toEqual([
+      "GET",
+      "HEAD",
+    ]);
+  } finally {
+    restoreEnvVar("FRONTEND_MODE", previous);
+  }
 });

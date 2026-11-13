@@ -353,17 +353,31 @@ test("two actual composed applications retain their own gate, selected tenant an
       entered: ReturnType<typeof deferred> | undefined;
     let handlers = 0;
     const container = new ServiceContainer();
+    const authorizeWidget = async (
+      resource: string,
+      action: string,
+      user: AuthUser | null,
+      model: unknown,
+    ) => {
+      assert.ok(model && typeof model === "object" && "tenant_id" in model);
+      assert.equal(resource, "widget");
+      assert.equal(user?.id, tenantId + 40);
+      assert.equal(model.tenant_id, tenantId);
+      if (action === "update") {
+        entered?.resolve();
+        await controlled?.promise;
+        if (!allowUpdate) throw new ForbiddenError(`${name} denied`);
+      }
+    };
     container.set(CORE_POLICY_GATE_TOKEN, {
-      async authorize(resource: string, action: string, user: AuthUser | null, model: Row) {
-        assert.equal(resource, "widget");
-        assert.equal(user?.id, tenantId + 40);
-        assert.equal(model.tenant_id, tenantId);
-        if (action === "update") {
-          entered?.resolve();
-          await controlled?.promise;
-          if (!allowUpdate) throw new ForbiddenError(`${name} denied`);
-        }
+      register() {
+        throw new Error("Policy registration is not part of this fixture.");
       },
+      allows: async () => {
+        throw new Error("Use the route model authorization port.");
+      },
+      authorize: async (resource, action, user, ...models) =>
+        authorizeWidget(resource, action, user as AuthUser | null, models[0]),
     });
     const features = {
       emailVerificationRequired: false,
@@ -378,6 +392,7 @@ test("two actual composed applications retain their own gate, selected tenant an
       allowTenantDevHeaders: false,
       metadata: () => ({
         authenticate: async () => ({
+          status: "authenticated",
           user: { id: tenantId + 40, role: "member" },
           credentialSource: "bearer",
         }),
@@ -391,7 +406,9 @@ test("two actual composed applications retain their own gate, selected tenant an
       container,
       invoke,
       cache,
-      storage: new StorageManager(createStorageDriver()),
+      storage: new StorageManager(
+        createStorageDriver({ driver: "local", rootDirectory: "storage" }),
+      ),
     });
     kernel = selectedKernel;
     const route = (action: "view" | "update") =>

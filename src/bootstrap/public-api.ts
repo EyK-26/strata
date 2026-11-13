@@ -16,17 +16,6 @@ export {
   Schedule,
   SchedulerLeaseLostError,
 } from "@getstrata/core/scheduler/schedule";
-export {
-  resolveApplicationAuth,
-  resolveApplicationCache,
-  resolveApplicationConfig,
-  resolveApplicationDependencies,
-  resolveApplicationEventBus,
-  resolveApplicationLogger,
-  resolveApplicationPolicyGate,
-  resolveApplicationQueue,
-  setActiveApplicationContext,
-} from "./applicationRegistry.ts";
 export type { BuildModuleRoutesOptions } from "./buildModuleRoutes.ts";
 export { buildModuleRoutes } from "./buildModuleRoutes.ts";
 export type { BuildWebModuleRoutesOptions } from "./buildWebModuleRoutes.ts";
@@ -43,7 +32,6 @@ export {
   CORE_EVENT_BUS_TOKEN,
   CORE_POLICY_GATE_TOKEN,
   CORE_QUEUE_TOKEN,
-  CORE_TOKEN_SERVICE_TOKEN,
   CSRF_TARGET_ORIGIN_CONFIG_KEY,
   DATABASE_URL_CONFIG_KEY,
   DEFAULT_APP_PORT,
@@ -78,12 +66,7 @@ export { discoverJobs, resetDiscoverJobsForTests } from "./discoverJobs.ts";
 export type { DiscoverModelsOptions } from "./discoverModels.ts";
 export { discoverModels } from "./discoverModels.ts";
 export type { DiscoverModulesOptions } from "./discoverModules.ts";
-export {
-  configureModulesDirectory,
-  configureModulesManifest,
-  discoverModules,
-  ensureModulesLoaded,
-} from "./discoverModules.ts";
+export { createModuleDiscovery, ensureModulesLoaded } from "./discoverModules.ts";
 export type { CreateHealthRoutesOptions } from "./health.ts";
 export { checkDatabase, checkRedis, createHealthRoutes, pingDatabase } from "./health.ts";
 export {
@@ -102,10 +85,17 @@ export type {
 export { createMetricsRoutes, createMetricsRuntime } from "./metricsRoutes.ts";
 export { prefixRouteMap } from "./prefixRouteMap.ts";
 export { type CacheBindingOptions, createCacheBindings } from "./providers/cache.ts";
-export { coreProviders } from "./providers/index.ts";
-export { default as tracingProvider } from "./providers/tracing.ts";
+export { createCoreProviders } from "./providers/index.ts";
+export { CORE_MAIL_TOKEN, createMailBindings, type MailBindingOptions } from "./providers/mail.ts";
+export {
+  CORE_STORAGE_TOKEN,
+  createStorageBindings,
+  createStorageProvider,
+  type StorageBindingOptions,
+} from "./providers/storage.ts";
+export { createTracingProvider } from "./providers/tracing.ts";
 export { registerDefaultJobs } from "./queue/defaultJobs.ts";
-export { RouteRegistry, routeRegistry } from "./routeRegistry.ts";
+export { compileRouteMap, composeRouteMaps, getRouteInventory } from "./routePlan.ts";
 export { assertProductionSecrets } from "./secretsGuard.ts";
 export {
   CookieSessionAuthManager,

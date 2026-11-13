@@ -4,7 +4,7 @@ import { BasicAuthGuard } from "@getstrata/core/auth/basicAuthGuard";
 import { AuthManager } from "@getstrata/core/auth/guard";
 import { hashPassword } from "@getstrata/core/auth/password";
 import { persistConsumedRecoveryHash } from "@getstrata/core/auth/passwordLogin";
-import { protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";
+import { createMfaSecretCodec, protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
 import { composeMiddleware } from "@getstrata/core/http/middleware";
 import { withErrorHandling } from "@getstrata/core/http/response";
@@ -43,9 +43,9 @@ test("actual Basic HTTP middleware and controller resolve one recovery proof onc
     const handler = withErrorHandling((request) =>
       invoke({ kind: "request" }, async ({ database }) => {
         const guard = new BasicAuthGuard({
-          directory: {
-            resolveUserFromToken: async () => null,
-            findByIdOrThrow: async (id) => ({ id, role: "member" }),
+          mfaSecrets: createMfaSecretCodec(process.env),
+          accounts: { findByIdOrThrow: async (id) => ({ id, role: "member" }) },
+          emailLookup: {
             findByEmail: async (email) => {
               if (email !== "fixture@example.test") return null;
               const [row] = await database.execute<{ mfa_recovery_codes: string }>({
@@ -57,7 +57,7 @@ test("actual Basic HTTP middleware and controller resolve one recovery proof onc
                 role: "member",
                 password,
                 mfa_enabled: true,
-                mfa_secret: protectMfaSecret(secret),
+                mfa_secret: protectMfaSecret(secret, createMfaSecretCodec(process.env)),
                 mfa_recovery_codes: row?.mfa_recovery_codes,
               };
             },

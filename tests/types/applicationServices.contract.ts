@@ -276,3 +276,33 @@ export function applicationServiceContracts(scope: CommandScope): void {
     ],
   });
 }
+
+import * as PublicViewProvider from "@getstrata/bootstrap/providers/view";
+// View ownership is explicit on every supported public surface.
+import * as PublicViews from "@getstrata/core/view";
+import { CORE_WEB_ERROR_VIEW_TOKEN } from "@getstrata/core/view/tokens";
+
+const ownedErrorView: PublicViews.WebErrorView = PublicViews.createWebErrorView({
+  render(input) {
+    return `<p>${input.message}</p>`;
+  },
+});
+PublicViews.htmlErrorResponse(
+  { status: 422, title: "Invalid", message: "Invalid" },
+  ownedErrorView,
+);
+void CORE_WEB_ERROR_VIEW_TOKEN;
+PublicViewProvider.createViewProvider({
+  enabled: true,
+  rootDir: "/app",
+  directory: "views",
+  error: { render: ownedErrorView },
+});
+// @ts-expect-error View configuration cannot write a process-global renderer.
+PublicViews.configureWebErrorView({ render: ownedErrorView });
+// @ts-expect-error Layout configuration cannot write process-global defaults.
+PublicViews.configureWebLayoutData({ extra: {} });
+// @ts-expect-error A static provider cannot be shared by unrelated owners.
+void PublicViewProvider.viewProvider;
+// @ts-expect-error Error renderers must return HTML, not a Response object.
+PublicViews.createWebErrorView({ render: () => new Response("invalid") });

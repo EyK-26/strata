@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as BootstrapRoot from "@getstrata/bootstrap";
 import * as BootstrapConfig from "@getstrata/bootstrap/config";
 import { CORE_CACHE_TOKEN as bootstrapCacheToken } from "@getstrata/bootstrap/config";
 import { createServiceToken as bootstrapToken } from "@getstrata/bootstrap/contracts";
+import * as ProviderView from "@getstrata/bootstrap/providers/view";
 import { createViewProvider as granularViewProvider } from "@getstrata/bootstrap/providers/view";
 import * as Root from "@getstrata/core";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
@@ -17,9 +18,14 @@ import * as Services from "@getstrata/core/contracts/services";
 import * as ServiceTokens from "@getstrata/core/contracts/serviceTokens";
 import { CORE_CACHE_TOKEN as serviceToken } from "@getstrata/core/contracts/serviceTokens";
 import * as Tokens from "@getstrata/core/contracts/token";
+import * as Mail from "@getstrata/core/mail/mailer";
+import * as AppQueue from "@getstrata/core/queue/createAppQueue";
+import * as JobRegistries from "@getstrata/core/queue/jobRegistry";
 import * as Runtime from "@getstrata/core/runtime/application";
 import { type CommandScope, createApplication } from "@getstrata/core/runtime/application";
+import * as Storage from "@getstrata/core/storage/storage";
 import * as Views from "@getstrata/core/view";
+import * as ViewTokens from "@getstrata/core/view/tokens";
 
 assert.equal(Root.createServiceToken, Tokens.createServiceToken);
 assert.equal(Container.createServiceToken, Tokens.createServiceToken);
@@ -47,6 +53,12 @@ const publicModules: Record<string, Record<string, unknown>> = {
   view: Views,
   bootstrap: BootstrapRoot,
   bootstrapConfig: BootstrapConfig,
+  providerView: ProviderView,
+  appQueue: AppQueue,
+  viewTokens: ViewTokens,
+  mail: Mail,
+  storage: Storage,
+  jobRegistries: JobRegistries,
 };
 const opaqueConstants = new Map<string, Array<{ path: string; value: unknown }>>();
 for (const [path, module] of Object.entries(publicModules)) {
@@ -62,13 +74,28 @@ for (const [path, module] of Object.entries(publicModules)) {
   }
 }
 const expectedOpaque = [
+  "CORE_MAIL_TOKEN",
+  "CORE_STORAGE_TOKEN",
+  "CORE_JSON_RESPONSE_POLICY_TOKEN",
+  "CORE_TRACING_RUNTIME_TOKEN",
+  "QUEUE_JOB_REGISTRY_TOKEN",
   "CORE_CACHE_TOKEN",
+  "CORE_CONFIG_TOKEN",
+  "CORE_QUEUE_TOKEN",
+  "CORE_EVENT_BUS_TOKEN",
+  "CORE_POLICY_GATE_TOKEN",
+  "CORE_AUTH_TOKEN",
+  "CORE_ABILITY_CHECKER_TOKEN",
+  "CORE_AUTH_USER_DIRECTORY_TOKEN",
+  "CORE_VIEW_TOKEN",
+  "FAILED_JOB_SERVICE_TOKEN",
   "CORE_EXECUTION_CONTEXT_TOKEN",
   "CORE_HTTP_CLEANUP_TOKEN",
   "CORE_PUBLIC_TENANCY_TOKEN",
   "CORE_TENANT_RESOLVER_TOKEN",
   "CORE_THROTTLE_QUOTA_POLICY_TOKEN",
   "CORE_VIEW_RENDERER_TOKEN",
+  "CORE_WEB_ERROR_VIEW_TOKEN",
 ];
 for (const name of expectedOpaque)
   assert.ok(opaqueConstants.has(name), `${name} missing from public inventory`);
@@ -119,6 +146,71 @@ try {
   }
 } finally {
   await rm(viewsDirectory, { recursive: true, force: true });
+}
+
+// Real Application owners with physical custom templates, through fresh packed exports.
+const errorViewDirectory = await mkdtemp(join(process.cwd(), "owned-error-view-"));
+const viewApplications: Awaited<ReturnType<typeof BootstrapRoot.createAppContext>>[] = [];
+try {
+  for (const label of ["packed-first", "packed-second"]) {
+    const directory = join(errorViewDirectory, label);
+    await mkdir(join(directory, "errors"), { recursive: true });
+    await writeFile(
+      join(directory, "errors/error.eta"),
+      "<p><%= it.label %>:<%= it.message %></p>",
+    );
+    const app = await BootstrapRoot.createAppContext(
+      [
+        {
+          name: "packed.view.dependencies",
+          register({ dependencies }) {
+            dependencies.cache = new Root.CacheRepository(new SimpleCacheStore(new SimpleCache()));
+            dependencies.storage = new Storage.StorageManager({
+              put: async (path) => path,
+              get: async () => null,
+              delete: async () => false,
+            });
+          },
+        },
+        granularViewProvider({
+          enabled: true,
+          rootDir: errorViewDirectory,
+          directory: label,
+          layout: false,
+          data: { extra: { label } },
+        }),
+      ],
+      { connection: "main", definition: { services: [], providers: [] } },
+    );
+    viewApplications.push(app);
+    assert.equal(Root.CORE_WEB_ERROR_VIEW_TOKEN, Views.CORE_WEB_ERROR_VIEW_TOKEN);
+    assert.equal(Root.CORE_WEB_ERROR_VIEW_TOKEN, ViewTokens.CORE_WEB_ERROR_VIEW_TOKEN);
+  }
+  const results = await Promise.all(
+    Array.from({ length: 8 }, async (_, index) => {
+      const app = viewApplications[index % 2];
+      assert.ok(app);
+      const response = await Views.htmlErrorResponse(
+        { status: 422, title: "invalid", message: `message${index}` },
+        app.container.resolve(Root.CORE_WEB_ERROR_VIEW_TOKEN),
+      );
+      assert.equal(response.status, 422);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      return response.text();
+    }),
+  );
+  results.forEach((html, index) => {
+    assert.equal(html, `<p>${index % 2 ? "packed-second" : "packed-first"}:message${index}</p>`);
+  });
+  const safe = await Views.renderWebErrorHtml({ status: 422, title: "safe", message: "<script>" });
+  assert.ok(safe.includes("&lt;script&gt;"));
+  assert.ok(!safe.includes("packed-first") && !safe.includes("packed-second"));
+  assert.equal("configureWebErrorView" in Views, false);
+  assert.equal("configureWebLayoutData" in Views, false);
+  assert.equal("viewProvider" in ProviderView, false);
+} finally {
+  await Promise.all(viewApplications.map((app) => app.dispose()));
+  await rm(errorViewDirectory, { recursive: true, force: true });
 }
 
 const paths = [];
@@ -175,9 +267,37 @@ const settings = parseApplicationConfig(
 );
 const Settings = Tokens.createServiceToken<typeof settings>("settings");
 const cache = new Root.CacheRepository(new SimpleCacheStore(new SimpleCache()));
+const sent: Mail.MailMessage[] = [];
+const objects = new Map<string, Uint8Array>();
 const app = createApplication({
   providers: [],
   services: [
+    ...BootstrapRoot.createMailBindings({
+      driver: "custom",
+      mail: {
+        async send(message) {
+          sent.push(message);
+        },
+      },
+    }),
+    ...BootstrapRoot.createStorageBindings({
+      driver: "custom",
+      storage: {
+        async put(path, contents) {
+          objects.set(
+            path,
+            typeof contents === "string" ? new TextEncoder().encode(contents) : contents,
+          );
+          return path;
+        },
+        async get(path) {
+          return objects.get(path) ?? null;
+        },
+        async delete(path) {
+          return objects.delete(path);
+        },
+      },
+    }),
     Root.resourceService(Managed, {
       lifetime: "application",
       dependencies: [second],
@@ -281,6 +401,18 @@ try {
   const contexts: Runtime.ExecutionContext[] = [];
   await app.run(async (scope) => {
     saved = scope;
+    const mail = scope.resolve(Root.CORE_MAIL_TOKEN);
+    assert.equal(mail, scope.resolve(Mail.CORE_MAIL_TOKEN));
+    await mail.send({ to: "fixture@example.test", subject: "packed identity", body: "owned mail" });
+    assert.equal(sent.length, 1);
+    const storage = scope.resolve(Root.CORE_STORAGE_TOKEN);
+    assert.equal(storage, scope.resolve(Storage.CORE_STORAGE_TOKEN));
+    await storage.put("identity.txt", "owned storage");
+    assert.equal(
+      new TextDecoder().decode((await storage.get("identity.txt")) ?? undefined),
+      "owned storage",
+    );
+    assert.equal(await storage.delete("identity.txt"), true);
     const executionHandle = scope.resolve(ExecutionResourceAlias);
     assert.equal(scope.resolve(ExecutionResource), executionHandle);
     await scope.acquire(packedTaskResource("root"));

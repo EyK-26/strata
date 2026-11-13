@@ -19,7 +19,7 @@ async function createQueuePersistenceFixture() {
   ) => application.run((scope) => work(scope.resolve(DATABASE_SESSION_TOKEN)));
   await run((db) =>
     db.execute({
-      text: "CREATE TABLE failed_job(id INTEGER PRIMARY KEY,job_name TEXT NOT NULL,job_id TEXT,payload TEXT NOT NULL,exception TEXT NOT NULL,failed_at DATETIME NOT NULL)",
+      text: "CREATE TABLE failed_job(id INTEGER PRIMARY KEY,job_name TEXT NOT NULL,job_id TEXT,handoff TEXT,payload TEXT NOT NULL,exception TEXT NOT NULL,failed_at DATETIME NOT NULL)",
       params: [],
     }),
   );

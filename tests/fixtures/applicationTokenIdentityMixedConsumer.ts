@@ -75,8 +75,7 @@ if (process.argv[2] === "execution") {
     await app.stop();
   }
 } else if (process.argv[2] === "dialect") {
-  core.useSqlDialect("mysql");
-  try {
+  await core.runWithSqlDialect("mysql", async () => {
     const table = core.defineTable({
       name: "identity_rows",
       primaryKey: "id",
@@ -94,9 +93,7 @@ if (process.argv[2] === "execution") {
     console.log(
       JSON.stringify({ evidence: "mixed-workspace-source-built", dialect: "mysql", query }),
     );
-  } finally {
-    core.resetSqlDialect();
-  }
+  });
 } else {
   const directory = await mkdtemp(join(tmpdir(), "strata-mixed-view-token-"));
   try {

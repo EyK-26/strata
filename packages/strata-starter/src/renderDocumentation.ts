@@ -1,73 +1,64 @@
 import { GENERATED_POSTGRES_APP_ROLE, usesComposePostgres } from "./databaseDefaults.ts";
+import type { StarterFeaturePlan } from "./featurePlan.ts";
 import { renderDockerCompose } from "./renderDocker.ts";
 import { renderSupportingToolsReadme } from "./renderSupportingTools.ts";
-import {
-  authNeedsUsers,
-  authUsesCookie,
-  authUsesJwt,
-  authUsesToken,
-  dockerComposeUpCommand,
-  type GenerateOptions,
-  neededDockerServices,
-  needsFrontendBuild,
-  type StarterLayers,
-  selectedDockerServices,
-} from "./types.ts";
+import type { GenerateOptions } from "./types.ts";
 
 /**
  * Written per layer so it can only list routes this app actually serves.
  * A static template drifts the moment the auth stack changes.
  */
-function renderApiDocs(projectName: string, layers: StarterLayers): string {
+function renderApiDocs(projectName: string, plan: StarterFeaturePlan): string {
+  const layers = plan.layers;
   const rows = ["| Method | Path | Notes |", "| --- | --- | --- |"];
   rows.push(
     "| `GET` | `/health` | Plain text `ok` (200) when configured database/Redis checks succeed and `notes` is readable (zero rows is still 200). This infrastructure probe runs outside API auth/tenancy admission, never selects a tenant or bypasses RLS, and returns no rows. `degraded` (503) when a dependency or schema check fails. Docker HEALTHCHECK uses this path. |",
     '| `GET` | `/ready` | JSON from the framework: `{"status":"ready","checks":{"database":"ok","redis":"skipped"}}` (200) or `not_ready` (503). `redis` is `ok` or `error` when `REDIS_URL` is set and `skipped` otherwise. It does not check the schema, so use `/health` as the deploy gate. |',
   );
 
-  if (authUsesToken(layers.auth)) {
+  if (plan.decisions.token) {
     rows.push(
       "| `POST` | `/api/v1/auth/login` | `{ email, password }` returns `{ token }`. Requires `GET /api/v1/auth/csrf` then `X-CSRF-Token`. |",
       "| `GET` | `/api/v1/auth/me` | Requires `Authorization: Bearer <token>`. |",
     );
   }
-  if (authUsesJwt(layers.auth)) {
+  if (plan.decisions.jwt) {
     rows.push(
       "| `POST` | `/api/auth/token` | Mints a short-lived JWT. Not an HTML session. Requires CSRF like JSON login. |",
     );
   }
-  if (authUsesToken(layers.auth) || authUsesJwt(layers.auth) || authUsesCookie(layers.auth)) {
+  if (plan.decisions.users) {
     rows.push(
       "| `POST` | `/api/v1/auth/register` | Returns neutral `{ ok: true }` (201); sign in separately. |",
       "| `POST` | `/api/v1/auth/forgot-password` | Sends a signed reset link through the mail driver. |",
       "| `POST` | `/api/v1/auth/reset-password` | Consumes the signed link. |",
-      ...(authUsesToken(layers.auth) || authUsesJwt(layers.auth)
+      ...(plan.decisions.bearerApi
         ? ["| `GET` | `/api/user` | Current user for the active guard. |"]
         : []),
     );
   }
-  if (authNeedsUsers(layers.auth)) {
+  if (plan.decisions.users) {
     rows.push(
       "| `GET` | `/api/v1/auth/csrf` | Issues the CSRF cookie and JSON token for unauthenticated writes. |",
     );
   }
-  if (authUsesCookie(layers.auth)) {
-    if (!authUsesToken(layers.auth))
+  if (plan.decisions.cookie) {
+    if (!plan.decisions.token)
       rows.push(
         "| `POST` | `/api/v1/auth/login` | `{ email, password }` sets the session cookie and returns `{ ok: true }`. Requires CSRF. |",
         "| `GET` | `/api/v1/auth/me` | Current user from the session cookie. |",
       );
   }
-  if (layers.extras.emailVerification && authNeedsUsers(layers.auth)) {
+  if (plan.decisions.emailVerification) {
     rows.push(
       "| `POST` | `/api/v1/auth/verify-email` | Consumes the signed verification token; requires CSRF. |",
     );
   }
-  if (authUsesCookie(layers.auth) && layers.extras.emailVerification)
+  if (plan.decisions.cookieVerification)
     rows.push(
       "| `POST` | `/api/v1/auth/verification-notification` | Authenticated owner resend; verification is not required. Requires CSRF. |",
     );
-  if (authUsesCookie(layers.auth) && layers.extras.mfa)
+  if (plan.decisions.pendingMfa)
     rows.push(
       "| `POST` | `/api/v1/auth/confirm-password` | Verify the current password and set an epoch-bound confirmation cookie. Requires verified session and CSRF. |",
       "| `GET` | `/api/v1/auth/mfa` | Returns a fresh proposed `{ secret, otpauth }`; requires verified session. Does not enable MFA. |",
@@ -89,32 +80,31 @@ function renderApiDocs(projectName: string, layers: StarterLayers): string {
       "| (job) | `webhook.dispatch` | Discovered from `src/jobs/dispatchOutboundWebhookJob.ts`. No HTTP route. |",
     );
   }
-  if (layers.extras.oauthGithub && authUsesCookie(layers.auth)) {
+  if (plan.decisions.github) {
     rows.push(
       "| `GET` | `/auth/github` | Redirects to GitHub. 404 unless `FEATURE_OAUTH=true`. |",
       "| `GET` | `/auth/github/callback` | Exchanges the code, JIT user, MFA gate, cookie session. |",
     );
   }
-  if (layers.extras.oidc && authUsesCookie(layers.auth)) {
+  if (plan.decisions.oidc) {
     rows.push(
       "| `GET` | `/auth/oidc` | OIDC `createAuthorization()` plus `oidc_pkce` cookie. 404 unless `FEATURE_OAUTH=true`. |",
       "| `GET` | `/auth/oidc/callback` | Reads PKCE, exchanges the code, JIT user, MFA gate, cookie session. |",
     );
   }
 
-  const authNote =
-    layers.auth === "headers"
-      ? `Auth is \`headers\`. Send \`x-authenticated-user-id\` (and optional \`x-authenticated-user-role\`) for local work and tests. There are no login endpoints and no \`users\` table. Production must set \`AUTH_DEV_HEADERS=false\`, which turns those headers off and leaves you without a guard, so pick another auth layer before you ship.`
-      : authUsesToken(layers.auth)
-        ? `Sign in with \`GET /api/v1/auth/csrf\` then \`POST /api/v1/auth/login\` (send \`X-CSRF-Token\`), then send \`Authorization: Bearer <token>\` on every request. Tokens are stored hashed in \`api_tokens\` and expire after \`API_TOKEN_DEFAULT_EXPIRY_DAYS\` (30 in \`.env.example\`). The response includes \`expires_at\`.`
-        : authUsesCookie(layers.auth)
-          ? `Sign in with \`GET /api/v1/auth/csrf\` then \`POST /api/v1/auth/login\`; preserve the session and CSRF cookies. The response sets a cookie and returns \`{ ok: true }\`. API mode does not serve HTML login or registration forms.`
-          : `Mint a JWT with \`POST /api/auth/token\`, then send \`Authorization: Bearer <jwt>\`. JWTs expire; re-mint rather than refreshing in place.`;
+  const authNote = !plan.decisions.users
+    ? `Auth is \`headers\`. Send \`x-authenticated-user-id\` (and optional \`x-authenticated-user-role\`) for local work and tests. There are no login endpoints and no \`users\` table. Production must set \`AUTH_DEV_HEADERS=false\`, which turns those headers off and leaves you without a guard, so pick another auth layer before you ship.`
+    : plan.decisions.token
+      ? `Sign in with \`GET /api/v1/auth/csrf\` then \`POST /api/v1/auth/login\` (send \`X-CSRF-Token\`), then send \`Authorization: Bearer <token>\` on every request. Tokens are stored hashed in \`api_tokens\` and expire after \`API_TOKEN_DEFAULT_EXPIRY_DAYS\` (30 in \`.env.example\`). The response includes \`expires_at\`.`
+      : plan.decisions.cookie
+        ? `Sign in with \`GET /api/v1/auth/csrf\` then \`POST /api/v1/auth/login\`; preserve the session and CSRF cookies. The response sets a cookie and returns \`{ ok: true }\`. API mode does not serve HTML login or registration forms.`
+        : `Mint a JWT with \`POST /api/auth/token\`, then send \`Authorization: Bearer <jwt>\`. JWTs expire; re-mint rather than refreshing in place.`;
 
   return `# ${projectName} API
 
 \`FRONTEND_MODE=${layers.frontend}\`. ${
-    layers.frontend === "api"
+    plan.decisions.apiDocs
       ? "API-only: no server-rendered welcome/login pages or SPA assets. The root path is not a generated endpoint."
       : `HTML is served alongside this API. The SPA is mounted at \`${layers.spaPrefix}\`.`
   }
@@ -165,7 +155,8 @@ Use the handler’s explicit \`database\` port to bind model definitions to the 
 `;
 }
 
-function renderIntegrationsReadme(layers: StarterLayers): string {
+function renderIntegrationsReadme(plan: StarterFeaturePlan): string {
+  const layers = plan.layers;
   const enabled = [
     layers.extras.oauthGithub ? "GitHub OAuth cookie login (`/auth/github`)" : null,
     layers.extras.oidc ? "OIDC cookie login (`/auth/oidc`, PKCE in `oidc_pkce`)" : null,
@@ -236,16 +227,17 @@ Strata app generated by \`create-strata\`.
 
 function renderReadme(
   projectName: string,
-  layers: StarterLayers,
+  plan: StarterFeaturePlan,
   options: Pick<GenerateOptions, "inRepoExample" | "dogfood"> = {},
 ): string {
-  const docker = renderDockerCompose(projectName, layers);
+  const layers = plan.layers;
+  const docker = renderDockerCompose(projectName, plan);
   const next = [`cd ${projectName}`, "cp .env.example .env"];
   if (docker) {
-    next.push(dockerComposeUpCommand(layers));
+    next.push(plan.decisions.composeUpCommand);
   }
   next.push("bun install");
-  if (needsFrontendBuild(layers.frontend)) {
+  if (plan.decisions.frontendBuild) {
     next.push("bun run frontend:install", "bun run frontend:build");
   }
   next.push("bun run db:migrate", "bun run dev");
@@ -253,8 +245,8 @@ function renderReadme(
   const extras = Object.entries(layers.extras)
     .filter(([, on]) => on)
     .map(([key]) => key);
-  const dockerServices = selectedDockerServices(layers);
-  const neededTools = neededDockerServices(layers);
+  const dockerServices = plan.services.docker;
+  const neededTools = plan.services.required;
   const dockerLabel =
     neededTools.length === 0
       ? "not needed"
@@ -279,7 +271,7 @@ function renderReadme(
 ${extras.length > 0 ? `| Extras | ${extras.join(", ")} |\n` : ""}
 This file is the map for this app. Framework guides: [Building apps](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md), [Auth](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md), [Starter](https://github.com/EyK-26/strata/blob/main/docs/STARTER.md), [Integrations](https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md).
 
-${renderIntegrationsReadme(layers)}
+${renderIntegrationsReadme(plan)}
 ## Run it
 
 \`\`\`bash
@@ -288,12 +280,12 @@ ${next.join("\n")}
 
 Open http://localhost:3000. Health check: \`GET /health\`. Discover registered commands with \`bunx strata help\`. \`dev\` and \`start\` run HTTP only; workers are explicit, separate processes.
 
-${layers.queue === "redis" ? "Redis jobs need `bun run queue:work` in another terminal (requires `REDIS_URL`).\n\n" : "The synchronous queue handles jobs inline; no Redis queue worker is needed for it.\n\n"}For durable events, add listeners in \`src/outbox/registry.ts\`, apply \`bun run db:migrate\`, then run \`bun run outbox:work\` in another terminal. Apps that do not publish durable events do not need this worker. Durable cache invalidation also needs the outbox worker when explicitly configured. Use the same application environment, database, Redis URL and \`APP_KEY_PREFIX\` for HTTP and its workers. An idle worker is normal; startup output confirms entry into polling, not dependency health. Stop HTTP and workers before resetting the development database.
+${plan.decisions.redisQueue ? "Redis jobs need `bun run queue:work` in another terminal (requires `REDIS_URL`).\n\n" : "The synchronous queue handles jobs inline; no Redis queue worker is needed for it.\n\n"}For durable events, add listeners in \`src/outbox/registry.ts\`, apply \`bun run db:migrate\`, then run \`bun run outbox:work\` in another terminal. Apps that do not publish durable events do not need this worker. Durable cache invalidation also needs the outbox worker when explicitly configured. Use the same application environment, database, Redis URL and \`APP_KEY_PREFIX\` for HTTP and its workers. An idle worker is normal; startup output confirms entry into polling, not dependency health. Stop HTTP and workers before resetting the development database.
 
-${renderSupportingToolsReadme(projectName, layers)}${
-  layers.auth !== "headers"
+${renderSupportingToolsReadme(projectName, plan)}${
+  plan.decisions.users
     ? `
-For the first production admin, apply migrations and run \`bunx strata auth:provision-admin --email operator@example.test --name "Initial Operator" --password-stdin${layers.tenancy !== "none" ? " --tenant 1" : ""} < /run/secrets/initial_admin_password\` before admitting traffic. Supply your own private secret-manager-mounted file, not a demo password. Passwords require at least 16 characters and at most 72 UTF-8 bytes. Tenant-enabled applications require an existing tenant ID; this command does not create tenants. It refuses existing admins/accounts, records a transactional one-time claim, and does not mark email verified or enroll MFA. Additional admins and recovery remain explicit application administration. The command does not migrate or seed automatically.
+For the first production admin, apply migrations and run \`bunx strata auth:provision-admin --email operator@example.test --name "Initial Operator" --password-stdin${plan.decisions.tenantTable ? " --tenant 1" : ""} < /run/secrets/initial_admin_password\` before admitting traffic. Supply your own private secret-manager-mounted file, not a demo password. Passwords require at least 16 characters and at most 72 UTF-8 bytes. Tenant-enabled applications require an existing tenant ID; this command does not create tenants. It refuses existing admins/accounts, records a transactional one-time claim, and does not mark email verified or enroll MFA. Additional admins and recovery remain explicit application administration. The command does not migrate or seed automatically.
 
 Optional development demo accounts: run \`bun run db:seed:demo\` explicitly after migrations. This command refuses production and staging. It creates these accounts with password \`StrataDemo!ChangeMe\`:
 
@@ -304,7 +296,7 @@ Optional development demo accounts: run \`bun run db:seed:demo\` explicitly afte
 Header auth is on for local use. Send \`x-authenticated-user-id\` (and optional \`x-authenticated-user-role\`). Production must set \`AUTH_DEV_HEADERS=false\`.
 `
 }${
-  authUsesCookie(layers.auth) && (layers.frontend === "server-htmx" || layers.frontend === "hybrid")
+  plan.decisions.htmlCookieAccounts
     ? `
 HTML auth kit (restyle \`views/\` and \`public/assets/site.css\`):
 
@@ -318,8 +310,7 @@ Cookie name is \`strata_session\`. Forms send CSRF as \`_token\`.
 `
     : ""
 }${
-  authUsesCookie(layers.auth) &&
-  (layers.frontend === "api" || layers.frontend === "spa-react" || layers.frontend === "hybrid")
+  plan.decisions.jsonCookieAccounts
     ? `
 JSON cookie account flows: fetch \`GET /api/v1/auth/csrf\`, retain the cookie and send \`X-CSRF-Token\` on writes (browser clients use credentials). Register through \`POST /api/v1/auth/register\` (neutral 201), login through \`POST /api/v1/auth/login\` (session cookie), and read \`GET /api/v1/auth/me\`. Reset through \`POST /api/v1/auth/forgot-password\` then signed \`POST /api/v1/auth/reset-password\` with \`{ password }\`.
 ${layers.extras.emailVerification ? "Verify through signed `POST /api/v1/auth/verify-email`; authenticated unverified owners resend through `POST /api/v1/auth/verification-notification`.\n" : ""}${layers.extras.mfa ? "MFA setup: `GET /api/v1/auth/mfa`, confirm the current password through `POST /api/v1/auth/confirm-password`, then submit `{ secret, code }` to `POST /api/v1/auth/mfa`. Store the returned recovery codes safely; enrollment revokes credentials. Login again with `{ email, password, mfa_code }` using a TOTP or one-use recovery code. Missing code returns JSON 401 `mfa_required`.\n" : ""}
@@ -327,13 +318,13 @@ These routes return JSON, not account pages. The client owns account forms and h
 `
     : ""
 }${
-  authUsesToken(layers.auth)
+  plan.decisions.token
     ? `
 Opaque token login: \`POST /api/v1/auth/login\` with \`{ "email", "password" }\`. Register: \`POST /api/v1/auth/register\`. Forgot/reset: \`POST /api/v1/auth/forgot-password\` and signed \`POST /api/v1/auth/reset-password\`. Send \`Authorization: Bearer\` after login.
 `
     : ""
 }${
-  authUsesJwt(layers.auth)
+  plan.decisions.jwt
     ? `
 JWT mint: \`POST /api/auth/token\` with email and password. Short-lived. Do not use JWT as an HTML cookie session.
 `
@@ -363,7 +354,7 @@ The generated provider drains owned SQL collectors through \`context.drain()\` b
 `
     : ""
 }${
-  needsFrontendBuild(layers.frontend)
+  plan.decisions.frontendBuild
     ? `
 ## Frontend
 
@@ -388,7 +379,7 @@ Until \`frontend/dist\` exists, \`${layers.spaPrefix}\` answers 503. Use \`bun r
 ## Database
 
 The app uses the database named in \`DATABASE_URL\` and creates it on first migrate when the connection user may. Set \`APP_DATABASE_URL\` only when migrations and the app should target a different database than \`DATABASE_URL\`.${
-        usesComposePostgres(layers)
+        usesComposePostgres(plan)
           ? ` \`.env.example\` points \`DATABASE_URL\` at \`${GENERATED_POSTGRES_APP_ROLE}\` (\`NOSUPERUSER\` \`NOBYPASSRLS\`), including \`--no-docker\`. \`db/ensure-postgres-app-role.sql\` is repeatable on an existing volume; Compose init still runs on first empty volume. The \`postgres\` superuser is for CREATE ROLE / GRANT / migrate and Adminer.`
           : ""
       }
@@ -404,7 +395,7 @@ Run \`bun run src/db/status.ts\` to inspect existing migration history. Status d
 Bun >=1.4.4 is required. \`.bun-version\` and Docker stages pin the tested 1.4.4 runtime; upgrade pins deliberately and rerun checks before deployment. Runtime and TypeScript requirements use >=1.4.4, accepting future 1.4.x patches; the bun-types override keeps transitive shims above the same minimum. Refresh and commit root/frontend lockfiles when upgrading. Updating framework packages does not rewrite an existing app Dockerfile, runtime pin or manifest.
 
 \`Dockerfile\` builds a production image from the committed \`bun.lock\` (run \`bun install\` once and commit the lockfile).${
-    needsFrontendBuild(layers.frontend) ? " The React frontend is built inside the image." : ""
+    plan.decisions.frontendBuild ? " The React frontend is built inside the image." : ""
   }
 
 \`\`\`bash
@@ -430,8 +421,8 @@ The image sets \`APP_ENV=production\` and \`AUTH_DEV_HEADERS=false\`; everything
 - Add explicitly approved application headers with \`CORS_ADDITIONAL_ALLOWED_HEADERS=Idempotency-Key,X-Correlation-Id\`; this extends the defaults, validates header names and never reflects requested headers. OpenAPI metadata does not grant CORS access.
 - Cross-origin browser calls are off in production until you set \`CORS_ALLOWED_ORIGINS\` to explicit origins. A \`*\` entry is rejected. Non-browser clients are unaffected.
 - Behind a reverse proxy or load balancer, set \`TRUST_FORWARDED_FOR=true\` so throttles and session records see the client address instead of the proxy. Only the rightmost public hop of \`X-Forwarded-For\` is trusted.
-${authUsesCookie(layers.auth) ? "- Set `SESSION_SECRET` to 32+ characters.\n" : ""}${authUsesToken(layers.auth) ? "- Set `TOKEN_HASH_PEPPER`.\n" : ""}${layers.extras.scim ? "- Set `SCIM_BEARER_TOKEN`.\n" : ""}${layers.extras.metrics ? "- Set `METRICS_TOKEN`.\n" : ""}${layers.extras.oauthGithub ? "- Set `OAUTH_STATE_SECRET` and `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`.\n" : ""}${layers.extras.oidc ? "- Set `OAUTH_STATE_SECRET`, `OIDC_ISSUER`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET`. Loopback issuers work outside production; set `OIDC_ALLOW_PRIVATE=true` for other private IdPs.\n" : ""}${layers.extras.billing ? "- Set `STRIPE_WEBHOOK_SECRET` when `FEATURE_BILLING=true`.\n" : ""}${
-  layers.tenancy === "rls"
+${plan.decisions.dedicatedSigningSecret ? "- Set `SIGNED_URL_SECRET` to 32+ characters.\n" : ""}${plan.decisions.cookie ? "- Set `SESSION_SECRET` to 32+ characters.\n" : ""}${plan.decisions.token ? "- Set `TOKEN_HASH_PEPPER`.\n" : ""}${layers.extras.scim ? "- Set `SCIM_BEARER_TOKEN`.\n" : ""}${layers.extras.metrics ? "- Set `METRICS_TOKEN`.\n" : ""}${layers.extras.oauthGithub ? "- Set `OAUTH_STATE_SECRET` and `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`.\n" : ""}${layers.extras.oidc ? "- Set `OAUTH_STATE_SECRET`, `OIDC_ISSUER`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET`. Loopback issuers work outside production; set `OIDC_ALLOW_PRIVATE=true` for other private IdPs.\n" : ""}${layers.extras.billing ? "- Set `STRIPE_WEBHOOK_SECRET` when `FEATURE_BILLING=true`.\n" : ""}${
+  plan.decisions.rls
     ? `- \`DATABASE_URL\` must be a \`NOBYPASSRLS\` role, not the \`postgres\` superuser. Generated apps create \`${GENERATED_POSTGRES_APP_ROLE}\` via \`db/ensure-postgres-app-role.sql\` (and Compose init on first empty volume). \`MIGRATION_DATABASE_URL\` and an explicit non-development \`STRATA_APP_PASSWORD\` belong only to the migrate/provisioning process. HTTP/workers connect to the existing role without admin credentials or role/password writes. Production boot rejects username \`postgres\` or \`root\`, then inspects \`pg_roles\` for \`rolsuper\` / \`rolbypassrls\`.
 `
     : ""

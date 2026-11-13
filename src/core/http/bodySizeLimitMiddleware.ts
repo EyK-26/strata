@@ -66,8 +66,8 @@ function guardBody(request: Request, maxBytes: number): BodyGuard {
 
 const DEFAULT_MAX_BODY_BYTES = 1_048_576;
 
-function resolveMaxBodyBytes(): number {
-  const raw = process.env.MAX_REQUEST_BODY_BYTES?.trim();
+function resolveMaxBodyBytes(value?: string): number {
+  const raw = value?.trim();
 
   if (!raw) {
     return DEFAULT_MAX_BODY_BYTES;

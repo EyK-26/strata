@@ -1,17 +1,16 @@
-import { join } from "node:path";
+import { resolve } from "node:path";
 import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import { assertUrlPathUnderRoot } from "@getstrata/core/security/safePath";
 import { notFoundHtmlResponse } from "@getstrata/core/view";
+import { CORE_WEB_ERROR_VIEW_TOKEN } from "@getstrata/core/view/tokens";
 import { buildWebModuleRoutes } from "./buildWebModuleRoutes";
 import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
-import { routeRegistry } from "./routeRegistry";
+import { compileRoutePlan } from "./routeCompiler";
+import { publishRoutePlan } from "./routeMetadata";
 
 interface CreateWebRoutesOptions {
-  modules?: AppModule[];
-}
-
-function registerRoute(method: string, path: string, middleware: string[]): void {
-  routeRegistry.register({ method, path, middleware });
+  modules?: readonly AppModule[];
+  publicDir?: string;
 }
 
 function createWebRoutes(
@@ -19,33 +18,34 @@ function createWebRoutes(
   options: CreateWebRoutesOptions = {},
 ): AppRouteMap {
   const wrappedRoutes = buildWebModuleRoutes(dependencies, {
-    clearRegistry: false,
-    modules: options.modules,
+    modules: options.modules ?? [],
   });
 
-  registerRoute("GET", "/", ["global", "web"]);
-
-  wrappedRoutes["/assets/*"] = async (request: Request) => {
-    registerRoute("GET", "/assets/*", ["global", "web"]);
-
+  const publicDir = resolve(options.publicDir ?? "public");
+  const renderError = dependencies.container.has(CORE_WEB_ERROR_VIEW_TOKEN)
+    ? dependencies.container.resolve(CORE_WEB_ERROR_VIEW_TOKEN)
+    : undefined;
+  const assetHandler = async (request: Request) => {
     const pathname = new URL(request.url).pathname;
     try {
-      const filePath = assertUrlPathUnderRoot(join(process.cwd(), "public"), pathname);
+      const filePath = assertUrlPathUnderRoot(publicDir, pathname);
       const file = Bun.file(filePath);
 
       if (!(await file.exists())) {
-        return notFoundHtmlResponse();
+        return notFoundHtmlResponse(undefined, renderError);
       }
 
       return new Response(file);
     } catch {
-      return notFoundHtmlResponse();
+      return notFoundHtmlResponse(undefined, renderError);
     }
   };
 
-  registerRoute("GET", "/assets/*", ["global", "web"]);
-
-  return wrappedRoutes;
+  const plan = compileRoutePlan([
+    { name: "web modules", routes: wrappedRoutes },
+    { name: "public assets", routes: { "/assets/*": assetHandler }, middleware: [] },
+  ]);
+  return publishRoutePlan(plan, plan.routes) as AppRouteMap;
 }
 
 function mergeWebRoutes(
@@ -57,10 +57,12 @@ function mergeWebRoutes(
     return routes;
   }
 
-  return {
-    ...createWebRoutes(dependencies, options),
-    ...routes,
-  };
+  const webRoutes = createWebRoutes(dependencies, options);
+  const plan = compileRoutePlan([
+    { name: "web", routes: webRoutes },
+    { name: "application", routes },
+  ]);
+  return publishRoutePlan(plan, plan.routes) as AppRouteMap;
 }
 
 export type { CreateWebRoutesOptions };

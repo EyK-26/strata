@@ -47,6 +47,21 @@ try {
     },
   });
   const file = Bun.file(new URL("../bootstrap/createApp.ts", import.meta.url));
+  assert.throws(
+    () =>
+      buildModuleRoutes(app.context.dependencies, {
+        modules: [
+          {
+            name: "invalid-method-map",
+            routes: () => ({
+              "/invalid": { GET: () => new Response("valid method"), inert: false },
+            }),
+          },
+        ],
+      }),
+    /Unsupported route method: inert/,
+    "Mixed method maps must reject unsupported keys before binding.",
+  );
   const routes = buildModuleRoutes(app.context.dependencies, {
     modules: [
       {
@@ -59,7 +74,6 @@ try {
           "/partial": {
             GET: () => new Response("partial read"),
             POST: () => new Response("partial write"),
-            inert: false,
           },
         }),
       },
@@ -84,7 +98,7 @@ try {
   moduleServer = selectedModuleServer;
   assert.equal(routes["/file"], file);
   assert.equal(web["/web-file"], file);
-  assert.equal(routes["/partial"].inert, false);
+  assert.deepEqual(Object.keys(routes["/partial"]).sort(), ["GET", "POST"]);
   const partialRejection = await fetch(new URL("/partial", selectedModuleServer.url), {
     method: "POST",
   });

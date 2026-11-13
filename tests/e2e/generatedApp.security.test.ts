@@ -3,8 +3,9 @@ import { get as httpGet } from "node:http";
 import { generateOneTimeToken } from "@getstrata/core/auth/oneTimeToken";
 import type { Application } from "@getstrata/core/contracts/application";
 import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
-import { protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";
+import { createMfaSecretCodec, protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import { absoluteTemporarySignedUrl } from "@getstrata/core/http/signedUrl";
+import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
 import { generateTotp, generateTotpSecret } from "@getstrata/core/security/totp";
 import { createGeneratedSecurityApp } from "../helpers/generatedSecurityApp";
 import { jsonCsrfHeaders } from "../helpers/jsonCsrf";
@@ -28,7 +29,8 @@ function cookieHeader(response: Response, previous = ""): string {
     const pair = header.split(";")[0] ?? "";
     const [name, ...rest] = pair.split("=");
     if (name) {
-      jar.set(name, rest.join("="));
+      if (/;\s*max-age=0(?:;|$)/i.test(header)) jar.delete(name);
+      else jar.set(name, rest.join("="));
     }
   }
   return [...jar.entries()].map(([name, value]) => `${name}=${value}`).join("; ");
@@ -349,14 +351,22 @@ describe("Generated application security", () => {
       process.env.TENANCY_DRIVER = "rls";
       process.env.DATABASE_URL = migrationUrl;
       process.env.APP_DATABASE_URL = migrationUrl;
+      let inspections = 0;
       await expect(
-        assertRlsLiveDatabaseRole({
-          APP_ENV: "local",
-          TENANCY_DRIVER: "rls",
-          DATABASE_URL: migrationUrl,
-          APP_DATABASE_URL: migrationUrl,
-        }),
+        assertRlsLiveDatabaseRole(
+          {
+            APP_ENV: "local",
+            TENANCY_DRIVER: "rls",
+            DATABASE_URL: migrationUrl,
+            APP_DATABASE_URL: migrationUrl,
+          },
+          async () => {
+            inspections++;
+            throw new Error("URL denylist must reject before live inspection");
+          },
+        ),
       ).rejects.toThrow(/not postgres/);
+      expect(inspections).toBe(0);
     } finally {
       restoreEnv("DATABASE_URL", previousDatabaseUrl);
       restoreEnv("APP_DATABASE_URL", previousAppUrl);
@@ -422,7 +432,7 @@ describe("Generated application security", () => {
     }
   });
 
-  test("cookie login requires CSRF and ignores garbage Bearer", async () => {
+  test("cookie login requires CSRF and rejects supplied invalid Bearer without downgrade", async () => {
     const loginPage = await fetch(`${origin}/login`);
     const html = await loginPage.text();
     const csrf = /name="_token" value="([^"]+)"/.exec(html)?.[1] ?? "";
@@ -432,7 +442,6 @@ describe("Generated application security", () => {
       method: "POST",
       headers: {
         cookie: cookies,
-        authorization: "Bearer garbage",
         origin,
         "content-type": "application/x-www-form-urlencoded",
       },
@@ -444,7 +453,8 @@ describe("Generated application security", () => {
     });
     expect(skipped.status).toBe(403);
 
-    const signedIn = await fetch(`${origin}/login`, {
+    const sessionsBefore = await sql.unsafe("SELECT id FROM sessions WHERE user_id = $1", [1]);
+    const rejected = await fetch(`${origin}/login`, {
       method: "POST",
       headers: {
         cookie: cookies,
@@ -452,6 +462,24 @@ describe("Generated application security", () => {
         origin,
         "content-type": "application/x-www-form-urlencoded",
       },
+      body: new URLSearchParams({
+        _token: csrf,
+        email: "demo@example.com",
+        password: "StrataDemo!ChangeMe",
+      }),
+      redirect: "manual",
+    });
+    expect(rejected.status).toBe(401);
+    expect(rejected.headers.get("location")).toBeNull();
+    expect(
+      rejected.headers.getSetCookie().some((value) => value.startsWith("strata_session=")),
+    ).toBe(false);
+    expect(await sql.unsafe("SELECT id FROM sessions WHERE user_id = $1", [1])).toHaveLength(
+      sessionsBefore.length,
+    );
+    const signedIn = await fetch(`${origin}/login`, {
+      method: "POST",
+      headers: { cookie: cookies, origin, "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         _token: csrf,
         email: "demo@example.com",
@@ -541,8 +569,25 @@ describe("Generated application security", () => {
       headers: { cookie: cookies },
       redirect: "manual",
     });
-    expect(stale.status).toBe(302);
-    expect(stale.headers.get("location") ?? "").toMatch(/\/login/);
+    expect(stale.status).toBe(401);
+    expect(stale.headers.get("location")).toBeNull();
+    expect(await stale.text()).not.toContain('name="password"');
+    expect(
+      stale.headers
+        .getSetCookie()
+        .some(
+          (value) => value.startsWith("strata_session=") && /;\s*max-age=0(?:;|$)/i.test(value),
+        ),
+    ).toBe(true);
+    cookies = cookieHeader(stale, cookies);
+    expect(cookies.split(";").some((value) => value.trim().startsWith("strata_session="))).toBe(
+      false,
+    );
+    const cleanLogin = await fetch(`${origin}/login`, {
+      headers: { cookie: cookies },
+      redirect: "manual",
+    });
+    expect(cleanLogin.status).toBe(200);
 
     await sql.unsafe(
       "UPDATE users SET mfa_enabled = false, mfa_secret = NULL, mfa_recovery_codes = NULL, session_valid_after = NULL WHERE email = $1",
@@ -553,7 +598,7 @@ describe("Generated application security", () => {
   test("API login requires CSRF and MFA when enabled", async () => {
     const secret = generateTotpSecret();
     await sql.unsafe("UPDATE users SET mfa_enabled = true, mfa_secret = $1 WHERE email = $2", [
-      protectMfaSecret(secret),
+      protectMfaSecret(secret, createMfaSecretCodec(process.env)),
       "demo@example.com",
     ]);
     try {
@@ -778,10 +823,20 @@ describe("Generated application security", () => {
       "INSERT INTO auth_one_time_tokens (purpose, user_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)",
       ["password_reset", 1, issued.hash, new Date(Date.now() + 3600_000).toISOString()],
     );
-    const resetUrl = absoluteTemporarySignedUrl("/reset-password", 3600, {
-      email: "demo@example.com",
-      token: issued.plain,
-    });
+    const resetUrl = absoluteTemporarySignedUrl(
+      "/reset-password",
+      3600,
+      {
+        email: "demo@example.com",
+        token: issued.plain,
+      },
+      process.env.APP_URL ?? "http://localhost:3000",
+      requireConfiguredSecret(
+        ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+        "signed-url-secret",
+        process.env,
+      ),
+    );
     const resetParsed = new URL(resetUrl, origin);
     const resetPath = `${resetParsed.pathname}${resetParsed.search}`;
     const resetPage = await fetch(`${origin}${resetPath}`);
@@ -836,13 +891,26 @@ describe("Generated application security", () => {
       headers: { cookie: oldCookie },
       redirect: "manual",
     });
-    expect(protectedPage.status).toBe(302);
-    expect(protectedPage.headers.get("location") ?? "").toMatch(/\/login/);
+    expect(protectedPage.status).toBe(401);
+    expect(protectedPage.headers.get("location")).toBeNull();
+    expect(await protectedPage.text()).not.toContain('name="password"');
+    expect(
+      protectedPage.headers
+        .getSetCookie()
+        .some(
+          (value) => value.startsWith("strata_session=") && /;\s*max-age=0(?:;|$)/i.test(value),
+        ),
+    ).toBe(true);
+    cookies = cookieHeader(protectedPage, cookies);
 
-    const loginAgainPage = await fetch(`${origin}/login`);
+    const loginAgainPage = await fetch(`${origin}/login`, {
+      headers: { cookie: cookies },
+      redirect: "manual",
+    });
+    expect(loginAgainPage.status).toBe(200);
     const loginAgainHtml = await loginAgainPage.text();
     const loginAgainCsrf = /name="_token" value="([^"]+)"/.exec(loginAgainHtml)?.[1] ?? "";
-    let freshCookies = cookieHeader(loginAgainPage);
+    let freshCookies = cookieHeader(loginAgainPage, cookies);
     const signedInAgain = await fetch(`${origin}/login`, {
       method: "POST",
       headers: {
@@ -869,8 +937,16 @@ describe("Generated application security", () => {
       headers: { cookie: oldCookie },
       redirect: "manual",
     });
-    expect(staleProtected.status).toBe(302);
-    expect(staleProtected.headers.get("location") ?? "").toMatch(/\/login/);
+    expect(staleProtected.status).toBe(401);
+    expect(staleProtected.headers.get("location")).toBeNull();
+    expect(await staleProtected.text()).not.toContain('name="password"');
+    expect(
+      staleProtected.headers
+        .getSetCookie()
+        .some(
+          (value) => value.startsWith("strata_session=") && /;\s*max-age=0(?:;|$)/i.test(value),
+        ),
+    ).toBe(true);
   });
 
   test("verify GET does not set a session cookie", async () => {
@@ -1137,7 +1213,7 @@ describe("Generated application security", () => {
           const secret = generateTotpSecret();
           await sql.unsafe(
             "UPDATE users SET mfa_enabled = true, mfa_secret = $1 WHERE email = $2",
-            [protectMfaSecret(secret), "demo@example.com"],
+            [protectMfaSecret(secret, createMfaSecretCodec(process.env)), "demo@example.com"],
           );
           const mfaStart = await fetch(`${origin}/auth/saml`, { redirect: "manual" });
           const mfaRelay =

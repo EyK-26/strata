@@ -1,6 +1,5 @@
 export const COVERAGE_EXEMPT_FILES = [
   "src/bootstrap/app.ts",
-  "src/bootstrap/applicationRegistry.ts",
   "src/bootstrap/buildModuleRoutes.ts",
   "src/bootstrap/buildWebModuleRoutes.ts",
   "src/bootstrap/cache/modelCacheTags.ts",
@@ -24,10 +23,7 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/bootstrap/middleware.ts",
   "src/bootstrap/modules.ts",
   "src/bootstrap/prefixRouteMap.ts",
-  "src/bootstrap/preloadModules.ts",
   "src/bootstrap/providers/auth.ts",
-  // Temporary M4/M5 bridge retains the former legacy cache provider's exemption.
-  "src/bootstrap/legacyCache.ts",
   "src/bootstrap/providers/config.ts",
   "src/bootstrap/providers/events.ts",
   "src/bootstrap/providers/index.ts",
@@ -39,7 +35,6 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/bootstrap/public-api.ts",
   "src/bootstrap/queue/defaultJobs.ts",
   "src/bootstrap/rateLimit.ts",
-  "src/bootstrap/routeRegistry.ts",
   "src/bootstrap/routes.ts",
   "src/bootstrap/schedule.ts",
   "src/bootstrap/schemaTarget.ts",
@@ -106,10 +101,7 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/core/config/envSchema.ts",
   "src/core/contracts/di.ts",
   "src/core/contracts/serviceTokens.ts",
-  "src/core/database/bindConnection.ts",
-  "src/core/database/boundConnection.ts",
   "src/core/database/bunSql.ts",
-  "src/core/database/defaultConnection.ts",
   "src/core/database/factory.ts",
   "src/core/database/migrations/advisoryLock.ts",
   "src/core/database/migrations/runner.ts",
@@ -118,7 +110,6 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/core/database/query.ts",
   "src/core/database/queryProxy.ts",
   "src/core/database/relationQuery.ts",
-  "src/core/database/repositoryConnection.ts",
   "src/core/database/schema/blueprint.ts",
   "src/core/database/schema/columnDefinition.ts",
   "src/core/database/schema/driver.ts",
@@ -133,7 +124,6 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/core/database/schema/index.ts",
   "src/core/database/schema/schema.ts",
   "src/core/database/whereBuilder.ts",
-  "src/core/facades/index.ts",
   "src/core/http/authMiddleware.ts",
   "src/core/http/authorizeMiddleware.ts",
   "src/core/http/bodySizeLimitMiddleware.ts",
@@ -202,7 +192,6 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/core/queue/queueMetrics.ts",
   "src/core/queue/redisQueue.ts",
   "src/core/queue/resilientQueue.ts",
-  "src/core/runtime/applicationRegistry.ts",
   "src/core/scheduler/osCron.ts",
   "src/core/scheduler/schedule.ts",
   "src/core/storage/storage.ts",
@@ -217,7 +206,6 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/core/view/webErrorView.ts",
   "src/core/view/webLayoutData.ts",
   "src/db/connection/createConnection.ts",
-  "src/db/connection/index.ts",
   "src/db/migrations/0001_create_organization.ts",
   "src/db/migrations/0002_create_project.ts",
   "src/db/migrations/0003_create_task.ts",
@@ -271,6 +259,6 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/testing/webViewSmoke.ts",
 ] as const;
 
-export const COVERAGE_EXEMPT_LIMIT = 269;
+export const COVERAGE_EXEMPT_LIMIT = 258;
 
 export const COVERAGE_EXEMPT_SET: ReadonlySet<string> = new Set(COVERAGE_EXEMPT_FILES);

@@ -18,11 +18,7 @@ const PRUNE_TOP_LEVEL = [
 ] as const;
 
 /** Private fixture declarations that are not part of the public surface. */
-const PRUNE_FILES = [
-  "bootstrap/createRoutes.d.ts",
-  "bootstrap/routes.d.ts",
-  "bootstrap/preloadModules.d.ts",
-] as const;
+const PRUNE_FILES = ["bootstrap/createRoutes.d.ts", "bootstrap/routes.d.ts"] as const;
 
 for (const directory of PRUNE_TOP_LEVEL) {
   await rm(join(BOOTSTRAP_DIST, directory), { recursive: true, force: true });

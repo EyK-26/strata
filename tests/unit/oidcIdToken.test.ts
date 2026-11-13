@@ -1,13 +1,21 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { createSign, generateKeyPairSync } from "node:crypto";
-import {
-  loadOidcDiscovery,
-  oidcAccessTokenHash,
-  resetOidcDiscoveryCacheForTests,
-  verifyOidcIdToken,
-} from "@getstrata/core/auth/oauth/oidcIdToken";
+import { createOidcClient, oidcAccessTokenHash } from "@getstrata/core/auth/oauth/oidcIdToken";
 import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/security/safeUrl";
 
+import { isProductionEnv } from "../../src/core/runtime/appEnv";
+
+let client: ReturnType<typeof createOidcClient> | undefined;
+function ownedClient() {
+  client ??= createOidcClient({
+    production: isProductionEnv(),
+    allowPrivate: process.env.OIDC_ALLOW_PRIVATE === "true",
+  });
+  return client;
+}
+const loadOidcDiscovery = (issuer: string) => ownedClient().loadDiscovery(issuer);
+const verifyOidcIdToken: ReturnType<typeof createOidcClient>["verifyIdToken"] = (token, options) =>
+  ownedClient().verifyIdToken(token, options);
 const originalFetch = globalThis.fetch;
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const rsaJwk = publicKey.export({ format: "jwk" });
@@ -56,7 +64,7 @@ function mockOidcDocuments(jwks: unknown, discovery: Record<string, unknown> = {
 afterEach(() => {
   globalThis.fetch = originalFetch;
   resetDnsLookupForTests();
-  resetOidcDiscoveryCacheForTests();
+  client = undefined;
 });
 
 describe("oidcIdToken", () => {
@@ -129,6 +137,8 @@ describe("oidcIdToken", () => {
     try {
       await expect(loadOidcDiscovery("http://10.0.0.8")).rejects.toThrow("blocked host");
       process.env.OIDC_ALLOW_PRIVATE = "true";
+      await expect(loadOidcDiscovery("http://10.0.0.8")).rejects.toThrow("blocked host");
+      client = undefined;
       const discovery = await loadOidcDiscovery("http://10.0.0.8");
       expect(discovery.token_endpoint).toContain("issuer.example.com");
     } finally {
@@ -447,4 +457,26 @@ describe("oidcIdToken", () => {
       verifyOidcIdToken(token, { ...options, accessToken: "access-token" }),
     ).resolves.toMatchObject({ sub: "user-1", azp: "client-id" });
   });
+});
+
+test("owned OIDC policies stay isolated after caller and environment mutations", async () => {
+  const previous = process.env.APP_ENV;
+  const permissive = { production: false, allowPrivate: true };
+  const local = createOidcClient(permissive);
+  const production = createOidcClient({ production: true, allowPrivate: true });
+  permissive.production = true;
+  permissive.allowPrivate = false;
+  process.env.APP_ENV = "production";
+  mockOidcDocuments({ keys: [] });
+  try {
+    await expect(local.loadDiscovery("http://127.0.0.1:19")).resolves.toBeDefined();
+    // Another owner cannot reuse the permissive owner's discovery cache.
+    await expect(production.loadDiscovery("http://127.0.0.1:19")).rejects.toThrow();
+    process.env.APP_ENV = "local";
+    await expect(production.loadDiscovery("https://127.0.0.1:20")).rejects.toThrow("blocked host");
+    await expect(local.loadDiscovery("http://127.0.0.1:21")).resolves.toBeDefined();
+  } finally {
+    if (previous === undefined) delete process.env.APP_ENV;
+    else process.env.APP_ENV = previous;
+  }
 });

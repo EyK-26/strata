@@ -3,6 +3,7 @@ import {
   completePasswordLogin,
   persistConsumedRecoveryHash,
 } from "@getstrata/core/auth/passwordLogin";
+import { createMfaSecretCodec } from "@getstrata/core/crypto/mfaSecret";
 import type { DatabaseSession } from "@getstrata/core/database/session";
 import { generateRecoveryCodes, hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
 import { generateTotp, generateTotpSecret } from "@getstrata/core/security/totp";
@@ -28,11 +29,19 @@ async function withSql<T>(
 
 describe("completePasswordLogin", () => {
   test("allows users without MFA", () => {
-    expect(completePasswordLogin({ mfa_enabled: false })).toEqual({ ok: true });
+    expect(
+      completePasswordLogin({ mfa_enabled: false }, {}, createMfaSecretCodec(process.env)),
+    ).toEqual({ ok: true });
   });
 
   test("requires an MFA code when enabled", () => {
-    expect(completePasswordLogin({ mfa_enabled: true, mfa_secret: generateTotpSecret() })).toEqual({
+    expect(
+      completePasswordLogin(
+        { mfa_enabled: true, mfa_secret: generateTotpSecret() },
+        {},
+        createMfaSecretCodec(process.env),
+      ),
+    ).toEqual({
       ok: false,
       error: "mfa_required",
     });
@@ -42,7 +51,11 @@ describe("completePasswordLogin", () => {
     const secret = generateTotpSecret();
     const code = generateTotp(secret, Math.floor(Date.now() / 30_000));
     expect(
-      completePasswordLogin({ mfa_enabled: true, mfa_secret: secret }, { mfaCode: code }),
+      completePasswordLogin(
+        { mfa_enabled: true, mfa_secret: secret },
+        { mfaCode: code },
+        createMfaSecretCodec(process.env),
+      ),
     ).toEqual({ ok: true });
   });
 
@@ -56,6 +69,7 @@ describe("completePasswordLogin", () => {
         mfa_recovery_codes: JSON.stringify([hash]),
       },
       { mfaCode: code },
+      createMfaSecretCodec(process.env),
     );
     expect(result).toEqual({ ok: true, consumedRecoveryHash: hash });
   });
@@ -65,24 +79,28 @@ describe("completePasswordLogin", () => {
       completePasswordLogin(
         { mfa_enabled: true, mfa_secret: generateTotpSecret(), mfa_recovery_codes: "not-json" },
         { mfaCode: "000000" },
+        createMfaSecretCodec(process.env),
       ),
     ).toEqual({ ok: false, error: "mfa_invalid" });
     expect(
       completePasswordLogin(
         { mfa_enabled: true, mfa_secret: generateTotpSecret(), mfa_recovery_codes: "[]" },
         { mfaCode: "000000" },
+        createMfaSecretCodec(process.env),
       ),
     ).toEqual({ ok: false, error: "mfa_invalid" });
     expect(
       completePasswordLogin(
         { mfa_enabled: true, mfa_secret: generateTotpSecret(), mfa_recovery_codes: "[1,2]" },
         { mfaCode: "000000" },
+        createMfaSecretCodec(process.env),
       ),
     ).toEqual({ ok: false, error: "mfa_invalid" });
     expect(
       completePasswordLogin(
         { mfa_enabled: true, mfa_secret: generateTotpSecret(), mfa_recovery_codes: "" },
         { mfaCode: "000000" },
+        createMfaSecretCodec(process.env),
       ),
     ).toEqual({ ok: false, error: "mfa_invalid" });
   });
@@ -166,6 +184,7 @@ test("non-array recovery-code JSON cannot authorize an MFA login", () => {
       completePasswordLogin(
         { mfa_enabled: true, mfa_secret: generateTotpSecret(), mfa_recovery_codes: input },
         { mfaCode: "invalid" },
+        createMfaSecretCodec(process.env),
       ),
     ).toEqual({ ok: false, error: "mfa_invalid" });
 });

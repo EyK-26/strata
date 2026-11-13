@@ -73,7 +73,7 @@ Options:
   --docker            Write Docker Compose for every selected tool that needs a service
   --no-docker         Skip docker-compose.yml; use installs already on this machine
   --docker-services   Subset: postgres, mysql, redis, mailpit, adminer (comma-separated)
-  --force             Replace an existing directory
+  --force             Existing output paths are always rejected
   --yes, --no-interactive
   -h, --help
 

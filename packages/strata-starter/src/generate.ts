@@ -1,8 +1,16 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
-import { validateSpaPrefix } from "@getstrata/core/runtime/frontendMode";
+import {
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { copyOverlayTree, copyTree, removeIfExists, writeText } from "./copy.ts";
 import { usesComposePostgres } from "./databaseDefaults.ts";
+import { compileStarterFeatures, type StarterFeaturePlan } from "./featurePlan.ts";
 import type { ParsedFlags } from "./parseArgs.ts";
 import { parseCreateStrataArgs, usage } from "./parseArgs.ts";
 import { resolveStarterPlan } from "./prompt.ts";
@@ -86,17 +94,14 @@ import {
   renderUserModel,
 } from "./renderModels.ts";
 import { renderScimModule } from "./renderScim.ts";
-import type { GenerateOptions, StarterLayers } from "./types.ts";
 import {
-  authNeedsUsers,
-  authUsesToken,
-  dockerComposeUpCommand,
-  htmlAuthKit,
-  neededDockerServices,
-  needsFrontendBuild,
-  selectedDockerServices,
-  usesTenantTable,
-} from "./types.ts";
+  renderWorkTrackerDomain,
+  renderWorkTrackerGuide,
+  renderWorkTrackerMigration,
+  renderWorkTrackerModels,
+  renderWorkTrackerModule,
+} from "./renderWorkTracker.ts";
+import type { GenerateOptions } from "./types.ts";
 
 const PROJECT_NAME_PATTERN = /^[a-z0-9][a-z0-9-_]*$/i;
 
@@ -157,19 +162,21 @@ function resolveProjectTarget(
 function applyFrontendOverlays(
   overlayRoot: string,
   targetDir: string,
-  layers: StarterLayers,
+  plan: StarterFeaturePlan,
 ): void {
-  if (layers.frontend === "hybrid" || layers.frontend === "spa-react") {
+  if (plan.decisions.frontendBuild) {
     copyOverlayTree(join(overlayRoot, "spa-react"), targetDir);
   }
 }
 
-function writeGeneratedFiles(options: GenerateOptions): void {
-  const { targetDir, projectName, layers } = options;
+function writeGeneratedFiles(options: GenerateOptions, plan: StarterFeaturePlan): void {
+  const { decisions } = plan;
+  const { targetDir, projectName } = options;
+  const { layers } = plan;
   const src = join(targetDir, "src");
-  if (needsFrontendBuild(layers.frontend)) {
-    const transport = layers.auth.startsWith("cookie") ? "cookie" : layers.auth;
-    const mfa = transport === "cookie" && layers.extras.mfa;
+  if (decisions.frontendBuild) {
+    const transport = decisions.browserTransport;
+    const mfa = decisions.pendingMfa;
     writeText(
       join(targetDir, "frontend/src/auth/config.ts"),
       `export type AuthTransport = "cookie" | "token" | "jwt" | "headers";\nexport const AUTH_CONFIG: { transport: AuthTransport; mfa: boolean } = ${JSON.stringify({ transport, mfa })};\n`,
@@ -181,7 +188,7 @@ function writeGeneratedFiles(options: GenerateOptions): void {
 
 // Generated scripts supply only this public value before Bun starts.
 export const SPA_PREFIX = validateSpaPrefix(process.env.BUN_PUBLIC_SPA_PREFIX);
-export const TENANCY_ENABLED = ${usesTenantTable(layers.tenancy)};
+export const TENANCY_ENABLED = ${decisions.tenantTable};
 `,
     );
     const manifestPath = join(targetDir, "frontend/package.json");
@@ -197,39 +204,36 @@ export const TENANCY_ENABLED = ${usesTenantTable(layers.tenancy)};
   }
 
   writeText(join(targetDir, ".bun-version"), "1.4.4\n");
-  writeText(join(targetDir, ".env.example"), renderEnvExample(projectName, layers));
+  writeText(join(targetDir, ".env.example"), renderEnvExample(projectName, plan));
   writeText(join(targetDir, ".gitignore"), renderGitignore());
-  writeText(
-    join(targetDir, "package.json"),
-    renderPackageJson(projectName, { ...options, layers }),
-  );
+  writeText(join(targetDir, "package.json"), renderPackageJson(projectName, { ...options, plan }));
   writeText(
     join(targetDir, "README.md"),
-    renderReadme(projectName, layers, {
+    renderReadme(projectName, plan, {
       inRepoExample: options.inRepoExample,
       dogfood: options.dogfood,
     }),
   );
-  if (layers.frontend === "api") {
-    writeText(join(targetDir, "docs/API.md"), renderApiDocs(projectName, layers));
+  if (decisions.apiDocs) {
+    writeText(join(targetDir, "docs/API.md"), renderApiDocs(projectName, plan));
   } else {
     removeIfExists(join(targetDir, "docs/API.md"));
   }
-  writeText(join(targetDir, "strata.layers.json"), renderLayersManifest(projectName, layers));
+  writeText(join(targetDir, "strata.layers.json"), renderLayersManifest(projectName, plan));
 
-  writeText(join(targetDir, "Dockerfile"), renderDockerfile(layers));
-  writeText(join(targetDir, ".dockerignore"), renderDockerignore(layers));
+  writeText(join(targetDir, "Dockerfile"), renderDockerfile(plan));
+  writeText(join(targetDir, ".dockerignore"), renderDockerignore(plan));
 
-  const compose = renderDockerCompose(projectName, layers);
+  const compose = renderDockerCompose(projectName, plan);
   if (compose) {
     writeText(join(targetDir, "docker-compose.yml"), compose);
   } else {
     removeIfExists(join(targetDir, "docker-compose.yml"));
   }
-  const postgresInit = renderPostgresAppRoleInitSql(projectName, layers);
+  const postgresInit = renderPostgresAppRoleInitSql(projectName, plan);
   if (postgresInit) {
     writeText(join(targetDir, "db/ensure-postgres-app-role.sql"), postgresInit);
-    if (usesComposePostgres(layers)) {
+    if (usesComposePostgres(plan)) {
       writeText(join(targetDir, "docker/postgres-init/01-strata-app-role.sql"), postgresInit);
     } else {
       removeIfExists(join(targetDir, "docker/postgres-init"));
@@ -240,21 +244,21 @@ export const TENANCY_ENABLED = ${usesTenantTable(layers.tenancy)};
   }
 
   writeText(join(src, "routes.ts"), renderRoutesTs());
-  writeText(join(src, "bootstrap/providers/view.ts"), renderViewProvider(layers));
+  writeText(join(src, "bootstrap/providers/view.ts"), renderViewProvider(plan));
   writeText(join(src, "bootstrap/config.ts"), renderConfigTs());
-  writeText(join(src, "bootstrap/preload.ts"), renderPreloadTs(layers, projectName));
-  writeText(join(src, "bootstrap/database.ts"), renderDatabaseTs(layers));
-  const ensureDatabase = renderEnsureDatabaseTs(layers, projectName);
+  writeText(join(src, "bootstrap/preload.ts"), renderPreloadTs(plan, projectName));
+  writeText(join(src, "bootstrap/database.ts"), renderDatabaseTs(plan));
+  const ensureDatabase = renderEnsureDatabaseTs(plan, projectName);
   if (ensureDatabase) {
     writeText(join(src, "bootstrap/ensureDatabase.ts"), ensureDatabase);
   } else {
     removeIfExists(join(src, "bootstrap/ensureDatabase.ts"));
   }
-  writeText(join(src, "bootstrap/createApp.ts"), renderCreateAppTs(layers));
+  writeText(join(src, "bootstrap/createApp.ts"), renderCreateAppTs(plan));
   writeText(join(src, "bootstrap/schedule.ts"), renderScheduleTs());
-  writeText(join(src, "cli/register.ts"), renderCliRegisterTs(layers));
-  const initialAdminCommand = renderInitialAdminCommand(layers);
-  const initialAdminMigration = renderInitialAdminMigration(layers);
+  writeText(join(src, "cli/register.ts"), renderCliRegisterTs(plan));
+  const initialAdminCommand = renderInitialAdminCommand(plan);
+  const initialAdminMigration = renderInitialAdminMigration(plan);
   if (initialAdminCommand && initialAdminMigration) {
     writeText(join(src, "cli/initialAdmin.ts"), initialAdminCommand);
     writeText(join(src, "db/migrations/0004_initial_admin_provisioning.ts"), initialAdminMigration);
@@ -264,79 +268,73 @@ export const TENANCY_ENABLED = ${usesTenantTable(layers.tenancy)};
   }
   writeText(join(src, "cli/queueWork.ts"), renderCliQueueWorkTs());
   writeText(join(src, "cli/outboxWork.ts"), renderCliOutboxWorkTs());
-  writeText(join(src, "outbox/registry.ts"), renderOutboxRegistryTs());
+  writeText(join(src, "outbox/registry.ts"), renderOutboxRegistryTs(plan));
   writeText(join(src, "cli/queueFailed.ts"), renderCliQueueFailedTs());
   writeText(join(src, "cli/openapi.ts"), renderCliOpenApiTs());
   writeText(join(src, "cli/scheduleRun.ts"), renderCliScheduleRunTs());
-  writeText(join(src, "bootstrap/providers/config.ts"), renderConfigProvider(layers));
+  writeText(join(src, "bootstrap/providers/config.ts"), renderConfigProvider(plan));
   writeText(join(src, "bootstrap/providers/queue.ts"), renderQueueProvider());
   writeText(join(src, "bootstrap/providers/policy.ts"), renderPolicyProvider());
   writeText(join(src, "bootstrap/providers/index.ts"), renderProvidersIndex());
-  writeText(join(src, "bootstrap/providers/auth.ts"), renderAuthProvider(layers));
-  writeText(join(src, "models/Note.ts"), renderNoteModel(layers));
-  if (authNeedsUsers(layers.auth)) {
-    writeText(join(src, "models/User.ts"), renderUserModel(layers));
+  writeText(join(src, "bootstrap/providers/auth.ts"), renderAuthProvider(plan));
+  writeText(join(src, "models/Note.ts"), renderNoteModel(plan));
+  if (decisions.users) {
+    writeText(join(src, "models/User.ts"), renderUserModel(plan));
     writeText(join(src, "models/AuthOneTimeToken.ts"), renderAuthOneTimeTokenModel());
   } else {
     removeIfExists(join(src, "models/User.ts"));
     removeIfExists(join(src, "models/AuthOneTimeToken.ts"));
   }
-  if (authUsesToken(layers.auth)) {
+  if (decisions.token) {
     writeText(join(src, "models/ApiToken.ts"), renderApiTokenModel());
   } else {
     removeIfExists(join(src, "models/ApiToken.ts"));
   }
-  writeText(join(src, "models/register.ts"), renderModelsRegister(layers));
-  writeText(join(src, "db/migrate.ts"), renderMigrateTs(layers));
-  writeText(join(src, "db/migrationRuntime.ts"), renderMigrationRuntimeTs(layers));
-  writeText(
-    join(src, "db/migrations/0001_starter_schema.ts"),
-    renderStarterSchemaMigration(layers),
-  );
-  writeText(join(src, "db/migrations/0005_outbox.ts"), renderOutboxMigration(layers));
-  if (authNeedsUsers(layers.auth)) {
-    writeText(
-      join(src, "db/migrations/0006_account_state.ts"),
-      renderAccountStateMigration(layers),
-    );
+  writeText(join(src, "models/register.ts"), renderModelsRegister(plan));
+  writeText(join(src, "db/migrate.ts"), renderMigrateTs(plan));
+  writeText(join(src, "db/migrationRuntime.ts"), renderMigrationRuntimeTs(plan));
+  writeText(join(src, "db/migrations/0001_starter_schema.ts"), renderStarterSchemaMigration(plan));
+  writeText(join(src, "db/migrations/0005_outbox.ts"), renderOutboxMigration(plan));
+  if (decisions.users) {
+    writeText(join(src, "db/migrations/0006_account_state.ts"), renderAccountStateMigration(plan));
   } else {
     removeIfExists(join(src, "db/migrations/0006_account_state.ts"));
   }
   removeIfExists(join(src, "db/migrations/0002_webhooks_schema.ts"));
   removeIfExists(join(src, "db/migrations/0002_billing_schema.ts"));
   removeIfExists(join(src, "db/migrations/0003_billing_schema.ts"));
-  const webhooksMigration = renderWebhooksMigration(layers);
-  const webhooksName = webhookMigrationName(layers);
+  const webhooksMigration = renderWebhooksMigration(plan);
+  const webhooksName = webhookMigrationName(plan);
   if (webhooksMigration && webhooksName) {
     writeText(join(src, `db/migrations/${webhooksName}.ts`), webhooksMigration);
   }
-  const billingMigration = renderBillingMigration(layers);
-  const billingName = billingMigrationName(layers);
+  const billingMigration = renderBillingMigration(plan);
+  const billingName = billingMigrationName(plan);
   if (billingMigration && billingName) {
     writeText(join(src, `db/migrations/${billingName}.ts`), billingMigration);
   }
-  writeText(join(src, "db/fresh.ts"), renderFreshTs(layers));
+  writeText(join(src, "db/fresh.ts"), renderFreshTs(plan));
   writeText(join(src, "db/seed.ts"), renderSeedTs());
-  writeText(join(src, "db/status.ts"), renderStatusTs(layers));
-  writeText(join(src, "db/rollback.ts"), renderRollbackTs(layers));
-  writeText(join(src, "modules/site/index.ts"), renderSiteModule(layers));
+  writeText(join(src, "db/status.ts"), renderStatusTs(plan));
+  writeText(join(src, "db/rollback.ts"), renderRollbackTs(plan));
+  writeText(join(src, "modules/site/index.ts"), renderSiteModule(plan));
 
-  const directory = renderAuthDirectory(layers);
+  const directory = renderAuthDirectory(plan);
   if (directory) {
     writeText(join(src, "bootstrap/authDirectory.ts"), directory);
   }
 
-  const sidecars = renderSidecarsTs(layers);
+  const sidecars = renderSidecarsTs(plan);
   if (sidecars) {
     writeText(join(src, "bootstrap/sidecars.ts"), sidecars);
   }
 
-  const authModule = renderAuthModule(layers);
+  const authModule = renderAuthModule(plan);
   if (authModule) {
     writeText(join(src, "modules/auth/index.ts"), authModule);
   }
 
-  const scimModule = renderScimModule(layers);
+  const scimModule = renderScimModule(plan);
   if (scimModule) {
     writeText(join(src, "modules/scim/index.ts"), scimModule);
   } else {
@@ -345,7 +343,7 @@ export const TENANCY_ENABLED = ${usesTenantTable(layers.tenancy)};
 
   if (layers.extras.billing) {
     writeText(join(src, "billing/applyStripeWebhook.ts"), renderApplyStripeWebhook());
-    writeText(join(src, "modules/billing/index.ts"), renderBillingModule(layers));
+    writeText(join(src, "modules/billing/index.ts"), renderBillingModule(plan));
   } else {
     removeIfExists(join(src, "billing/applyStripeWebhook.ts"));
     removeIfExists(join(src, "modules/billing/index.ts"));
@@ -354,7 +352,7 @@ export const TENANCY_ENABLED = ${usesTenantTable(layers.tenancy)};
   if (layers.extras.webhooks) {
     writeText(
       join(src, "jobs/dispatchOutboundWebhookJob.ts"),
-      renderDispatchOutboundWebhookJob(layers),
+      renderDispatchOutboundWebhookJob(plan),
     );
     writeText(
       join(src, "listeners/noteCreatedWebhookListener.ts"),
@@ -365,7 +363,7 @@ export const TENANCY_ENABLED = ${usesTenantTable(layers.tenancy)};
     removeIfExists(join(src, "listeners/noteCreatedWebhookListener.ts"));
   }
 
-  if (layers.extras.mfa && htmlAuthKit(layers.auth)) {
+  if (decisions.pendingMfa) {
     writeText(join(src, "bootstrap/pendingMfa.ts"), renderPendingMfaTs());
   } else {
     removeIfExists(join(src, "bootstrap/pendingMfa.ts"));
@@ -387,10 +385,10 @@ export const TENANCY_ENABLED = ${usesTenantTable(layers.tenancy)};
       copyFileSync(versionSidecar, join(targetDir, "public/assets/htmx.min.js.version"));
     }
   }
-  writeText(join(targetDir, "views/home.eta"), renderHomeView(projectName, layers));
-  writeText(join(targetDir, "views/layouts/app.eta"), renderLayout(layers, projectName));
-  if (htmlAuthKit(layers.auth)) {
-    writeText(join(targetDir, "views/auth/login.eta"), renderLoginView(layers));
+  writeText(join(targetDir, "views/home.eta"), renderHomeView(projectName, plan));
+  writeText(join(targetDir, "views/layouts/app.eta"), renderLayout(plan, projectName));
+  if (decisions.htmlAuth) {
+    writeText(join(targetDir, "views/auth/login.eta"), renderLoginView(plan));
     writeText(join(targetDir, "views/auth/register.eta"), renderRegisterView());
     writeText(join(targetDir, "views/auth/forgot-password.eta"), renderForgotPasswordView());
     writeText(join(targetDir, "views/auth/reset-password.eta"), renderResetPasswordView());
@@ -404,19 +402,34 @@ export const TENANCY_ENABLED = ${usesTenantTable(layers.tenancy)};
     }
   }
 
+  if (decisions.workTracker) {
+    writeText(join(targetDir, "docs/WORK_TRACKER.md"), renderWorkTrackerGuide());
+    const readmePath = join(targetDir, "README.md");
+    writeText(
+      readmePath,
+      readFileSync(readmePath, "utf8") +
+        "\n## Work tracker reference\n\nOpen `/work` after signing in to the server app. See [the reference workflow](docs/WORK_TRACKER.md) for roles, API actions and the durable worker.\n",
+    );
+    writeText(join(src, "domain/workTracker.ts"), renderWorkTrackerDomain());
+    writeText(join(src, "models/workTracker.ts"), renderWorkTrackerModels());
+    writeText(join(src, "modules/workTracker/index.ts"), renderWorkTrackerModule());
+    writeText(join(src, "db/migrations/0007_work_tracker.ts"), renderWorkTrackerMigration(plan));
+  }
+
   mkdirSync(join(targetDir, "storage"), { recursive: true });
   writeText(join(targetDir, "storage/.gitkeep"), "");
 }
 
 function printNextSteps(
   projectName: string,
-  layers: StarterLayers,
+  plan: StarterFeaturePlan,
   compose: boolean,
   cdTarget = projectName,
 ): void {
-  const dockerOn = selectedDockerServices(layers);
-  const neededTools = neededDockerServices(layers);
-  const localOn = neededTools.filter((name) => !dockerOn.includes(name));
+  const layers = plan.layers;
+  const dockerOn = plan.services.docker;
+  const neededTools = plan.services.required;
+  const localOn = plan.services.local;
   const dockerSummary =
     dockerOn.length > 0 ? dockerOn.join("+") : neededTools.length === 0 ? "none" : "local";
   console.log(`\nCreated Strata app in ${projectName}/\n`);
@@ -427,7 +440,7 @@ function printNextSteps(
   console.log(`  cd ${cdTarget}`);
   console.log("  cp .env.example .env");
   if (compose) {
-    console.log(`  ${dockerComposeUpCommand(layers)}`);
+    console.log(`  ${plan.decisions.composeUpCommand}`);
   }
   if (dockerOn.includes("adminer")) {
     console.log("  Adminer: http://localhost:8080");
@@ -436,7 +449,7 @@ function printNextSteps(
     console.log(`  Point env at local ${localOn.join(", ")} (see README).`);
   }
   console.log("  bun install");
-  if (needsFrontendBuild(layers.frontend)) {
+  if (plan.decisions.frontendBuild) {
     console.log("  bun run frontend:install");
     console.log("  bun run frontend:build");
   }
@@ -446,19 +459,68 @@ function printNextSteps(
   console.log("Run it directly with bunx strata <command> from inside the app directory.\n");
 }
 
-function generateProject(options: GenerateOptions): void {
+function generateProject(options: GenerateOptions): StarterFeaturePlan {
   assertProjectName(options.projectName);
-  const layers = { ...options.layers, spaPrefix: validateSpaPrefix(options.layers.spaPrefix) };
-  if (existsSync(options.targetDir)) {
-    if (!options.force) {
-      throw new Error(`Directory already exists: ${options.targetDir}`);
+  const plan = compileStarterFeatures(options.layers, options.reference);
+  mkdirSync(dirname(options.targetDir), { recursive: true });
+  // mkdir is the ownership boundary: it refuses files, directories and dangling symlinks.
+  // --force never authorizes deleting an existing application's data.
+  try {
+    mkdirSync(options.targetDir);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new Error(
+        `Output path already exists: ${options.targetDir}. Choose a new path; --force does not overwrite existing projects.`,
+      );
     }
-    rmSync(options.targetDir, { recursive: true, force: true });
+    throw error;
   }
-
-  copyTree(options.templateRoot, options.targetDir, options.projectName, new Set(["overlays"]));
-  applyFrontendOverlays(options.overlayRoot, options.targetDir, layers);
-  writeGeneratedFiles({ ...options, layers });
+  const owned = lstatSync(options.targetDir);
+  try {
+    copyTree(options.templateRoot, options.targetDir, options.projectName, new Set(["overlays"]));
+    applyFrontendOverlays(options.overlayRoot, options.targetDir, plan);
+    writeGeneratedFiles({ ...options, layers: plan.layers }, plan);
+    for (const artifact of plan.artifacts) {
+      if (!lstatSync(join(options.targetDir, artifact)).isFile()) {
+        throw new Error(`Feature plan artifact was not rendered: ${artifact}`);
+      }
+    }
+    const inventory = (directory: string, prefix = ""): string[] =>
+      readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+        const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+        return entry.isDirectory() ? inventory(join(directory, entry.name), path) : [path];
+      });
+    writeText(
+      join(options.targetDir, "strata.features.json"),
+      JSON.stringify(
+        {
+          ...plan,
+          emittedArtifacts: [
+            ...new Set([...inventory(options.targetDir), "strata.features.json"]),
+          ].sort(),
+        },
+        null,
+        2,
+      ),
+    );
+  } catch (error) {
+    // Never remove a path replaced by another owner while rendering.
+    try {
+      const current = lstatSync(options.targetDir);
+      if (current.dev === owned.dev && current.ino === owned.ino) {
+        rmSync(options.targetDir, { recursive: true, force: true });
+      }
+    } catch (cleanupError) {
+      if ((cleanupError as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw new AggregateError(
+          [error, cleanupError],
+          "Starter generation and owned-output cleanup failed.",
+        );
+      }
+    }
+    throw error;
+  }
+  return plan;
 }
 
 async function runCreateStrata(argv: string[], cwd = process.cwd()): Promise<number> {
@@ -478,7 +540,7 @@ async function runCreateStrata(argv: string[], cwd = process.cwd()): Promise<num
   try {
     const plan = await resolveStarterPlan(flags);
     const { projectName, targetDir } = resolveProjectTarget(plan.projectName, cwd);
-    generateProject({
+    const features = generateProject({
       projectName,
       targetDir,
       layers: plan.layers,
@@ -486,12 +548,7 @@ async function runCreateStrata(argv: string[], cwd = process.cwd()): Promise<num
       overlayRoot: resolveOverlayRoot(),
       force: flags.force,
     });
-    printNextSteps(
-      projectName,
-      plan.layers,
-      renderDockerCompose(projectName, plan.layers) !== null,
-      plan.projectName,
-    );
+    printNextSteps(projectName, features, features.services.docker.length > 0, plan.projectName);
     return 0;
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);

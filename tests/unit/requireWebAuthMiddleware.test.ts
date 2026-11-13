@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { intendedUrlCookieOptionsFromEnvironment } from "@getstrata/core/auth/intendedUrlCookie";
 import { UnauthorizedError } from "@getstrata/core/errors/http";
 import { composeMiddleware } from "@getstrata/core/http/middleware";
 import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebAuthMiddleware";
@@ -20,7 +21,9 @@ describe("createRequireWebAuthMiddleware", () => {
   });
   test("allows authenticated requests through", async () => {
     const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
-    const handler = composeMiddleware(createRequireWebAuthMiddleware(auth))(async () => {
+    const handler = composeMiddleware(
+      createRequireWebAuthMiddleware(auth, intendedUrlCookieOptionsFromEnvironment(process.env)),
+    )(async () => {
       expect(currentAuthUser()?.id).toBe("1");
       return Response.json({ ok: true });
     });
@@ -39,9 +42,9 @@ describe("createRequireWebAuthMiddleware", () => {
 
   test("rejects guests with UnauthorizedError for JSON requests", async () => {
     const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
-    const handler = composeMiddleware(createRequireWebAuthMiddleware(auth))(async () =>
-      Response.json({ ok: true }),
-    );
+    const handler = composeMiddleware(
+      createRequireWebAuthMiddleware(auth, intendedUrlCookieOptionsFromEnvironment(process.env)),
+    )(async () => Response.json({ ok: true }));
 
     await expect(
       handler(
@@ -54,9 +57,9 @@ describe("createRequireWebAuthMiddleware", () => {
 
   test("redirects guests to login for HTML requests", async () => {
     const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
-    const handler = composeMiddleware(createRequireWebAuthMiddleware(auth))(async () =>
-      Response.json({ ok: true }),
-    );
+    const handler = composeMiddleware(
+      createRequireWebAuthMiddleware(auth, intendedUrlCookieOptionsFromEnvironment(process.env)),
+    )(async () => Response.json({ ok: true }));
 
     const response = await handler(
       new Request("http://example.test/forum?page=2", {

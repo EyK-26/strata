@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { Job } from "@getstrata/core/queue";
-import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+
+const jobRegistry = new JobRegistry();
+
 import { queueKeyForPriority, RedisQueue } from "@getstrata/core/queue/redisQueue";
 import { RedisClient } from "bun";
 import { withQueuePersistence } from "../helpers/queuePersistence";
@@ -13,7 +16,7 @@ describe.skipIf(!redisUrl)("failed-job SQL recovery and Redis admission", () => 
     const previousPrefix = process.env.APP_KEY_PREFIX;
     process.env.APP_KEY_PREFIX = `retry-test-${crypto.randomUUID()}`;
     const client = new RedisClient(redisUrl);
-    const queue = new RedisQueue(redisUrl);
+    const queue = new RedisQueue(redisUrl, jobRegistry);
     await withQueuePersistence(async ({ services: service }) => {
       const key = queueKeyForPriority("high");
       let id: number | undefined;
@@ -53,6 +56,9 @@ describe.skipIf(!redisUrl)("failed-job SQL recovery and Redis admission", () => 
           name,
           payload: { marker: "persisted" },
           attempts: 0,
+          jobId: expect.stringMatching(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+          ),
         });
       } finally {
         if (id !== undefined) await service.delete(id).catch(() => {});

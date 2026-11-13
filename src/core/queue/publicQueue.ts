@@ -1,9 +1,16 @@
 import FailedJobRepository from "@getstrata/core/queue/failedJobRepository";
 import FailedJobService from "./failedJobService.ts";
 import type { Job, Queue } from "./index.ts";
-import { jobRegistry } from "./jobRegistry.ts";
+import type { JobRegistry } from "./jobRegistry.ts";
 import { runQueueJob } from "./jobRunner.ts";
-import { resolveRedisQueueTransport } from "./queueConfig";
+import {
+  type QueueRetryPolicy,
+  type QueueRuntimeConfig,
+  resolveQueueConfig,
+  resolveQueueRuntimeConfig,
+  snapshotQueueRetryPolicy,
+  snapshotQueueRuntimeConfig,
+} from "./queueConfig";
 import {
   createFailedJobService,
   createQueueServices,
@@ -15,10 +22,11 @@ import { RedisStreamsQueue, RedisStreamsWorker } from "./redisStreams";
 import { ResilientQueue } from "./resilientQueue.ts";
 
 function createTrackedJob<TPayload extends object>(
+  registry: JobRegistry,
   name: string,
   job: Job<TPayload>,
 ): Job<TPayload> {
-  return jobRegistry.track(name, job);
+  return registry.track(name, job);
 }
 
 function createProductionQueue(
@@ -26,11 +34,11 @@ function createProductionQueue(
   options: {
     redisUrl?: string;
     failedJobs: QueueServices;
-    registerJobs?: () => void;
+    registry: JobRegistry;
+    retryPolicy?: QueueRetryPolicy;
+    runtime?: QueueRuntimeConfig;
   },
 ): Queue {
-  options.registerJobs?.();
-
   const failedJobs = options.failedJobs;
 
   if (driver === "redis") {
@@ -38,23 +46,51 @@ function createProductionQueue(
       throw new Error('QUEUE_DRIVER="redis" requires REDIS_URL to be set.');
     }
 
-    return resolveRedisQueueTransport() === "streams"
-      ? new RedisStreamsQueue(options.redisUrl)
-      : new RedisQueue(options.redisUrl);
+    const runtime = snapshotQueueRuntimeConfig(options.runtime ?? resolveQueueRuntimeConfig());
+    return runtime.transport === "streams"
+      ? new RedisStreamsQueue(options.redisUrl, options.registry, runtime.queueKeys)
+      : new RedisQueue(options.redisUrl, options.registry, runtime.queueKeys);
   }
 
-  return new ResilientQueue(failedJobs, driver === "async");
+  return new ResilientQueue(
+    failedJobs,
+    options.registry,
+    driver === "async",
+    snapshotQueueRetryPolicy(options.retryPolicy ?? resolveQueueConfig()),
+  );
 }
 
 function createQueueWorker(
   redisUrl: string,
   failedJobs: Pick<QueueServices, "recordFailure" | "runAttempt">,
+  registry: JobRegistry,
+  options: { readonly runtime?: QueueRuntimeConfig; readonly retryPolicy?: QueueRetryPolicy } = {},
 ): QueueWorker | RedisStreamsWorker {
-  return resolveRedisQueueTransport() === "streams"
-    ? new RedisStreamsWorker(redisUrl, failedJobs)
-    : new QueueWorker(redisUrl, failedJobs);
+  const runtime = snapshotQueueRuntimeConfig(options.runtime ?? resolveQueueRuntimeConfig());
+  const retry = snapshotQueueRetryPolicy(options.retryPolicy ?? resolveQueueConfig());
+  return runtime.transport === "streams"
+    ? new RedisStreamsWorker(
+        redisUrl,
+        failedJobs,
+        registry,
+        5,
+        runtime.queueKeys,
+        retry,
+        runtime.visibilityMs,
+      )
+    : new QueueWorker(
+        redisUrl,
+        failedJobs,
+        registry,
+        5,
+        runtime.queueKeys,
+        retry,
+        runtime.visibilityMs,
+      );
 }
 
+export type { QueueHandoff, QueueIdentity } from "@getstrata/core/queue/queueHandoff";
+export { createIdentityQueue, createQueueHandoff } from "@getstrata/core/queue/queueHandoff";
 export type { QueueInvocation, QueueInvocationConfig, QueueServices } from "./queueServices";
 export {
   createFailedJobService,
@@ -65,7 +101,6 @@ export {
   createTrackedJob,
   FailedJobRepository,
   FailedJobService,
-  jobRegistry,
   QueueWorker,
   RedisQueue,
   ResilientQueue,

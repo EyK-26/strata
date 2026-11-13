@@ -7,7 +7,11 @@ import { CacheRepository } from "@getstrata/core/cache/repository";
 import type { Application, TransportDefinition } from "@getstrata/core/contracts/application";
 import { Job } from "@getstrata/core/queue";
 import type { QueueServices } from "@getstrata/core/queue/createAppQueue";
-import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { resolveQueueRuntimeConfig } from "@getstrata/core/queue/queueConfig";
+
+const jobRegistry = new JobRegistry();
+
 import {
   createQueueWorkerTransport,
   type QueueWorkerTransport,
@@ -32,6 +36,10 @@ const url = process.env.REDIS_URL;
 const scope = process.env.APP_KEY_PREFIX;
 assert.ok(url, "Use the explicit dedicated Redis fixture URL.");
 assert.ok(scope && /^strata-protocol-[0-9a-f-]{36}$/.test(scope), "Use a fresh owned namespace.");
+const queueRuntime = resolveQueueRuntimeConfig({
+  APP_KEY_PREFIX: scope,
+  QUEUE_REDIS_TRANSPORT: "lists",
+});
 const application: {
   createApp(options: {
     migrate: false;
@@ -96,16 +104,38 @@ try {
     runAttempt: (...args) => selected().runAttempt(...args),
   };
   listWorker = createQueueWorkerTransport({
+    registry: jobRegistry,
     name: "qualification.list-worker",
     redisUrl: url,
     queueServices: services,
-    createWorker: (redis, services) => new QueueWorker(redis, services),
+    runtime: queueRuntime,
+    createWorker: (redis, services) =>
+      new QueueWorker(
+        redis,
+        services,
+        jobRegistry,
+        5,
+        queueRuntime.queueKeys,
+        undefined,
+        queueRuntime.visibilityMs,
+      ),
   });
   streamWorker = createQueueWorkerTransport({
+    registry: jobRegistry,
     name: "qualification.stream-worker",
     redisUrl: url,
     queueServices: services,
-    createWorker: (redis, services) => new RedisStreamsWorker(redis, services),
+    runtime: { ...queueRuntime, transport: "streams" },
+    createWorker: (redis, services) =>
+      new RedisStreamsWorker(
+        redis,
+        services,
+        jobRegistry,
+        5,
+        queueRuntime.queueKeys,
+        undefined,
+        queueRuntime.visibilityMs,
+      ),
   });
   app = await application.createApp({
     migrate: false,
@@ -123,26 +153,53 @@ try {
   const jobName = `qualification.protocol.${crypto.randomUUID()}`;
   jobRegistry.register(jobName, () => job);
   jobRegistry.track(jobName, job);
-  list = new RedisQueue(url);
-  const queueKey = queueKeyForPriority(job.priority);
-  assert.equal(queueKey, QUEUE_LIST_KEY);
+  list = new RedisQueue(url, jobRegistry, queueRuntime.queueKeys);
+  const queueKey = queueKeyForPriority(job.priority, queueRuntime.queueKeys);
+  assert.equal(QUEUE_LIST_KEY, "strata:queue:default");
+  assert.equal(queueKey, `${scope}:queue:default`);
   assert.ok(queueKey.startsWith(`${scope}:`));
   await list.dispatch(job, { kind: "list" });
   assert.equal(await listWorker.processNext(), true);
   assert.deepEqual(effects, ["list"]);
   await list.dispatch(job, { kind: "reservation" });
-  const reservation = await reserveQueueJob(observer, queueKey, "owned-consumer");
+  const reservation = await reserveQueueJob(
+    observer,
+    queueKey,
+    "owned-consumer",
+    queueRuntime.visibilityMs,
+  );
   assert.ok(reservation);
   assert.equal(
-    await updateQueueReservation(observer, queueKey, { ...reservation, owner: "stale" }, "ack"),
+    await updateQueueReservation(
+      observer,
+      queueKey,
+      { ...reservation, owner: "stale" },
+      "ack",
+      queueRuntime.visibilityMs,
+    ),
     false,
   );
-  assert.equal(await updateQueueReservation(observer, queueKey, reservation, "renew"), true);
-  assert.equal(await updateQueueReservation(observer, queueKey, reservation, "ack"), true);
-  assert.equal(await updateQueueReservation(observer, queueKey, reservation, "ack"), false);
+  assert.equal(
+    await updateQueueReservation(
+      observer,
+      queueKey,
+      reservation,
+      "renew",
+      queueRuntime.visibilityMs,
+    ),
+    true,
+  );
+  assert.equal(
+    await updateQueueReservation(observer, queueKey, reservation, "ack", queueRuntime.visibilityMs),
+    true,
+  );
+  assert.equal(
+    await updateQueueReservation(observer, queueKey, reservation, "ack", queueRuntime.visibilityMs),
+    false,
+  );
   assert.equal(await observer.llen(queueProcessingKey(queueKey)), 0);
 
-  streams = new RedisStreamsQueue(url);
+  streams = new RedisStreamsQueue(url, jobRegistry, queueRuntime.queueKeys);
   const jobId = await streams.enqueue(
     job,
     { kind: "streams" },

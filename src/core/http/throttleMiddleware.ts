@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { currentTenant, type TenantContext } from "@getstrata/core/tenant/tenantContext";
 import { RedisClient } from "bun";
-import { namespacedRedisKey } from "../runtime/appKeyPrefix";
 import { readClientIp } from "./clientIp";
 import type { Middleware } from "./middleware";
 import { currentRequestMeta } from "./requestMetaContext";
@@ -19,7 +18,12 @@ interface ThrottleQuotaContext {
 /** A synchronous application-owned attempt limit; the window remains fixed. */
 type ThrottleQuotaPolicy = (context: ThrottleQuotaContext) => number;
 
-interface ThrottleOptions {
+interface ThrottleIdentityPolicy {
+  readonly namespace?: string;
+  readonly trustForwardedFor?: boolean;
+}
+
+interface ThrottleOptions extends ThrottleIdentityPolicy {
   redisUrl: string;
   maxAttempts: number;
   decaySeconds: number;
@@ -29,7 +33,7 @@ interface ThrottleOptions {
   quotaPolicy?: ThrottleQuotaPolicy;
 }
 
-function resolveThrottleIdentity(request: Request): string {
+function resolveThrottleIdentity(request: Request, trustForwardedFor = false): string {
   const user = currentAuthUser();
 
   if (user?.tokenId !== undefined) {
@@ -40,7 +44,7 @@ function resolveThrottleIdentity(request: Request): string {
     return `user:${user.id}`;
   }
 
-  return readClientIp(request) ?? "unknown";
+  return readClientIp(request, { TRUST_FORWARDED_FOR: String(trustForwardedFor) }) ?? "unknown";
 }
 
 type RedisThrottleClient = Pick<RedisClient, "send">;
@@ -61,6 +65,7 @@ function redisThrottleKey(
   prefix: string,
   identity: string,
   tenantId: number | null = currentTenant()?.id ?? null,
+  namespace = "strata",
 ): string {
   const bucket = JSON.stringify([
     tenantId,
@@ -68,7 +73,7 @@ function redisThrottleKey(
     currentRequestMeta().routeTemplate ?? "__unmatched__",
     identity,
   ]);
-  return namespacedRedisKey(`${prefix}:${createHash("sha256").update(bucket).digest("hex")}`);
+  return `${namespace}:${prefix}:${createHash("sha256").update(bucket).digest("hex")}`;
 }
 
 async function consumeRedisThrottle(
@@ -170,8 +175,8 @@ function throttleUnavailableResponse(): Response {
 
 function resolveThrottleQuota(
   request: Request,
-  options: Pick<ThrottleOptions, "maxAttempts" | "quotaPolicy">,
-  identity = resolveThrottleIdentity(request),
+  options: Pick<ThrottleOptions, "maxAttempts" | "quotaPolicy" | "trustForwardedFor">,
+  identity = resolveThrottleIdentity(request, options.trustForwardedFor),
 ): number {
   const limit = options.quotaPolicy
     ? options.quotaPolicy({
@@ -189,6 +194,7 @@ function resolveThrottleQuota(
 }
 
 function createThrottleMiddleware(options: ThrottleOptions): DisposableThrottle {
+  options = Object.freeze({ ...options });
   if (!Number.isSafeInteger(options.maxAttempts) || options.maxAttempts < 0) {
     throw new Error("Throttle maxAttempts must be a non-negative safe integer.");
   }
@@ -196,14 +202,14 @@ function createThrottleMiddleware(options: ThrottleOptions): DisposableThrottle 
   const prefix = options.keyPrefix ?? "throttle";
 
   const middleware: Middleware = async (request, next) => {
-    const identity = resolveThrottleIdentity(request);
+    const identity = resolveThrottleIdentity(request, options.trustForwardedFor);
     let maxAttempts: number;
     try {
       maxAttempts = resolveThrottleQuota(request, options, identity);
     } catch {
       return throttleUnavailableResponse();
     }
-    const key = redisThrottleKey(request, prefix, identity);
+    const key = redisThrottleKey(request, prefix, identity, undefined, options.namespace);
     let attempts: number;
     try {
       attempts = await consume(key, options.decaySeconds);
@@ -222,6 +228,7 @@ function createThrottleMiddleware(options: ThrottleOptions): DisposableThrottle 
 export type {
   DisposableThrottle,
   RedisThrottleClient,
+  ThrottleIdentityPolicy,
   ThrottleOptions,
   ThrottleQuotaContext,
   ThrottleQuotaPolicy,

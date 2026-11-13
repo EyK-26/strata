@@ -1,6 +1,6 @@
 import { UnprocessableEntityError } from "@getstrata/core/errors/http";
 import type { AuthUserRecord } from "../contracts/authUserDirectory";
-import { revealMfaSecret } from "../crypto/mfaSecret";
+import { type MfaSecretCodec, revealMfaSecret } from "../crypto/mfaSecret";
 import type { DatabaseSession, TransactionSession } from "../database/session";
 import { recoveryCodeMatches } from "../security/recoveryCodes";
 import { verifyTotp } from "../security/totp";
@@ -37,7 +37,8 @@ function parseRecoveryHashes(raw: string | null | undefined): string[] {
 
 function completePasswordLogin(
   user: Pick<AuthUserRecord, "is_active" | "mfa_enabled" | "mfa_secret" | "mfa_recovery_codes">,
-  options: { mfaCode?: string | null } = {},
+  options: { mfaCode?: string | null },
+  mfaSecrets: MfaSecretCodec,
 ): PasswordLoginResult {
   if (!isAccountActive(user)) return { ok: false, error: "account_inactive" };
   if (!user.mfa_enabled) {
@@ -49,7 +50,7 @@ function completePasswordLogin(
     return { ok: false, error: "mfa_required" };
   }
 
-  const secret = revealMfaSecret(user.mfa_secret);
+  const secret = revealMfaSecret(user.mfa_secret, mfaSecrets);
   if (secret && verifyTotp(secret, submitted)) {
     return { ok: true };
   }

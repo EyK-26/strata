@@ -10,6 +10,7 @@ import {
   signedUrl,
   temporarySignedUrl,
 } from "@getstrata/core/http/signedUrl";
+import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
 
 const SECRET_KEYS = ["SIGNED_URL_SECRET", "APP_KEY", "SESSION_SECRET"] as const;
 const previous: Record<string, string | undefined> = {};
@@ -87,34 +88,130 @@ describe("safeInternalRedirectPath", () => {
 
 describe("signed URLs", () => {
   test("a freshly signed URL without expires does not verify", () => {
-    expect(hasValidSignature(signedUrl("/invoices/9"))).toBe(false);
+    expect(
+      hasValidSignature(
+        signedUrl(
+          "/invoices/9",
+          {},
+          requireConfiguredSecret(
+            ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+            "signed-url-secret",
+            process.env,
+          ),
+        ),
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
+    ).toBe(false);
   });
 
   test("a freshly temporary signed URL verifies", () => {
-    expect(hasValidSignature(temporarySignedUrl("/invoices/9", 60))).toBe(true);
+    expect(
+      hasValidSignature(
+        temporarySignedUrl(
+          "/invoices/9",
+          60,
+          {},
+          requireConfiguredSecret(
+            ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+            "signed-url-secret",
+            process.env,
+          ),
+        ),
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
+    ).toBe(true);
   });
 
   test("a tampered path does not verify", () => {
-    const signed = signedUrl("/invoices/9");
-    expect(hasValidSignature(signed.replace("/invoices/9", "/invoices/10"))).toBe(false);
+    const signed = signedUrl(
+      "/invoices/9",
+      {},
+      requireConfiguredSecret(
+        ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+        "signed-url-secret",
+        process.env,
+      ),
+    );
+    expect(
+      hasValidSignature(
+        signed.replace("/invoices/9", "/invoices/10"),
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
+    ).toBe(false);
   });
 
   test("a tampered query value does not verify", () => {
-    const signed = signedUrl("/invoices", { id: "9" });
-    expect(hasValidSignature(signed.replace("id=9", "id=10"))).toBe(false);
+    const signed = signedUrl(
+      "/invoices",
+      { id: "9" },
+      requireConfiguredSecret(
+        ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+        "signed-url-secret",
+        process.env,
+      ),
+    );
+    expect(
+      hasValidSignature(
+        signed.replace("id=9", "id=10"),
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
+    ).toBe(false);
   });
 
   test("a stripped signature does not verify", () => {
-    expect(hasValidSignature("/invoices/9")).toBe(false);
+    expect(
+      hasValidSignature(
+        "/invoices/9",
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
+    ).toBe(false);
   });
 
   test("a forged signature does not verify", () => {
-    expect(hasValidSignature("/invoices/9?signature=deadbeef")).toBe(false);
+    expect(
+      hasValidSignature(
+        "/invoices/9?signature=deadbeef",
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
+    ).toBe(false);
   });
 
   test("query parameter order does not change the outcome", () => {
     const signed = new URL(
-      temporarySignedUrl("/report", 60, { b: "2", a: "1" }),
+      temporarySignedUrl(
+        "/report",
+        60,
+        { b: "2", a: "1" },
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
       "https://app.example.com",
     );
     const reordered = new URL("https://app.example.com/report");
@@ -126,42 +223,177 @@ describe("signed URLs", () => {
     reordered.searchParams.set("expires", expires);
     reordered.searchParams.set("signature", signature);
 
-    expect(hasValidSignature(reordered)).toBe(true);
+    expect(
+      hasValidSignature(
+        reordered,
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
+    ).toBe(true);
   });
 
   test("an unexpired temporary URL verifies", () => {
-    expect(hasValidSignature(temporarySignedUrl("/invoices/9", 60))).toBe(true);
+    expect(
+      hasValidSignature(
+        temporarySignedUrl(
+          "/invoices/9",
+          60,
+          {},
+          requireConfiguredSecret(
+            ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+            "signed-url-secret",
+            process.env,
+          ),
+        ),
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
+    ).toBe(true);
   });
 
   test("an expired temporary URL does not verify", () => {
-    const signed = new URL(temporarySignedUrl("/invoices/9", 60), "https://app.example.com");
+    const signed = new URL(
+      temporarySignedUrl(
+        "/invoices/9",
+        60,
+        {},
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
+      "https://app.example.com",
+    );
     const past = Math.floor(Date.now() / 1000) - 1;
     signed.searchParams.set("expires", String(past));
 
-    expect(hasValidSignature(signed)).toBe(false);
+    expect(
+      hasValidSignature(
+        signed,
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
+    ).toBe(false);
   });
 
   test("a non-numeric expiry does not verify", () => {
-    const signed = new URL(temporarySignedUrl("/invoices/9", 60), "https://app.example.com");
+    const signed = new URL(
+      temporarySignedUrl(
+        "/invoices/9",
+        60,
+        {},
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
+      "https://app.example.com",
+    );
     signed.searchParams.set("expires", "soon");
 
-    expect(hasValidSignature(signed)).toBe(false);
+    expect(
+      hasValidSignature(
+        signed,
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
+    ).toBe(false);
   });
 
   test("temporarySignedUrl rejects a non-positive lifetime", () => {
-    expect(() => temporarySignedUrl("/x", 0)).toThrow();
-    expect(() => temporarySignedUrl("/x", -1)).toThrow();
+    expect(() =>
+      temporarySignedUrl(
+        "/x",
+        0,
+        {},
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
+    ).toThrow();
+    expect(() =>
+      temporarySignedUrl(
+        "/x",
+        -1,
+        {},
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
+    ).toThrow();
   });
 
   test("a signature made with a different secret does not verify", () => {
-    const signed = signedUrl("/invoices/9");
+    const signed = signedUrl(
+      "/invoices/9",
+      {},
+      requireConfiguredSecret(
+        ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+        "signed-url-secret",
+        process.env,
+      ),
+    );
     process.env.SESSION_SECRET = "a-completely-different-secret-value-32";
 
-    expect(hasValidSignature(signed)).toBe(false);
+    expect(
+      hasValidSignature(
+        signed,
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
+    ).toBe(false);
   });
 
   test("assertValidSignature throws for a bad signature and passes for a good one", () => {
-    expect(() => assertValidSignature("/invoices/9?signature=nope")).toThrow();
-    expect(() => assertValidSignature(temporarySignedUrl("/invoices/9", 60))).not.toThrow();
+    expect(() =>
+      assertValidSignature(
+        "/invoices/9?signature=nope",
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
+    ).toThrow();
+    expect(() =>
+      assertValidSignature(
+        temporarySignedUrl(
+          "/invoices/9",
+          60,
+          {},
+          requireConfiguredSecret(
+            ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+            "signed-url-secret",
+            process.env,
+          ),
+        ),
+        requireConfiguredSecret(
+          ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+          "signed-url-secret",
+          process.env,
+        ),
+      ),
+    ).not.toThrow();
   });
 });

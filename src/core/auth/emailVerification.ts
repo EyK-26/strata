@@ -1,7 +1,7 @@
 import type { AuthUser } from "./authContext";
 
-function isEmailVerificationRequired(): boolean {
-  return (process.env.FEATURE_EMAIL_VERIFICATION ?? "false") === "true";
+function isEmailVerificationRequired(env: Readonly<Record<string, string | undefined>>): boolean {
+  return (env.FEATURE_EMAIL_VERIFICATION ?? "false") === "true";
 }
 
 /** Missing, undefined, or null means unverified. */

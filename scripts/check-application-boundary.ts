@@ -74,7 +74,10 @@ const neutralEdges: Readonly<
     values: ["contracts/token", "contracts/services"],
     types: ["contracts/token", "contracts/services"],
   },
-  [PATH("view/tokens")]: { values: ["contracts/token"], types: ["view/viewRenderer"] },
+  [PATH("view/tokens")]: {
+    values: ["contracts/token"],
+    types: ["view/viewRenderer", "view/etaViewEngine", "view/webErrorView"],
+  },
   [PATH("cache/tokens")]: {
     values: ["contracts/token"],
     types: ["../types/services", "cache/repository"],
@@ -103,7 +106,8 @@ const neutralEdges: Readonly<
     types: ["runtime/application"],
   },
   [PATH("../bootstrap/cachedJson")]: {
-    values: ["http/conditionalResponse"],
+    // Adapter assembly selects its captured response policy by a canonical token.
+    values: ["http/conditionalResponse", "contracts/serviceTokens"],
     types: ["../bootstrap/contracts", "../types/services", "cache/tokens"],
   },
   [PATH("http/conditionalResponse")]: { values: ["http/etag"], types: [] },
@@ -216,7 +220,9 @@ const neutralEdges: Readonly<
   [PATH("database/acquisitionMetrics")]: { values: [], types: [] },
   [PATH("runtime/optionalPeer")]: { values: [], types: [] },
   [PATH("http/databaseError")]: { values: ["database/errors", "errors/http"], types: [] },
-  [PATH("errors/http")]: { values: [], types: [] },
+  [PATH("auth/policy")]: { values: [], types: [] },
+  [PATH("contracts/authUserDirectory")]: { values: [], types: ["auth/authContext"] },
+  [PATH("errors/http")]: { values: ["auth/policy"], types: [] },
 
   // M3b2 immutable definitions and the single private ORM runtime closure.
   [PATH("database/definitions")]: {
@@ -391,11 +397,19 @@ const neutralEdges: Readonly<
   [PATH("database/pluck")]: { values: [], types: ["database/types"] },
   [PATH("pagination/index")]: { values: [], types: [] },
   [PATH("events/eventBusClass")]: { values: [], types: [] },
-  // Legacy compatibility facade: preserve only its enumerated type debt, never runtime ownership.
+  // Typed adapter tokens retain enumerated type edges, never runtime ownership.
   [PATH("contracts/serviceTokens")]: {
     values: ["contracts/token", "cache/tokens"],
     types: [
       "auth/abilityChecker",
+      "auth/authReader",
+      "auth/policy",
+      "events/eventBusClass",
+      "mail/mailer",
+      "storage/storage",
+      "tracing/otel",
+      "queue/index",
+      "queue/queueServices",
       "http/throttleMiddleware",
       "tenant/tenantMiddleware",
       "contracts/authUserDirectory",
@@ -405,6 +419,8 @@ const neutralEdges: Readonly<
 };
 const canonicalValues = new Set(
   [
+    "auth/policy",
+    "contracts/authUserDirectory",
     "database/definitions",
     "contracts/token",
     "contracts/container",

@@ -4,6 +4,7 @@ import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import type { HttpPersistenceOptions } from "@getstrata/bootstrap/persistenceContracts";
 import { createPersistenceInvocation } from "@getstrata/bootstrap/persistenceInvocation";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { intendedUrlCookieOptionsFromEnvironment } from "@getstrata/core/auth/intendedUrlCookie";
 import {
   passwordConfirmCookieName,
   passwordConfirmTtlSeconds,
@@ -11,45 +12,17 @@ import {
 import type { Application } from "@getstrata/core/contracts/application";
 import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
 import { CORE_HTTP_CLEANUP_TOKEN } from "@getstrata/core/contracts/serviceTokens";
-import { bindDatabaseConnection } from "@getstrata/core/database/bindConnection";
 import { createDatabaseBindings } from "@getstrata/core/database/bindings";
-import { resetBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
+import { csrfMiddlewareOptionsFromEnvironment } from "@getstrata/core/http/csrfMiddleware";
+import { flashSessionOptionsFromEnvironment } from "@getstrata/core/http/flashSession";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
 import { createApplication } from "@getstrata/core/runtime/application";
 import { createStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
-import { SQL } from "bun";
 import { HTTP_PERSISTENCE_OPTIONS } from "../../src/bootstrap/httpPersistence";
-import type { DatabaseConnection as CoreDatabaseConnection } from "../../src/core/database/connectionContracts";
-import type { DatabaseConnection } from "../../src/db/connection";
+import { resolveHttpResponsePolicy } from "../../src/bootstrap/providers/config";
+import type { DatabaseConnection } from "../../src/db/connection/createConnection";
 import type { CacheLike } from "../../src/types/services";
-
-type TransactionCapableConnection = CoreDatabaseConnection & {
-  begin<TValue>(
-    callback: (transaction: CoreDatabaseConnection) => Promise<TValue>,
-  ): Promise<TValue>;
-};
-
-function bindFakeTransactionConnection(): void {
-  const transactionConnection: CoreDatabaseConnection = {
-    async unsafe() {
-      return [];
-    },
-  };
-
-  bindDatabaseConnection({
-    async unsafe() {
-      return [];
-    },
-    async begin(callback) {
-      return await callback(transactionConnection);
-    },
-  } as TransactionCapableConnection);
-}
-
-function resetFakeTransactionConnection(): void {
-  resetBoundDatabaseConnection();
-}
 
 const defaultTestTenant = {
   id: 1,
@@ -59,11 +32,6 @@ const defaultTestTenant = {
 };
 
 type MockQuery = (strings: TemplateStringsArray, ...values: unknown[]) => Promise<unknown[]>;
-
-function readInteger(name: string, fallback: number): number {
-  const parsed = Number.parseInt(process.env[name] ?? String(fallback), 10);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
-}
 
 function createMockDatabaseConnection(
   query: MockQuery,
@@ -78,25 +46,6 @@ function createMockDatabaseConnection(
   }) as DatabaseConnection;
 
   return connection;
-}
-
-async function restoreDefaultDatabaseConnection(): Promise<void> {
-  const url = process.env.DATABASE_URL;
-
-  if (!url) {
-    return;
-  }
-
-  const { replaceDatabaseConnectionForTests } = await import("../../src/db/connection");
-  await replaceDatabaseConnectionForTests(
-    new SQL({
-      url,
-      max: readInteger("DB_POOL_MAX", 10),
-      idleTimeout: readInteger("DB_POOL_IDLE_TIMEOUT", 30),
-      maxLifetime: readInteger("DB_POOL_MAX_LIFETIME", 3600),
-      connectionTimeout: readInteger("DB_CONNECTION_TIMEOUT", 10),
-    }),
-  );
 }
 
 function createMockCache(overrides: Partial<CacheLike> = {}): CacheLike {
@@ -147,7 +96,9 @@ afterEach(async () => {
 function createMockDependencies(
   container: AppDependencies["container"],
   cache: CacheLike = createMockCache(),
-  storage: StorageManager = new StorageManager(createStorageDriver()),
+  storage: StorageManager = new StorageManager(
+    createStorageDriver({ driver: "local", rootDirectory: "storage" }),
+  ),
   explicitInvoke?: PersistenceInvocation,
   http?: HttpPersistenceOptions,
 ): AppDependencies {
@@ -196,7 +147,19 @@ function createMockDependencies(
       "signed-url-secret",
     );
     const passwordSecret = secret(["SESSION_SECRET", "OAUTH_STATE_SECRET"], "session-secret");
-    const options: HttpPersistenceOptions = http ?? {
+    const options: HttpPersistenceOptions = {
+      responsePolicy: resolveHttpResponsePolicy(environment),
+      features: {
+        emailVerificationRequired: environment.FEATURE_EMAIL_VERIFICATION === "true",
+        viewsEnabled: ["server-htmx", "hybrid"].includes(environment.FRONTEND_MODE ?? "api"),
+        publicReadsEnabled: environment.FEATURE_PUBLIC_READS === "true",
+        etagEnabled: environment.FEATURE_ETAG !== "false",
+      },
+      intendedUrl: intendedUrlCookieOptionsFromEnvironment(environment),
+      ...(passwordSecret ? { flash: flashSessionOptionsFromEnvironment(environment) } : {}),
+      ...(secret(["SESSION_SECRET", "CSRF_SECRET"], "csrf-secret")
+        ? { csrf: csrfMiddlewareOptionsFromEnvironment(environment) }
+        : {}),
       ...(signatureSecret ? { signatureSecret } : {}),
       ...(passwordSecret
         ? {
@@ -212,21 +175,17 @@ function createMockDependencies(
       allowTenantDevHeaders: false,
       metadata: () => ({
         authenticate: async (request) => {
-          type FixtureAuth = Pick<AuthManager, "resolve"> &
-            Partial<Pick<AuthManager, "resolveWithSource">>;
-          const manager: FixtureAuth = container.has(CORE_AUTH_TOKEN)
-            ? container.resolve<FixtureAuth>(CORE_AUTH_TOKEN)
+          const manager = container.has(CORE_AUTH_TOKEN)
+            ? container.resolve(CORE_AUTH_TOKEN)
             : anonymous;
-          return typeof manager.resolveWithSource === "function"
-            ? manager.resolveWithSource(request)
-            : { user: await manager.resolve(request), credentialSource: null };
+          return manager.authenticate(request);
         },
         memberships: async () => [],
         userTenantId: async () => defaultTestTenant.id,
         tenant: async (id) => (id === defaultTestTenant.id ? defaultTestTenant : null),
       }),
     };
-    container.set(HTTP_PERSISTENCE_OPTIONS, Object.freeze(options));
+    container.set(HTTP_PERSISTENCE_OPTIONS, Object.freeze({ ...options, ...http }));
   }
   return { container, cache, storage, invoke };
 }
@@ -235,26 +194,10 @@ function mockFetch(implementation: (...args: never[]) => unknown): typeof fetch 
   return implementation as unknown as typeof fetch;
 }
 
-/** Explicit legacy audit-fixture cleanup; it does not grant canonical ORM authority. */
-async function clearPendingAuditLogs(): Promise<void> {
-  const db = (await import("../../src/db/connection")).default;
-  await db.begin(async (transaction) => {
-    if ((process.env.DB_CONNECTION ?? "pgsql") === "pgsql")
-      await transaction.unsafe("SELECT set_config('app.bypass_rls', $1, true)", ["true"]);
-    await transaction.unsafe(
-      "UPDATE audit_log SET exported_at = CURRENT_TIMESTAMP WHERE exported_at IS NULL",
-    );
-  });
-}
-
 export {
-  bindFakeTransactionConnection,
-  clearPendingAuditLogs,
   createMockCache,
   createMockDatabaseConnection,
   createMockDependencies,
   defaultTestTenant,
   mockFetch,
-  resetFakeTransactionConnection,
-  restoreDefaultDatabaseConnection,
 };

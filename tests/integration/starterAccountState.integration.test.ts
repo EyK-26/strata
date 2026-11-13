@@ -3,8 +3,7 @@ import { createHash, createSign, generateKeyPairSync } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
-import { signJwt } from "@getstrata/core/auth/jwt";
+import { jwtOptionsFromEnvironment, signJwt } from "@getstrata/core/auth/jwt";
 import { oidcAccessTokenHash } from "@getstrata/core/auth/oauth/oidcIdToken";
 import { hashPassword } from "@getstrata/core/auth/password";
 import type {
@@ -12,7 +11,7 @@ import type {
   ScopedPolicy,
   SelectedSession,
 } from "@getstrata/core/contracts/persistence";
-import { protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";
+import { createMfaSecretCodec, protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import type { Model } from "@getstrata/core/database/model";
 
 import { generateTotp } from "@getstrata/core/security/totp";
@@ -74,7 +73,6 @@ afterEach(() => {
   process.chdir(repoRoot);
   for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];
   Object.assign(process.env, original);
-  resetDiscoverModulesForTests();
 });
 
 async function withApp(
@@ -151,7 +149,6 @@ async function withApp(
       delete process.env.APP_DATABASE_URL;
       delete process.env.MIGRATION_DATABASE_URL;
     }
-    resetDiscoverModulesForTests();
     await verify(app, admin);
   } finally {
     process.chdir(repoRoot);
@@ -331,7 +328,7 @@ for (const driver of ["sqlite", "postgres"] as const) {
               is_admin: false,
               tenant_id: 2,
               mfa_enabled: true,
-              mfa_secret: protectMfaSecret(secret),
+              mfa_secret: protectMfaSecret(secret, createMfaSecretCodec(process.env)),
             });
             const neighbor = await selectedUsers(database).create({
               name: "Neighbor",
@@ -564,7 +561,12 @@ for (const driver of ["sqlite", "postgres"] as const) {
           expect(mfaSetup.headers.get("location")).toContain("/confirm-password");
           await mfaSetup.text();
           // Missing authVersion never upgrades an old stateless proof after adoption.
-          expect(await authStatus(undefined, signJwt({ sub: id, role: "member" }))).toBe(401);
+          expect(
+            await authStatus(
+              undefined,
+              signJwt({ sub: id, role: "member" }, jwtOptionsFromEnvironment(process.env)),
+            ),
+          ).toBe(401);
           // Hold the same official account lock used by issuance and SCIM. The epoch
           // changes before the queued login is admitted, so it must use fresh state.
           let entered = () => {};

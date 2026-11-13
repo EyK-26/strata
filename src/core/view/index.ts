@@ -1,4 +1,4 @@
-export { CORE_VIEW_RENDERER_TOKEN } from "@getstrata/core/view/tokens";
+export { CORE_VIEW_RENDERER_TOKEN, CORE_WEB_ERROR_VIEW_TOKEN } from "@getstrata/core/view/tokens";
 export type { LayoutDataResolver, RenderOptions } from "./etaViewEngine";
 export { DEFAULT_VIEWS_DIRECTORY, EtaViewEngine } from "./etaViewEngine";
 export {
@@ -17,9 +17,9 @@ export type {
   ViewResponseOptions,
 } from "./viewRenderer";
 export { ViewRenderer } from "./viewRenderer";
-export type { WebErrorViewInput, WebErrorViewOptions } from "./webErrorView";
+export type { WebErrorView, WebErrorViewInput, WebErrorViewOptions } from "./webErrorView";
 export {
-  configureWebErrorView,
+  createWebErrorView,
   errorTemplateName,
   htmlErrorResponse,
   notFoundHtmlResponse,
@@ -33,7 +33,6 @@ export type {
   WebLayoutUserKey,
 } from "./webLayoutData";
 export {
-  configureWebLayoutData,
   createWebLayoutDataResolver,
   resolveWebLayoutData,
 } from "./webLayoutData";

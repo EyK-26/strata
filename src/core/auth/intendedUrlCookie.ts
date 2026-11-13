@@ -2,7 +2,7 @@ import { safeInternalRedirectPath, sanitizeInternalPath } from "../http/safeInte
 import { isProductionEnv } from "../runtime/appEnv";
 import { appCookieName } from "../runtime/appKeyPrefix";
 
-const INTENDED_URL_COOKIE = appCookieName("intended");
+const INTENDED_URL_COOKIE = "strata_intended";
 const DEFAULT_INTENDED_URL_TTL_SECONDS = 60 * 60 * 24;
 
 const SKIP_EXACT_PATHS = new Set([
@@ -18,17 +18,31 @@ const SKIP_EXACT_PATHS = new Set([
   "/api",
 ]);
 
-function intendedUrlCookieName(): string {
-  return process.env.INTENDED_URL_COOKIE_NAME?.trim() || appCookieName("intended");
+export interface IntendedUrlCookieOptions {
+  readonly cookieName: string;
+  readonly ttlSeconds: number;
+  readonly production: boolean;
+}
+export function intendedUrlCookieOptionsFromEnvironment(
+  env: Readonly<Record<string, string | undefined>>,
+): IntendedUrlCookieOptions {
+  return Object.freeze({
+    cookieName: intendedUrlCookieName(env),
+    ttlSeconds: intendedUrlTtlSeconds(env),
+    production: isProductionEnv(env),
+  });
+}
+function intendedUrlCookieName(env: Readonly<Record<string, string | undefined>>): string {
+  return env.INTENDED_URL_COOKIE_NAME?.trim() || appCookieName("intended", env);
 }
 
-function intendedUrlTtlSeconds(): number {
-  const parsed = Number.parseInt(process.env.INTENDED_URL_TTL_SECONDS ?? "", 10);
+function intendedUrlTtlSeconds(env: Readonly<Record<string, string | undefined>>): number {
+  const parsed = Number.parseInt(env.INTENDED_URL_TTL_SECONDS ?? "", 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_INTENDED_URL_TTL_SECONDS;
 }
 
-function cookieSecureFlag(): string {
-  return isProductionEnv() ? "; Secure" : "";
+function cookieSecureFlag(options: IntendedUrlCookieOptions): string {
+  return options.production ? "; Secure" : "";
 }
 
 function pathnameOf(path: string): string {
@@ -74,26 +88,29 @@ function readCookieValue(request: Request, cookieName: string): string | null {
   return null;
 }
 
-function createIntendedUrlCookie(path: string): string | null {
+function createIntendedUrlCookie(path: string, options: IntendedUrlCookieOptions): string | null {
   const sanitized = sanitizeInternalPath(path, "");
 
   if (!sanitized || !isStashableIntendedPath(sanitized)) {
     return null;
   }
 
-  return `${intendedUrlCookieName()}=${encodeURIComponent(sanitized)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${intendedUrlTtlSeconds()}${cookieSecureFlag()}`;
+  return `${options.cookieName}=${encodeURIComponent(sanitized)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${options.ttlSeconds}${cookieSecureFlag(options)}`;
 }
 
-function createIntendedUrlCookieFromRequest(request: Request): string | null {
+function createIntendedUrlCookieFromRequest(
+  request: Request,
+  options: IntendedUrlCookieOptions,
+): string | null {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return null;
   }
 
-  return createIntendedUrlCookie(safeInternalRedirectPath(request, ""));
+  return createIntendedUrlCookie(safeInternalRedirectPath(request, ""), options);
 }
 
-function readIntendedUrl(request: Request): string | null {
-  const cookieValue = readCookieValue(request, intendedUrlCookieName());
+function readIntendedUrl(request: Request, options: IntendedUrlCookieOptions): string | null {
+  const cookieValue = readCookieValue(request, options.cookieName);
 
   if (!cookieValue) {
     return null;
@@ -104,8 +121,8 @@ function readIntendedUrl(request: Request): string | null {
   return sanitized && isStashableIntendedPath(sanitized) ? sanitized : null;
 }
 
-function clearIntendedUrlCookie(): string {
-  return `${intendedUrlCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${cookieSecureFlag()}`;
+function clearIntendedUrlCookie(options: IntendedUrlCookieOptions): string {
+  return `${options.cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${cookieSecureFlag(options)}`;
 }
 
 export {

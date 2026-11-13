@@ -1,6 +1,7 @@
 import { jsonResponse } from "@getstrata/core/http/response";
 import { isSpaEnabled, isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import { notFoundHtmlResponse } from "@getstrata/core/view";
+import { CORE_WEB_ERROR_VIEW_TOKEN } from "@getstrata/core/view/tokens";
 import index from "../../index.html";
 import { buildModuleRoutes } from "./buildModuleRoutes";
 import type { AppDependencies, AppRouteMap } from "./contracts";
@@ -8,44 +9,36 @@ import { mergeSpaRoutes } from "./createSpaRoutes";
 import { mergeWebRoutes } from "./createWebRoutes";
 import { createHealthRoutes } from "./health";
 import { createMetricsRoutes } from "./metricsRoutes";
-import { routeRegistry } from "./routeRegistry";
-
-function registerRoute(method: string, path: string, middleware: string[]): void {
-  routeRegistry.register({ method, path, middleware });
-}
+import { compileRoutePlan } from "./routeCompiler";
+import { publishRoutePlan } from "./routeMetadata";
 
 function createRoutes(dependencies: AppDependencies): AppRouteMap {
   // Preserve the framework fixture route map; product prefixes belong to generated apps.
   const apiPrefix = "";
+  const viewsEnabled = isViewsEnabled();
+  const spaEnabled = isSpaEnabled();
+  const renderError = dependencies.container.has(CORE_WEB_ERROR_VIEW_TOKEN)
+    ? dependencies.container.resolve(CORE_WEB_ERROR_VIEW_TOKEN)
+    : undefined;
   const wrappedModuleRoutes = buildModuleRoutes(dependencies, {
     apiPrefix,
-    clearRegistry: true,
     modules: [],
   });
 
   const healthRoutes = createHealthRoutes(dependencies);
   const metricsRoutes = createMetricsRoutes();
-  registerRoute("GET", "/health", []);
-  registerRoute("GET", "/ready", []);
-  registerRoute("GET", "/metrics", []);
 
   const notFoundApiPath = `${apiPrefix || "/api"}/*`;
-  const baseRoutes: AppRouteMap = {
-    ...healthRoutes,
-    ...metricsRoutes,
-    ...(isViewsEnabled() || isSpaEnabled() ? {} : { "/": index }),
-    ...wrappedModuleRoutes,
+  const fallbackRoutes: AppRouteMap = {
     [notFoundApiPath]: async () => {
-      registerRoute("GET", notFoundApiPath, ["global", "api"]);
       return jsonResponse({ error: "Not Found" }, { status: 404 });
     },
     "/*": async () => {
-      registerRoute("GET", "/*", []);
-      if (isViewsEnabled()) {
-        return notFoundHtmlResponse();
+      if (viewsEnabled) {
+        return notFoundHtmlResponse(undefined, renderError);
       }
 
-      if (isSpaEnabled()) {
+      if (spaEnabled) {
         return jsonResponse({ error: "Not Found" }, { status: 404 });
       }
 
@@ -53,7 +46,19 @@ function createRoutes(dependencies: AppDependencies): AppRouteMap {
     },
   };
 
-  return mergeSpaRoutes(dependencies, mergeWebRoutes(dependencies, baseRoutes));
+  const basePlan = compileRoutePlan([
+    { name: "health", routes: healthRoutes },
+    { name: "metrics", routes: metricsRoutes },
+    { name: "index", routes: viewsEnabled || spaEnabled ? {} : { "/": index } },
+    { name: "API modules", routes: wrappedModuleRoutes },
+    { name: "fallbacks", routes: fallbackRoutes },
+  ]);
+  const merged = mergeSpaRoutes(
+    dependencies,
+    mergeWebRoutes(dependencies, basePlan.routes as AppRouteMap),
+  );
+  const plan = compileRoutePlan([{ name: "application", routes: merged }]);
+  return publishRoutePlan(plan, plan.routes) as AppRouteMap;
 }
 
 export { createRoutes };

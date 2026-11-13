@@ -21,7 +21,7 @@ describe("@getstrata/core/database barrel", () => {
       "defineFactory",
       "Schema",
       "createDatabaseConnection",
-      "useSqlDialect",
+      "runWithSqlDialect",
       "currentSqlDialect",
       "defineTable",
       "mapDatabaseError",
@@ -40,13 +40,26 @@ describe("@getstrata/core/database barrel", () => {
   });
 });
 
-test("database barrel excludes ambient transaction owners", () => {
+test("database barrel excludes ambient database owners", () => {
   for (const name of [
+    "useSqlDialect",
+    "resetSqlDialect",
     "runInTransaction",
     "isActiveTransactionConnection",
     "hasActiveTransaction",
     "requestTransactionRollback",
     "afterCommit",
+    "getNamedConnection",
+    "hasNamedConnection",
+    "registerNamedConnection",
+    "resetNamedConnections",
+    "runOnNamedConnection",
+    "unregisterNamedConnection",
+    "getDefaultDatabasePool",
+    "registerDefaultDatabasePool",
+    "bindDatabaseConnection",
+    "repositoryConnection",
+    "bindBunSql",
   ])
     expect(name in databaseBarrel).toBe(false);
 });

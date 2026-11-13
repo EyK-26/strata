@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { type InitialAdminInput, runInitialAdminCommand } from "@getstrata/cli/initialAdmin";
+import { compileStarterFeatures } from "../../../packages/strata-starter/src/featurePlan.ts";
 import {
   layersFromFlags,
   parseCreateStrataArgs,
@@ -119,16 +120,20 @@ test("tenant selection is explicit and credential-bearing provider errors are re
 test("only user-auth starters generate the explicit admin command and claim migration", () => {
   for (const auth of ["headers", "cookie", "token", "jwt", "cookie-token-jwt"]) {
     const layers = layersFromFlags(parseCreateStrataArgs(["admin-test", "--auth", auth, "--yes"]));
-    const generated = renderInitialAdminCommand(layers);
+    const generated = renderInitialAdminCommand(compileStarterFeatures(layers));
     if (auth === "headers") {
       expect(generated).toBeNull();
-      expect(renderInitialAdminMigration(layers)).toBeNull();
-      expect(renderCliRegisterTs(layers)).not.toContain("auth:provision-admin");
+      expect(renderInitialAdminMigration(compileStarterFeatures(layers))).toBeNull();
+      expect(renderCliRegisterTs(compileStarterFeatures(layers))).not.toContain(
+        "auth:provision-admin",
+      );
     } else {
       expect(generated).toContain("hashPassword(input.password)");
       expect(generated).not.toContain("seed()");
-      expect(renderCliRegisterTs(layers)).toContain("auth:provision-admin");
-      expect(renderInitialAdminMigration(layers)).toContain('table.integer("id").primary()');
+      expect(renderCliRegisterTs(compileStarterFeatures(layers))).toContain("auth:provision-admin");
+      expect(renderInitialAdminMigration(compileStarterFeatures(layers))).toContain(
+        'table.integer("id").primary()',
+      );
     }
   }
 });

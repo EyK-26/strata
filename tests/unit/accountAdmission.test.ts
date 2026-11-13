@@ -21,14 +21,19 @@ import {
   createSessionReader,
   readSession,
   sessionCookieName,
+  sessionCookieOptionsFromEnvironment,
 } from "@getstrata/core/auth/sessionCookie";
 import { SessionGuard } from "@getstrata/core/auth/sessionGuard";
 import type {
+  AuthCredentialVerifier,
+  AuthEmailLookup,
   AuthUserDirectory,
   AuthUserRecord,
 } from "@getstrata/core/contracts/authUserDirectory";
 import type { ScopedPolicy } from "@getstrata/core/contracts/persistence";
+import { createMfaSecretCodec } from "@getstrata/core/crypto/mfaSecret";
 import type { DatabaseSession } from "@getstrata/core/database/session";
+import { authFixtureOutcome } from "../helpers/authOutcome";
 import { withBoundDatabase } from "../helpers/boundRepositoryHarness";
 import { withPolicyPersistence } from "../helpers/policyPersistence";
 
@@ -41,20 +46,39 @@ afterEach(() => {
 function sessionGuard(directory: AuthUserDirectory) {
   return new SessionGuard(directory, {
     read: createSessionReader({
-      cookieName: sessionCookieName(),
+      cookieName: sessionCookieName(process.env),
       secret,
       ttlSeconds: 60 * 60 * 24 * 30,
     }),
+    hasCredential: (request) => request.headers.has("cookie"),
     abilities: (role) => (role === "admin" ? ["*"] : []),
+    validity: directory.hasActiveBrowserSession
+      ? (directory as Required<Pick<AuthUserDirectory, "hasActiveBrowserSession">>)
+      : null,
   });
 }
 function basic(directory: AuthUserDirectory) {
-  return new BasicAuthGuard({
-    directory,
-    persistRecovery: async () => {
-      throw new Error("No recovery proof may be consumed by these account admission fixtures.");
-    },
-  });
+  const persistRecovery = async () => {
+    throw new Error("No recovery proof may be consumed by these account admission fixtures.");
+  };
+  const emailLookup = directory.findByEmail ? (directory as AuthEmailLookup) : undefined;
+  const credentials = directory.verifyCredentials
+    ? (directory as AuthCredentialVerifier)
+    : undefined;
+  return emailLookup
+    ? new BasicAuthGuard({
+        mfaSecrets: createMfaSecretCodec(process.env),
+        accounts: directory,
+        emailLookup,
+        credentials,
+        persistRecovery,
+      })
+    : new BasicAuthGuard({
+        mfaSecrets: createMfaSecretCodec(process.env),
+        accounts: directory,
+        credentials: credentials as AuthCredentialVerifier,
+        persistRecovery,
+      });
 }
 function cookieRequest(header: string) {
   return new Request("http://localhost/account", {
@@ -114,30 +138,61 @@ test("versioned signed sessions reject stale or missing versions while legacy se
   process.env.SESSION_SECRET = secret;
   const record = { id: 1, role: "member", is_active: true, auth_version: 0 };
   const guard = sessionGuard(directoryFor(record));
-  const old = createSessionCookie(1, { authVersion: 0 });
-  expect(readSession(cookieRequest(old))).toMatchObject({ userId: 1, authVersion: 0 });
+  const old = createSessionCookie(
+    1,
+    { authVersion: 0 },
+    sessionCookieOptionsFromEnvironment(process.env),
+  );
+  expect(
+    readSession(cookieRequest(old), sessionCookieOptionsFromEnvironment(process.env)),
+  ).toMatchObject({ userId: 1, authVersion: 0 });
   expect(await guard.resolve(cookieRequest(old))).toMatchObject({ id: 1 });
   record.is_active = false;
   expect(await guard.resolve(cookieRequest(old))).toBeNull();
   record.is_active = true;
   record.auth_version = 1;
   expect(await guard.resolve(cookieRequest(old))).toBeNull();
-  expect(await guard.resolve(cookieRequest(createSessionCookie(1)))).toBeNull();
+  expect(
+    await guard.resolve(
+      cookieRequest(createSessionCookie(1, {}, sessionCookieOptionsFromEnvironment(process.env))),
+    ),
+  ).toBeNull();
   for (const remember of [false, true]) {
-    const fresh = createSessionCookie(1, { authVersion: 1, remember });
+    const fresh = createSessionCookie(
+      1,
+      { authVersion: 1, remember },
+      sessionCookieOptionsFromEnvironment(process.env),
+    );
     expect(await guard.resolve(cookieRequest(fresh))).toMatchObject({ id: 1 });
     const encoded = fresh.split(";")[0] ?? "";
     const damaged = encoded.replace(/.$/, (x) => (x === "0" ? "1" : "0"));
     expect(
-      readSession(new Request("http://localhost", { headers: { cookie: damaged } })),
+      readSession(
+        new Request("http://localhost", { headers: { cookie: damaged } }),
+        sessionCookieOptionsFromEnvironment(process.env),
+      ),
     ).toBeNull();
   }
   for (const authVersion of [-1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])
-    expect(() => createSessionCookie(1, { authVersion })).toThrow();
+    expect(() =>
+      createSessionCookie(1, { authVersion }, sessionCookieOptionsFromEnvironment(process.env)),
+    ).toThrow();
   const legacy = sessionGuard(directoryFor({ id: 1, role: "member" }));
-  expect(await legacy.resolve(cookieRequest(createSessionCookie(1)))).toMatchObject({ id: 1 });
   expect(
-    await legacy.resolve(cookieRequest(createSessionCookie(1, { remember: true }))),
+    await legacy.resolve(
+      cookieRequest(createSessionCookie(1, {}, sessionCookieOptionsFromEnvironment(process.env))),
+    ),
+  ).toMatchObject({ id: 1 });
+  expect(
+    await legacy.resolve(
+      cookieRequest(
+        createSessionCookie(
+          1,
+          { remember: true },
+          sessionCookieOptionsFromEnvironment(process.env),
+        ),
+      ),
+    ),
   ).toMatchObject({ id: 1 });
 });
 
@@ -151,7 +206,10 @@ test("disabled password and Basic paths deny before accepting MFA or consuming r
     mfa_secret: null,
     mfa_recovery_codes: "[]",
   };
-  expect(completePasswordLogin(record)).toEqual({ ok: false, error: "account_inactive" });
+  expect(completePasswordLogin(record, {}, createMfaSecretCodec(process.env))).toEqual({
+    ok: false,
+    error: "account_inactive",
+  });
   const request = new Request("http://localhost/account", {
     headers: { authorization: `Basic ${btoa("fixture@example.test:Fixture!Password123")}` },
   });
@@ -166,11 +224,19 @@ test("disabled password and Basic paths deny before accepting MFA or consuming r
   };
   expect(await basic(fallback).resolve(request)).toBeNull();
   expect(fallbackCalls).toBe(1);
-  expect(completePasswordLogin({ is_active: false, mfa_enabled: false })).toEqual({
+  expect(
+    completePasswordLogin(
+      { is_active: false, mfa_enabled: false },
+      {},
+      createMfaSecretCodec(process.env),
+    ),
+  ).toEqual({
     ok: false,
     error: "account_inactive",
   });
-  expect(completePasswordLogin({ mfa_enabled: false })).toEqual({ ok: true });
+  expect(
+    completePasswordLogin({ mfa_enabled: false }, {}, createMfaSecretCodec(process.env)),
+  ).toEqual({ ok: true });
 });
 
 test("opaque and static guards reject explicitly inactive principals and AuthManager enforces custom guard results", async () => {
@@ -182,9 +248,13 @@ test("opaque and static guards reject explicitly inactive principals and AuthMan
       bearer("static-fixture"),
     ),
   ).toBeNull();
-  const manager = new AuthManager({ resolve: () => ({ id: 1, isActive: false }) });
+  const manager = new AuthManager({
+    authenticate: () => authFixtureOutcome({ id: 1, isActive: false }),
+  });
   expect(await manager.user(new Request("http://localhost"))).toBeNull();
-  manager.registerGuard("api", { resolve: () => ({ id: 1, isActive: false }) });
+  manager.registerGuard("api", {
+    authenticate: () => authFixtureOutcome({ id: 1, isActive: false }),
+  });
   expect(await manager.user(bearer("opaque-fixture"))).toBeNull();
   record.is_active = true;
   expect(await opaque.resolve(bearer("opaque-fixture"))).toMatchObject({ id: 1 });
@@ -358,7 +428,11 @@ test("versioned session parsing rejects malformed fields, expires and preserves 
     now = originalNow();
   Date.now = () => now;
   try {
-    const cookie = createSessionCookie(1, { authVersion: 0 });
+    const cookie = createSessionCookie(
+      1,
+      { authVersion: 0 },
+      sessionCookieOptionsFromEnvironment(process.env),
+    );
     expect(cookie).toContain("account-fixture=");
     expect(cookie).toContain("HttpOnly; SameSite=Lax");
     expect(cookie).toContain("; Secure");
@@ -379,11 +453,14 @@ test("versioned session parsing rejects malformed fields, expires and preserves 
       expect(
         readSession(
           cookieRequest(`${pair.slice(0, separator + 1)}${encodeURIComponent(mutated.join("."))}`),
+          sessionCookieOptionsFromEnvironment(process.env),
         ),
       ).toBeNull();
     }
     Date.now = () => now + 61000;
-    expect(readSession(cookieRequest(cookie))).toBeNull();
+    expect(
+      readSession(cookieRequest(cookie), sessionCookieOptionsFromEnvironment(process.env)),
+    ).toBeNull();
   } finally {
     Date.now = originalNow;
   }
@@ -433,7 +510,12 @@ test("malformed session cookie encoding is denied through native HTTP and shared
           });
           expect(response.status).toBe(401);
           await response.text();
-          expect(readSession(cookieRequest(`malformed-fixture=${value}`))).toBeNull();
+          expect(
+            readSession(
+              cookieRequest(`malformed-fixture=${value}`),
+              sessionCookieOptionsFromEnvironment(process.env),
+            ),
+          ).toBeNull();
         }
       } finally {
         await server.stop(true);

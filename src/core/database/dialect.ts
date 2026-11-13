@@ -1,19 +1,17 @@
 import { createAsyncContextStore } from "../runtime/asyncContextStore";
-import { type DatabaseDriver, resolveDatabaseDriver } from "./schema/driver.ts";
+import type { DatabaseDriver } from "./schema/driver.ts";
 
 import { dialectFor, type SqlDialect } from "./sqlDialects";
 
 const dialectContext = createAsyncContextStore<SqlDialect>("@getstrata/sqlDialect");
 
-let dialectOverride: SqlDialect | null = null;
-
+/** Resolve only the explicitly owned async SQL context. */
 function currentSqlDialect(): SqlDialect {
-  return dialectContext.getStore() ?? dialectOverride ?? dialectFor(resolveDatabaseDriver());
-}
-
-function useSqlDialect(driver: DatabaseDriver): SqlDialect {
-  dialectOverride = dialectFor(driver);
-  return dialectOverride;
+  const dialect = dialectContext.getStore();
+  if (!dialect) {
+    throw new Error("SQL dialect context is required. Use runWithSqlDialect(driver, callback).");
+  }
+  return dialect;
 }
 
 /** Format a timestamp parameter for whichever engine is active. */
@@ -21,23 +19,9 @@ function sqlTimestamp(value: Date = new Date()): string {
   return currentSqlDialect().timestampValue(value);
 }
 
-function resetSqlDialect(): void {
-  dialectOverride = null;
-}
-
-function runWithSqlDialect<T>(
-  driver: DatabaseDriver,
-  callback: () => T | Promise<T>,
-): T | Promise<T> {
+function runWithSqlDialect<T>(driver: DatabaseDriver, callback: () => T): T {
   return dialectContext.run(dialectFor(driver), callback);
 }
 
 export type { SqlDialect };
-export {
-  currentSqlDialect,
-  dialectFor,
-  resetSqlDialect,
-  runWithSqlDialect,
-  sqlTimestamp,
-  useSqlDialect,
-};
+export { currentSqlDialect, dialectFor, runWithSqlDialect, sqlTimestamp };

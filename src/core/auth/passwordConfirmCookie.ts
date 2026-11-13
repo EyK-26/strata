@@ -4,26 +4,32 @@ import { isProductionEnv } from "../runtime/appEnv";
 import { appCookieName, requireConfiguredSecret } from "../runtime/appKeyPrefix";
 import { matchesAuthVersion } from "./accountState";
 
-const PASSWORD_CONFIRM_COOKIE = appCookieName("password_confirmed");
+const PASSWORD_CONFIRM_COOKIE = "strata_password_confirmed";
 const DEFAULT_PASSWORD_CONFIRM_TTL_SECONDS = 3 * 60 * 60;
 
-function passwordConfirmCookieName(
-  env: Readonly<Record<string, string | undefined>> = process.env,
-): string {
+function passwordConfirmCookieName(env: Readonly<Record<string, string | undefined>>): string {
   return env.PASSWORD_CONFIRM_COOKIE_NAME?.trim() || appCookieName("password_confirmed", env);
 }
 
-function passwordConfirmTtlSeconds(
-  env: Readonly<Record<string, string | undefined>> = process.env,
-): number {
+function passwordConfirmTtlSeconds(env: Readonly<Record<string, string | undefined>>): number {
   const parsed = Number.parseInt(env.PASSWORD_CONFIRM_TIMEOUT ?? "", 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_PASSWORD_CONFIRM_TTL_SECONDS;
 }
 
-function resolvePasswordConfirmSecret(): string {
-  return requireConfiguredSecret(["SESSION_SECRET", "OAUTH_STATE_SECRET"], "session-secret");
+export function passwordConfirmOptionsFromEnvironment(
+  env: Readonly<Record<string, string | undefined>>,
+): PasswordConfirmWriteOptions {
+  return Object.freeze({
+    cookieName: passwordConfirmCookieName(env),
+    ttlSeconds: passwordConfirmTtlSeconds(env),
+    production: isProductionEnv(env),
+    secret: requireConfiguredSecret(
+      ["SESSION_SECRET", "OAUTH_STATE_SECRET"],
+      "session-secret",
+      env,
+    ),
+  });
 }
-
 export interface PasswordConfirmReadOptions {
   readonly secret: string;
   readonly cookieName: string;
@@ -31,6 +37,9 @@ export interface PasswordConfirmReadOptions {
 }
 export interface PasswordConfirmWriteOptions extends PasswordConfirmReadOptions {
   readonly production: boolean;
+}
+function missingPasswordConfirmSecret(): never {
+  throw new TypeError("Explicit password confirmation secret is required.");
 }
 function signPasswordConfirm(
   userId: number,
@@ -42,7 +51,7 @@ function signPasswordConfirm(
     authVersion === undefined
       ? `${userId}.${confirmedAt}`
       : `v2.${userId}.${confirmedAt}.${authVersion}`;
-  const signature = createHmac("sha256", secret ?? resolvePasswordConfirmSecret())
+  const signature = createHmac("sha256", secret ?? missingPasswordConfirmSecret())
     .update(payload)
     .digest("hex");
 
@@ -52,13 +61,10 @@ function signPasswordConfirm(
 function hasFreshPasswordConfirmation(
   request: Request,
   userId: number,
-  authVersion?: number,
-  options?: PasswordConfirmReadOptions,
+  authVersion: number | undefined,
+  options: PasswordConfirmReadOptions,
 ): boolean {
-  const cookieValue = readRequestCookie(
-    request,
-    options?.cookieName ?? passwordConfirmCookieName(),
-  );
+  const cookieValue = readRequestCookie(request, options.cookieName);
 
   if (!cookieValue) {
     return false;
@@ -92,7 +98,7 @@ function hasFreshPasswordConfirmation(
     return false;
   }
 
-  if (Date.now() - confirmedAt > (options?.ttlSeconds ?? passwordConfirmTtlSeconds()) * 1000) {
+  if (Date.now() - confirmedAt > options.ttlSeconds * 1000) {
     return false;
   }
 
@@ -100,7 +106,7 @@ function hasFreshPasswordConfirmation(
     cookieUserId,
     confirmedAt,
     proofVersion,
-    options?.secret,
+    options.secret,
   )
     .split(".")
     .pop();
@@ -121,24 +127,24 @@ function hasFreshPasswordConfirmation(
 
 function createPasswordConfirmCookie(
   userId: number,
-  authVersion?: number,
-  options?: PasswordConfirmWriteOptions,
+  authVersion: number | undefined,
+  options: PasswordConfirmWriteOptions,
 ): string {
   if (authVersion !== undefined && (!Number.isSafeInteger(authVersion) || authVersion < 0))
     throw new Error("Invalid authentication version.");
   const confirmedAt = Date.now();
-  const value = signPasswordConfirm(userId, confirmedAt, authVersion, options?.secret);
-  const secure = (options?.production ?? isProductionEnv()) ? "; Secure" : "";
+  const value = signPasswordConfirm(userId, confirmedAt, authVersion, options.secret);
+  const secure = options.production ? "; Secure" : "";
 
-  return `${options?.cookieName ?? passwordConfirmCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${options?.ttlSeconds ?? passwordConfirmTtlSeconds()}${secure}`;
+  return `${options.cookieName}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${options.ttlSeconds}${secure}`;
 }
 
 function clearPasswordConfirmCookie(
-  options?: Pick<PasswordConfirmWriteOptions, "production" | "cookieName">,
+  options: Pick<PasswordConfirmWriteOptions, "production" | "cookieName">,
 ): string {
-  const secure = (options?.production ?? isProductionEnv()) ? "; Secure" : "";
+  const secure = options.production ? "; Secure" : "";
 
-  return `${options?.cookieName ?? passwordConfirmCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
+  return `${options.cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
 }
 
 export {

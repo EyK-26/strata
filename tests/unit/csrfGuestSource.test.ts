@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 import { runWithAuthContext } from "@getstrata/core/auth/authContext";
 import { ForbiddenError } from "@getstrata/core/errors/http";
-import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
+import {
+  createCsrfMiddleware,
+  csrfMiddlewareOptionsFromEnvironment,
+} from "@getstrata/core/http/csrfMiddleware";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 for (const [mode, flag, user, source, allowed] of [
@@ -21,7 +24,7 @@ for (const [mode, flag, user, source, allowed] of [
       dev = process.env.AUTH_DEV_HEADERS;
     Object.assign(process.env, { APP_ENV: mode, AUTH_DEV_HEADERS: flag });
     try {
-      const middleware = createCsrfMiddleware();
+      const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
       const response = () =>
         runWithAuthContext(user ? { id: 42 } : null, source, () =>
           middleware(

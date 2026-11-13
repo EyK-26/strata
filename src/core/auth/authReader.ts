@@ -1,8 +1,10 @@
 import { UnauthorizedError } from "@getstrata/core/errors/http";
 import { createAsyncContextStore } from "../runtime/asyncContextStore";
 import { type AuthUser, type CredentialSource, runWithAuthContext } from "./authContext";
+import { type AuthOutcome, absentAuth, authenticatedAuth } from "./authOutcome";
 
 export interface AuthReader {
+  authenticate(request?: Request): Promise<AuthOutcome>;
   resolve(request?: Request): Promise<AuthUser | null>;
   resolveWithSource(
     request?: Request,
@@ -28,6 +30,10 @@ export function runWithEstablishedAuth<T>(
 }
 /** Reads only an explicitly installed established snapshot; never authenticates. */
 export const establishedAuthReader: AuthReader = Object.freeze({
+  async authenticate(request?: Request) {
+    const { user, credentialSource } = await establishedAuthReader.resolveWithSource(request);
+    return user ? authenticatedAuth(user, credentialSource) : absentAuth;
+  },
   async resolveWithSource(request?: Request) {
     const value = established.getStore();
     if (!value || (request !== undefined && request !== value.request))

@@ -2,7 +2,6 @@ import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bu
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { generateOpenApiSpec, renderOpenApiDocument } from "@getstrata/core/openapi/generator";
 import {
   createOpenApiCheckCommand,
@@ -71,8 +70,8 @@ describe("openapiValidateCommand", () => {
 
 describe("openapiCheckCommand", () => {
   test("passes when committed OpenAPI file matches generated spec", async () => {
-    await registerOpenApiRoutes();
-    const generated = renderOpenApiDocument(generateOpenApiSpec(routeRegistry.list()));
+    const inventory = await registerOpenApiRoutes();
+    const generated = renderOpenApiDocument(generateOpenApiSpec(inventory));
 
     const output = captureConsole();
 
@@ -145,8 +144,8 @@ describe("openapi CLI validation failures", () => {
   });
 
   test("openapiCheckCommand fails when generated OpenAPI spec is invalid", async () => {
-    await registerOpenApiRoutes();
-    const generated = renderOpenApiDocument(generateOpenApiSpec(routeRegistry.list()));
+    const inventory = await registerOpenApiRoutes();
+    const generated = renderOpenApiDocument(generateOpenApiSpec(inventory));
 
     const output = captureConsole();
     const exit = mockProcessExit();

@@ -1,5 +1,32 @@
-import { apiPrefix, appDisplayName, appUrl, sdkClientClassName } from "../runtime/appKeyPrefix";
 import type { RegisteredRoute } from "./registeredRoute";
+
+interface OpenApiConfig {
+  readonly appName: string;
+  readonly appUrl: string;
+  readonly apiPrefix: string;
+  readonly sdkClassName: string;
+}
+/** Environment adapter: call once at the application's composition boundary. */
+function resolveOpenApiConfig(env: Readonly<Record<string, string | undefined>>): OpenApiConfig {
+  const appName = env.APP_NAME?.trim() || "Strata";
+  const rawPrefix = env.API_PREFIX?.trim() || "/api/v1";
+  const prefix =
+    (rawPrefix.startsWith("/") ? rawPrefix : `/${rawPrefix}`).replace(/\/+$/, "") || "/api/v1";
+  const override = env.APP_SDK_CLASS?.trim();
+  const name = appName.replace(/[^A-Za-z0-9]/g, "");
+  return Object.freeze({
+    appName,
+    appUrl: (env.APP_URL?.trim() || "http://localhost:3000").replace(/\/$/, ""),
+    apiPrefix: prefix,
+    sdkClassName:
+      override && /^[A-Za-z_][A-Za-z0-9_]*$/.test(override)
+        ? override
+        : name
+          ? `${name}Client`
+          : "AppClient",
+  });
+}
+const defaultOpenApiConfig = resolveOpenApiConfig({});
 
 interface OpenApiSpec {
   openapi: string;
@@ -100,9 +127,7 @@ function toOpenApiPath(path: string): string {
   return path.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, "{$1}");
 }
 
-function toRelativeApiPath(path: string): string {
-  const prefix = apiPrefix();
-
+function toRelativeApiPath(path: string, prefix: string): string {
   if (path === prefix) {
     return "/";
   }
@@ -114,8 +139,8 @@ function toRelativeApiPath(path: string): string {
   return path;
 }
 
-function requiresBearerAuth(path: string, method: string): boolean {
-  const relative = toRelativeApiPath(path);
+function requiresBearerAuth(path: string, method: string, prefix: string): boolean {
+  const relative = toRelativeApiPath(path, prefix);
 
   if (
     relative.startsWith("/auth/login") ||
@@ -182,21 +207,39 @@ const DEFAULT_RESPONSES = {
   "422": { description: "Validation Error" },
 };
 
-function generateOpenApiSpec(routes: RegisteredRoute[]): OpenApiSpec {
+function generateOpenApiSpec(
+  routes: readonly RegisteredRoute[],
+  config: OpenApiConfig = defaultOpenApiConfig,
+): OpenApiSpec {
   const paths: Record<string, Record<string, unknown>> = {};
 
-  for (const route of routes) {
+  // Bun direct/native handlers accept every method. OpenAPI describes only its standard
+  // operations; explicit per-method contracts override the wildcard defaults below.
+  const expanded = routes.flatMap((route) =>
+    route.method === "*"
+      ? ["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "TRACE"].map((method) => ({
+          ...route,
+          method,
+          openApi: undefined,
+        }))
+      : [],
+  );
+  for (const route of [...expanded, ...routes.filter((route) => route.method !== "*")]) {
     const openApiPath = toOpenApiPath(route.path);
     const method = route.method.toLowerCase();
     const description =
-      PUBLIC_ROUTE_DESCRIPTIONS[`${route.method} ${toRelativeApiPath(route.path)}`] ??
+      PUBLIC_ROUTE_DESCRIPTIONS[
+        `${route.method} ${toRelativeApiPath(route.path, config.apiPrefix)}`
+      ] ??
       PUBLIC_ROUTE_DESCRIPTIONS[`${route.method} ${route.path}`] ??
       `${route.method} ${route.path}`;
 
     paths[openApiPath] ??= {};
     paths[openApiPath][method] = {
       summary: description,
-      ...(requiresBearerAuth(route.path, route.method) ? { security: [{ bearerAuth: [] }] } : {}),
+      ...(requiresBearerAuth(route.path, route.method, config.apiPrefix)
+        ? { security: [{ bearerAuth: [] }] }
+        : {}),
       ...route.openApi,
       responses: route.openApi?.responses ?? structuredClone(DEFAULT_RESPONSES),
     };
@@ -205,12 +248,12 @@ function generateOpenApiSpec(routes: RegisteredRoute[]): OpenApiSpec {
   return {
     openapi: "3.1.0",
     info: {
-      title: `${appDisplayName()} API`,
+      title: `${config.appName} API`,
       version: "1.0.0",
     },
     servers: [
-      { url: `${appUrl()}${apiPrefix()}`, description: `${appDisplayName()} API` },
-      { url: appUrl(), description: "Root (health, metrics, SCIM)" },
+      { url: `${config.appUrl}${config.apiPrefix}`, description: `${config.appName} API` },
+      { url: config.appUrl, description: "Root (health, metrics, SCIM)" },
     ],
     paths,
     components: {
@@ -283,9 +326,13 @@ function toRequestPath(path: string, apiPrefix: string): string {
   return path.startsWith(apiPrefix) ? path.slice(apiPrefix.length) || "/" : path;
 }
 
-function renderTypeScriptSdk(spec: OpenApiSpec, prefix = apiPrefix()): string {
+function renderTypeScriptSdk(
+  spec: OpenApiSpec,
+  prefix = defaultOpenApiConfig.apiPrefix,
+  className = defaultOpenApiConfig.sdkClassName,
+): string {
   const lines = [
-    `export class ${sdkClientClassName()} {`,
+    `export class ${className} {`,
     `  constructor(private readonly baseUrl = "${spec.servers[0]?.url ?? ""}") {}`,
     "",
     "  private async request(path: string, init: RequestInit = {}): Promise<Response> {",
@@ -403,5 +450,5 @@ function renderTypeScriptSdk(spec: OpenApiSpec, prefix = apiPrefix()): string {
   return lines.join("\n");
 }
 
-export type { OpenApiSpec };
-export { generateOpenApiSpec, renderOpenApiDocument, renderTypeScriptSdk };
+export type { OpenApiConfig, OpenApiSpec };
+export { generateOpenApiSpec, renderOpenApiDocument, renderTypeScriptSdk, resolveOpenApiConfig };

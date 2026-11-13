@@ -3,6 +3,7 @@ import {
   createFlashCookie,
   flashCookieName,
   flashResponse,
+  flashSessionOptionsFromEnvironment,
   pullFlash,
   withFlashClear,
 } from "@getstrata/core/http/flashSession";
@@ -10,26 +11,39 @@ import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("flashSession", () => {
   test("stores and reads a flash message from cookies", () => {
-    const cookie = createFlashCookie({ level: "success", message: "Saved." });
+    const cookie = createFlashCookie(
+      { level: "success", message: "Saved." },
+      flashSessionOptionsFromEnvironment(process.env),
+    );
     const request = new Request("http://example.test/organizations", {
       headers: { cookie: cookie.split(";")[0] ?? "" },
     });
 
-    expect(pullFlash(request)).toEqual({ level: "success", message: "Saved." });
+    expect(pullFlash(request, flashSessionOptionsFromEnvironment(process.env))).toEqual({
+      level: "success",
+      message: "Saved.",
+    });
   });
 
   test("flashResponse attaches a flash cookie to the response", () => {
-    const response = flashResponse(Response.redirect("/organizations", 302), {
-      level: "success",
-      message: "Organization created.",
-    });
+    const response = flashResponse(
+      Response.redirect("/organizations", 302),
+      {
+        level: "success",
+        message: "Organization created.",
+      },
+      flashSessionOptionsFromEnvironment(process.env),
+    );
 
     expect(response.status).toBe(302);
     expect(response.headers.get("set-cookie")).toContain("strata_flash=");
   });
 
   test("withFlashClear removes the flash cookie", () => {
-    const response = withFlashClear(new Response("ok"));
+    const response = withFlashClear(
+      new Response("ok"),
+      flashSessionOptionsFromEnvironment(process.env),
+    );
 
     expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
   });
@@ -39,8 +53,13 @@ describe("flashSession", () => {
     process.env.FLASH_COOKIE_NAME = "app_flash";
 
     try {
-      expect(flashCookieName()).toBe("app_flash");
-      expect(createFlashCookie({ level: "info", message: "Hi" })).toContain("app_flash=");
+      expect(flashCookieName(process.env)).toBe("app_flash");
+      expect(
+        createFlashCookie(
+          { level: "info", message: "Hi" },
+          flashSessionOptionsFromEnvironment(process.env),
+        ),
+      ).toContain("app_flash=");
     } finally {
       restoreEnvVar("FLASH_COOKIE_NAME", previous);
     }

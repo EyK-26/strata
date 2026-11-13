@@ -22,7 +22,7 @@ test("native PostgreSQL retains JSONB object storage, restricted-role replay and
     adminUrl.pathname = `/${database}`;
     owner = new SQL({ url: adminUrl.href, max: 1 });
     await owner.unsafe(
-      "CREATE TABLE failed_job(id SERIAL PRIMARY KEY,job_name TEXT NOT NULL,job_id TEXT,payload JSONB NOT NULL DEFAULT '{}'::jsonb,exception TEXT NOT NULL,failed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+      "CREATE TABLE failed_job(id SERIAL PRIMARY KEY,job_name TEXT NOT NULL,job_id TEXT,handoff TEXT,payload JSONB NOT NULL DEFAULT '{}'::jsonb,exception TEXT NOT NULL,failed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
     );
     const runtimeUrl = new URL(restrictedUrl);
     await grantPostgresAppRolePrivileges(owner, {

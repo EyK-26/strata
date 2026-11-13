@@ -6,7 +6,10 @@ import { requestPrefersJson } from "./contentNegotiation";
 import type { Middleware } from "./middleware";
 import { loginRedirectLocation } from "./safeInternalPath";
 
-function createRequireWebAuthMiddleware(auth: AuthReader): Middleware {
+function createRequireWebAuthMiddleware(
+  auth: AuthReader,
+  intendedOptions: import("../auth/intendedUrlCookie").IntendedUrlCookieOptions,
+): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
     const user = await auth.resolve(request);
 
@@ -18,7 +21,7 @@ function createRequireWebAuthMiddleware(auth: AuthReader): Middleware {
       throw new UnauthorizedError();
     }
 
-    const intended = createIntendedUrlCookieFromRequest(request);
+    const intended = createIntendedUrlCookieFromRequest(request, intendedOptions);
     const headers = new Headers({ Location: loginRedirectLocation(request) });
     if (intended) {
       headers.append("Set-Cookie", intended);

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  createFieldEncryptionCodec,
   decryptField,
   emailLookupForQuery,
   encryptField,
@@ -39,7 +40,7 @@ describe("fieldEncryption", () => {
     process.env.KMS_ENCRYPTION_KEY = "a".repeat(64);
     process.env.FEATURE_FIELD_ENCRYPTION = "true";
 
-    const key = resolveEncryptionKey();
+    const key = resolveEncryptionKey(process.env);
 
     if (!key) {
       throw new Error("Expected encryption key to be configured.");
@@ -47,7 +48,9 @@ describe("fieldEncryption", () => {
 
     const ciphertext = encryptField("admin@strata.test", key);
     expect(ciphertext.startsWith("enc:v1:")).toBe(true);
-    expect(revealEmail(ciphertext)).toBe("admin@strata.test");
+    expect(revealEmail(ciphertext, createFieldEncryptionCodec(process.env))).toBe(
+      "admin@strata.test",
+    );
     expect(decryptField(ciphertext, key)).toBe("admin@strata.test");
   });
 
@@ -55,19 +58,31 @@ describe("fieldEncryption", () => {
     process.env.KMS_ENCRYPTION_KEY = "b".repeat(64);
     process.env.FEATURE_FIELD_ENCRYPTION = "true";
 
-    const protectedEmail = protectEmail("Admin@Strata.test");
+    const protectedEmail = protectEmail(
+      "Admin@Strata.test",
+      createFieldEncryptionCodec(process.env),
+    );
     expect(protectedEmail.storedEmail.startsWith("enc:v1:")).toBe(true);
-    expect(emailLookupForQuery("admin@strata.test")).toBe(protectedEmail.emailLookup);
+    expect(emailLookupForQuery("admin@strata.test", createFieldEncryptionCodec(process.env))).toBe(
+      protectedEmail.emailLookup,
+    );
   });
 
   test("returns plaintext when encryption is disabled or keys are missing", () => {
     delete process.env.KMS_ENCRYPTION_KEY;
     process.env.FEATURE_FIELD_ENCRYPTION = "false";
 
-    const protectedEmail = protectEmail("Plain@Example.com");
+    const protectedEmail = protectEmail(
+      "Plain@Example.com",
+      createFieldEncryptionCodec(process.env),
+    );
     expect(protectedEmail.storedEmail).toBe("plain@example.com");
-    expect(revealEmail("plain@example.com")).toBe("plain@example.com");
-    expect(emailLookupForQuery("Plain@Example.com")).toBe("plain@example.com");
+    expect(revealEmail("plain@example.com", createFieldEncryptionCodec(process.env))).toBe(
+      "plain@example.com",
+    );
+    expect(emailLookupForQuery("Plain@Example.com", createFieldEncryptionCodec(process.env))).toBe(
+      "plain@example.com",
+    );
   });
 
   test("enables encryption automatically in production when the feature flag is unset", () => {
@@ -75,29 +90,34 @@ describe("fieldEncryption", () => {
     delete process.env.FEATURE_FIELD_ENCRYPTION;
     process.env.APP_ENV = "production";
 
-    const protectedEmail = protectEmail("prod@example.com");
+    const protectedEmail = protectEmail(
+      "prod@example.com",
+      createFieldEncryptionCodec(process.env),
+    );
     expect(protectedEmail.storedEmail.startsWith("enc:v1:")).toBe(true);
-    expect(revealEmail(protectedEmail.storedEmail)).toBe("prod@example.com");
+    expect(revealEmail(protectedEmail.storedEmail, createFieldEncryptionCodec(process.env))).toBe(
+      "prod@example.com",
+    );
   });
 
   test("isFieldEncryptionEnabled respects explicit feature flag values", () => {
     process.env.FEATURE_FIELD_ENCRYPTION = "false";
-    expect(isFieldEncryptionEnabled()).toBe(false);
+    expect(isFieldEncryptionEnabled(createFieldEncryptionCodec(process.env))).toBe(false);
 
     process.env.FEATURE_FIELD_ENCRYPTION = "true";
-    expect(isFieldEncryptionEnabled()).toBe(true);
+    expect(isFieldEncryptionEnabled(createFieldEncryptionCodec(process.env))).toBe(true);
 
     delete process.env.FEATURE_FIELD_ENCRYPTION;
     process.env.APP_ENV = "local";
-    expect(isFieldEncryptionEnabled()).toBe(false);
+    expect(isFieldEncryptionEnabled(createFieldEncryptionCodec(process.env))).toBe(false);
   });
 
   test("accepts base64 keys and rejects invalid key sizes", () => {
     process.env.KMS_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
-    expect(resolveEncryptionKey()?.length).toBe(32);
+    expect(resolveEncryptionKey(process.env)?.length).toBe(32);
 
     process.env.KMS_ENCRYPTION_KEY = "too-short";
-    expect(() => resolveEncryptionKey()).toThrow("KMS_ENCRYPTION_KEY must be 32 bytes");
+    expect(() => resolveEncryptionKey(process.env)).toThrow("KMS_ENCRYPTION_KEY must be 32 bytes");
   });
 
   test("decryptField returns plaintext values unchanged", () => {

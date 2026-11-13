@@ -87,7 +87,7 @@ describe("HttpKernel.wrapPolicy", () => {
   });
   test("applies auth and policy middleware to route handlers", async () => {
     const dependencies = createKernelDependencies();
-    const gate = dependencies.container.resolve<PolicyGate>(CORE_POLICY_GATE_TOKEN);
+    const gate = dependencies.container.resolve(CORE_POLICY_GATE_TOKEN);
     gate.register("project", new ProjectPolicy());
 
     const kernel = createHttpKernel(dependencies);

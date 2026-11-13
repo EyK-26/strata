@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { compileStarterFeatures } from "../../../packages/strata-starter/src/featurePlan.ts";
 import {
   layersFromFlags,
   parseCreateStrataArgs,
@@ -16,7 +17,7 @@ for (const database of ["mysql", "postgres"] as const) {
         `--docker-services=${database},redis,mailpit,adminer`,
       ]),
     );
-    const compose = renderDockerCompose("ready-app", layers);
+    const compose = renderDockerCompose("ready-app", compileStarterFeatures(layers));
     if (!compose) throw new Error("Expected selected Compose services");
     expect(compose.match(/healthcheck:/g)).toHaveLength(4);
     expect(compose).toContain("SELECT 1");
@@ -35,11 +36,15 @@ test("required services without Adminer also wait and Local never adds services"
   const flags = ["--database=mysql", "--docker"];
   const layers = layersFromFlags(parseCreateStrataArgs(flags));
   expect(dockerComposeUpCommand(layers)).toBe("docker compose up -d --wait --wait-timeout 180");
-  expect(renderDockerCompose("ready-app", layers)).not.toContain("adminer:");
+  expect(renderDockerCompose("ready-app", compileStarterFeatures(layers))).not.toContain(
+    "adminer:",
+  );
   expect(
     renderDockerCompose(
       "ready-app",
-      layersFromFlags(parseCreateStrataArgs(["--database=mysql", "--no-docker"])),
+      compileStarterFeatures(
+        layersFromFlags(parseCreateStrataArgs(["--database=mysql", "--no-docker"])),
+      ),
     ),
   ).toBeNull();
 });

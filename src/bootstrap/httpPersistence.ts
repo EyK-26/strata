@@ -1,8 +1,12 @@
 import { establishedAuthReader, runWithEstablishedAuth } from "@getstrata/core/auth/authReader";
+import { type AuthOutcome, validatedAuthOutcome } from "@getstrata/core/auth/guard";
 import { runWithMembershipSnapshot } from "@getstrata/core/auth/membershipContext";
 import type { ApplicationConfig } from "@getstrata/core/contracts/application";
 import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
+import { InternalServerError, InvalidCredentialsError } from "@getstrata/core/errors/http";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { errorResponse } from "@getstrata/core/http/response";
+import { webErrorResponse } from "@getstrata/core/http/webErrorResponse";
 import { createPublicTenantSelector } from "@getstrata/core/tenant/publicTenantHost";
 import { runWithTenant, type TenantContext } from "@getstrata/core/tenant/tenantContext";
 import { DEFAULT_TENANT, resolveTenantForRequest } from "@getstrata/core/tenant/tenantMiddleware";
@@ -15,8 +19,13 @@ import type {
   IdentityPolicyMode,
 } from "./persistenceContracts";
 
-export const HTTP_PERSISTENCE_OPTIONS = "bootstrap.httpPersistence";
-function snapshotAuth(auth: EstablishedRequest["auth"]): EstablishedRequest["auth"] {
+export { HTTP_PERSISTENCE_OPTIONS } from "#strata-http-route";
+
+function snapshotAuth(input: AuthOutcome): EstablishedRequest["auth"] {
+  const auth = validatedAuthOutcome(input);
+  if (auth.status === "error")
+    throw Object.assign(new InternalServerError(), { cause: auth.error });
+  if (auth.status === "invalid") throw new InvalidCredentialsError();
   const user = auth.user;
   const name = user?.name;
   const email = user?.email;
@@ -63,6 +72,9 @@ export function createHttpPersistence(
   invoke: PersistenceInvocation,
   options: HttpPersistenceOptions,
 ) {
+  const invalidSessionCookie = options.invalidSessionCookie
+    ? Object.freeze({ ...options.invalidSessionCookie })
+    : undefined;
   const selectPublic = options.publicTenancy
     ? createPublicTenantSelector(options.publicTenancy)
     : undefined;
@@ -94,7 +106,22 @@ export function createHttpPersistence(
           });
         }
         const lookup = options.metadata(ports);
-        const auth = snapshotAuth(await lookup.authenticate(request));
+        const outcome = validatedAuthOutcome(await lookup.authenticate(request));
+        if (
+          outcome.status === "invalid" &&
+          outcome.credentialSource === "session" &&
+          invalidSessionCookie &&
+          request.headers
+            .get("cookie")
+            ?.split(";")
+            .some((part) => part.trim().startsWith(`${invalidSessionCookie.name}=`))
+        ) {
+          const error = new InvalidCredentialsError();
+          const response = (await webErrorResponse(error, request)) ?? errorResponse(error);
+          response.headers.append("Set-Cookie", invalidSessionCookie.expiredHeader);
+          return response;
+        }
+        const auth = snapshotAuth(outcome);
         const memberships = auth.user ? await lookup.memberships(auth.user) : [];
         const resolveTenant = async (id: number) => {
           const result = await lookup.tenant(id);

@@ -65,6 +65,7 @@ describe("createHealthRoutes", () => {
 
     const container = new ServiceContainer();
     const config = new ConfigStore();
+    config.set("app.debug", true);
     config.set(REDIS_URL_CONFIG_KEY, "");
     container.set(CORE_CONFIG_TOKEN, config);
 
@@ -126,6 +127,7 @@ describe("createHealthRoutes", () => {
 
     const container = new ServiceContainer();
     const config = new ConfigStore();
+    config.set("app.debug", true);
     config.set(REDIS_URL_CONFIG_KEY, process.env.REDIS_URL ?? "");
     container.set(CORE_CONFIG_TOKEN, config);
 
@@ -162,6 +164,7 @@ describe("schema/container health probes", () => {
   const dependencies = () => {
     const container = new ServiceContainer();
     const config = new ConfigStore();
+    config.set("app.debug", true);
     config.set(REDIS_URL_CONFIG_KEY, "");
     container.set(CORE_CONFIG_TOKEN, config);
     return createMockDependencies(
@@ -207,6 +210,7 @@ describe("schema/container health probes", () => {
   test("unavailable Redis cannot report a healthy text probe", async () => {
     const container = new ServiceContainer();
     const config = new ConfigStore();
+    config.set("app.debug", true);
     config.set(REDIS_URL_CONFIG_KEY, "redis://127.0.0.1:1");
     container.set(CORE_CONFIG_TOKEN, config);
     const deps = createMockDependencies(
@@ -231,4 +235,40 @@ describe("schema/container health probes", () => {
     expect(response.status).toBe(503);
     expect(await response.text()).toBe("degraded");
   });
+});
+
+test("readiness details follow each owner's captured debug config despite conflicting host settings", async () => {
+  const saved = process.env.APP_DEBUG;
+  const make = (debug: boolean) => {
+    const config = new ConfigStore();
+    config.set("app.debug", debug);
+    config.set(REDIS_URL_CONFIG_KEY, "");
+    const container = new ServiceContainer();
+    container.set(CORE_CONFIG_TOKEN, config);
+    return {
+      config,
+      routes: createHealthRoutes(createMockDependencies(container), {
+        extra: { ownerDetail: "private" },
+      }),
+    };
+  };
+  try {
+    process.env.APP_DEBUG = "true";
+    const quiet = make(false);
+    process.env.APP_DEBUG = "false";
+    const verbose = make(true);
+    quiet.config.set("app.debug", true);
+    verbose.config.set("app.debug", false);
+    for (const debug of ["true", "false"]) {
+      process.env.APP_DEBUG = debug;
+      expect(await (await quiet.routes["/ready"]()).json()).toEqual({ status: "ready" });
+      expect(await (await verbose.routes["/ready"]()).json()).toEqual({
+        status: "ready",
+        checks: { database: "ok", redis: "skipped" },
+        ownerDetail: "private",
+      });
+    }
+  } finally {
+    restoreEnvVar("APP_DEBUG", saved);
+  }
 });

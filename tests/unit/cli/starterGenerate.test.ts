@@ -1,3 +1,5 @@
+import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
+
 function requiredServer<T>(server: T | undefined): T {
   if (!server) throw new Error("Expected application-owned HTTP server");
   return server;
@@ -67,7 +69,6 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
 import {
   generateProject,
   resolveOverlayRoot,
@@ -117,7 +118,6 @@ function restoreRuntime(): void {
       process.env[key] = value;
     }
   }
-  resetDiscoverModulesForTests();
 }
 
 afterEach(async () => {
@@ -361,7 +361,7 @@ describe("create-strata generate", () => {
     expect(bootstrap).toContain(
       'import { repositoryDefinitions, modelDefinitions } from "../models/register.ts";',
     );
-    expect(preload).toContain("configureModulesDirectory");
+    expect(preload).not.toContain("configureModulesDirectory");
     expect(existsSync(join(app, "src/modules/billing/index.ts"))).toBe(false);
     expect(existsSync(join(app, "src/jobs/dispatchOutboundWebhookJob.ts"))).toBe(false);
 
@@ -380,8 +380,8 @@ describe("create-strata generate", () => {
     );
     expect(existsSync(join(app, "src/bootstrap/providers/policy.ts"))).toBe(true);
 
-    expect(providers).toContain('import { tracingProvider } from "@getstrata/bootstrap"');
-    expect(providers).toContain("  tracingProvider,");
+    expect(providers).toContain('import { createTracingProvider } from "@getstrata/bootstrap"');
+    expect(providers).toContain("  createTracingProvider({ env }),");
 
     const queueProvider = providers;
     expect(queueProvider).toContain("registerDefaultJobs");
@@ -390,15 +390,18 @@ describe("create-strata generate", () => {
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(createApp).not.toContain("createMetricsRoutes");
     expect(createApp).toContain("isProductionEnv(env)");
-    expect(createApp).toContain("discoverModules");
+    expect(createApp).toContain(
+      'ensureModulesLoaded({modulesDir:join(import.meta.dir,"../modules")})',
+    );
+    expect(createApp).not.toContain("discoverModules()");
     expect(createApp).toContain("...modules.flatMap(module=>module.providers??[])");
-    expect(createApp.indexOf("await ensureModulesLoaded()")).toBeLessThan(
+    expect(createApp.indexOf("await ensureModulesLoaded({modulesDir:")).toBeLessThan(
       createApp.indexOf("const handle=createApplicationContext("),
     );
     expect(createApp).toContain("providersFromScope:scope=>");
     expect(createApp).not.toContain("runProviderPhase");
     expect(queueProvider).toContain("async register({container})");
-    expect(queueProvider.indexOf("discoverJobs()")).toBeGreaterThan(
+    expect(queueProvider.indexOf("discoverJobs(registry)")).toBeGreaterThan(
       queueProvider.indexOf("async register({container})"),
     );
     expect(readme).not.toContain("GET /metrics");
@@ -411,7 +414,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^2.2.60");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^3.0.0");
     expect(pkg.dependencies.eta).toBe("^4.6.0");
     expect(pkg.dependencies.mysql2).toBeUndefined();
     expect(pkg.scripts.dev).toBe("strata dev");
@@ -729,7 +732,7 @@ describe("create-strata generate", () => {
     expect(authModule).not.toContain("INTO users");
     expect(authModule).not.toContain("INTO api_tokens");
     expect(await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8")).toContain(
-      "createMetadataAuthManager(directory, { ...snapshot, mechanisms:",
+      "createMetadataAuthManager(directory, { ...snapshot, mfaSecrets, mechanisms:",
     );
     expect(existsSync(join(app, "src/bootstrap/ensureDatabase.ts"))).toBe(true);
     const ensure = await readFile(join(app, "src/bootstrap/ensureDatabase.ts"), "utf8");
@@ -1287,25 +1290,26 @@ describe("create-strata CLI", () => {
     await mkdir(probeDir, { recursive: true });
     await writeFile(
       join(probeDir, "index.ts"),
-      `import { CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
+      `import { createServiceToken } from "@getstrata/core/contracts/token";
+import { CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import type { ServiceProvider } from "@getstrata/core/contracts/di";
 
-export const PROBE_REGISTER_TOKEN = "probe.module.register.token";
-export const PROBE_BOOT_TOKEN = "probe.module.boot.token";
+export const PROBE_REGISTER_TOKEN = createServiceToken<string>("probe.module.register.token");
+export const PROBE_CLOSED_TOKEN = createServiceToken<boolean>("probe.closed");
+export const STARTER_BOOT_OBSERVED_TOKEN = createServiceToken<boolean>("fixture.starter-boot-observed");
+export const PROBE_BOOT_TOKEN = createServiceToken<string>("probe.module.boot.token");
 
 const probeProvider: ServiceProvider = {
   name: "probe.provider",
   async register({ container, onCleanup }) {
     await new Promise((resolve) => setTimeout(resolve, 20));
-    onCleanup(() => { container.set("probe.closed", true); });
+    onCleanup(() => { container.set(PROBE_CLOSED_TOKEN, true); });
     container.singleton(PROBE_REGISTER_TOKEN, () => "module-provider-register");
   },
   async boot({ container }) {
     await new Promise((resolve) => setTimeout(resolve, 5));
-    const gate = container.resolve<{ register: (resource: string, policy: unknown) => void }>(
-      CORE_POLICY_GATE_TOKEN,
-    );
+    const gate = container.resolve(CORE_POLICY_GATE_TOKEN);
     gate.register("probe", { view: () => true });
     container.singleton(PROBE_BOOT_TOKEN, () => "module-provider-boot");
   },
@@ -1324,14 +1328,15 @@ export default probeModule;
     const providerSource = await readFile(providerIndex, "utf8");
     await writeFile(
       providerIndex,
-      providerSource.replace(
-        "    createStarterAuthProvider(auth),",
-        `    {name:"fixture.starter-boot-order",boot({container}) {
-      if(container.resolve("probe.module.register.token")!=="module-provider-register") throw new Error("starter boot ran before module registration");
-      container.set("fixture.starter-boot-observed",true);
+      'import { PROBE_REGISTER_TOKEN, STARTER_BOOT_OBSERVED_TOKEN } from "../../modules/probe";\n' +
+        providerSource.replace(
+          "    createStarterAuthProvider(auth),",
+          `    {name:"fixture.starter-boot-order",boot({container}) {
+      if(container.resolve(PROBE_REGISTER_TOKEN)!=="module-provider-register") throw new Error("starter boot ran before module registration");
+      container.set(STARTER_BOOT_OBSERVED_TOKEN,true);
     }},
     createStarterAuthProvider(auth),`,
-      ),
+        ),
     );
 
     installGeneratedAppDependencies(app);
@@ -1346,20 +1351,22 @@ export default probeModule;
     process.env.MAIL_DRIVER = "log";
     process.env.CACHE_DRIVER = "array";
     process.env.QUEUE_DRIVER = "sync";
-    resetDiscoverModulesForTests();
 
     try {
       const { bootstrapApp } = await import(`${join(app, "src/bootstrap/createApp.ts")}`);
-      const { PROBE_BOOT_TOKEN, PROBE_REGISTER_TOKEN } = await import(
-        `${join(probeDir, "index.ts")}`
-      );
+      const {
+        PROBE_BOOT_TOKEN,
+        PROBE_REGISTER_TOKEN,
+        PROBE_CLOSED_TOKEN,
+        STARTER_BOOT_OBSERVED_TOKEN,
+      } = await import(`${join(probeDir, "index.ts")}`);
 
       // Compare identities within the installed consumer, not against the source checkout.
       const { ConfigStore } = await import(
         createRequire(join(app, "package.json")).resolve("@getstrata/bootstrap/contracts")
       );
       const { context } = await bootstrapApp({ migrate: false });
-      expect(context.container.resolve("fixture.starter-boot-observed")).toBe(true);
+      expect(context.container.resolve(STARTER_BOOT_OBSERVED_TOKEN)).toBe(true);
       expect(context.container.resolve(PROBE_REGISTER_TOKEN)).toBe("module-provider-register");
       expect(context.container.resolve(PROBE_BOOT_TOKEN)).toBe("module-provider-boot");
       expect(context.config).toBeInstanceOf(ConfigStore);
@@ -1369,9 +1376,8 @@ export default probeModule;
         'Config key "generator.missing" is not defined.',
       );
       await context.dispose();
-      expect(context.container.resolve("probe.closed")).toBe(true);
+      expect(context.container.resolve(PROBE_CLOSED_TOKEN)).toBe(true);
     } finally {
-      resetDiscoverModulesForTests();
       process.chdir(repoRoot);
     }
   });
@@ -1396,7 +1402,6 @@ export default probeModule;
     process.env.CACHE_DRIVER = "array";
     process.env.QUEUE_DRIVER = "sync";
     process.env.METRICS_TOKEN = "generated-metrics-fixture";
-    resetDiscoverModulesForTests();
     const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
 
     let context: Awaited<ReturnType<typeof bootstrapApp>>["context"] | undefined;
@@ -1593,7 +1598,6 @@ export default probeModule;
         SCIM_TENANT_TOKENS: "1:fixture-first,2:fixture-second,999:fixture-missing",
         REDIS_URL: "",
       });
-      resetDiscoverModulesForTests();
       const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
 
       const { User } = await import(join(app, "src/models/User.ts"));
@@ -1742,7 +1746,6 @@ export default probeModule;
           SCIM_TENANT_TOKENS: "1:fixture-scim-one,2:fixture-scim-two",
           REDIS_URL: "",
         });
-        resetDiscoverModulesForTests();
         await prepareObserverFixture(app);
         const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
 
@@ -2071,7 +2074,6 @@ export default probeModule;
         CACHE_DRIVER: "array",
         QUEUE_DRIVER: "sync",
       });
-      resetDiscoverModulesForTests();
       await prepareObserverFixture(app);
       const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
 
@@ -2141,10 +2143,20 @@ export default probeModule;
                 expires_at: new Date(expires).toISOString(),
               }),
             );
-            const link = absoluteTemporarySignedUrl(path, 60, {
-              token: issued.plain,
-              id: String(id),
-            });
+            const link = absoluteTemporarySignedUrl(
+              path,
+              60,
+              {
+                token: issued.plain,
+                id: String(id),
+              },
+              process.env.APP_URL ?? "http://localhost:3000",
+              requireConfiguredSecret(
+                ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+                "signed-url-secret",
+                process.env,
+              ),
+            );
             return { row, link };
           };
           const submit = (link: string, withCsrf = true) =>
@@ -2260,10 +2272,20 @@ export default probeModule;
               expires_at: new Date(Date.now() + 60000).toISOString(),
             }),
           );
-          const link = absoluteTemporarySignedUrl(path, 60, {
-            token: issued.plain,
-            id: String(nextId),
-          });
+          const link = absoluteTemporarySignedUrl(
+            path,
+            60,
+            {
+              token: issued.plain,
+              id: String(nextId),
+            },
+            process.env.APP_URL ?? "http://localhost:3000",
+            requireConfiguredSecret(
+              ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+              "signed-url-secret",
+              process.env,
+            ),
+          );
           const attempts = await Promise.all([submit(link), submit(link)]);
           expect(attempts.map((r) => r.status).sort()).toEqual(html ? [302, 302] : [200, 403]);
           expect(
@@ -2332,7 +2354,6 @@ export default probeModule;
       process.env.MAIL_DRIVER = "log";
       process.env.CACHE_DRIVER = "array";
       process.env.QUEUE_DRIVER = "sync";
-      resetDiscoverModulesForTests();
       const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
 
       const { User } = await import(join(app, "src/models/User.ts"));
@@ -2429,6 +2450,12 @@ export default probeModule;
             html ? "/reset-password" : "/api/v1/auth/reset-password",
             60,
             { token: issued.plain, email: String(user.get("email")) },
+            process.env.APP_URL ?? "http://localhost:3000",
+            requireConfiguredSecret(
+              ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+              "signed-url-secret",
+              process.env,
+            ),
           );
           const consumed = async () =>
             (
@@ -2500,6 +2527,10 @@ export default probeModule;
           ).toBe(true);
           for (const bearer of [undefined, token, jwt])
             expect(await credentialStatus(bearer)).toBe(401);
+          // Both transports retain the now-revoked session proof, so authentication rejects replay first.
+          expect((await submit("Another!Password123")).status).toBe(401);
+          // A fresh anonymous browser with the CSRF cookie still reaches consumed-link validation.
+          cookie = csrf.cookie;
           expect((await submit("Another!Password123")).status).toBe(html ? 200 : 403);
           expect(
             await verifyPassword(

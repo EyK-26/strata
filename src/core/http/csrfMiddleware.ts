@@ -1,6 +1,6 @@
 import { currentAuthUser, currentCredentialSource } from "@getstrata/core/auth/authContext";
 import { ForbiddenError } from "@getstrata/core/errors/http";
-import { envFlagEnabled, isProductionEnv } from "@getstrata/core/runtime/appEnv";
+import { envFlagEnabled } from "@getstrata/core/runtime/appEnv";
 import { createCsrfOriginPolicy } from "./csrfOriginPolicy";
 import {
   type CsrfTokenOptions,
@@ -11,7 +11,7 @@ import {
   verifyCsrfTokenValue,
 } from "./csrfToken";
 import type { Middleware } from "./middleware";
-import { currentRequestMeta } from "./requestMetaContext";
+import { currentRequestMeta, runWithRequestMeta } from "./requestMetaContext";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -55,14 +55,24 @@ function appendSetCookie(response: Response, cookie: string): Response {
   });
 }
 
-function createCsrfMiddleware(options: CsrfOptions = {}): Middleware {
-  const env = Object.freeze({ ...process.env });
-  let tokenOptions = options.token ? Object.freeze({ ...options.token }) : undefined;
-  const capturedToken = () => (tokenOptions ??= csrfTokenOptionsFromEnvironment(env));
-  const production = tokenOptions?.production ?? isProductionEnv(env);
-  const allowDevelopmentHeaders =
-    options.allowDevelopmentHeaders ?? envFlagEnabled(env.AUTH_DEV_HEADERS);
-  const samlPathname = samlAcsPathname(options.samlAcsUrl ?? env.SAML_ACS_URL);
+export function csrfMiddlewareOptionsFromEnvironment(
+  env: Readonly<Record<string, string | undefined>>,
+): CsrfOptions {
+  return Object.freeze({
+    token: csrfTokenOptionsFromEnvironment(env),
+    allowDevelopmentHeaders: envFlagEnabled(env.AUTH_DEV_HEADERS),
+    samlAcsUrl: env.SAML_ACS_URL,
+  });
+}
+function createCsrfMiddleware(options: CsrfOptions): Middleware {
+  const tokenOptions = options.token ? Object.freeze({ ...options.token }) : undefined;
+  const capturedToken = () => {
+    if (!tokenOptions) throw new TypeError("Explicit CSRF token configuration is required.");
+    return tokenOptions;
+  };
+  const production = tokenOptions?.production ?? true;
+  const allowDevelopmentHeaders = options.allowDevelopmentHeaders ?? false;
+  const samlPathname = samlAcsPathname(options.samlAcsUrl);
   const targetOrigin = options.targetOrigin;
   const policy = targetOrigin === undefined ? undefined : createCsrfOriginPolicy(targetOrigin);
   return async (request: Request, next: () => Promise<Response>) => {
@@ -87,11 +97,26 @@ function createCsrfMiddleware(options: CsrfOptions = {}): Middleware {
     if (!MUTATING_METHODS.has(method)) {
       const meta = currentRequestMeta();
       const csrf =
-        meta.csrfToken && verifyCsrfTokenValue(meta.csrfToken, capturedToken())
+        meta.request === request &&
+        meta.csrfToken &&
+        verifyCsrfTokenValue(meta.csrfToken, capturedToken())
           ? { token: meta.csrfToken }
           : resolveCsrfToken(request, capturedToken());
-      meta.csrfToken = csrf.token;
-      const response = await next();
+      const scopedMeta =
+        meta.request === request
+          ? meta
+          : {
+              ipAddress: null,
+              userAgent: request.headers.get("user-agent"),
+              errorFormat: meta.errorFormat,
+              webErrorView: meta.webErrorView,
+              viewsEnabled: meta.viewsEnabled,
+              webErrorsProduction: meta.webErrorsProduction,
+            };
+      const response = await runWithRequestMeta(
+        { ...scopedMeta, request, csrfToken: csrf.token },
+        next,
+      );
 
       if (!csrf.cookie) {
         return response;

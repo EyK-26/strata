@@ -1,10 +1,12 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { jobRegistry } from "./jobRegistry";
-import { queueConfig } from "./queueConfig";
+import { copyApplicationConfig } from "../config/configSnapshot";
+import type { JobRegistry } from "./jobRegistry";
+import { type QueueRetryPolicy, resolveQueueConfig, snapshotQueueRetryPolicy } from "./queueConfig";
 import type { QueueServices } from "./queueServices";
 
 interface QueueJobEnvelope {
   name: string;
+  handoff?: string;
   payload: Record<string, unknown>;
   attempts?: number;
   jobId?: string;
@@ -12,7 +14,43 @@ interface QueueJobEnvelope {
   cancellable?: boolean;
 }
 
-function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
+/** Capture the exact data that admission authenticates, before any asynchronous resource acquisition. */
+function snapshotQueueJobEnvelope(input: QueueJobEnvelope): QueueJobEnvelope {
+  if (
+    !input ||
+    typeof input !== "object" ||
+    Array.isArray(input) ||
+    ![Object.prototype, null].includes(Object.getPrototypeOf(input))
+  )
+    throw new TypeError("Queue envelope must be plain data.");
+  const data: Record<string, unknown> = {};
+  for (const key of Reflect.ownKeys(input)) {
+    if (
+      typeof key !== "string" ||
+      !["name", "payload", "attempts", "jobId", "deadlineAtMs", "cancellable", "handoff"].includes(
+        key,
+      )
+    )
+      throw new TypeError("Unknown queue envelope field.");
+    const descriptor = Object.getOwnPropertyDescriptor(input, key);
+    if (!descriptor || !("value" in descriptor) || !descriptor.enumerable)
+      throw new TypeError("Queue envelope must contain own data fields.");
+    if (descriptor.value !== undefined)
+      Object.defineProperty(data, key, { value: descriptor.value, enumerable: true });
+  }
+  const captured = copyApplicationConfig(data) as unknown as QueueJobEnvelope;
+  if (
+    typeof captured.name !== "string" ||
+    !captured.name ||
+    !captured.payload ||
+    typeof captured.payload !== "object" ||
+    Array.isArray(captured.payload)
+  )
+    throw new TypeError("Queue envelope requires a job name and payload record.");
+  return captured;
+}
+
+function parseQueueJobEnvelope(rawPayload: string, registry: JobRegistry): QueueJobEnvelope | null {
   let parsed: unknown;
 
   try {
@@ -28,19 +66,43 @@ function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
   }
 
   const envelope = parsed as Partial<QueueJobEnvelope>;
+  if (
+    Object.keys(parsed).some(
+      (key) =>
+        ![
+          "name",
+          "payload",
+          "attempts",
+          "jobId",
+          "deadlineAtMs",
+          "cancellable",
+          "handoff",
+        ].includes(key),
+    )
+  )
+    return null;
+  if (
+    envelope.handoff !== undefined &&
+    (typeof envelope.handoff !== "string" ||
+      !envelope.handoff.length ||
+      envelope.handoff.length > 32768)
+  )
+    return null;
   if (typeof envelope.name !== "string" || envelope.name.length === 0) {
     console.error("[QueueWorker] Ignoring queue payload without job name");
     return null;
   }
 
-  if (!jobRegistry.create(envelope.name)) {
+  if (!registry.has(envelope.name)) {
     console.error(`[QueueWorker] Ignoring unknown job name: ${envelope.name}`);
     return null;
   }
 
   if (
     envelope.payload !== undefined &&
-    (typeof envelope.payload !== "object" || envelope.payload === null)
+    (typeof envelope.payload !== "object" ||
+      envelope.payload === null ||
+      Array.isArray(envelope.payload))
   ) {
     console.error("[QueueWorker] Ignoring queue payload with invalid payload object");
     return null;
@@ -72,6 +134,7 @@ function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
   return {
     ...(envelope.cancellable ? { cancellable: true } : {}),
     ...(envelope.deadlineAtMs === undefined ? {} : { deadlineAtMs: envelope.deadlineAtMs }),
+    ...(envelope.handoff === undefined ? {} : { handoff: envelope.handoff }),
     jobId: envelope.jobId,
     name: envelope.name,
     payload: (envelope.payload ?? {}) as Record<string, unknown>,
@@ -82,16 +145,18 @@ function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
 async function runQueueJob(
   envelope: QueueJobEnvelope,
   failedJobs: Pick<QueueServices, "recordFailure" | "runAttempt">,
+  registry: JobRegistry,
   options: {
+    retryPolicy?: QueueRetryPolicy;
     onFailureRecorded?: () => void;
     context?: import("./index").JobContext;
     deferRetry?: (envelope: QueueJobEnvelope, delayMs: number) => Promise<void>;
   } = {},
 ): Promise<void> {
+  envelope = snapshotQueueJobEnvelope(envelope);
+  const retryPolicy = snapshotQueueRetryPolicy(options.retryPolicy ?? resolveQueueConfig());
   options.context?.signal.throwIfAborted();
-  const job = jobRegistry.create(envelope.name);
-
-  if (!job) {
+  if (!registry.has(envelope.name)) {
     throw new Error(`Unknown job "${envelope.name}".`);
   }
 
@@ -101,17 +166,23 @@ async function runQueueJob(
     signal: new AbortController().signal,
   };
 
+  let job: import("./index").Job | undefined;
   try {
-    await failedJobs.runAttempt(envelope, { ...context, attempt: attempts + 1 }, (scoped) =>
-      job.handle(envelope.payload, scoped),
-    );
+    await failedJobs.runAttempt(envelope, { ...context, attempt: attempts + 1 }, (scoped) => {
+      scoped.signal.throwIfAborted();
+      job = registry.create(envelope.name);
+      if (!job) throw new Error(`Unknown job "${envelope.name}".`);
+      return job.handle(envelope.payload, scoped);
+    });
   } catch (error) {
     options.context?.signal.throwIfAborted();
+    // Admission failures have no job attempt to retry or record as a business failure.
+    if (!job) throw error;
     const nextAttempt = attempts + 1;
-    const maxAttempts = job.maxAttempts ?? queueConfig.maxAttempts;
+    const maxAttempts = job.maxAttempts ?? retryPolicy.maxAttempts;
 
     if (nextAttempt < maxAttempts) {
-      const backoffMs = job.backoffMs ?? queueConfig.backoffMs;
+      const backoffMs = job.backoffMs ?? retryPolicy.backoffMs;
       if (options.deferRetry) {
         await options.deferRetry(
           { ...envelope, jobId: context.jobId, attempts: nextAttempt },
@@ -126,13 +197,15 @@ async function runQueueJob(
           attempts: nextAttempt,
         },
         failedJobs,
-        { ...options, context },
+        registry,
+        { ...options, context, retryPolicy },
       );
       return;
     }
 
     await failedJobs.recordFailure({
       jobName: envelope.name,
+      ...(envelope.handoff === undefined ? {} : { handoff: envelope.handoff }),
       jobId: context.jobId,
       payload: envelope.payload,
       exception: error instanceof Error ? (error.stack ?? error.message) : String(error),
@@ -144,4 +217,4 @@ async function runQueueJob(
 }
 
 export type { QueueJobEnvelope };
-export { parseQueueJobEnvelope, runQueueJob };
+export { parseQueueJobEnvelope, runQueueJob, snapshotQueueJobEnvelope };

@@ -1,3 +1,5 @@
+import { PolicyDeniedError } from "@getstrata/core/auth/policy";
+
 class HttpError extends Error {
   readonly status: number;
   readonly details?: unknown;
@@ -52,6 +54,9 @@ class UnauthorizedError extends HttpError {
   }
 }
 
+/** A supplied credential failed verification; retrying via login redirect cannot repair it. */
+class InvalidCredentialsError extends UnauthorizedError {}
+
 class PayloadTooLargeError extends HttpError {
   constructor(message: string = "Payload Too Large", details?: unknown) {
     super(413, message, details);
@@ -93,6 +98,10 @@ function isHttpErrorLike(error: unknown): error is HttpErrorLike {
 }
 
 function toHttpError(error: unknown): HttpError | null {
+  if (error instanceof PolicyDeniedError) {
+    return new ForbiddenError();
+  }
+
   if (error instanceof HttpError) {
     return error;
   }
@@ -110,6 +119,7 @@ export {
   ForbiddenError,
   HttpError,
   InternalServerError,
+  InvalidCredentialsError,
   isHttpErrorLike,
   NotFoundError,
   PayloadTooLargeError,

@@ -76,6 +76,8 @@ interface GenerateOptions {
   templateRoot: string;
   overlayRoot: string;
   force?: boolean;
+  /** Optional reference commercial domain, shared by browser and API examples. */
+  reference?: "work-tracker";
   workspaceDependencies?: boolean;
   /** Compatibility README label for generated example profiles; not a repository path. */
   inRepoExample?: boolean;

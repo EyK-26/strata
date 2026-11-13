@@ -2,11 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
 import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
+import { getRouteInventory } from "@getstrata/bootstrap/routePlan";
 import { convertAppRoutesToBunRoutes, createWebServer } from "@getstrata/bootstrap/web/server";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { generateOpenApiSpec } from "@getstrata/core/openapi/generator";
+import { resolveHttpResponsePolicy } from "../../src/bootstrap/providers/config";
 import { guestGuardOptions } from "../helpers/devAuthHeaders";
 import { createMockDependencies } from "./testHelpers";
 
@@ -23,7 +24,6 @@ afterEach(() => {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   });
-  routeRegistry.clear();
 });
 function preflight(origin = "https://client.example") {
   return {
@@ -61,7 +61,12 @@ describe("native registered-route preflights", () => {
         },
       ],
     });
-    const server = createWebServer({ port: 0, native: { hostname: "127.0.0.1" }, routes });
+    const server = createWebServer({
+      cors: resolveHttpResponsePolicy(process.env).cors,
+      port: 0,
+      native: { hostname: "127.0.0.1" },
+      routes,
+    });
     try {
       const url = `http://127.0.0.1:${server.port}/api/v1/orders`;
       const allowed = await fetch(url, preflight());
@@ -85,9 +90,9 @@ describe("native registered-route preflights", () => {
       expect(actual.status).toBe(403);
       expect(await actual.json()).toHaveProperty("error");
       expect(writes).toBe(0);
-      const spec = generateOpenApiSpec(routeRegistry.list());
+      const spec = generateOpenApiSpec(getRouteInventory(routes));
       expect(Object.keys(spec.paths["/api/v1/orders"] ?? {})).toEqual(["post"]);
-      expect(routeRegistry.list().some((route) => route.method === "OPTIONS")).toBe(false);
+      expect(getRouteInventory(routes).some((route) => route.method === "OPTIONS")).toBe(false);
       expect(routes["/api/v1/orders"]).not.toHaveProperty("OPTIONS");
       expect((await fetch(`http://127.0.0.1:${server.port}/unknown`, preflight())).status).toBe(
         404,
@@ -100,6 +105,7 @@ describe("native registered-route preflights", () => {
   test("GET shorthand, HEAD fallback and parameterized method maps retain native dispatch", async () => {
     let calls = 0;
     const server = createWebServer({
+      cors: resolveHttpResponsePolicy(process.env).cors,
       port: 0,
       native: { hostname: "127.0.0.1" },
       routes: {
@@ -137,6 +143,7 @@ describe("native registered-route preflights", () => {
     const invalid = convertAppRoutesToBunRoutes({ "/empty": {}, "/metadata": { nope: false } });
     expect(Object.keys(invalid)).toEqual([]);
     const server = createWebServer({
+      cors: resolveHttpResponsePolicy(process.env).cors,
       port: 0,
       native: { hostname: "127.0.0.1" },
       routes: {
@@ -161,14 +168,20 @@ describe("native registered-route preflights", () => {
         port: 0,
         native: { hostname: "127.0.0.1" },
         routes: { "/read": () => new Response("read") },
-        cors: { additionalAllowedHeaders: ["*"] },
+        cors: { ...resolveHttpResponsePolicy(process.env).cors, additionalAllowedHeaders: ["*"] },
       }),
     ).toThrow(TypeError);
     const server = createWebServer({
       port: 0,
       native: { hostname: "127.0.0.1" },
       routes: { "/read": () => new Response("read") },
-      cors: { additionalAllowedHeaders: ["X-Native"] },
+      cors: {
+        ...resolveHttpResponsePolicy(process.env).cors,
+        additionalAllowedHeaders: [
+          ...(resolveHttpResponsePolicy(process.env).cors?.additionalAllowedHeaders ?? []),
+          "X-Native",
+        ],
+      },
     });
     try {
       const response = await fetch(`http://127.0.0.1:${server.port}/read`, preflight());

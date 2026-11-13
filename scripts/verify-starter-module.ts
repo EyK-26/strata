@@ -341,11 +341,12 @@ try {
     await writeFile(
       join(directory, file),
       `import type { Migration } from "@getstrata/core/database/migrations/types";
-import { Schema, resolveDatabaseDriver } from "@getstrata/core/database/schema";
+import { currentSqlDialect } from "@getstrata/core/database/dialect";
+import { Schema } from "@getstrata/core/database/schema";
 const migration: Migration = {
  name: ${JSON.stringify(file.slice(0, -3))},
- async up(db) { await Schema.run(db, resolveDatabaseDriver(), schema => { schema.create("target", table => { table.id(); table.string("name"); }); }); },
- async down(db) { await Schema.run(db, resolveDatabaseDriver(), schema => { schema.drop("target"); }); },
+ async up(db) { await Schema.run(db, currentSqlDialect().driver, schema => { schema.create("target", table => { table.id(); table.string("name"); }); }); },
+ async down(db) { await Schema.run(db, currentSqlDialect().driver, schema => { schema.drop("target"); }); },
 };
 export default migration;
 `,

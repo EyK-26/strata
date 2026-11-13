@@ -8,6 +8,7 @@ interface SafeFetchOptions {
   maxRedirects?: number;
   allowHttp?: boolean;
   resolveDns?: boolean;
+  production?: boolean;
   allowPrivate?: boolean;
 }
 
@@ -108,6 +109,7 @@ async function safeFetch(
   }
   const maxRedirects = options.maxRedirects ?? 0;
   const urlOptions = {
+    production: options.production,
     allowHttp: options.allowHttp,
     resolveDns: options.resolveDns ?? true,
     allowPrivate: options.allowPrivate,

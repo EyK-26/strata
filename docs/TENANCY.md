@@ -6,11 +6,17 @@
 |--------|----------|--------------|
 | `none` | any | No `tenant` table. Middleware still sets an async-local default tenant (`id` 1). It does not query `tenant` or run `SET LOCAL`. |
 | `column` | any | Creates a `tenant` table and `users.tenant_id`. Requests resolve the tenant in application code (ALS). No Postgres `SET LOCAL` / `set_config`. Use this on SQLite and MySQL, or on Postgres when you do not want RLS. |
-| `rls` | Postgres | Same tenant table plus `SET LOCAL` / `set_config('app.tenant_id')` on the connection that runs queries. SQLite and MySQL cannot do this. `create-strata` coerces `--tenancy=rls` to `column` on those engines. |
+| `rls` | Postgres | Same tenant table plus `SET LOCAL` / `set_config('app.tenant_id')` on the connection that runs queries. SQLite and MySQL cannot do this. The feature compiler rejects RLS on those engines before generation. |
 
 The default in core (unset env) is `rls`. Generated apps write the driver you picked into `.env.example`. Hobby SQLite defaults to `none`.
 
-HTTP requests and background jobs must call `runWithTenantDatabase()` when RLS is on so `app.tenant_id` is set on the connection. Migrations, seeds, and audit export use `runWithMigrationBypass()`, which opens a transaction and `SET LOCAL app.bypass_rls=true`. That unbounded GUC is migrate/seed/audit only. Request auth lookups use `runWithMigrationBypassForIdentifier()`, which opens its own transaction and `SET LOCAL app.bypass_identifier` to the caller-supplied id, email, session id, or token hash. The helper does not rewrite SQL. The policy is the pin: `users` match `id::text` or `email`; `sessions` match `id` or `user_id::text`; `api_tokens` and `auth_one_time_tokens` match `token_hash` or `user_id::text`. Notes and other tenant data honour unbounded `app.bypass_rls()` or `tenant_id = app_current_tenant_id()` only. After the user or session is known, follow-up SQL in the same request uses the request tenant GUC. Note / SCIM / `/health` SQL does not wrap bypass. `column` and `none` skip those Postgres session GUCs. Postgres RLS is the only driver with database-level enforcement; SQLite and MySQL apps should use `column` (application ALS) or `none`.
+HTTP and jobs establish an owned execution with an explicit tenant, then run its
+selected `DatabaseSession` through `ScopedPolicy.run(database, { kind: "tenant",
+tenantId }, work)`. This installs transaction-local RLS settings. Trusted migration,
+seed and audit operations request the explicit bypass policy; auth lookups request
+an identifier-limited policy. The application supplies these capabilities; no
+ambient tenant helper selects a default connection. Column tenancy remains an
+application constraint, while PostgreSQL RLS provides database enforcement.
 
 ## Generated applications
 
@@ -46,11 +52,11 @@ Authenticated non-admin users are pinned to their account tenant. Global admins 
 
 ## Background jobs
 
-Jobs that touch RLS tables must call `runWithTenantDatabase()` with an explicit tenant from the job payload. Do not rely on a leftover pooled `app.bypass_rls` or `app.tenant_id` from a previous request.
+Jobs touching RLS tables must establish a fresh owned execution from a trusted actor/tenant envelope, then use its explicit scoped policy and selected session. A tenant ID in arbitrary queue payload data is not trusted identity. Authenticated queue handoffs bind the application audience, job name and payload; unsigned system work requires an explicit execution policy. Do not inherit a closed HTTP scope or leftover pooled tenant/bypass settings.
 
 Webhook dispatch jobs require `tenantId` and scope lookup and delivery to that tenant. Blocked outbound URLs (`assertSafeOutboundUrl`) are recorded and do not fail the originating model write.
 
-`runWithTenantDatabase()` (and `runInTransaction()`) defer `BaseRepository` model events until the transaction commits. A throw drops those events. Re-entering a same-tenant scope on an active connection uses a SQL savepoint and restores the outer tenant, bypass, and bypass-identifier settings. Switching tenants inside an active transaction is rejected. Await sibling scopes sequentially. An exception converted to an HTTP error response by framework error handling rolls the open transaction or savepoint back; a normal 4xx return does not. See [DATABASE.md](./DATABASE.md) and [INTEGRATIONS.md](./INTEGRATIONS.md#outbound-webhooks).
+Owned session transactions defer after-commit repository/model effects until durability. A throw drops those events. Re-entering a same-tenant scope on an active connection uses a SQL savepoint and restores the outer tenant, bypass, and bypass-identifier settings. Switching tenants inside an active transaction is rejected. Await sibling scopes sequentially. An exception converted to an HTTP error response by framework error handling rolls the open transaction or savepoint back; a normal 4xx return does not. See [DATABASE.md](./DATABASE.md) and [INTEGRATIONS.md](./INTEGRATIONS.md#outbound-webhooks).
 
 ### Application metadata and quota policies
 

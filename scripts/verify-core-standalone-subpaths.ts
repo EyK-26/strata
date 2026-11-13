@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { ServiceToken } from "@getstrata/core/contracts/token";
 import { CORE_SHARED_SUBPATH_SET, CORE_STANDALONE_SUBPATHS } from "./core-shared-subpaths";
 
 const root = join(import.meta.dir, "..");
@@ -65,6 +66,10 @@ for (const subpath of canonical) {
     // importing the public root shim would cycle through root queue exports.
     if (subpath === "queue/failedJobRepository" && dependency.path === "#strata-orm-runtime")
       continue;
+    // Handoff authentication uses the runtime's cryptographic primitives. Bun
+    // normalizes node:crypto to crypto in the emitted standalone bundle.
+    if (subpath === "queue/queueHandoff" && ["crypto", "node:crypto"].includes(dependency.path))
+      continue;
     assert(
       dependency.path.startsWith(prefix),
       `${subpath} depends on a root shim or noncanonical module: ${dependency.path}`,
@@ -78,6 +83,43 @@ for (const subpath of canonical) {
     );
   }
 }
+// Every public token must use the canonical opaque brand, including tokens defined in the root bundle.
+const rootExports = await import(join(root, "packages/strata-core/dist/index.js"));
+const canonicalTokens = await import("@getstrata/core/contracts/token");
+const canonicalServices = await import("@getstrata/core/contracts/services");
+for (const [name, value] of Object.entries(rootExports)) {
+  if (!name.endsWith("_TOKEN")) continue;
+  assert(
+    canonicalTokens.isServiceToken(value),
+    `Public ${name} has a private or invalid token brand`,
+  );
+  assert.doesNotThrow(
+    () => canonicalServices.valueService(value as ServiceToken<unknown>, undefined),
+    `Public ${name} must be accepted by canonical valueService`,
+  );
+}
+// The policy adapter is consumed by installed bootstrap; source aliases must not hide missing exports.
+const queuePolicy = await import(
+  join(root, "packages/strata-core/dist/entries/queue/queueConfig.js")
+);
+for (const name of [
+  "resolveQueueConfig",
+  "snapshotQueueRetryPolicy",
+  "resolveRedisQueueTransport",
+  "readQueueVisibilityMs",
+])
+  assert.equal(typeof queuePolicy[name], "function", `Queue policy artifact is missing ${name}`);
+assert.equal(
+  "queueConfig" in queuePolicy,
+  false,
+  "Queue policy must not expose the removed ambient getter",
+);
+const capturedPolicy = queuePolicy.resolveQueueConfig({
+  QUEUE_MAX_ATTEMPTS: "2",
+  QUEUE_BACKOFF_MS: "0",
+});
+assert.equal(capturedPolicy.maxAttempts, 2);
+assert(Object.isFrozen(capturedPolicy), "Queue policy must be immutable");
 console.log(
   `Standalone canonical artifacts OK (${canonical.size}; packed identity is checked separately).`,
 );

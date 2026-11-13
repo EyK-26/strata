@@ -25,13 +25,13 @@ The framework test fixture schema still uses the table name `api_token`. Generat
 
 `AuthManager` keeps a default guard (usually the cookie session) and extra named guards:
 
-```typescript
-auth.registerGuard("api", new DatabaseTokenGuard(container));
-auth.registerGuard("jwt", new JwtGuard(container));
-auth.registerGuard("basic", new BasicAuthGuard(container));
-```
+Each guard receives its declared capability options: `DatabaseTokenGuard` receives
+its token resolver, `JwtGuard` receives its account directory and signing secret,
+and `BasicAuthGuard` receives account lookup, credential verification and recovery
+persistence. Generated `src/bootstrap/providers/auth.ts` composes those dependencies;
+passing a container in place of those options is no longer supported.
 
-Generated applications do this in the generated `src/bootstrap/providers/auth.ts`. `JwtGuard` needs a directory (or container) so it can reject tokens whose `iat` is before `session_valid_after`. A `JwtGuard` without a directory returns null. It does not call `configureAbilityCatalog`.
+Generated applications do this in the generated `src/bootstrap/providers/auth.ts`. `JwtGuard` requires explicit `{ directory, secret }` options so it can reject tokens whose `iat` is before `session_valid_after`. Missing required capabilities reject at construction. Role and ability resolution belongs to that application.
 
 Every generated auth provider also registers the ability checker, including cookie-only, JWT-only and development-header apps. `make:module` uses `kernel.wrapAbility` for its API writes independently of the credential selection. The existing checker reads the authenticated identity's abilities; registering it does not enable opaque-token authentication, require an API-token table, or grant new permissions. Applications still choose their own grants and resource policies.
 
@@ -45,20 +45,12 @@ import { CORE_ABILITY_CHECKER_TOKEN } from "@getstrata/core/contracts/serviceTok
 container.set(CORE_ABILITY_CHECKER_TOKEN, createTokenAbilityChecker());
 ```
 
-Default token abilities for HMAC sessions and test headers stay `profile:read` plus `auth:tokens:*` unless you replace the catalog:
-
-```typescript
-import { configureAbilityCatalog } from "@getstrata/core/auth/abilityCatalog";
-
-configureAbilityCatalog({
-  member: ["profile:read"],
-  admin: ["*"],
-  resolveForRole(role) {
-    if (role === "admin") return ["*"];
-    return ["profile:read"];
-  },
-});
-```
+Default role abilities remain available as immutable declarations from
+`@getstrata/core/auth/abilityCatalog`. The process-wide `configureAbilityCatalog`
+and `abilityCatalog` accessors are removed. Supply application-specific ability
+resolution through the owning auth directory/guard and `CORE_ABILITY_CHECKER_TOKEN`;
+register policies through that application's policy gate. One application's choices
+must not change another application's authorization.
 
 Opaque API tokens still store their own ability list on the `api_tokens` row.
 
@@ -104,8 +96,8 @@ These are kernel helpers. Cookie apps generated with `--email-verification` ship
 
 - `FEATURE_EMAIL_VERIFICATION=true` makes `wrapWebAuthenticated` send HTML users with `emailVerifiedAt: null` to `/email/verify`.
 - Fresh signup persists its account and verification-token intent in one transaction. Generated auth database timestamps use `sqlTimestamp`; MySQL DATETIME bindings must not use raw ISO wire strings. SMTP is registered with `afterCommit` from `@getstrata/core/database/transaction`, so an RLS request's outer transaction must commit before delivery. Token persistence failure rolls back signup and permits retry. SMTP failure after commit retains the account; a browser owner can sign in while unverified and request `/email/verification-notification`. This process-local callback is not durable delivery; use the SQL outbox for effects that must survive crashes. See [starter journey qualification](STARTER-JOURNEYS.md).
-- `GET /email/verify` consumes the one-time token and redirects to `/login`. It does not create a session. Generated JSON and HTML verification now put purpose-scoped token consumption and the account update/immediate observers in one explicit `runInTransaction`, including SQLite/non-RLS apps. A database or observer failure rolls them back, leaving the original signed link retryable. Successful verification applies once; invalid/expired/wrong-purpose tokens retain the existing JSON 403 or HTML flash/redirect behavior. Signature and CSRF admission are unchanged. Existing apps must explicitly adopt the released verification helper/handlers; updating dependencies does not rewrite routes. This transaction does not qualify external mail delivery, link-scanner policy or email-address-change binding.
-- Password reset updates the hash, sets `users.session_valid_after`, deletes `sessions` rows, and deletes `api_tokens` for that user. JwtGuard rejects JWTs issued before that watermark. Cookie sessions compare `sessions.created_at` to the watermark, not last-seen. Generated JSON and HTML reset handlers validate the new password before consuming the signed one-time token. Token consumption, hash update and credential revocation use one `runInTransaction` boundary; a database failure rolls them all back so the original link and credentials remain usable. Successful reset consumes the link once; replay cannot replace the password again. Signed-route and CSRF checks still apply. Existing generated apps must adopt the updated reset-handler/helper shape; updating a package alone does not rewrite application files.
+- `GET /email/verify` consumes the one-time token and redirects to `/login`. It does not create a session. Generated JSON and HTML verification now put purpose-scoped token consumption and the account update/immediate observers in one explicit selected-session transaction, including SQLite/non-RLS apps. A database or observer failure rolls them back, leaving the original signed link retryable. Successful verification applies once; invalid/expired/wrong-purpose tokens retain the existing JSON 403 or HTML flash/redirect behavior. Signature and CSRF admission are unchanged. Existing apps must explicitly adopt the released verification helper/handlers; updating dependencies does not rewrite routes. This transaction does not qualify external mail delivery, link-scanner policy or email-address-change binding.
+- Password reset updates the hash, sets `users.session_valid_after`, deletes `sessions` rows, and deletes `api_tokens` for that user. JwtGuard rejects JWTs issued before that watermark. Cookie sessions compare `sessions.created_at` to the watermark, not last-seen. Generated JSON and HTML reset handlers validate the new password before consuming the signed one-time token. Token consumption, hash update and credential revocation use one selected-session transaction boundary; a database failure rolls them all back so the original link and credentials remain usable. Successful reset consumes the link once; replay cannot replace the password again. Signed-route and CSRF checks still apply. Existing generated apps must adopt the updated reset-handler/helper shape; updating a package alone does not rewrite application files.
 - Sensitive HTML actions can require a fresh password-confirm cookie (`wrapWebPasswordConfirm`). MFA enroll requires that cookie.
 
 SAML ACS verifies HMAC RelayState without a SameSite cookie so a cross-site IdP POST can succeed. Replay stores assertion IDs in `auth_saml_assertions` by default (SQL unique insert). Tests may use an in-memory store. Both drop IDs after 1 hour, which is longer than a typical assertion `NotOnOrAfter` plus `acceptedClockSkewMs` (5000). ACS also checks `profile.issuer` against `SAML_IDP_ISSUER`. Signed responses are required in production (`SAML_WANT_RESPONSE_SIGNED=false` is rejected at boot). `SAML_IDP_ISSUER` is required. JIT is skipped when `FEATURE_REGISTRATION=false`. New users and SAML JIT use `currentTenantId()`. If the account already has MFA enrolled, ACS redirects to `/login/mfa` instead of creating a session.
@@ -167,7 +159,7 @@ These exist for generic apps, tests, or framework fixtures. Generated applicatio
 | `FEATURE_MFA` | Cookie apps get `/login/mfa` and `/account/mfa`. Password login (HTML MFA, token, JWT, and Basic mint) goes through `completePasswordLogin` when the user is enrolled. Enrollment is optional. JwtGuard does not run TOTP on each request. New secrets require encryption configuration even locally. The legacy KMS key writes `enc:v1:`; the opt-in keyring supports reader-first v1 writes or explicit `enc:v2:` writes while retaining old decrypt keys. Legacy plaintext reads remain development-only without encryption configuration. See [rotation configuration](ENCRYPTION-ROTATION.md). Generated SAML ACS redirects enrolled users to `/login/mfa`. Generated `--oidc` uses the same MFA gate via `completeBrowserSsoLogin`. |
 | `FEATURE_EMAIL_VERIFICATION` | Kernel redirects plus generated verify pages / one-time JSON verify |
 | `FEATURE_REGISTRATION` | `false` 404s HTML and JSON register routes and blocks SAML JIT |
-| `FEATURE_OAUTH` | Optional `--oauth-github` generates GitHub cookie login (`GET /auth/github`, callback, login link, JIT + MFA gate). GitHub state is `createOAuthState()` on the query string. It does not call `createOAuthStateCookie()`. Optional `--oidc` generates OIDC cookie login (`GET /auth/oidc`, callback, `oidc_pkce` cookie). The login link is hidden unless `FEATURE_OAUTH=true` and `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` are set; the route is 404 until then. Call `createAuthorization()` and pass the handshake to `exchangeCode()`. `getAuthorizationUrl()` throws. Loopback issuers are fetched outside production; other private hosts need `OIDC_ALLOW_PRIVATE=true` (ignored in production). Browser SSO failures are JSON, not `login.eta`. `completeBrowserSsoLogin` lowercases email. Inbound OIDC ID tokens are RS256 via JWKS. App JWTs are HS256 (`signJwt`). Multi-valued `aud` requires `azp` equal to the client id. `at_hash` is verified when present; omitted `access_token` plus `at_hash` throws. GitHub OAuth always reads `/user/emails` and throws unless a verified address exists (unverified `profile.email` is ignored). |
+| `FEATURE_OAUTH` | Optional `--oauth-github` generates GitHub cookie login (`GET /auth/github`, callback, login link, JIT + MFA gate). GitHub state is `createOAuthState()` on the query string. It does not call `createOAuthStateCookie()`. Optional `--oidc` generates OIDC cookie login (`GET /auth/oidc`, callback, `oidc_pkce` cookie). The login link is hidden unless `FEATURE_OAUTH=true` and `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` are set; the route is 404 until then. Call `createAuthorization()` and pass the handshake to `exchangeCode()`. `getAuthorizationUrl()` throws. Generated applications capture `APP_ENV` and `OIDC_ALLOW_PRIVATE` into the provider network policy. Outside production, loopback issuers work and other private hosts require the explicit private-host allowance. Production blocks private hosts. Direct `OidcProvider` construction defaults to production-safe networking; pass `networkPolicy: { production: false, allowPrivate: true }` only for an explicitly configured local provider. Each provider owns its discovery/JWKS caches. Browser SSO failures are JSON, not `login.eta`. `completeBrowserSsoLogin` lowercases email. Inbound OIDC ID tokens are RS256 via JWKS. App JWTs are HS256 (`signJwt`). Multi-valued `aud` requires `azp` equal to the client id. `at_hash` is verified when present; omitted `access_token` plus `at_hash` throws. GitHub OAuth always reads `/user/emails` and throws unless a verified address exists (unverified `profile.email` is ignored). |
 | `FEATURE_SAML` | Real SP via optional peer `@node-saml/node-saml`. Routes `GET /auth/saml` and `POST /auth/saml/acs` 404 when the flag is off. Requires `SAML_IDP_ISSUER`. ACS compares assertion issuer. Signed responses default on; production boot rejects `SAML_WANT_RESPONSE_SIGNED=false`. |
 
 Production checks: [PRODUCTION.md](./PRODUCTION.md).
@@ -180,7 +172,7 @@ Generated user-backed apps include `0006_account_state.ts`, model/directory fiel
 import { createAccountStateMigration } from "@getstrata/core/auth/accountStateMigration";
 import { resolveDatabaseDriver } from "@getstrata/core/database/schema";
 
-export default createAccountStateMigration("0006_account_state", resolveDatabaseDriver(), {
+export default createAccountStateMigration("0006_account_state", resolveDatabaseDriver({ connection: "pgsql" }), {
   sessions: true, // only when this app has the standard database-cookie sessions table
 });
 ```

@@ -1,9 +1,9 @@
-function isPublicReadsEnabled(): boolean {
-  return (process.env.FEATURE_PUBLIC_READS ?? "false") === "true";
+function isPublicReadsEnabled(enabled = false): boolean {
+  return enabled;
 }
 
-function guestCanViewResource(): boolean {
-  return isPublicReadsEnabled();
+function guestCanViewResource(enabled = false): boolean {
+  return isPublicReadsEnabled(enabled);
 }
 
 export { guestCanViewResource, isPublicReadsEnabled };

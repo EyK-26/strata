@@ -3,6 +3,7 @@ import { createPersistenceInvocation } from "@getstrata/bootstrap/persistenceInv
 import { BasicAuthGuard } from "@getstrata/core/auth/basicAuthGuard";
 import { hashPassword } from "@getstrata/core/auth/password";
 import { persistConsumedRecoveryHash } from "@getstrata/core/auth/passwordLogin";
+import { createMfaSecretCodec } from "@getstrata/core/crypto/mfaSecret";
 import { createMysqlConnection } from "@getstrata/core/database/mysqlConnection";
 import type { DatabaseSession } from "@getstrata/core/database/session";
 import { generateRecoveryCodes, hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
@@ -149,9 +150,9 @@ test.skipIf(!rlsAdmin || !rlsRuntime)(
         ({ database, policy }) =>
           policy.run(database, { kind: "tenant", tenantId: 102 }, async (selected) => {
             const guard = new BasicAuthGuard({
-              directory: {
-                resolveUserFromToken: async () => null,
-                findByIdOrThrow: async (id) => ({ id, role: "member" }),
+              mfaSecrets: createMfaSecretCodec(process.env),
+              accounts: { findByIdOrThrow: async (id) => ({ id, role: "member" }) },
+              emailLookup: {
                 findByEmail: async () => ({
                   id: 1,
                   role: "member",

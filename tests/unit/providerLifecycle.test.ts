@@ -6,6 +6,7 @@ import {
 } from "@getstrata/bootstrap/context";
 import type { ServiceProvider } from "@getstrata/bootstrap/contracts";
 import { CORE_HTTP_CLEANUP_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import { createServiceToken } from "@getstrata/core/contracts/token";
 import { createDatabaseBindings } from "@getstrata/core/database/bindings";
 
 const contextOptions = () => ({
@@ -62,7 +63,7 @@ describe("awaited provider lifecycle", () => {
         order.push("starter.register");
       },
       boot({ container }) {
-        expect(container.resolve<string>("late.binding")).toBe("ready");
+        expect(container.resolve<string>(LateBinding)).toBe("ready");
         order.push("starter.boot");
       },
     };
@@ -72,7 +73,7 @@ describe("awaited provider lifecycle", () => {
         entered();
         await delayed;
         config.set("lifecycle.ready", true);
-        container.set("late.binding", "ready");
+        container.set(LateBinding, "ready");
         order.push("module.register");
       },
       async boot() {
@@ -89,7 +90,7 @@ describe("awaited provider lifecycle", () => {
     release();
     const context = await pending;
     expect(order).toEqual(["starter.register", "module.register", "starter.boot", "module.boot"]);
-    expect(context.container.resolve("late.binding")).toBe("ready");
+    expect(context.container.resolve(LateBinding)).toBe("ready");
     expect(owner.application.state.phase).toBe("ready");
     await context.dispose();
     expect(owner.application.state.phase).toBe("stopped");
@@ -242,16 +243,14 @@ test("HTTP startup rejects a delayed provider before socket admission and cleans
   const repo = join(import.meta.dir, "../..");
   const script = `
     import App from ${JSON.stringify(join(repo, "src/bootstrap/app.ts"))};
-    import { configureModulesDirectory } from ${JSON.stringify(join(repo, "src/bootstrap/discoverModules.ts"))};
-    import { ensureModulesLoaded, discoverModules } from ${JSON.stringify(join(repo, "src/bootstrap/discoverModules.ts"))};
+    import { ensureModulesLoaded } from ${JSON.stringify(join(repo, "src/bootstrap/discoverModules.ts"))};
     import { collectProviders } from ${JSON.stringify(join(repo, "src/bootstrap/context.ts"))};
     import { createDatabaseBindings } from ${JSON.stringify(join(repo, "src/core/database/bindings.ts"))};
-    configureModulesDirectory(${JSON.stringify(root)});
     globalThis.acquired = 0; globalThis.closed = 0;
     let bound = 0;
     Bun.serve = () => { bound++; throw new Error("unexpected socket admission"); };
-    await ensureModulesLoaded();
-    const app=new App({port:0,providers:collectProviders(discoverModules()),connection:"main",definition:{providers:[],services:createDatabaseBindings({default:"main",connections:{main:{driver:"sqlite",filename:":memory:"}}})}});
+    const modules = await ensureModulesLoaded({modulesDir:${JSON.stringify(root)}});
+    const app=new App({port:0,providers:collectProviders(modules),connection:"main",definition:{providers:[],services:createDatabaseBindings({default:"main",connections:{main:{driver:"sqlite",filename:":memory:"}}})}});
     let failure;
     try { await app.serve(); } catch (error) { failure = error.message; }
     await app.shutdown();
@@ -392,3 +391,5 @@ test("direct disposal preserves application services until admitted work and tel
   expect(context.application.state.phase).toBe("stopped");
   await expect(context.invoke({ kind: "command" }, () => undefined)).rejects.toBeDefined();
 });
+
+const LateBinding = createServiceToken<string>("late.binding");

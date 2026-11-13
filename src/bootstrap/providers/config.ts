@@ -1,7 +1,12 @@
 import { validateEnv } from "@getstrata/core/config/envSchema";
-import { appConfig } from "../../config/app";
-import { authConfig } from "../../config/auth";
-import { queueConfig } from "../../config/queue";
+import { CORE_JSON_RESPONSE_POLICY_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import { resolveMaxBodyBytes } from "@getstrata/core/http/bodySizeLimitMiddleware";
+import { type CorsOptions, resolveCorsConfig } from "@getstrata/core/http/corsMiddleware";
+import { resolveMaxUploadBytes } from "@getstrata/core/http/uploads";
+import { envFlagEnabled, isProductionEnv } from "@getstrata/core/runtime/appEnv";
+import { parseFrontendMode } from "@getstrata/core/runtime/frontendMode";
+import { resolveDefaultTokenExpiryDays } from "@getstrata/core/security/tokenExpiry";
+import { resolveQueueConfig } from "../../config/queue";
 import {
   APP_PORT_CONFIG_KEY,
   CACHE_DRIVER_CONFIG_KEY,
@@ -10,60 +15,104 @@ import {
   CORE_CONFIG_TOKEN,
   CSRF_TARGET_ORIGIN_CONFIG_KEY,
   DATABASE_URL_CONFIG_KEY,
-  DEFAULT_APP_PORT,
-  DEFAULT_CACHE_DRIVER,
-  DEFAULT_CACHE_MAX_ENTRIES,
-  DEFAULT_CACHE_TTL_MS,
   REDIS_URL_CONFIG_KEY,
 } from "../config";
 import type { ServiceProvider } from "../contracts";
 import { appConfigKeys, appEnvSchema } from "../env";
+import type { HttpPersistenceOptions } from "../persistenceContracts";
+import { resolveLoginRateLimit, resolveRegisterRateLimit } from "../rateLimit";
 
-function parseInteger(value: string, envName: string, minimum: number): number {
-  const parsed = Number.parseInt(value, 10);
-
-  if (!Number.isInteger(parsed) || parsed < minimum) {
-    const comparison = minimum === 0 ? "a non-negative" : `an integer >= ${minimum}`;
-    throw new Error(`${envName} must be ${comparison} value.`);
-  }
-
-  return parsed;
+/** Entrypoint adapter: resolve once from the owning application's environment snapshot. */
+function resolveHttpResponsePolicy(
+  source: Readonly<Record<string, string | undefined>>,
+): NonNullable<HttpPersistenceOptions["responsePolicy"]> {
+  const cors: CorsOptions = Object.freeze({
+    allowedOrigins: Object.freeze(
+      (
+        source.CORS_ALLOWED_ORIGINS ??
+        (source.APP_URL?.trim() || "http://localhost:3000").replace(/\/$/, "")
+      )
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+    ),
+    additionalAllowedHeaders: Object.freeze(
+      source.CORS_ADDITIONAL_ALLOWED_HEADERS?.trim()
+        ? source.CORS_ADDITIONAL_ALLOWED_HEADERS.split(",").map((name) => name.trim())
+        : [],
+    ),
+  });
+  resolveCorsConfig(cors);
+  const maxAttempts = Number(source.RATE_LIMIT_PER_MINUTE ?? "120");
+  return Object.freeze({
+    cors,
+    securityHeaders: Object.freeze({
+      frontendMode: parseFrontendMode(source.FRONTEND_MODE),
+      production: isProductionEnv(source),
+    }),
+    maxBodyBytes: resolveMaxBodyBytes(source.MAX_REQUEST_BODY_BYTES),
+    rateLimitPerMinute: Number.isFinite(maxAttempts) ? maxAttempts : 120,
+    namespace: source.APP_KEY_PREFIX?.trim() || "strata",
+    trustForwardedFor: source.TRUST_FORWARDED_FOR === "true",
+    loginRateLimit: Object.freeze(resolveLoginRateLimit({ APP_ENV: "local", ...source })),
+    registerRateLimit: Object.freeze(resolveRegisterRateLimit({ APP_ENV: "local", ...source })),
+  });
 }
 
-const configProvider: ServiceProvider = {
-  name: "core.config",
-  register({ container, config }) {
-    const env = validateEnv(appEnvSchema);
-
-    container.set(CORE_CONFIG_TOKEN, config);
-    if (process.env.CSRF_TARGET_ORIGIN !== undefined)
-      config.set(CSRF_TARGET_ORIGIN_CONFIG_KEY, process.env.CSRF_TARGET_ORIGIN);
-    config.set(DATABASE_URL_CONFIG_KEY, env.DATABASE_URL);
-    config.set(APP_PORT_CONFIG_KEY, parseInteger(env.PORT ?? String(DEFAULT_APP_PORT), "PORT", 1));
-    config.set(
-      CACHE_TTL_MS_CONFIG_KEY,
-      parseInteger(env.CACHE_TTL_MS ?? String(DEFAULT_CACHE_TTL_MS), "CACHE_TTL_MS", 0),
-    );
-    config.set(
-      CACHE_MAX_ENTRIES_CONFIG_KEY,
-      parseInteger(
-        env.CACHE_MAX_ENTRIES ?? String(DEFAULT_CACHE_MAX_ENTRIES),
-        "CACHE_MAX_ENTRIES",
-        1,
+/** Validate and capture all settings before any provider can acquire resources. */
+function createConfigProvider(
+  input: Readonly<Record<string, string | undefined>>,
+): ServiceProvider {
+  const source = Object.freeze({ ...input });
+  const env = validateEnv(appEnvSchema, source);
+  const queue = resolveQueueConfig(env);
+  const values = Object.freeze({
+    [DATABASE_URL_CONFIG_KEY]: env.DATABASE_URL,
+    [APP_PORT_CONFIG_KEY]: Number(env.PORT),
+    [CACHE_TTL_MS_CONFIG_KEY]: Number(env.CACHE_TTL_MS),
+    [CACHE_MAX_ENTRIES_CONFIG_KEY]: Number(env.CACHE_MAX_ENTRIES),
+    [CACHE_DRIVER_CONFIG_KEY]: env.CACHE_DRIVER,
+    [REDIS_URL_CONFIG_KEY]: env.REDIS_URL,
+    "http.responsePolicy": resolveHttpResponsePolicy({ ...source, APP_URL: env.APP_URL }),
+    "http.features": Object.freeze({
+      emailVerificationRequired: source.FEATURE_EMAIL_VERIFICATION === "true",
+      viewsEnabled: ["server-htmx", "hybrid"].includes(source.FRONTEND_MODE ?? "api"),
+      publicReadsEnabled: source.FEATURE_PUBLIC_READS === "true",
+      etagEnabled: source.FEATURE_ETAG !== "false",
+    }),
+    "http.uploadPolicy": Object.freeze({
+      maxBytes: resolveMaxUploadBytes(
+        source.MAX_UPLOAD_BYTES?.trim() ?? source.MAX_REQUEST_BODY_BYTES?.trim(),
       ),
-    );
-    config.set(CACHE_DRIVER_CONFIG_KEY, env.CACHE_DRIVER ?? DEFAULT_CACHE_DRIVER);
-    config.set(REDIS_URL_CONFIG_KEY, env.REDIS_URL ?? "");
-    config.set("app.env", appConfig.env);
-    config.set("app.debug", appConfig.debug);
-    config.set("app.url", appConfig.url);
-    config.set("app.apiPrefix", appConfig.apiPrefix);
-    config.set("auth.allowDevHeaders", authConfig.allowDevHeaders);
-    config.set("queue.driver", queueConfig.driver);
-    config.set("queue.maxAttempts", queueConfig.maxAttempts);
-    config.set("queue.backoffMs", queueConfig.backoffMs);
-  },
-};
+      allowUnknownMime: envFlagEnabled(source.UPLOAD_ALLOW_UNKNOWN_MIME),
+    }),
+    "auth.defaultTokenExpiryDays": resolveDefaultTokenExpiryDays(
+      source.API_TOKEN_DEFAULT_EXPIRY_DAYS,
+    ),
+    "app.name": source.APP_NAME?.trim() || "Strata",
+    "app.env": env.APP_ENV,
+    "app.debug": source.APP_DEBUG === "true",
+    "app.url": env.APP_URL,
+    "app.apiPrefix": env.API_PREFIX,
+    "auth.allowDevHeaders": envFlagEnabled(env.AUTH_DEV_HEADERS),
+    "queue.driver": queue.driver,
+    "queue.maxAttempts": queue.maxAttempts,
+    "queue.backoffMs": queue.backoffMs,
+    ...(source.CSRF_TARGET_ORIGIN !== undefined
+      ? { [CSRF_TARGET_ORIGIN_CONFIG_KEY]: source.CSRF_TARGET_ORIGIN }
+      : {}),
+  });
+  return Object.freeze({
+    name: "core.config",
+    register({ container, config }: Parameters<NonNullable<ServiceProvider["register"]>>[0]) {
+      container.set(CORE_CONFIG_TOKEN, config);
+      container.set(
+        CORE_JSON_RESPONSE_POLICY_TOKEN,
+        Object.freeze({ etagEnabled: source.FEATURE_ETAG !== "false" }),
+      );
+      for (const [key, value] of Object.entries(values)) config.set(key, value);
+    },
+  });
+}
 
-export default configProvider;
-export { appConfigKeys };
+export { appConfigKeys, createConfigProvider, resolveHttpResponsePolicy };

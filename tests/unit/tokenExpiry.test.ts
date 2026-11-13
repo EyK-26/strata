@@ -16,26 +16,26 @@ describe("resolveDefaultTokenExpiryDays", () => {
   test("returns null when the env var is unset", () => {
     delete process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS;
 
-    expect(resolveDefaultTokenExpiryDays()).toBeNull();
+    expect(resolveDefaultTokenExpiryDays(process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS)).toBeNull();
   });
 
   test("returns null for blank values", () => {
     process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS = "   ";
 
-    expect(resolveDefaultTokenExpiryDays()).toBeNull();
+    expect(resolveDefaultTokenExpiryDays(process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS)).toBeNull();
   });
 
   test("returns null for invalid integers", () => {
     process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS = "0";
-    expect(resolveDefaultTokenExpiryDays()).toBeNull();
+    expect(resolveDefaultTokenExpiryDays(process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS)).toBeNull();
 
     process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS = "abc";
-    expect(resolveDefaultTokenExpiryDays()).toBeNull();
+    expect(resolveDefaultTokenExpiryDays(process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS)).toBeNull();
   });
 
   test("returns positive integer day counts", () => {
     process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS = "30";
 
-    expect(resolveDefaultTokenExpiryDays()).toBe(30);
+    expect(resolveDefaultTokenExpiryDays(process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS)).toBe(30);
   });
 });

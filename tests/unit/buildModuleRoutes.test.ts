@@ -7,14 +7,17 @@ import {
 } from "@getstrata/bootstrap/config";
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
+import { getRouteInventory } from "@getstrata/bootstrap/routePlan";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { PolicyGate } from "@getstrata/core/auth/policy";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
-import { CORE_TOKEN_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
-import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
+import { CORE_ABILITY_CHECKER_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import {
+  csrfTokenOptionsFromEnvironment,
+  resolveCsrfTokenForRequest,
+} from "@getstrata/core/http/csrfToken";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { SyncQueue } from "@getstrata/core/queue";
 import { guestGuardOptions } from "../helpers/devAuthHeaders";
@@ -40,7 +43,7 @@ function createTestDependencies() {
   dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard(guestGuardOptions())));
   dependencies.container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
   dependencies.container.set(CORE_QUEUE_TOKEN, new SyncQueue());
-  dependencies.container.set(CORE_TOKEN_SERVICE_TOKEN, {
+  dependencies.container.set(CORE_ABILITY_CHECKER_TOKEN, {
     requireAbility: () => undefined,
     tokenCan: () => true,
   });
@@ -54,7 +57,12 @@ const loginModule: AppModule = {
     return {
       "/api/v1/auth/csrf": {
         GET: kernel.wrap("api", async (request) =>
-          Response.json({ token: resolveCsrfTokenForRequest(request) }),
+          Response.json({
+            token: resolveCsrfTokenForRequest(
+              request,
+              csrfTokenOptionsFromEnvironment(process.env),
+            ),
+          }),
         ),
       },
       "/api/v1/auth/login": {
@@ -125,7 +133,7 @@ describe("buildModuleRoutes", () => {
     expect(typeof routes["/api/reports/summary"]).toBe("function");
   });
 
-  test("can append routes without clearing the OpenAPI registry", () => {
+  test("creates independent inventories for separate route maps", () => {
     const dependencies = createTestDependencies();
     const firstCount = buildModuleRoutes(dependencies, {
       apiPrefix: "/api",
@@ -133,8 +141,7 @@ describe("buildModuleRoutes", () => {
     });
     const secondCount = buildModuleRoutes(dependencies, {
       apiPrefix: "/api",
-      modules: [fixtureModule],
-      clearRegistry: false,
+      modules: [{ name: "more", routes: () => ({ "/more": () => new Response() }) }],
     });
 
     expect(Object.keys(firstCount).length).toBeGreaterThan(0);
@@ -145,9 +152,14 @@ describe("buildModuleRoutes", () => {
       ...fixtureModule,
       openApi: { "/reports/summary": { GET: { summary: "Summary contract" } } },
     };
-    buildModuleRoutes(createTestDependencies(), { apiPrefix: "/api", modules: [module] });
+    const routes = buildModuleRoutes(createTestDependencies(), {
+      apiPrefix: "/api",
+      modules: [module],
+    });
     expect(
-      routeRegistry.list().find((route) => route.path === "/api/reports/summary")?.openApi?.summary,
+      getRouteInventory(routes).find(
+        (route) => route.path === "/api/reports/summary" && route.method === "GET",
+      )?.openApi?.summary,
     ).toBe("Summary contract");
     expect(() =>
       buildModuleRoutes(createTestDependencies(), {
@@ -157,94 +169,75 @@ describe("buildModuleRoutes", () => {
     expect(() =>
       buildModuleRoutes(createTestDependencies(), {
         modules: [
-          { ...fixtureModule, openApi: { "/reports/summary": { POST: { summary: "Invalid" } } } },
+          {
+            ...fixtureModule,
+            routes: () => ({ "/reports/summary": { GET: () => new Response() } }),
+            openApi: { "/reports/summary": { POST: { summary: "Invalid" } } },
+          },
         ],
       }),
     ).toThrow("no API handler");
   });
 
-  test("later modules replace a whole path rather than merging method maps", () => {
-    const routes = buildModuleRoutes(createTestDependencies(), {
-      apiPrefix: "/api/",
-      modules: [
-        {
-          name: "first",
-          routes: () => ({ "/shared": { GET: () => new Response("first") } }),
-          openApi: { "/shared": { GET: { summary: "Old read" } } },
-        },
-        {
-          name: "second",
-          routes: () => ({ "/shared": { POST: () => new Response("second") } }),
-          openApi: { "/shared": { POST: { summary: "Current write" } } },
-        },
-      ],
+  test("rejects metadata on a module with no API route hook", () => {
+    const existing = buildModuleRoutes(createTestDependencies(), { modules: [fixtureModule] });
+    const before = getRouteInventory(existing);
+    expect(() =>
+      buildModuleRoutes(createTestDependencies(), {
+        modules: [
+          { name: "missing-hook", openApi: { "/missing": { GET: { summary: "Orphan" } } } },
+        ],
+      }),
+    ).toThrow("no API route");
+    expect(getRouteInventory(existing)).toBe(before);
+    const empty = buildModuleRoutes(createTestDependencies(), {
+      modules: [{ name: "empty", openApi: {} }],
     });
-    expect(Object.keys(routes["/api/shared"])).toEqual(["POST"]);
-    expect(routeRegistry.list()).toEqual([
-      {
-        method: "POST",
-        path: "/api/shared",
-        middleware: ["global", "api"],
-        openApi: { summary: "Current write" },
-      },
-    ]);
+    expect(getRouteInventory(empty)).toEqual([]);
   });
 
-  test("a replacement without metadata removes the previous path contract", () => {
-    buildModuleRoutes(createTestDependencies(), {
+  test("merges disjoint module methods and retains each operation contract", () => {
+    const routes = buildModuleRoutes(createTestDependencies(), {
       apiPrefix: "/api/",
       modules: [
         {
-          name: "documented",
-          routes: () => ({ "/shared": () => new Response("old") }),
-          openApi: { "/shared": { GET: { summary: "Old response" } } },
+          name: "read",
+          routes: () => ({ "/shared": { GET: () => new Response("read") } }),
+          openApi: { "/shared": { GET: { summary: "Read" } } },
         },
-        { name: "replacement", routes: () => ({ "/shared": () => new Response("new") }) },
+        {
+          name: "write",
+          routes: () => ({ shared: { POST: () => new Response("write") } }),
+          openApi: { shared: { POST: { summary: "Write" } } },
+        },
       ],
     });
-    expect(routeRegistry.list()).toEqual([
-      { method: "GET", path: "/api/shared", middleware: ["global", "api"] },
-    ]);
+    expect(Object.keys(routes["/api/shared"])).toEqual(["GET", "POST"]);
+    expect(
+      getRouteInventory(routes)
+        .filter((route) => route.method !== "HEAD")
+        .map((route) => route.openApi?.summary),
+    ).toEqual(["Read", "Write"]);
   });
 
-  test("normalized path aliases cannot retain metadata from a replaced handler", () => {
-    const routes = buildModuleRoutes(createTestDependencies(), {
-      apiPrefix: "/api/",
-      modules: [
-        {
-          name: "relative",
-          routes: () => ({ shared: () => new Response("old") }),
-          openApi: { shared: { GET: { summary: "Old response" } } },
-        },
-        { name: "absolute", routes: () => ({ "/shared": () => new Response("new") }) },
-      ],
-    });
-    expect(Object.keys(routes)).toEqual(["/api/shared"]);
-    expect(routeRegistry.list()).toEqual([
-      { method: "GET", path: "/api/shared", middleware: ["global", "api"] },
-    ]);
-  });
-  test("normalization preserves existing raw-path insertion precedence", () => {
-    const routes = buildModuleRoutes(createTestDependencies(), {
-      apiPrefix: "/api/",
-      modules: [
-        { name: "first", routes: () => ({ "/shared": { GET: () => new Response("first") } }) },
-        {
-          name: "second",
-          routes: () => ({ shared: { POST: () => new Response("second") } }),
-          openApi: { shared: { POST: { summary: "Second raw path" } } },
-        },
-        { name: "third", routes: () => ({ "/shared": { GET: () => new Response("third") } }) },
-      ],
-    });
-    expect(Object.keys(routes["/api/shared"])).toEqual(["POST"]);
-    expect(routeRegistry.list()).toEqual([
-      {
-        method: "POST",
-        path: "/api/shared",
-        middleware: ["global", "api"],
-        openApi: { summary: "Second raw path" },
-      },
-    ]);
+  test("rejects duplicate paths and normalized aliases without changing existing inventories", () => {
+    const routes = buildModuleRoutes(createTestDependencies(), { modules: [fixtureModule] });
+    const before = getRouteInventory(routes);
+    for (const path of ["/shared", "shared"]) {
+      expect(() =>
+        buildModuleRoutes(createTestDependencies(), {
+          apiPrefix: "/api/",
+          modules: [
+            {
+              name: "first",
+              routes: () => ({ "/shared": () => new Response("first") }),
+              openApi: { "/shared": { GET: { summary: "Original" } } },
+            },
+            { name: "second", routes: () => ({ [path]: () => new Response("second") }) },
+          ],
+        }),
+      ).toThrow("Duplicate route");
+      expect(getRouteInventory(routes)).toEqual(before);
+    }
   });
 });

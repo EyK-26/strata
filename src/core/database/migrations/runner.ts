@@ -193,6 +193,7 @@ async function migrateDatabase(
   options: { advisoryLock?: boolean; onMigration?: (name: string) => void } = {},
 ): Promise<number> {
   validateMigrations(migrations);
+  currentSqlDialect();
   const { advisoryLock = false, onMigration } = options;
 
   if (advisoryLock) {
@@ -261,6 +262,7 @@ async function freshDatabase(
     );
   }
   validateMigrations(migrations);
+  currentSqlDialect();
   const runFresh = async (): Promise<void> => {
     const applied = await getAppliedMigrations(db);
     requireMigrationDefinitions(applied, migrations, "reset database");

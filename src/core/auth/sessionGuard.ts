@@ -1,33 +1,59 @@
-import type { AuthUserDirectory } from "../contracts/authUserDirectory";
+import type { AuthAccountLookup, AuthSessionValidity } from "../contracts/authUserDirectory";
 import { isAccountActive, matchesAuthVersion } from "./accountState";
 import type { AuthUser } from "./authContext";
+import { type AuthOutcome, authenticateProof, authUserFromOutcome } from "./authOutcome";
 import type { AuthGuard } from "./guard";
+import { requireAuthCapability } from "./requireAuthCapability";
 import { isSessionInvalidated, type readSession } from "./sessionCookie";
 
 class SessionGuard implements AuthGuard {
   constructor(
-    private readonly directory: AuthUserDirectory,
+    private readonly directory: AuthAccountLookup,
     private readonly session: {
       read(request: Request): ReturnType<typeof readSession>;
+      hasCredential(request: Request): boolean;
       abilities(role: string): string[];
+      /** Null explicitly selects account epoch/cutoff validation without a session registry. */
+      validity: AuthSessionValidity | null;
     },
-  ) {}
+  ) {
+    requireAuthCapability<AuthAccountLookup>(directory, ["findByIdOrThrow"], "session account");
+    requireAuthCapability<typeof session>(
+      session,
+      ["read", "abilities", "hasCredential"],
+      "session",
+    );
+    if (session.validity !== null) {
+      requireAuthCapability<AuthSessionValidity>(
+        session.validity,
+        ["hasActiveBrowserSession"],
+        "session validity",
+      );
+    }
+  }
 
+  authenticate(request: Request): Promise<AuthOutcome> {
+    return authenticateProof(
+      "session",
+      () => this.session.hasCredential(request),
+      () => this.resolveUser(request),
+    );
+  }
   async resolve(request: Request): Promise<AuthUser | null> {
+    return authUserFromOutcome(await this.authenticate(request));
+  }
+  private async resolveUser(request: Request): Promise<AuthUser | null> {
     const session = this.session.read(request);
 
     if (!session) {
       return null;
     }
 
-    const tokenService = this.directory;
+    const accounts = this.directory;
 
-    if (!tokenService) {
-      return null;
-    }
-
-    try {
-      const user = await tokenService.findByIdOrThrow(session.userId);
+    {
+      const user = await accounts.findByIdOrThrow(session.userId);
+      if (user.id !== session.userId) return null;
 
       if (!isAccountActive(user) || !matchesAuthVersion(session.authVersion, user.auth_version))
         return null;
@@ -39,10 +65,13 @@ class SessionGuard implements AuthGuard {
         return null;
       }
 
-      if (typeof tokenService.hasActiveBrowserSession === "function") {
-        const active = await tokenService.hasActiveBrowserSession(session.userId, session.issuedAt);
+      if (this.session.validity !== null) {
+        const active = await this.session.validity.hasActiveBrowserSession(
+          session.userId,
+          session.issuedAt,
+        );
 
-        if (!active) {
+        if (active !== true) {
           return null;
         }
       }
@@ -54,8 +83,6 @@ class SessionGuard implements AuthGuard {
         abilities: this.session.abilities(user.role),
         emailVerifiedAt: user.email_verified_at ?? null,
       };
-    } catch {
-      return null;
     }
   }
 }

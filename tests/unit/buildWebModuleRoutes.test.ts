@@ -7,13 +7,13 @@ import {
 } from "@getstrata/bootstrap/config";
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
+import { getRouteInventory } from "@getstrata/bootstrap/routePlan";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { PolicyGate } from "@getstrata/core/auth/policy";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
-import { CORE_TOKEN_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import { CORE_ABILITY_CHECKER_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { SyncQueue } from "@getstrata/core/queue";
 import { guestGuardOptions } from "../helpers/devAuthHeaders";
 import { createMockDependencies } from "./testHelpers";
@@ -37,7 +37,7 @@ function createTestDependencies() {
   dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard(guestGuardOptions())));
   dependencies.container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
   dependencies.container.set(CORE_QUEUE_TOKEN, new SyncQueue());
-  dependencies.container.set(CORE_TOKEN_SERVICE_TOKEN, {
+  dependencies.container.set(CORE_ABILITY_CHECKER_TOKEN, {
     requireAbility: () => undefined,
     tokenCan: () => true,
   });
@@ -49,13 +49,12 @@ describe("buildWebModuleRoutes", () => {
   test("builds web routes from supplied module webRoutes hooks", () => {
     const dependencies = createTestDependencies();
     const routes = buildWebModuleRoutes(dependencies, {
-      clearRegistry: true,
       modules: [fixtureModule],
     });
 
     expect(routes["/home"]).toBeDefined();
   });
-  test("modules replace seed paths and earlier method maps without changing unrelated paths", () => {
+  test("merges seed and module methods without changing unrelated paths", () => {
     const routes = buildWebModuleRoutes(createTestDependencies(), {
       seedRoutes: {
         "/shared": { DELETE: () => new Response("seed") },
@@ -69,11 +68,14 @@ describe("buildWebModuleRoutes", () => {
         },
       ],
     });
-    expect(Object.keys(routes["/shared"])).toEqual(["POST"]);
+    expect(Object.keys(routes["/shared"])).toEqual(["DELETE", "GET", "POST"]);
     expect(typeof routes["/kept"]).toBe("function");
-    expect(routeRegistry.list()).toEqual([
-      { method: "GET", path: "/kept", middleware: ["global", "web"] },
+    expect(getRouteInventory(routes)).toEqual([
+      { method: "*", path: "/kept", middleware: ["global", "web"] },
+      { method: "DELETE", path: "/shared", middleware: ["global", "web"] },
+      { method: "GET", path: "/shared", middleware: ["global", "web"] },
       { method: "POST", path: "/shared", middleware: ["global", "web"] },
+      { method: "HEAD", path: "/shared", middleware: ["global", "web"] },
     ]);
   });
 });

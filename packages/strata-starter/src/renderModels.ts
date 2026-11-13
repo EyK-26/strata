@@ -1,7 +1,7 @@
-import { authNeedsUsers, authUsesToken, type StarterLayers, usesTenantTable } from "./types.ts";
+import type { StarterFeaturePlan } from "./featurePlan.ts";
 
-function renderNoteModel(layers: StarterLayers): string {
-  const tenancyOn = usesTenantTable(layers.tenancy);
+function renderNoteModel(plan: StarterFeaturePlan): string {
+  const tenancyOn = plan.decisions.tenantTable;
   const tenantField = tenancyOn
     ? `
   tenant_id: number;`
@@ -45,8 +45,9 @@ export { Note, NoteEntity, NoteRepository };
 `;
 }
 
-function renderUserModel(layers: StarterLayers): string {
-  const tenancyOn = usesTenantTable(layers.tenancy) || layers.extras.scim;
+function renderUserModel(plan: StarterFeaturePlan): string {
+  const layers = plan.layers;
+  const tenancyOn = plan.decisions.schemaTenants;
   const mfaOn = Boolean(layers.extras.mfa);
   const tenantField = tenancyOn
     ? `
@@ -208,13 +209,14 @@ export { AuthOneTimeToken, AuthOneTimeTokenEntity, AuthOneTimeTokenRepository };
 `;
 }
 
-function renderModelsRegister(layers: StarterLayers): string {
+function renderModelsRegister(plan: StarterFeaturePlan): string {
+  const workTracker = plan.decisions.workTracker;
   const names = ["Note"];
-  if (authNeedsUsers(layers.auth)) names.push("User", "AuthOneTimeToken");
-  if (authUsesToken(layers.auth)) names.push("ApiToken");
-  return `${names.map((name) => `import { ${name}, ${name}Repository } from "./${name}";`).join("\n")}
+  if (plan.decisions.users) names.push("User", "AuthOneTimeToken");
+  if (plan.decisions.token) names.push("ApiToken");
+  return `${workTracker ? 'import { workTrackerRepositories } from "./workTracker.ts";\n' : ""}${names.map((name) => `import { ${name}, ${name}Repository } from "./${name}";`).join("\n")}
 
-export const repositoryDefinitions = Object.freeze([${names.map((name) => `${name}Repository`).join(", ")}]);
+export const repositoryDefinitions = Object.freeze([${names.map((name) => `${name}Repository`).join(", ")}${workTracker ? ", ...workTrackerRepositories" : ""}]);
 export const modelDefinitions = Object.freeze([${names.join(", ")}]);
 `;
 }

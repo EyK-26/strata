@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
 import { Job } from "@getstrata/core/queue";
-import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+
+const jobRegistry = new JobRegistry();
+
 import type { QueueServices } from "@getstrata/core/queue/queueServices";
 import {
   QueueWorker,
@@ -72,7 +75,7 @@ describeRedis("queue reservation failure boundaries", () => {
         JSON.stringify({ name, payload: {} }),
         JSON.stringify({ name, payload: {} }),
       );
-      const worker = new QueueWorker(redisUrl, services, 0, [key]);
+      const worker = new QueueWorker(redisUrl, services, jobRegistry, 0, [key]);
       const running = worker.run();
       const lifecycle = new LifecycleCoordinator({ timeoutMs: 2000 });
       const order: string[] = [];
@@ -230,7 +233,7 @@ describeRedis("queue reservation failure boundaries", () => {
           if (!saved) throw new Error("failed-job database unavailable");
         },
       });
-      const worker = new QueueWorker(redisUrl, service, 0, [key]);
+      const worker = new QueueWorker(redisUrl, service, jobRegistry, 0, [key]);
       try {
         await worker.processNext();
         expect(await client.llen(queueProcessingKey(key))).toBe(1);
@@ -275,7 +278,7 @@ describeRedis("queue reservation failure boundaries", () => {
         const name = `test.slow.${crypto.randomUUID()}`;
         jobRegistry.register(name, () => new Slow());
         await client.lpush(key, JSON.stringify({ name, payload: {} }));
-        const worker = new QueueWorker(redisUrl, services, 0, [key]);
+        const worker = new QueueWorker(redisUrl, services, jobRegistry, 0, [key]);
         const running = worker.processNext();
         try {
           await started;
@@ -302,7 +305,8 @@ describeRedis("queue reservation failure boundaries", () => {
       const script = `
         import { QueueWorker } from ${JSON.stringify(`${source}/redisQueue.ts`)};
         import { Job } from ${JSON.stringify(`${source}/index.ts`)};
-        import { jobRegistry } from ${JSON.stringify(`${source}/jobRegistry.ts`)};
+        import { JobRegistry } from ${JSON.stringify(`${source}/jobRegistry.ts`)};
+const jobRegistry = new JobRegistry();
         import { createQueuePersistenceFixture } from ${JSON.stringify(join(import.meta.dir, "../helpers/queuePersistence.ts"))};
         import { RedisClient } from "bun";
         const persistence = await createQueuePersistenceFixture();
@@ -312,7 +316,7 @@ describeRedis("queue reservation failure boundaries", () => {
           await new Promise(() => {});
         } }
         jobRegistry.register(${JSON.stringify(name)}, () => new Blocked());
-        const worker = new QueueWorker(process.env.REDIS_URL, persistence.services, 0, [${JSON.stringify(key)}]);
+        const worker = new QueueWorker(process.env.REDIS_URL, persistence.services, jobRegistry,  0, [${JSON.stringify(key)}]);
         await worker.processNext();
       `;
       await client.lpush(key, JSON.stringify({ name, payload: {} }));
@@ -340,7 +344,7 @@ describeRedis("queue reservation failure boundaries", () => {
           }
         }
         jobRegistry.register(name, () => new Recovered());
-        const worker = new QueueWorker(redisUrl, services, 0, [key]);
+        const worker = new QueueWorker(redisUrl, services, jobRegistry, 0, [key]);
         try {
           await worker.processNext();
         } finally {
@@ -363,7 +367,7 @@ describeRedis("queue reservation failure boundaries", () => {
       await client.hset(queueProcessingLeaseKey(key), legacy, String(Date.now() - 120_000));
       expect(await reclaimExpiredQueueReservations(client, [key])).toBe(1);
       expect(await client.hlen(queueProcessingLeaseKey(key))).toBe(0);
-      const worker = new QueueWorker(redisUrl, services, 0, [key]);
+      const worker = new QueueWorker(redisUrl, services, jobRegistry, 0, [key]);
       try {
         await worker.processNext();
       } finally {
@@ -372,5 +376,44 @@ describeRedis("queue reservation failure boundaries", () => {
       expect(await client.llen(queueProcessingKey(key))).toBe(0);
       expect(await client.lrange(queueInvalidKey(key), 0, -1)).toEqual([legacy]);
     });
+  });
+});
+
+test("list workers keep same-name factories owned and construct only admitted jobs", async () => {
+  await fixture(async (client, key, services) => {
+    const a = new JobRegistry(),
+      b = new JobRegistry();
+    const seen: string[] = [];
+    let createdA = 0,
+      createdB = 0;
+    a.register("same-owned-name", () => {
+      createdA++;
+      return {
+        handle: async () => {
+          seen.push("A");
+        },
+      };
+    });
+    b.register("same-owned-name", () => {
+      createdB++;
+      return {
+        handle: async () => {
+          seen.push("B");
+        },
+      };
+    });
+    const workerA = new QueueWorker(redisUrl, services, a, 0, [key]);
+    const workerB = new QueueWorker(redisUrl, services, b, 0, [key]);
+    try {
+      await client.lpush(key, JSON.stringify({ name: "same-owned-name", payload: {} }));
+      expect(await workerA.processNext()).toBe(true);
+      await client.lpush(key, JSON.stringify({ name: "same-owned-name", payload: {} }));
+      expect(await workerB.processNext()).toBe(true);
+      expect(seen).toEqual(["A", "B"]);
+      expect([createdA, createdB]).toEqual([1, 1]);
+    } finally {
+      workerA.close();
+      workerB.close();
+    }
   });
 });

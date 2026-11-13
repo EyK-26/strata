@@ -1,14 +1,16 @@
-import type { AuthUserDirectory } from "../contracts/authUserDirectory";
-import { readBearerToken } from "../http/statelessAuth";
+import type { AuthAccountLookup } from "../contracts/authUserDirectory";
+import { authorizationScheme, readBearerToken } from "../http/statelessAuth";
 import { isAccountActive, matchesAuthVersion } from "./accountState";
 import type { AuthUser } from "./authContext";
+import { type AuthOutcome, authenticateProof, authUserFromOutcome } from "./authOutcome";
 import type { AuthGuard } from "./guard";
 import { type JwtPayload, verifyJwt } from "./jwt";
+import { requireAuthCapability } from "./requireAuthCapability";
 import { isSessionInvalidated } from "./sessionCookie";
 
 interface JwtGuardOptions {
   secret: string;
-  directory: AuthUserDirectory;
+  directory: AuthAccountLookup;
 }
 
 function authUserFromJwt(payload: JwtPayload): AuthUser {
@@ -21,12 +23,9 @@ function authUserFromJwt(payload: JwtPayload): AuthUser {
 }
 
 function jwtSubjectId(payload: JwtPayload): number | null {
-  const userId =
-    typeof payload.sub === "number" ? payload.sub : Number.parseInt(String(payload.sub), 10);
-
-  if (!Number.isInteger(userId) || userId <= 0) {
-    return null;
-  }
+  if (typeof payload.sub === "string" && !/^[1-9]\d*$/.test(payload.sub)) return null;
+  const userId = typeof payload.sub === "number" ? payload.sub : Number(payload.sub);
+  if (!Number.isSafeInteger(userId) || userId <= 0) return null;
 
   return userId;
 }
@@ -35,10 +34,25 @@ class JwtGuard implements AuthGuard {
   private readonly options: JwtGuardOptions;
 
   constructor(options: JwtGuardOptions) {
+    requireAuthCapability<AuthAccountLookup>(options.directory, ["findByIdOrThrow"], "JWT");
+    if (typeof options.secret !== "string" || !options.secret) {
+      throw new TypeError("Explicit JWT secret is required.");
+    }
     this.options = options;
   }
 
+  authenticate(request: Request): Promise<AuthOutcome> {
+    return authenticateProof(
+      "bearer",
+      authorizationScheme(request) === "bearer" &&
+        (readBearerToken(request) === null || readBearerToken(request)?.split(".").length === 3),
+      () => this.resolveUser(request),
+    );
+  }
   async resolve(request: Request): Promise<AuthUser | null> {
+    return authUserFromOutcome(await this.authenticate(request));
+  }
+  private async resolveUser(request: Request): Promise<AuthUser | null> {
     const token = readBearerToken(request);
 
     if (token?.split(".").length !== 3) {
@@ -57,21 +71,13 @@ class JwtGuard implements AuthGuard {
 
     const directory = this.options.directory;
 
-    if (!directory) {
-      return null;
-    }
-
     const userId = jwtSubjectId(payload);
     if (userId === null) {
       return null;
     }
 
-    let record: Awaited<ReturnType<AuthUserDirectory["findByIdOrThrow"]>>;
-    try {
-      record = await directory.findByIdOrThrow(userId);
-    } catch {
-      return null;
-    }
+    const record = await directory.findByIdOrThrow(userId);
+    if (record.id !== userId) return null;
 
     if (!isAccountActive(record) || !matchesAuthVersion(payload.authVersion, record.auth_version))
       return null;
@@ -85,6 +91,7 @@ class JwtGuard implements AuthGuard {
 
     return {
       ...authUserFromJwt(payload),
+      id: record.id,
       ...(record.auth_version !== undefined ? { authVersion: record.auth_version } : {}),
     };
   }

@@ -6,7 +6,11 @@ import {
   createCookieSessionAuthManager,
   type SessionUser,
 } from "@getstrata/bootstrap/web/session";
-import { createSessionCookie, sessionCookieName } from "@getstrata/core/auth/sessionCookie";
+import {
+  createSessionCookie,
+  sessionCookieName,
+  sessionCookieOptionsFromEnvironment,
+} from "@getstrata/core/auth/sessionCookie";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { withPolicyPersistence } from "../helpers/policyPersistence";
 
@@ -166,8 +170,11 @@ describe("CookieSessionGuard", () => {
         ).toEqual({ id: 9, role: "admin" });
         expect(cookie.startsWith("strata_session=")).toBe(true);
 
-        const hmacCookie = createSessionCookie(9).split(";")[0] ?? "";
-        expect(hmacCookie.startsWith(`${sessionCookieName()}=`)).toBe(true);
+        const hmacCookie =
+          createSessionCookie(9, {}, sessionCookieOptionsFromEnvironment(process.env)).split(
+            ";",
+          )[0] ?? "";
+        expect(hmacCookie.startsWith(`${sessionCookieName(process.env)}=`)).toBe(true);
         expect(
           await auth.resolve(
             new Request("http://example.test/", { headers: { cookie: hmacCookie } }),

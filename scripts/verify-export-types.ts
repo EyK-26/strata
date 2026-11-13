@@ -2,7 +2,6 @@
 
 /** Fail if package.json export "types" paths are missing after a package build. */
 
-import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -60,7 +59,6 @@ function collectExportEntries(
 
 const missing: string[] = [];
 const unreachable: string[] = [];
-let facadesTypesPath: string | null = null;
 let runtimeChecked = 0;
 
 for (const relativePath of PACKAGES) {
@@ -83,10 +81,6 @@ for (const relativePath of PACKAGES) {
       const absolute = join(packageDir, types);
       if (!existsSync(absolute)) {
         missing.push(`${packageJson.name} ${key} -> ${types}`);
-      }
-
-      if (packageJson.name === "@getstrata/core" && key === "./facades") {
-        facadesTypesPath = absolute;
       }
     }
 
@@ -141,20 +135,3 @@ if (unreachable.length > 0) {
 }
 
 console.log(`Export types paths OK (${runtimeChecked} entries compared to runtime).`);
-
-if (facadesTypesPath) {
-  const fixtureDir = join(ROOT, "scripts/fixtures/facades-types");
-  const result = spawnSync("bunx", ["tsc", "--noEmit", "-p", fixtureDir], {
-    cwd: ROOT,
-    encoding: "utf8",
-  });
-
-  if (result.status !== 0) {
-    console.error(result.stdout);
-    console.error(result.stderr);
-    console.error(`@getstrata/core/facades failed tsc --noEmit (types: ${facadesTypesPath})`);
-    process.exit(1);
-  }
-
-  console.log("@getstrata/core/facades typechecks OK.");
-}

@@ -4,17 +4,12 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { Job, type JobContext } from "@getstrata/core/queue";
 import { FAILED_JOB_SERVICE_TOKEN } from "@getstrata/core/queue/createAppQueue";
-import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import type { JobRegistry } from "@getstrata/core/queue/jobRegistry";
 import type { QueueWorkerTransport } from "@getstrata/core/queue/queueWorkerTransport";
 import { RedisClient } from "bun";
-import {
-  configureModulesManifest,
-  discoverModules,
-  ensureModulesLoaded,
-  resetDiscoverModulesForTests,
-} from "../../../src/bootstrap/discoverModules";
 import { bootQueueApplication } from "../../../src/cli/commands/queueApplication";
 import { bounded } from "../../fixtures/applicationOwnershipSupport";
 
@@ -32,7 +27,6 @@ async function liveWorkspace(
   const directory = await mkdtemp(join(tmpdir(), "strata-live-queue-"));
   const filename = join(directory, "queue.sqlite");
   const originalCwd = process.cwd();
-  const previousModules = [...discoverModules()];
   const prefix = `queue-composition-${crypto.randomUUID()}`;
   const changes: Record<string, string | undefined> = {
     APP_ENV: "local",
@@ -65,7 +59,7 @@ async function liveWorkspace(
     for (const [key, value] of Object.entries(changes))
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
-    configureModulesManifest([
+    const modules: AppModule[] = [
       {
         name: "queue-composition-witness",
         providers: [
@@ -83,13 +77,13 @@ async function liveWorkspace(
           },
         ],
       },
-    ]);
+    ];
     await work({
       filename,
       prefix,
       hooks,
       boot: async (worker = false) => {
-        const application = await bootQueueApplication(worker);
+        const application = await bootQueueApplication(worker, { modules });
         applications.push(application);
         return application;
       },
@@ -108,11 +102,6 @@ async function liveWorkspace(
     }
   }
   try {
-    resetDiscoverModulesForTests();
-    if (previousModules.length) {
-      configureModulesManifest(previousModules);
-      await ensureModulesLoaded();
-    }
     process.chdir(originalCwd);
     for (const [key, value] of Object.entries(previous))
       if (value === undefined) delete process.env[key];
@@ -129,7 +118,7 @@ async function liveWorkspace(
 async function schema(app: LiveApplication) {
   await app.invoke({ kind: "command" }, async ({ database }) => {
     await database.execute({
-      text: "CREATE TABLE failed_job(id INTEGER PRIMARY KEY,job_name TEXT NOT NULL,job_id TEXT,payload TEXT NOT NULL,exception TEXT NOT NULL,failed_at DATETIME NOT NULL)",
+      text: "CREATE TABLE failed_job(id INTEGER PRIMARY KEY,job_name TEXT NOT NULL,job_id TEXT,handoff TEXT,payload TEXT NOT NULL,exception TEXT NOT NULL,failed_at DATETIME NOT NULL)",
       params: [],
     });
     await database.execute({ text: "CREATE TABLE queue_effects(id INTEGER NOT NULL)", params: [] });
@@ -143,7 +132,7 @@ function nativeEffects(filename: string) {
     database.close();
   }
 }
-function liveJob(name: string, contexts: JobContext[]) {
+function liveJob(name: string, contexts: JobContext[], registry: JobRegistry) {
   class CompositionJob extends Job<{ id: number; fail?: boolean }> {
     static override readonly jobName = name;
     override readonly maxAttempts = 1;
@@ -158,7 +147,7 @@ function liveJob(name: string, contexts: JobContext[]) {
       });
     }
   }
-  jobRegistry.register(name, () => new CompositionJob());
+  registry.register(name, () => new CompositionJob());
   return CompositionJob;
 }
 
@@ -192,7 +181,7 @@ test("live SQLite queue assembly owns genuine selected failed-job operations, re
     expect(app.queueServices).toBe(app.context.container.get(FAILED_JOB_SERVICE_TOKEN));
     await schema(app);
     const contexts: JobContext[] = [];
-    const CompositionJob = liveJob(`${prefix}.recovery`, contexts);
+    const CompositionJob = liveJob(`${prefix}.recovery`, contexts, app.registry);
     const failed = await app.queueServices.recordFailure({
       jobName: CompositionJob.jobName,
       payload: { id: 7 },
@@ -284,7 +273,7 @@ test("live Redis worker performs bounded isolated polls and selected SQLite fail
         throw new Error("Original application-owned worker lacks bounded polling");
       const worker = actual as QueueWorkerTransport;
       const contexts: JobContext[] = [];
-      const CompositionJob = liveJob(`${prefix}.native`, contexts);
+      const CompositionJob = liveJob(`${prefix}.native`, contexts, app.registry);
       const foreign = `${prefix}:foreign:queue:default:stream`;
       await client.send("XADD", [
         foreign,

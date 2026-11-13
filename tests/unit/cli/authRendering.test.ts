@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { isUniqueConstraintError, PersistenceError } from "@getstrata/core/database/errors";
 import { ConflictError } from "@getstrata/core/errors/http";
+import { compileStarterFeatures } from "../../../packages/strata-starter/src/featurePlan.ts";
 import {
   layersFromFlags,
   parseCreateStrataArgs,
@@ -16,11 +17,11 @@ for (const { name, args, hashes } of baselines) {
   test(`auth rendering matches canonical full artifacts: ${name}`, () => {
     const layers = layersFromFlags(parseCreateStrataArgs(args));
     const artifacts = {
-      module: auth.renderAuthModule(layers),
-      directory: auth.renderAuthDirectory(layers),
-      provider: auth.renderAuthProvider(layers),
+      module: auth.renderAuthModule(compileStarterFeatures(layers)),
+      directory: auth.renderAuthDirectory(compileStarterFeatures(layers)),
+      provider: auth.renderAuthProvider(compileStarterFeatures(layers)),
       pendingMfa: auth.renderPendingMfaTs(),
-      site: auth.renderSiteModule(layers),
+      site: auth.renderSiteModule(compileStarterFeatures(layers)),
     };
     const actual = Object.fromEntries(
       Object.entries(artifacts).map(([artifact, source]) => [
@@ -48,7 +49,7 @@ function renderedSignup() {
       "--tenancy=none",
     ]),
   );
-  const source = auth.renderAuthModule(layers);
+  const source = auth.renderAuthModule(compileStarterFeatures(layers));
   if (source === null) throw new Error("Missing generated signup module");
   return source;
 }
@@ -66,9 +67,11 @@ test("generated signup imports the neutral unique classifier and preserves domai
     ({ args }) => args.includes("--mfa") && args.includes("--auth=cookie"),
   );
   if (!profile) throw new Error("Missing MFA rendering profile");
-  expect(auth.renderAuthModule(layersFromFlags(parseCreateStrataArgs(profile.args)))).toContain(
-    'throw new ConflictError("MFA configuration changed. Reload and confirm again.")',
-  );
+  expect(
+    auth.renderAuthModule(
+      compileStarterFeatures(layersFromFlags(parseCreateStrataArgs(profile.args))),
+    ),
+  ).toContain('throw new ConflictError("MFA configuration changed. Reload and confirm again.")');
 });
 
 async function invokeRenderedSignup(failure: unknown, accountExists: boolean) {

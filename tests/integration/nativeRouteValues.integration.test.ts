@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
 import { buildWebModuleRoutes } from "@getstrata/bootstrap/buildWebModuleRoutes";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
 import { applyMiddlewareToRoutes } from "@getstrata/core/http/middleware";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
@@ -22,15 +21,14 @@ beforeEach(() => {
 afterEach(() => {
   restoreEnvVar("CORS_ALLOWED_ORIGINS", previousOrigin);
   restoreEnvVar("TENANCY_DRIVER", previousTenancy);
-  routeRegistry.clear();
 });
 
 describe("native route values at the framework server boundary", () => {
-  test("module builders preserve opaque native values instead of replacing SDK objects", () => {
+  test("module builders preserve BunFile identity and snapshot validated directory declarations", () => {
     const dependencies = createMockDependencies(new ServiceContainer());
     const file = Bun.file(new URL("../../index.html", import.meta.url));
     const directory = { dir: "./public" };
-    const values = { "/file": file, "/directory": directory };
+    const values = { "/file": file, "/directory/*": directory };
     const api = buildModuleRoutes(dependencies, {
       modules: [{ name: "native-values", routes: () => values }],
     });
@@ -40,27 +38,27 @@ describe("native route values at the framework server boundary", () => {
     for (const routes of [api, web]) {
       expect(routes["/file"]).toBe(file);
       expect(routes["/file"]).toBeInstanceOf(Blob);
-      expect(routes["/directory"]).toBe(directory);
+      expect(routes["/directory/*"]).toEqual(directory);
+      expect(Object.isFrozen(routes["/directory/*"])).toBe(true);
     }
   });
 
   test("inert method-map fields cannot disable middleware around executable callbacks", async () => {
     const dependencies = createMockDependencies(new ServiceContainer());
+    const callbacks = { GET: () => new Response("read"), POST: () => new Response("write") };
+    expect(() =>
+      buildModuleRoutes(dependencies, {
+        modules: [
+          {
+            name: "invalid-method-map",
+            routes: () => ({ "/partial": { ...callbacks, inert: false } }),
+          },
+        ],
+      }),
+    ).toThrow("Unsupported route method: inert");
     const routes = buildModuleRoutes(dependencies, {
-      modules: [
-        {
-          name: "partial-method-map",
-          routes: () => ({
-            "/partial": {
-              GET: () => new Response("read"),
-              POST: () => new Response("write"),
-              inert: false,
-            },
-          }),
-        },
-      ],
+      modules: [{ name: "validated-method-map", routes: () => ({ "/partial": callbacks }) }],
     });
-    expect(routes["/partial"].inert).toBe(false);
     const server = createWebServer({ port: 0, native: { hostname: "127.0.0.1" }, routes });
     try {
       const rejected = await fetch(new URL("/partial", server.url), { method: "POST" });

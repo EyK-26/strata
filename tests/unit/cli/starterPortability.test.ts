@@ -494,7 +494,9 @@ describe("generated API docs", () => {
       expect(readme.includes("JSON cookie account flows")).toBe(json);
       if (json) {
         expect(source).toContain("kernel.wrapVerified(kernel.wrapPasswordConfirm(");
-        expect(source).toContain("const recoveryCodes = await enrollMfa(_ports, user, secret)");
+        expect(source).toContain(
+          "const recoveryCodes = await enrollMfa(_ports, authServices, user, secret)",
+        );
         expect(readme).toContain("opening the URL with GET does not consume a token");
       }
     });

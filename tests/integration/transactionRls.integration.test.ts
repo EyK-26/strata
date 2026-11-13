@@ -15,8 +15,14 @@ import type { DatabaseDefinition } from "@getstrata/core/database/driverPorts";
 import { Model } from "@getstrata/core/database/model";
 import type { DatabaseSession, TransactionSession } from "@getstrata/core/database/session";
 import { defineTable } from "@getstrata/core/database/table";
-import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
-import { createCsrfTokenCookie } from "@getstrata/core/http/csrfToken";
+import {
+  createCsrfMiddleware,
+  csrfMiddlewareOptionsFromEnvironment,
+} from "@getstrata/core/http/csrfMiddleware";
+import {
+  createCsrfTokenCookie,
+  csrfTokenOptionsFromEnvironment,
+} from "@getstrata/core/http/csrfToken";
 import { currentRequestMeta, runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import {
   currentTenantId,
@@ -24,6 +30,7 @@ import {
   type TenantContext,
 } from "@getstrata/core/tenant/tenantContext";
 import { createTenantMiddleware } from "@getstrata/core/tenant/tenantMiddleware";
+import { authFixtureOutcome } from "../helpers/authOutcome";
 import { type DatabaseInvocation, withBoundDatabase } from "../helpers/boundRepositoryHarness";
 import { sessionSql } from "../helpers/nativePersistenceApplication";
 import { createMockDependencies, defaultTestTenant } from "../unit/testHelpers";
@@ -176,17 +183,28 @@ describe.skipIf(!rlsUrl)("real Postgres transaction/RLS composition", () => {
     withRls(
       async (invoke) => {
         const marker = new AsyncLocalStorage<string>();
-        const auth = new AuthManager({ resolve: () => null });
+        const auth = new AuthManager({ authenticate: () => authFixtureOutcome(null) });
         auth.registerGuard("api", {
-          resolve(request) {
-            const match = /^Bearer fixture-(\d+)$/.exec(request.headers.get("authorization") ?? "");
-            return match ? { id: Number(match[1]), role: "member" } : null;
+          authenticate(request) {
+            return authFixtureOutcome(
+              (async () => {
+                const match = /^Bearer fixture-(\d+)$/.exec(
+                  request.headers.get("authorization") ?? "",
+                );
+                return match ? { id: Number(match[1]), role: "member" } : null;
+              })(),
+              "bearer",
+            );
           },
         });
         auth.registerGuard("web", {
-          resolve(request) {
-            const match = /fixture_user=(\d+)/.exec(request.headers.get("cookie") ?? "");
-            return match ? { id: Number(match[1]), role: "member" } : null;
+          authenticate(request) {
+            return authFixtureOutcome(
+              (async () => {
+                const match = /fixture_user=(\d+)/.exec(request.headers.get("cookie") ?? "");
+                return match ? { id: Number(match[1]), role: "member" } : null;
+              })(),
+            );
           },
         });
         const kernel = createHttpKernel(
@@ -200,7 +218,7 @@ describe.skipIf(!rlsUrl)("real Postgres transaction/RLS composition", () => {
               production: false,
               allowTenantDevHeaders: false,
               metadata: () => ({
-                authenticate: (request) => auth.resolveWithSource(request),
+                authenticate: (request) => auth.authenticate(request),
                 memberships: async () => [],
                 userTenantId: async (id) => id,
                 tenant: async (id) => ({ ...defaultTestTenant, id }),
@@ -208,7 +226,7 @@ describe.skipIf(!rlsUrl)("real Postgres transaction/RLS composition", () => {
             },
           ),
         );
-        const csrf = createCsrfMiddleware();
+        const csrf = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
         const business = async (
           request: Request,
           ports: import("@getstrata/bootstrap/persistenceContracts").BusinessRequestPorts,
@@ -268,7 +286,7 @@ describe.skipIf(!rlsUrl)("real Postgres transaction/RLS composition", () => {
             }),
           );
           expect(responses).toEqual([200, 200, 200, 200, 200, 200]);
-          const csrf = createCsrfTokenCookie();
+          const csrf = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
           await Promise.all(
             Array.from({ length: 6 }, async (_, index) => {
               const id = index + 1;

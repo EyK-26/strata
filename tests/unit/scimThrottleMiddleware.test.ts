@@ -73,6 +73,7 @@ describe("SCIM distributed failure contracts", () => {
     const counts = new Map<string, number>();
     const keys: string[] = [];
     const throttle = createScimThrottleMiddleware({
+      resolveTenant: (token) => (token === "trusted-token" ? 2 : null),
       maxAttempts: 1,
       decaySeconds: 60,
       redisClient: {

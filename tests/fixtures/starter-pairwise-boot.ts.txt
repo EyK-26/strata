@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import type { Application } from "@getstrata/core/contracts/application";
+import { createAppServer } from "./src/bootstrap/createApp.ts";
+let owner: Application | undefined;
+try {
+  const app = await createAppServer({ migrate: false, server: {port:0,native:{hostname:"127.0.0.1"}}, onConstructed:(application:Application)=>{owner=application;} });
+  assert.ok(app.server);
+  const response=await fetch(new URL("/health",app.server.url),{signal:AbortSignal.timeout(10000)});
+  assert.equal(response.status,200,await response.text());
+  assert.ok(response.headers.get("x-request-id"));
+  console.log("PASS installed generated boot and HTTP health");
+} finally {
+  if(owner)assert.ok((await owner.stop()).successful,"Owned generated application cleanup");
+}

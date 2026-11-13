@@ -8,6 +8,7 @@ import type { MigrationDatabase } from "@getstrata/core/database/migrations/type
 import { SQL } from "bun";
 import type { RowDataPacket } from "mysql2";
 import { createPool } from "mysql2/promise";
+import { compileStarterFeatures } from "../../packages/strata-starter/src/featurePlan.ts";
 import {
   generateProject,
   resolveOverlayRoot,
@@ -78,8 +79,14 @@ async function exercise(
       expect(path.startsWith(join(app, "node_modules/"))).toBe(true);
     await Bun.write(join(provenance, "resolved.json"), JSON.stringify({ app, installed }, null, 2));
   }
-  await Bun.write(join(app, "schema.ts"), renderStarterSchemaMigration(layers));
-  await Bun.write(join(app, "claim.ts"), renderInitialAdminMigration(layers) ?? "");
+  await Bun.write(
+    join(app, "schema.ts"),
+    renderStarterSchemaMigration(compileStarterFeatures(layers)),
+  );
+  await Bun.write(
+    join(app, "claim.ts"),
+    renderInitialAdminMigration(compileStarterFeatures(layers)) ?? "",
+  );
   const schema = (await import(join(app, "schema.ts"))).default;
   const claim = (await import(join(app, "claim.ts"))).default;
   await schema.up(db);

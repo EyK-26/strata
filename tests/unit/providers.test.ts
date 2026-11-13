@@ -7,6 +7,7 @@ import {
 } from "@getstrata/bootstrap/config";
 import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createAppContext } from "@getstrata/bootstrap/dependencies";
+import { createServiceToken } from "@getstrata/core/contracts/token";
 import { createDatabaseBindings } from "@getstrata/core/database/bindings";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -14,18 +15,18 @@ describe("service container", () => {
   test("memoizes singleton services and creates transient bindings", () => {
     const container = new ServiceContainer();
 
-    container.singleton("singleton", () => ({ marker: Symbol("singleton") }));
-    container.bind("transient", () => ({ marker: Symbol("transient") }));
+    container.singleton(Singleton, () => ({ marker: Symbol("singleton") }));
+    container.bind(Transient, () => ({ marker: Symbol("transient") }));
 
-    const singletonA = container.resolve<{ marker: symbol }>("singleton");
-    const singletonB = container.resolve<{ marker: symbol }>("singleton");
-    const transientA = container.resolve<{ marker: symbol }>("transient");
-    const transientB = container.resolve<{ marker: symbol }>("transient");
+    const singletonA = container.resolve<{ marker: symbol }>(Singleton);
+    const singletonB = container.resolve<{ marker: symbol }>(Singleton);
+    const transientA = container.resolve<{ marker: symbol }>(Transient);
+    const transientB = container.resolve<{ marker: symbol }>(Transient);
 
     expect(singletonA).toBe(singletonB);
     expect(transientA).not.toBe(transientB);
-    expect(container.has("singleton")).toBe(true);
-    expect(container.has("transient")).toBe(true);
+    expect(container.has(Singleton)).toBe(true);
+    expect(container.has(Transient)).toBe(true);
   });
 });
 
@@ -99,3 +100,6 @@ describe("app providers", () => {
     }
   });
 });
+
+const Singleton = createServiceToken<{ marker: symbol }>("singleton");
+const Transient = createServiceToken<{ marker: symbol }>("transient");

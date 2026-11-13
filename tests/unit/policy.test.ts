@@ -3,7 +3,7 @@ import { Policy, PolicyGate } from "@getstrata/core/auth/policy";
 
 class DefaultPolicy extends Policy {}
 
-import { ForbiddenError } from "@getstrata/core/errors/http";
+import { PolicyDeniedError } from "@getstrata/core/auth/policy";
 
 class OrganizationRecord {
   constructor(
@@ -31,67 +31,77 @@ class TestPolicy extends Policy {
 }
 
 describe("PolicyGate", () => {
-  test("allows registered policy actions", () => {
+  test("allows registered policy actions", async () => {
     const gate = new PolicyGate();
     gate.register("organization", new TestPolicy());
 
-    expect(gate.allows("organization", "create")).toBe(true);
+    expect(await gate.allows("organization", "create", undefined)).toBe(true);
     expect(
-      gate.allows("organization", "delete", undefined, new OrganizationRecord(1, "acme-labs")),
+      await gate.allows(
+        "organization",
+        "delete",
+        undefined,
+        new OrganizationRecord(1, "acme-labs"),
+      ),
     ).toBe(true);
   });
 
-  test("denies actions that the policy rejects", () => {
+  test("denies actions that the policy rejects", async () => {
     const gate = new PolicyGate();
     gate.register("organization", new TestPolicy());
 
     expect(
-      gate.allows("organization", "delete", undefined, new OrganizationRecord(2, "protected-org")),
+      await gate.allows(
+        "organization",
+        "delete",
+        undefined,
+        new OrganizationRecord(2, "protected-org"),
+      ),
     ).toBe(false);
   });
 
-  test("authorize throws ForbiddenError when access is denied", () => {
+  test("authorize rejects with PolicyDeniedError when access is denied", async () => {
     const gate = new PolicyGate();
     gate.register("organization", new TestPolicy());
 
-    expect(() =>
+    await expect(
       gate.authorize(
         "organization",
         "delete",
         undefined,
         new OrganizationRecord(2, "protected-org"),
       ),
-    ).toThrow(ForbiddenError);
+    ).rejects.toThrow(PolicyDeniedError);
   });
 
-  test("denies unknown resources by default", () => {
+  test("denies unknown resources by default", async () => {
     const gate = new PolicyGate();
 
-    expect(gate.allows("project", "create")).toBe(false);
+    expect(await gate.allows("project", "create", undefined)).toBe(false);
   });
 
-  test("uses default Policy methods that deny access", () => {
+  test("uses default Policy methods that deny access", async () => {
     const gate = new PolicyGate();
     gate.register("base", new DefaultPolicy());
     const basePolicy = new DefaultPolicy();
 
-    expect(gate.allows("base", "view", { id: 1 })).toBe(false);
-    expect(gate.allows("base", "create", { id: 1 })).toBe(false);
-    expect(gate.allows("base", "update", { id: 1 })).toBe(false);
-    expect(gate.allows("base", "delete", { id: 1 })).toBe(false);
+    expect(await gate.allows("base", "view", { id: 1 })).toBe(false);
+    expect(await gate.allows("base", "create", { id: 1 })).toBe(false);
+    expect(await gate.allows("base", "update", { id: 1 })).toBe(false);
+    expect(await gate.allows("base", "delete", { id: 1 })).toBe(false);
     expect(basePolicy.create()).toBe(false);
     expect(basePolicy.view()).toBe(false);
     expect(basePolicy.update()).toBe(false);
     expect(basePolicy.delete()).toBe(false);
   });
 
-  test("passes explicit users and models to policy handlers", () => {
+  test("passes explicit users and models to policy handlers", async () => {
     const gate = new PolicyGate();
     gate.register("organization", new TestPolicy());
 
-    expect(gate.allows("organization", "create", { id: 9, role: "member" })).toBe(true);
+    expect(await gate.allows("organization", "create", { id: 9, role: "member" })).toBe(true);
     expect(
-      gate.allows(
+      await gate.allows(
         "organization",
         "delete",
         { id: 9, role: "member" },
@@ -100,17 +110,17 @@ describe("PolicyGate", () => {
     ).toBe(true);
   });
 
-  test("returns false when a policy action is not callable", () => {
+  test("returns false when a policy action is not callable", async () => {
     const gate = new PolicyGate();
     gate.register("broken", { view: "not-a-function" } as never);
 
-    expect(gate.allows("broken", "view")).toBe(false);
+    expect(await gate.allows("broken", "view", undefined)).toBe(false);
   });
 
-  test("authorize succeeds when policy allows the action", () => {
+  test("authorize succeeds when policy allows the action", async () => {
     const gate = new PolicyGate();
     gate.register("organization", new TestPolicy());
 
-    expect(() => gate.authorize("organization", "create")).not.toThrow();
+    await expect(gate.authorize("organization", "create", undefined)).resolves.toBeUndefined();
   });
 });

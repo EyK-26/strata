@@ -145,9 +145,9 @@ describe("bodySizeLimitMiddleware", () => {
     const previous = process.env.MAX_REQUEST_BODY_BYTES;
     try {
       process.env.MAX_REQUEST_BODY_BYTES = "8junk";
-      expect(resolveMaxBodyBytes()).toBe(1_048_576);
+      expect(resolveMaxBodyBytes(process.env.MAX_REQUEST_BODY_BYTES)).toBe(1_048_576);
       process.env.MAX_REQUEST_BODY_BYTES = "8";
-      expect(resolveMaxBodyBytes()).toBe(8);
+      expect(resolveMaxBodyBytes(process.env.MAX_REQUEST_BODY_BYTES)).toBe(8);
     } finally {
       restoreEnvVar("MAX_REQUEST_BODY_BYTES", previous);
     }

@@ -1,9 +1,15 @@
+import { createServiceToken } from "@getstrata/core/contracts/token";
 import type { Middleware } from "@getstrata/core/http/middleware";
 import type {
   BusinessRequestPorts,
   BusinessRouteHandler,
+  HttpPersistenceOptions,
   IdentityPolicyMode,
 } from "./persistenceContracts";
+
+export const HTTP_PERSISTENCE_OPTIONS = createServiceToken<HttpPersistenceOptions>(
+  "bootstrap.httpPersistence",
+);
 
 export interface ComposedRouteHandler<T extends Request = Request> {
   (request: T): Response | Promise<Response>;

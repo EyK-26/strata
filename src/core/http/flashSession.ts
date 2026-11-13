@@ -2,11 +2,25 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { isProductionEnv } from "../runtime/appEnv";
 import { appCookieName, requireConfiguredSecret } from "../runtime/appKeyPrefix";
 
-const FLASH_COOKIE = appCookieName("flash");
+const FLASH_COOKIE = "strata_flash";
 const FLASH_TTL_MS = 60 * 1000;
 
-function flashCookieName(): string {
-  return process.env.FLASH_COOKIE_NAME?.trim() || appCookieName("flash");
+export interface FlashSessionOptions {
+  readonly cookieName: string;
+  readonly secret: string;
+  readonly production: boolean;
+}
+export function flashSessionOptionsFromEnvironment(
+  env: Readonly<Record<string, string | undefined>>,
+): FlashSessionOptions {
+  return Object.freeze({
+    cookieName: flashCookieName(env),
+    secret: requireConfiguredSecret(["SESSION_SECRET", "OAUTH_STATE_SECRET"], "flash-secret", env),
+    production: isProductionEnv(env),
+  });
+}
+function flashCookieName(env: Readonly<Record<string, string | undefined>>): string {
+  return env.FLASH_COOKIE_NAME?.trim() || appCookieName("flash", env);
 }
 
 type FlashLevel = "success" | "error" | "info";
@@ -16,19 +30,15 @@ interface FlashMessage {
   message: string;
 }
 
-function resolveFlashSecret(): string {
-  return requireConfiguredSecret(["SESSION_SECRET", "OAUTH_STATE_SECRET"], "flash-secret");
-}
-
-function signFlashPayload(payload: string, issuedAt: number): string {
-  const signature = createHmac("sha256", resolveFlashSecret())
+function signFlashPayload(payload: string, issuedAt: number, options: FlashSessionOptions): string {
+  const signature = createHmac("sha256", options.secret)
     .update(`${payload}.${issuedAt}`)
     .digest("hex");
 
   return `${payload}.${issuedAt}.${signature}`;
 }
 
-function readFlashCookie(request: Request): string | null {
+function readFlashCookie(request: Request, options: FlashSessionOptions): string | null {
   const cookieHeader = request.headers.get("cookie");
 
   if (!cookieHeader) {
@@ -38,7 +48,7 @@ function readFlashCookie(request: Request): string | null {
   for (const part of cookieHeader.split(";")) {
     const [name, ...rest] = part.trim().split("=");
 
-    if (name === flashCookieName()) {
+    if (name === options.cookieName) {
       return decodeURIComponent(rest.join("="));
     }
   }
@@ -46,7 +56,7 @@ function readFlashCookie(request: Request): string | null {
   return null;
 }
 
-function parseFlashCookie(cookieValue: string): FlashMessage | null {
+function parseFlashCookie(cookieValue: string, options: FlashSessionOptions): FlashMessage | null {
   const parts = cookieValue.split(".");
 
   if (parts.length < 3) {
@@ -67,7 +77,7 @@ function parseFlashCookie(cookieValue: string): FlashMessage | null {
     return null;
   }
 
-  const expectedSignature = signFlashPayload(payload, issuedAt).split(".").pop();
+  const expectedSignature = signFlashPayload(payload, issuedAt, options).split(".").pop();
 
   if (!expectedSignature) {
     return null;
@@ -101,33 +111,37 @@ function parseFlashCookie(cookieValue: string): FlashMessage | null {
   }
 }
 
-function createFlashCookie(message: FlashMessage): string {
+function createFlashCookie(message: FlashMessage, options: FlashSessionOptions): string {
   const payload = Buffer.from(JSON.stringify(message), "utf8").toString("base64url");
   const issuedAt = Date.now();
-  const value = signFlashPayload(payload, issuedAt);
+  const value = signFlashPayload(payload, issuedAt, options);
 
-  const secure = isProductionEnv() ? "; Secure" : "";
-  return `${flashCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=60${secure}`;
+  const secure = options.production ? "; Secure" : "";
+  return `${options.cookieName}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=60${secure}`;
 }
 
-function clearFlashCookie(): string {
-  const secure = isProductionEnv() ? "; Secure" : "";
-  return `${flashCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
+function clearFlashCookie(options: FlashSessionOptions): string {
+  const secure = options.production ? "; Secure" : "";
+  return `${options.cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
 }
 
-function pullFlash(request: Request): FlashMessage | null {
-  const cookieValue = readFlashCookie(request);
+function pullFlash(request: Request, options: FlashSessionOptions): FlashMessage | null {
+  const cookieValue = readFlashCookie(request, options);
 
   if (!cookieValue) {
     return null;
   }
 
-  return parseFlashCookie(cookieValue);
+  return parseFlashCookie(cookieValue, options);
 }
 
-function flashResponse(response: Response, message: FlashMessage): Response {
+function flashResponse(
+  response: Response,
+  message: FlashMessage,
+  options: FlashSessionOptions,
+): Response {
   const headers = new Headers(response.headers);
-  headers.append("set-cookie", createFlashCookie(message));
+  headers.append("set-cookie", createFlashCookie(message, options));
 
   return new Response(response.body, {
     status: response.status,
@@ -136,9 +150,9 @@ function flashResponse(response: Response, message: FlashMessage): Response {
   });
 }
 
-function withFlashClear(response: Response): Response {
+function withFlashClear(response: Response, options: FlashSessionOptions): Response {
   const headers = new Headers(response.headers);
-  headers.append("set-cookie", clearFlashCookie());
+  headers.append("set-cookie", clearFlashCookie(options));
 
   return new Response(response.body, {
     status: response.status,

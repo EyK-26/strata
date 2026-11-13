@@ -1,4 +1,5 @@
 import type { AuthUser, CredentialSource } from "@getstrata/core/auth/authContext";
+import type { AuthOutcome } from "@getstrata/core/auth/guard";
 import type { OrganizationMemberRole } from "@getstrata/core/contracts/membership";
 import type { TenantContext } from "@getstrata/core/tenant/tenantContext";
 
@@ -24,7 +25,7 @@ export interface EstablishedRequest {
   }>[];
 }
 export interface MetadataPorts {
-  authenticate(request: Request): Promise<AuthResolution>;
+  authenticate(request: Request): Promise<AuthOutcome>;
   memberships(user: AuthUser): Promise<EstablishedRequest["memberships"]>;
   userTenantId(userId: number): Promise<number>;
   tenant(id: number): Promise<TenantContext | null>;
@@ -51,6 +52,20 @@ export interface HttpPersistenceOptions {
     viewsEnabled: boolean;
     publicReadsEnabled: boolean;
     etagEnabled?: boolean;
+  }>;
+  readonly intendedUrl?: import("@getstrata/core/auth/intendedUrlCookie").IntendedUrlCookieOptions;
+  readonly flash?: import("@getstrata/core/http/flashSession").FlashSessionOptions;
+  /** Expire only a supplied cookie rejected by the session authenticator; never retries as guest. */
+  readonly invalidSessionCookie?: Readonly<{ name: string; expiredHeader: string }>;
+  readonly responsePolicy?: Readonly<{
+    securityHeaders?: import("@getstrata/core/http/contentSecurityPolicy").ContentSecurityPolicyOptions;
+    cors?: import("@getstrata/core/http/corsMiddleware").CorsOptions;
+    maxBodyBytes?: number;
+    rateLimitPerMinute?: number;
+    namespace?: string;
+    trustForwardedFor?: boolean;
+    loginRateLimit?: import("./rateLimit").LoginRateLimitConfig;
+    registerRateLimit?: import("./rateLimit").LoginRateLimitConfig;
   }>;
   readonly csrf?: import("@getstrata/core/http/csrfMiddleware").CsrfOptions;
   readonly scim?: (

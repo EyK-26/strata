@@ -1,4 +1,3 @@
-import { appUrl } from "../runtime/appKeyPrefix";
 import type { Middleware } from "./middleware";
 
 interface CorsConfig {
@@ -8,22 +7,19 @@ interface CorsConfig {
   maxAgeSeconds: number;
 }
 
-/** Additional application-approved request headers; defaults and origins remain unchanged. */
+/** Explicit application-owned origin and request-header policy. Omitted origins grant no cross-origin access. */
 interface CorsOptions {
   additionalAllowedHeaders?: readonly string[];
+  allowedOrigins?: readonly string[];
 }
 
 function additionalHeaders(options: CorsOptions): string[] {
-  const configured = process.env.CORS_ADDITIONAL_ALLOWED_HEADERS?.trim();
   const supplied =
     options.additionalAllowedHeaders === undefined ? [] : options.additionalAllowedHeaders;
   if (!Array.isArray(supplied)) {
     throw new TypeError("CORS additionalAllowedHeaders must be an array of header names.");
   }
-  const names: unknown[] = [
-    ...(configured ? configured.split(",").map((name) => name.trim()) : []),
-    ...supplied,
-  ];
+  const names: unknown[] = [...supplied];
   return names.map((name) => {
     // HTTP field-name token syntax. A wildcard is never an application-approved name.
     if (typeof name !== "string" || name === "*" || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) {
@@ -35,16 +31,16 @@ function additionalHeaders(options: CorsOptions): string[] {
   });
 }
 
-/** Unset means same-origin (`APP_URL`) only. Never default to `*`. */
-function defaultAllowedOrigins(): string {
-  return appUrl();
-}
-
 function resolveCorsConfig(options: CorsOptions = {}): CorsConfig {
   const extraHeaders = additionalHeaders(options);
+  if (
+    options.allowedOrigins !== undefined &&
+    (!Array.isArray(options.allowedOrigins) ||
+      options.allowedOrigins.some((origin) => typeof origin !== "string"))
+  )
+    throw new TypeError("CORS allowedOrigins must be an array of origins.");
   return {
-    allowedOrigins: (process.env.CORS_ALLOWED_ORIGINS ?? defaultAllowedOrigins())
-      .split(",")
+    allowedOrigins: [...(options.allowedOrigins ?? [])]
       .map((origin) => origin.trim())
       .filter(Boolean),
     allowedMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
@@ -69,10 +65,7 @@ function resolveCorsConfig(options: CorsOptions = {}): CorsConfig {
 
 function createCorsMiddleware(options: CorsOptions = {}): Middleware {
   // Reject invalid configuration before requests are admitted. Keep the caller's array private.
-  resolveCorsConfig(options);
-  const captured: CorsOptions = {
-    additionalAllowedHeaders: [...(options.additionalAllowedHeaders ?? [])],
-  };
+  const captured = resolveCorsConfig(options);
   return async (request: Request, next: () => Promise<Response>) => {
     if (request.method === "OPTIONS") {
       return new Response(null, {
@@ -106,10 +99,9 @@ function createCorsMiddleware(options: CorsOptions = {}): Middleware {
   };
 }
 
-function buildCorsHeaders(request: Request, options: CorsOptions): Headers {
+function buildCorsHeaders(request: Request, corsConfig: CorsConfig): Headers {
   const headers = new Headers();
   const origin = request.headers.get("origin");
-  const corsConfig = resolveCorsConfig(options);
   const allowedOrigins = corsConfig.allowedOrigins;
   headers.set("Vary", "Origin");
 

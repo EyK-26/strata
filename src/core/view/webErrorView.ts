@@ -14,14 +14,22 @@ interface WebErrorViewOptions {
   render?: (input: WebErrorViewInput) => Promise<string> | string;
 }
 
-let configuredErrorView: WebErrorViewOptions = {};
+type WebErrorView = (input: WebErrorViewInput) => Promise<string>;
 
-function configureWebErrorView(options: WebErrorViewOptions): void {
-  configuredErrorView = { ...options };
-}
-
-function resetWebErrorViewForTests(): void {
-  configuredErrorView = {};
+/** Captures a renderer for one application, including its safe kernel fallback. */
+function createWebErrorView(options: WebErrorViewOptions = {}): WebErrorView {
+  const render = options.render;
+  return async (input) => {
+    const resolved = { ...input, request: input.request ?? currentRequestMeta().request };
+    if (render) {
+      try {
+        return await render(resolved);
+      } catch {
+        /* Missing/broken custom templates use safe chrome. */
+      }
+    }
+    return renderKernelErrorChrome(resolved);
+  };
 }
 
 function escapeHtml(value: string): string {
@@ -101,50 +109,45 @@ function errorTemplateName(status: number): string {
   return "errors/error";
 }
 
-async function renderWebErrorHtml(input: WebErrorViewInput): Promise<string> {
-  const render = configuredErrorView.render;
-
-  if (!render) {
-    return renderKernelErrorChrome(input);
-  }
-
-  try {
-    return await render({
-      ...input,
-      request: input.request ?? currentRequestMeta().request,
-    });
-  } catch {
-    return renderKernelErrorChrome(input);
-  }
+async function renderWebErrorHtml(
+  input: WebErrorViewInput,
+  render: WebErrorView = currentRequestMeta().webErrorView ?? createWebErrorView(),
+): Promise<string> {
+  return render(input);
 }
 
-async function htmlErrorResponse(input: WebErrorViewInput & { status: number }): Promise<Response> {
-  const response = htmlResponse(await renderWebErrorHtml(input), { status: input.status });
+async function htmlErrorResponse(
+  input: WebErrorViewInput & { status: number },
+  render?: WebErrorView,
+): Promise<Response> {
+  const response = htmlResponse(await renderWebErrorHtml(input, render), { status: input.status });
   response.headers.set("Cache-Control", "no-store");
   return response;
 }
 
-async function notFoundHtmlResponse(body?: string): Promise<Response> {
+async function notFoundHtmlResponse(body?: string, render?: WebErrorView): Promise<Response> {
   if (body !== undefined) {
     const response = htmlResponse(body, { status: 404 });
     response.headers.set("Cache-Control", "no-store");
     return response;
   }
 
-  return htmlErrorResponse({
-    status: 404,
-    title: "Not Found",
-    message: "The page you requested was not found.",
-  });
+  return htmlErrorResponse(
+    {
+      status: 404,
+      title: "Not Found",
+      message: "The page you requested was not found.",
+    },
+    render,
+  );
 }
 
-export type { WebErrorViewInput, WebErrorViewOptions };
+export type { WebErrorView, WebErrorViewInput, WebErrorViewOptions };
 export {
-  configureWebErrorView,
+  createWebErrorView,
   errorTemplateName,
   htmlErrorResponse,
   notFoundHtmlResponse,
   renderKernelErrorChrome,
   renderWebErrorHtml,
-  resetWebErrorViewForTests,
 };

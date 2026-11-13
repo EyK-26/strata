@@ -113,23 +113,14 @@ class LifecycleCoordinator {
   }
 }
 
-let defaultLifecycle = new LifecycleCoordinator();
-const installations = new Map<LifecycleCoordinator, () => void>();
+const installations = new WeakMap<LifecycleCoordinator, () => void>();
 
-function registerShutdownHandler(
-  name: string,
-  handler: ShutdownHandler,
-  phase: ShutdownPhase = "close",
-): () => void {
-  return defaultLifecycle.register(name, handler, phase);
-}
-function runGracefulShutdown(signal: string): Promise<ShutdownResult> {
-  return defaultLifecycle.shutdown(signal);
-}
 function installGracefulShutdownSignals(
   signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"],
-  lifecycle: LifecycleCoordinator = defaultLifecycle,
+  lifecycle: LifecycleCoordinator,
 ): () => void {
+  if (typeof lifecycle?.shutdown !== "function")
+    throw new TypeError("Signal installation requires an explicit lifecycle coordinator.");
   const existing = installations.get(lifecycle);
   if (existing) return existing;
   let exiting = false;
@@ -156,16 +147,6 @@ function installGracefulShutdownSignals(
   installations.set(lifecycle, uninstall);
   return uninstall;
 }
-function resetGracefulShutdownForTests(): void {
-  for (const remove of [...installations.values()]) remove();
-  defaultLifecycle = new LifecycleCoordinator();
-}
 
 export type { ShutdownContext, ShutdownFailure, ShutdownHandler, ShutdownPhase, ShutdownResult };
-export {
-  installGracefulShutdownSignals,
-  LifecycleCoordinator,
-  registerShutdownHandler,
-  resetGracefulShutdownForTests,
-  runGracefulShutdown,
-};
+export { installGracefulShutdownSignals, LifecycleCoordinator };

@@ -14,7 +14,7 @@ import { sanitizeInternalPath } from "./safeInternalPath";
 const PASSWORD_CONFIRM_MESSAGE = "Password confirmation required.";
 const PASSWORD_CONFIRM_PATH = "/confirm-password";
 
-function createRequirePasswordConfirmMiddleware(options?: PasswordConfirmReadOptions): Middleware {
+function createRequirePasswordConfirmMiddleware(options: PasswordConfirmReadOptions): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
     const user = currentAuthUser();
     const json = currentRequestMeta().errorFormat === "json" || requestPrefersJson(request);

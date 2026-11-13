@@ -237,9 +237,14 @@ function isBlockedHostname(hostname: string): boolean {
 }
 
 function productionSafeOutboundOptions<
-  T extends { allowHttp?: boolean; resolveDns?: boolean; allowPrivate?: boolean },
+  T extends {
+    allowHttp?: boolean;
+    resolveDns?: boolean;
+    production?: boolean;
+    allowPrivate?: boolean;
+  },
 >(options: T): T {
-  if (!isProductionEnv()) {
+  if (!(options.production ?? isProductionEnv())) {
     return options;
   }
 
@@ -248,7 +253,7 @@ function productionSafeOutboundOptions<
 
 function assertSafeOutboundUrl(
   rawUrl: string,
-  options: { allowHttp?: boolean; allowPrivate?: boolean } = {},
+  options: { allowHttp?: boolean; production?: boolean; allowPrivate?: boolean } = {},
 ): URL {
   const resolved = productionSafeOutboundOptions(options);
   let parsed: URL;
@@ -296,7 +301,12 @@ interface ResolvedOutboundUrl {
 
 async function resolveSafeOutboundTarget(
   rawUrl: string,
-  options: { allowHttp?: boolean; resolveDns?: boolean; allowPrivate?: boolean } = {},
+  options: {
+    allowHttp?: boolean;
+    resolveDns?: boolean;
+    production?: boolean;
+    allowPrivate?: boolean;
+  } = {},
 ): Promise<ResolvedOutboundUrl> {
   const resolvedOptions = productionSafeOutboundOptions(options);
   const parsed = assertSafeOutboundUrl(rawUrl, resolvedOptions);
@@ -326,7 +336,12 @@ async function resolveSafeOutboundTarget(
 
 async function assertSafeOutboundUrlResolved(
   rawUrl: string,
-  options: { allowHttp?: boolean; resolveDns?: boolean; allowPrivate?: boolean } = {},
+  options: {
+    allowHttp?: boolean;
+    resolveDns?: boolean;
+    production?: boolean;
+    allowPrivate?: boolean;
+  } = {},
 ): Promise<URL> {
   return (await resolveSafeOutboundTarget(rawUrl, options)).url;
 }

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { compileStarterFeatures } from "../../../packages/strata-starter/src/featurePlan.ts";
 import { defaultLayers } from "../../../packages/strata-starter/src/presets";
 import { renderCreateAppTs } from "../../../packages/strata-starter/src/renderBootstrap";
 import { renderCliOutboxWorkTs } from "../../../packages/strata-starter/src/renderCli";
@@ -10,7 +11,7 @@ for (const tenancy of ["none", "column", "rls"] as const)
       tenancy,
       database: tenancy === "rls" ? ("postgres" as const) : ("sqlite" as const),
     };
-    const bootstrap = renderCreateAppTs(layers);
+    const bootstrap = renderCreateAppTs(compileStarterFeatures(layers));
     expect(() => new Bun.Transpiler({ loader: "ts" }).transformSync(bootstrap)).not.toThrow();
     expect(bootstrap).toContain(
       'import { listeners as durableListeners } from "../outbox/registry.ts";',

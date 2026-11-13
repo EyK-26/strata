@@ -1,10 +1,11 @@
 import type { CacheLike } from "@getstrata/core/cache/tokens";
+import { CORE_JSON_RESPONSE_POLICY_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import {
   conditionalJsonResponse,
   type JsonResponsePolicy,
   snapshotJsonResponsePolicy,
 } from "@getstrata/core/http/conditionalResponse";
-import type { CachedJson } from "./contracts";
+import type { AppDependencies, CachedJson } from "./contracts";
 
 function createCachedJson(cache: CacheLike, policy: JsonResponsePolicy): CachedJson {
   const responsePolicy = snapshotJsonResponsePolicy(policy);
@@ -23,5 +24,15 @@ function createCachedJson(cache: CacheLike, policy: JsonResponsePolicy): CachedJ
   };
 }
 
+/** Standalone assembly defaults to ETags; owned applications bind a captured policy. */
+function createApplicationCachedJson(
+  dependencies: Pick<AppDependencies, "cache" | "container">,
+): CachedJson {
+  const policy = dependencies.container.has(CORE_JSON_RESPONSE_POLICY_TOKEN)
+    ? dependencies.container.resolve(CORE_JSON_RESPONSE_POLICY_TOKEN)
+    : { etagEnabled: true };
+  return createCachedJson(dependencies.cache, policy);
+}
+
 export type { JsonResponsePolicy };
-export { createCachedJson };
+export { createApplicationCachedJson, createCachedJson };

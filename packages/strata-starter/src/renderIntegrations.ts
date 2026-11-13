@@ -1,5 +1,6 @@
+import type { StarterFeaturePlan } from "./featurePlan.ts";
 import { dialectFragments } from "./renderMigrations.ts";
-import { type DatabaseLayer, htmlAuthKit, type StarterLayers, usesTenantTable } from "./types.ts";
+import type { DatabaseLayer, StarterLayers } from "./types.ts";
 
 function activeBoolColumn(database: DatabaseLayer): string {
   if (database === "postgres") {
@@ -11,14 +12,16 @@ function activeBoolColumn(database: DatabaseLayer): string {
   return "INTEGER NOT NULL DEFAULT 1";
 }
 
-function webhookMigrationName(layers: StarterLayers): string | null {
+function webhookMigrationName(plan: StarterFeaturePlan): string | null {
+  const layers = plan.layers;
   if (!layers.extras.webhooks) {
     return null;
   }
   return "0002_webhooks_schema";
 }
 
-function billingMigrationName(layers: StarterLayers): string | null {
+function billingMigrationName(plan: StarterFeaturePlan): string | null {
+  const layers = plan.layers;
   if (!layers.extras.billing) {
     return null;
   }
@@ -59,8 +62,9 @@ export default migration;
 `;
 }
 
-function renderWebhooksMigration(layers: StarterLayers): string | null {
-  const name = webhookMigrationName(layers);
+function renderWebhooksMigration(plan: StarterFeaturePlan): string | null {
+  const layers = plan.layers;
+  const name = webhookMigrationName(plan);
   if (!name) {
     return null;
   }
@@ -96,13 +100,14 @@ function renderWebhooksMigration(layers: StarterLayers): string | null {
   );
 }
 
-function renderBillingMigration(layers: StarterLayers): string | null {
-  const name = billingMigrationName(layers);
+function renderBillingMigration(plan: StarterFeaturePlan): string | null {
+  const layers = plan.layers;
+  const name = billingMigrationName(plan);
   if (!name) {
     return null;
   }
   const d = dialectFragments(layers.database);
-  const tenancyOn = usesTenantTable(layers.tenancy);
+  const tenancyOn = plan.decisions.tenantTable;
   const cascade = layers.database === "sqlite" ? "" : " CASCADE";
   const up: string[] = [];
   if (tenancyOn) {
@@ -144,7 +149,8 @@ function sqlParams(database: DatabaseLayer, count: number): string {
   ).join(", ");
 }
 
-function renderDispatchOutboundWebhookJob(layers: StarterLayers): string {
+function renderDispatchOutboundWebhookJob(plan: StarterFeaturePlan): string {
+  const layers = plan.layers;
   const values = sqlParams(layers.database, 6);
   return `import { Job, type JobContext } from "@getstrata/core/queue";
 import { safeFetch } from "@getstrata/core/security/safeFetch";
@@ -287,8 +293,9 @@ export { applyStripeWebhook };
 `;
 }
 
-function renderBillingModule(layers: StarterLayers): string {
-  const tenancyOn = usesTenantTable(layers.tenancy);
+function renderBillingModule(plan: StarterFeaturePlan): string {
+  const layers = plan.layers;
+  const tenancyOn = plan.decisions.tenantTable;
   const tenantPlaceholder = layers.database === "postgres" ? "$1" : "?";
   const subscriptionQuery = tenancyOn
     ? `        const tenant = ports.established.tenant;
@@ -356,8 +363,8 @@ export default billingModule;
 `;
 }
 
-function githubOAuthEnabled(layers: StarterLayers): boolean {
-  return Boolean(layers.extras.oauthGithub && htmlAuthKit(layers.auth));
+function githubOAuthEnabled(plan: StarterFeaturePlan): boolean {
+  return Boolean(plan.decisions.github);
 }
 
 export {

@@ -4,6 +4,7 @@ import { matchesAuthVersion } from "@getstrata/core/auth/accountState";
 import {
   createPasswordConfirmCookie,
   hasFreshPasswordConfirmation,
+  passwordConfirmOptionsFromEnvironment,
 } from "@getstrata/core/auth/passwordConfirmCookie";
 import {
   clearPendingMfaCookie,
@@ -61,15 +62,65 @@ test("pending MFA proof binds account version and expires without accepting lega
 test("password confirmation optionally binds the same account epoch and fails malformed cookies closed", () => {
   process.env.APP_ENV = "local";
   process.env.SESSION_SECRET = secret;
-  const legacy = createPasswordConfirmCookie(3);
-  const current = createPasswordConfirmCookie(3, 4);
-  expect(hasFreshPasswordConfirmation(request(legacy), 3)).toBe(true);
-  expect(hasFreshPasswordConfirmation(request(legacy), 3, 4)).toBe(false);
-  expect(hasFreshPasswordConfirmation(request(current), 3, 4)).toBe(true);
-  expect(hasFreshPasswordConfirmation(request(current), 3, 5)).toBe(false);
-  expect(hasFreshPasswordConfirmation(request(current.replace(".4.", ".04.")), 3, 4)).toBe(false);
-  expect(hasFreshPasswordConfirmation(request(`${legacy.split("=")[0]}=%E0%A4%A`), 3, 4)).toBe(
-    false,
+  const legacy = createPasswordConfirmCookie(
+    3,
+    undefined,
+    passwordConfirmOptionsFromEnvironment(process.env),
   );
-  expect(() => createPasswordConfirmCookie(3, -1)).toThrow();
+  const current = createPasswordConfirmCookie(
+    3,
+    4,
+    passwordConfirmOptionsFromEnvironment(process.env),
+  );
+  expect(
+    hasFreshPasswordConfirmation(
+      request(legacy),
+      3,
+      undefined,
+      passwordConfirmOptionsFromEnvironment(process.env),
+    ),
+  ).toBe(true);
+  expect(
+    hasFreshPasswordConfirmation(
+      request(legacy),
+      3,
+      4,
+      passwordConfirmOptionsFromEnvironment(process.env),
+    ),
+  ).toBe(false);
+  expect(
+    hasFreshPasswordConfirmation(
+      request(current),
+      3,
+      4,
+      passwordConfirmOptionsFromEnvironment(process.env),
+    ),
+  ).toBe(true);
+  expect(
+    hasFreshPasswordConfirmation(
+      request(current),
+      3,
+      5,
+      passwordConfirmOptionsFromEnvironment(process.env),
+    ),
+  ).toBe(false);
+  expect(
+    hasFreshPasswordConfirmation(
+      request(current.replace(".4.", ".04.")),
+      3,
+      4,
+      passwordConfirmOptionsFromEnvironment(process.env),
+    ),
+  ).toBe(false);
+  expect(
+    hasFreshPasswordConfirmation(
+      request(`${legacy.split("=")[0]}=%E0%A4%A`),
+      3,
+      4,
+      passwordConfirmOptionsFromEnvironment(process.env),
+    ),
+  ).toBe(false);
+  expect(() =>
+    createPasswordConfirmCookie(3, -1, passwordConfirmOptionsFromEnvironment(process.env)),
+  ).toThrow();
 });

@@ -8,29 +8,25 @@ import {
   serviceTokenName,
 } from "@getstrata/core/contracts/token";
 
-/** Transitional old-composition keys; new application scopes expose no string overload. */
-type LegacyServiceKey = string;
-type ServiceKey = AnyServiceToken | LegacyServiceKey;
-type Key = symbol | string;
+type ServiceKey = AnyServiceToken;
+type Key = symbol;
 type ServiceFactory<T> = (container: ServiceContainer) => T;
 
 interface ServiceContainerLike {
   has(key: ServiceKey): boolean;
   resolve<T>(key: ServiceToken<T>): T;
-  resolve<T>(key: LegacyServiceKey): T;
 }
 
 function identity(key: ServiceKey): Key {
-  if (typeof key === "string") return key;
   assertServiceToken(key);
   return serviceTokenKey(key);
 }
 
 function display(key: ServiceKey): string {
-  return typeof key === "string" ? key : serviceTokenName(key);
+  return serviceTokenName(key);
 }
 
-/** One engine for cached values, legacy factories, aliases and eager initialization. */
+/** One engine for cached values, factories, aliases and eager initialization. */
 class ServiceContainer implements ServiceContainerLike {
   private readonly services = new Map<Key, unknown>();
   private readonly singletonFactories = new Map<Key, ServiceFactory<unknown>>();
@@ -57,7 +53,6 @@ class ServiceContainer implements ServiceContainerLike {
   }
 
   set<T>(key: ServiceToken<T>, value: NoInfer<T>): T;
-  set<T>(key: LegacyServiceKey, value: T): T;
   set<T>(key: ServiceKey, value: T): T {
     this.mutable();
     const id = identity(key);
@@ -67,7 +62,6 @@ class ServiceContainer implements ServiceContainerLike {
   }
 
   singleton<T>(key: ServiceToken<T>, factory: ServiceFactory<NoInfer<T>>): void;
-  singleton<T>(key: LegacyServiceKey, factory: ServiceFactory<T>): void;
   singleton<T>(key: ServiceKey, factory: ServiceFactory<T>): void {
     this.mutable();
     const id = identity(key);
@@ -76,7 +70,6 @@ class ServiceContainer implements ServiceContainerLike {
   }
 
   bind<T>(key: ServiceToken<T>, factory: ServiceFactory<NoInfer<T>>): void;
-  bind<T>(key: LegacyServiceKey, factory: ServiceFactory<T>): void;
   bind<T>(key: ServiceKey, factory: ServiceFactory<T>): void {
     this.mutable();
     const id = identity(key);
@@ -121,8 +114,8 @@ class ServiceContainer implements ServiceContainerLike {
   alias(key: AnyServiceToken, target: AnyServiceToken): void {
     this.mutable();
     const id = identity(key);
-    this.clearDefinition(id);
     identity(target);
+    this.clearDefinition(id);
     this.aliases.set(id, target);
   }
 
@@ -131,7 +124,6 @@ class ServiceContainer implements ServiceContainerLike {
   }
 
   get<T>(key: ServiceToken<T>): T;
-  get<T>(key: LegacyServiceKey): T;
   get<T>(key: ServiceKey): T {
     const id = identity(key);
     if (this.services.has(id)) return this.services.get(id) as T;
@@ -147,7 +139,7 @@ class ServiceContainer implements ServiceContainerLike {
     }
     const binding = this.bindings.get(id);
     if (binding) return this.resolveFactory(key, binding) as T;
-    if (typeof key !== "string" && this.parent) return this.parent.get(key as ServiceToken<T>);
+    if (this.parent) return this.parent.get(key as ServiceToken<T>);
     throw new Error(`Service "${display(key)}" is not registered.`);
   }
 
@@ -166,19 +158,16 @@ class ServiceContainer implements ServiceContainerLike {
   }
 
   resolve<T>(key: ServiceToken<T>): T;
-  resolve<T>(key: LegacyServiceKey): T;
   resolve<T>(key: ServiceKey): T {
     return this.get(key as ServiceToken<T>);
   }
 
   make<T>(key: ServiceToken<T>): T;
-  make<T>(key: LegacyServiceKey): T;
   make<T>(key: ServiceKey): T {
     return this.resolve(key as ServiceToken<T>);
   }
 
   instance<T>(key: ServiceToken<T>, value: NoInfer<T>): T;
-  instance<T>(key: LegacyServiceKey, value: T): T;
   instance<T>(key: ServiceKey, value: T): T {
     return this.set(key as ServiceToken<T>, value);
   }
@@ -190,7 +179,7 @@ class ServiceContainer implements ServiceContainerLike {
       this.singletonFactories.has(id) ||
       this.bindings.has(id) ||
       this.aliases.has(id) ||
-      (typeof key !== "string" && this.parent !== undefined && this.parent.has(key))
+      (this.parent?.has(key) ?? false)
     );
   }
 }
@@ -224,11 +213,5 @@ class ConfigStore implements ConfigStoreLike {
   }
 }
 
-export type {
-  ConfigStoreLike,
-  LegacyServiceKey,
-  ServiceContainerLike,
-  ServiceFactory,
-  ServiceToken,
-};
+export type { ConfigStoreLike, ServiceContainerLike, ServiceFactory, ServiceToken };
 export { ConfigStore, createServiceToken, ServiceContainer };

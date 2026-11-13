@@ -6,15 +6,15 @@ import type { AuthReader } from "../auth/authReader";
 import type { Middleware } from "./middleware";
 
 function createAuthorizeMiddleware(
-  gate: PolicyGate,
-  auth: AuthReader,
+  gate: Pick<PolicyGate, "allows">,
+  auth: Pick<AuthReader, "resolve">,
   resource: string,
   action: keyof Policy,
 ): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
     const user = currentAuthUser() ?? (await auth.resolve(request));
 
-    if (!gate.allows(resource, action, user)) {
+    if (!(await gate.allows(resource, action, user))) {
       const error = new ForbiddenError();
       return errorResponse(error);
     }

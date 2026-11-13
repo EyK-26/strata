@@ -45,7 +45,7 @@ describe("resolveThrottleIdentity", () => {
         },
       });
 
-      expect(resolveThrottleIdentity(request)).toBe("203.0.113.10");
+      expect(resolveThrottleIdentity(request, true)).toBe("203.0.113.10");
     } finally {
       restoreEnvVar("TRUST_FORWARDED_FOR", previous);
     }

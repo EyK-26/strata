@@ -7,12 +7,14 @@ class FailedJobService {
   async recordFailure(input: {
     jobName: string;
     jobId?: string;
+    handoff?: string;
     payload: Record<string, unknown>;
     exception: string;
   }): Promise<FailedJobRecord> {
     return await this.repository.create({
       job_name: input.jobName,
       job_id: input.jobId ?? null,
+      ...(input.handoff === undefined ? {} : { handoff: input.handoff }),
       payload: input.payload,
       exception: input.exception,
       failed_at: new Date(),

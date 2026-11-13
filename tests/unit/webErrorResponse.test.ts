@@ -6,9 +6,15 @@ import {
   UnauthorizedError,
   ValidationError,
 } from "@getstrata/core/errors/http";
-import { normalizeFieldErrors, webErrorResponse } from "@getstrata/core/http/webErrorResponse";
-import { resetWebErrorViewForTests } from "@getstrata/core/view/webErrorView";
-import { restoreEnvVar } from "../helpers/restoreEnv";
+import {
+  normalizeFieldErrors,
+  webErrorResponse as renderWebErrorResponse,
+} from "@getstrata/core/http/webErrorResponse";
+
+let viewsEnabled = false;
+function webErrorResponse(error: unknown, request?: Request) {
+  return renderWebErrorResponse(error, request, { enabled: viewsEnabled, production: false });
+}
 
 describe("normalizeFieldErrors", () => {
   test("returns an empty object for invalid details", () => {
@@ -33,16 +39,8 @@ describe("normalizeFieldErrors", () => {
 });
 
 describe("webErrorResponse", () => {
-  const previousFrontendMode = process.env.FRONTEND_MODE;
-
   afterEach(() => {
-    resetWebErrorViewForTests();
-
-    if (previousFrontendMode === undefined) {
-      delete process.env.FRONTEND_MODE;
-    } else {
-      restoreEnvVar("FRONTEND_MODE", previousFrontendMode);
-    }
+    viewsEnabled = false;
   });
 
   test("returns null when request is missing", async () => {
@@ -50,7 +48,7 @@ describe("webErrorResponse", () => {
   });
 
   test("returns null when views are disabled", async () => {
-    delete process.env.FRONTEND_MODE;
+    viewsEnabled = false;
 
     const request = new Request("http://example.test/widgets", {
       headers: { accept: "text/html" },
@@ -60,7 +58,7 @@ describe("webErrorResponse", () => {
   });
 
   test("returns null when the client prefers JSON", async () => {
-    process.env.FRONTEND_MODE = "server-htmx";
+    viewsEnabled = true;
 
     const request = new Request("http://example.test/api/v1/widgets", {
       headers: { accept: "application/json" },
@@ -70,7 +68,7 @@ describe("webErrorResponse", () => {
   });
 
   test("returns null for /api/ even when Accept is HTML", async () => {
-    process.env.FRONTEND_MODE = "hybrid";
+    viewsEnabled = true;
 
     const request = new Request("http://example.test/api/apply/me", {
       headers: { accept: "text/html" },
@@ -80,7 +78,7 @@ describe("webErrorResponse", () => {
   });
 
   test("redirects unauthorized errors to login", async () => {
-    process.env.FRONTEND_MODE = "server-htmx";
+    viewsEnabled = true;
 
     const request = new Request("http://example.test/widgets/new?tab=info", {
       headers: { accept: "text/html" },
@@ -93,7 +91,7 @@ describe("webErrorResponse", () => {
   });
 
   test("renders validation errors with field summaries", async () => {
-    process.env.FRONTEND_MODE = "server-htmx";
+    viewsEnabled = true;
 
     const request = new Request("http://example.test/widgets", {
       method: "POST",
@@ -117,7 +115,7 @@ describe("webErrorResponse", () => {
   });
 
   test("falls back to the validation message when field details are empty", async () => {
-    process.env.FRONTEND_MODE = "server-htmx";
+    viewsEnabled = true;
 
     const request = new Request("http://example.test/widgets", {
       headers: { accept: "text/html" },
@@ -131,7 +129,7 @@ describe("webErrorResponse", () => {
   });
 
   test("renders generic HTTP errors as HTML", async () => {
-    process.env.FRONTEND_MODE = "server-htmx";
+    viewsEnabled = true;
 
     const request = new Request("http://example.test/widgets", {
       headers: { accept: "text/html" },
@@ -147,7 +145,7 @@ describe("webErrorResponse", () => {
   });
 
   test("renders a foreign Forbidden-shaped error as HTTP 403", async () => {
-    process.env.FRONTEND_MODE = "server-htmx";
+    viewsEnabled = true;
 
     class ForeignForbidden extends Error {
       readonly status = 403;
@@ -173,7 +171,7 @@ describe("webErrorResponse", () => {
   });
 
   test("renders ForbiddenError as HTTP 403", async () => {
-    process.env.FRONTEND_MODE = "server-htmx";
+    viewsEnabled = true;
 
     const request = new Request("http://example.test/users", {
       headers: { accept: "text/html" },
@@ -187,7 +185,7 @@ describe("webErrorResponse", () => {
   });
 
   test("maps non-http errors through mapDatabaseError", async () => {
-    process.env.FRONTEND_MODE = "server-htmx";
+    viewsEnabled = true;
 
     const request = new Request("http://example.test/widgets", {
       headers: { accept: "text/html" },
@@ -202,7 +200,7 @@ describe("webErrorResponse", () => {
   });
 
   test("passes through existing HttpError instances", async () => {
-    process.env.FRONTEND_MODE = "server-htmx";
+    viewsEnabled = true;
 
     const request = new Request("http://example.test/widgets", {
       headers: { accept: "text/html" },
@@ -252,4 +250,78 @@ test("a failed POST may return to the same safe GET form/list path", async () =>
     }),
   });
   expect(html).toContain('href="/widgets">Go back');
+});
+
+test("supplied invalid credentials remain HTTP 401 while anonymous protected requests redirect", async () => {
+  viewsEnabled = true;
+  const { InvalidCredentialsError } = await import("@getstrata/core/errors/http");
+  const { withErrorHandling } = await import("@getstrata/core/http/response");
+  const server = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    fetch: withErrorHandling(
+      (request: Request) => {
+        if (request.headers.has("authorization")) throw new InvalidCredentialsError();
+        throw new UnauthorizedError();
+      },
+      { enabled: true, production: false },
+    ),
+  });
+  try {
+    const origin = `http://127.0.0.1:${server.port}`;
+    const invalid = await fetch(`${origin}/login`, {
+      headers: { accept: "text/html", authorization: "Bearer invalid" },
+      redirect: "manual",
+    });
+    expect(invalid.status).toBe(401);
+    expect(invalid.headers.get("location")).toBeNull();
+    const followed = await fetch(`${origin}/login`, {
+      headers: { accept: "text/html", authorization: "Bearer invalid" },
+    });
+    expect(followed.status).toBe(401);
+    const anonymous = await fetch(`${origin}/private`, {
+      headers: { accept: "text/html" },
+      redirect: "manual",
+    });
+    expect(anonymous.status).toBe(302);
+    expect(anonymous.headers.get("location")).toContain("/login?redirect=");
+  } finally {
+    await server.stop(true);
+    viewsEnabled = false;
+  }
+});
+
+test("captured error policies isolate production redaction and ignore later ambient mode", async () => {
+  const { withErrorHandling } = await import("@getstrata/core/http/response");
+  const { spyOn } = await import("bun:test");
+  const log = spyOn(console, "error").mockImplementation(() => undefined);
+  const production = { enabled: true, production: true };
+  const productionHandler = withErrorHandling((_request: Request) => {
+    throw new HttpError(500, "private diagnostics");
+  }, production);
+  const developmentHandler = withErrorHandling(
+    (_request: Request) => {
+      throw new HttpError(500, "development diagnostics");
+    },
+    { enabled: true, production: false },
+  );
+  const unownedHandler = withErrorHandling((_request: Request) => {
+    throw new BadRequestError("ownerless");
+  });
+  production.production = false;
+  production.enabled = false;
+  try {
+    const request = new Request("https://app.test/error", { headers: { accept: "text/html" } });
+    const [safe, debug, unowned] = await Promise.all([
+      productionHandler(request),
+      developmentHandler(request),
+      unownedHandler(request),
+    ]);
+    expect(await safe.text()).toContain("Something went wrong.");
+    expect(await debug.text()).toContain("development diagnostics");
+    expect(unowned.headers.get("content-type")).toContain("application/json");
+    expect(await unowned.json()).toEqual({ error: "ownerless" });
+  } finally {
+    log.mockRestore();
+  }
 });

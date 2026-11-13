@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 3.0.0
+
+Breaking application-owned runtime, typed authorization and persistence, immutable starter plans, isolated adapters and authenticated queue handoffs.
+
 ## 2.2.60
 
 - Preserve failed-job payloads as PostgreSQL JSONB objects by letting the native driver encode them once. Retain SQLite/MySQL JSON text mapping and readable legacy JSONB strings; timestamps, projections and replay admission/deletion ordering are unchanged.

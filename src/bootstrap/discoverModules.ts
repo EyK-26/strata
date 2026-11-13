@@ -9,39 +9,6 @@ interface DiscoverModulesOptions {
   exclude?: readonly string[];
   manifest?: readonly AppModule[];
 }
-interface DiscoverModulesState {
-  configuredModulesDir?: string;
-  configuredManifest?: readonly AppModule[];
-  appModules: AppModule[];
-  modulesReady?: Promise<AppModule[]>;
-  source?: string | readonly AppModule[];
-}
-const KEY = Symbol.for("@getstrata/discoverModulesState");
-function state(): DiscoverModulesState {
-  const globals = globalThis as Record<symbol, DiscoverModulesState | undefined>;
-  globals[KEY] ??= { appModules: [] };
-  return globals[KEY];
-}
-function configureModulesDirectory(modulesDir: string): void {
-  const current = state();
-  const directory = resolve(modulesDir);
-  if (current.configuredModulesDir !== directory || current.configuredManifest) {
-    current.appModules.length = 0;
-    current.modulesReady = undefined;
-    current.source = undefined;
-  }
-  current.configuredManifest = undefined;
-  current.configuredModulesDir = directory;
-}
-function configureModulesManifest(manifest: readonly AppModule[]): void {
-  const current = state();
-  if (current.configuredManifest !== manifest) {
-    current.appModules.length = 0;
-    current.modulesReady = undefined;
-    current.source = undefined;
-  }
-  current.configuredManifest = manifest;
-}
 function validateModule(value: unknown, location: string): asserts value is AppModule {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new TypeError(`Invalid application module at ${location}.`);
@@ -70,24 +37,21 @@ function validateModule(value: unknown, location: string): asserts value is AppM
     }
   }
 }
-async function load(options: DiscoverModulesOptions): Promise<AppModule[]> {
-  const manifest =
-    options.manifest ?? (options.modulesDir === undefined ? state().configuredManifest : undefined);
+async function load(options: DiscoverModulesOptions): Promise<readonly AppModule[]> {
+  const manifest = options.manifest;
   const entries: Array<{ value: unknown; location: string }> = [];
   if (manifest)
     for (const [index, value] of manifest.entries())
       entries.push({ value, location: `module manifest[${index}]` });
   else {
-    const directory = options.modulesDir ?? state().configuredModulesDir;
+    const directory = options.modulesDir;
     if (!directory)
-      throw new Error(
-        "configureModulesDirectory() or configureModulesManifest() must be called before discovering modules.",
-      );
+      throw new Error("An explicit modulesDir or manifest is required to discover modules.");
     let folders: Dirent[];
     try {
       folders = await readdir(directory, { withFileTypes: true });
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return Object.freeze([]);
       throw error;
     }
     const excluded = new Set(options.exclude ?? []);
@@ -117,50 +81,34 @@ async function load(options: DiscoverModulesOptions): Promise<AppModule[]> {
     modules.push(value);
   }
   // Stable source order resolves equal priorities without locale-dependent ordering.
-  return modules.sort((left, right) => (left.order ?? 100) - (right.order ?? 100));
+  return Object.freeze(modules.sort((left, right) => (left.order ?? 100) - (right.order ?? 100)));
 }
-function ensureModulesLoaded(options: DiscoverModulesOptions = {}): Promise<AppModule[]> {
-  const current = state();
-  const key =
-    options.manifest ??
-    (options.modulesDir === undefined ? current.configuredManifest : undefined) ??
-    JSON.stringify([
-      options.modulesDir ? resolve(options.modulesDir) : current.configuredModulesDir,
-      [...(options.exclude ?? [])].sort(),
-    ]);
-  if (current.modulesReady && current.source === key) return current.modulesReady;
-  current.appModules.length = 0;
-  current.source = key;
-  const pending = load(options)
-    .then((modules) => {
-      if (current.modulesReady !== pending) return modules;
-      current.appModules.splice(0, current.appModules.length, ...modules);
-      return current.appModules;
-    })
-    .catch((error) => {
-      if (current.modulesReady === pending) current.modulesReady = undefined;
-      throw error;
-    });
-  current.modulesReady = pending;
-  return pending;
+/** A discovery owner captures its source and owns its pending result, including retries. */
+function createModuleDiscovery(options: DiscoverModulesOptions) {
+  const source: DiscoverModulesOptions = Object.freeze({
+    ...options,
+    modulesDir: options.modulesDir === undefined ? undefined : resolve(options.modulesDir),
+    manifest: options.manifest === undefined ? undefined : Object.freeze([...options.manifest]),
+    exclude: options.exclude === undefined ? undefined : Object.freeze([...options.exclude]),
+  });
+  let pending: Promise<readonly AppModule[]> | undefined;
+  return Object.freeze({
+    load(): Promise<readonly AppModule[]> {
+      if (pending) return pending;
+      const result = load(source).catch((error) => {
+        if (pending === result) pending = undefined;
+        throw error;
+      });
+      pending = result;
+      return result;
+    },
+  });
 }
-function discoverModules(): AppModule[] {
-  return state().appModules;
-}
-function resetDiscoverModulesForTests(): void {
-  const current = state();
-  current.configuredModulesDir = undefined;
-  current.configuredManifest = undefined;
-  current.appModules.length = 0;
-  current.modulesReady = undefined;
-  current.source = undefined;
+
+/** One-shot discovery; applications retain the returned immutable module list. */
+function ensureModulesLoaded(options: DiscoverModulesOptions): Promise<readonly AppModule[]> {
+  return createModuleDiscovery(options).load();
 }
 
 export type { DiscoverModulesOptions };
-export {
-  configureModulesDirectory,
-  configureModulesManifest,
-  discoverModules,
-  ensureModulesLoaded,
-  resetDiscoverModulesForTests,
-};
+export { createModuleDiscovery, ensureModulesLoaded };

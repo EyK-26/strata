@@ -3,6 +3,8 @@
  * Import from `@getstrata/core` (workspace) or `src/framework/public-api`.
  */
 
+export type { PolicyAction, PolicyDecision } from "@getstrata/core/auth/policy";
+export { Policy, PolicyDeniedError, PolicyGate } from "@getstrata/core/auth/policy";
 export { CORE_CACHE_TOKEN } from "@getstrata/core/cache/tokens";
 export type {
   ConfigIntegerBounds,
@@ -14,6 +16,14 @@ export {
   configInteger,
   parseApplicationConfig,
 } from "@getstrata/core/config/applicationConfig";
+export type {
+  AuthAccountLookup,
+  AuthBearerResolver,
+  AuthCredentialVerifier,
+  AuthEmailLookup,
+  AuthSessionValidity,
+} from "@getstrata/core/contracts/authUserDirectory";
+export { AuthAccountNotFoundError } from "@getstrata/core/contracts/authUserDirectory";
 export {
   ConfigStore,
   createServiceToken,
@@ -31,6 +41,12 @@ export {
   service,
   valueService,
 } from "@getstrata/core/contracts/services";
+export {
+  CORE_JSON_RESPONSE_POLICY_TOKEN,
+  CORE_MAIL_TOKEN,
+  CORE_STORAGE_TOKEN,
+  CORE_TRACING_RUNTIME_TOKEN,
+} from "@getstrata/core/contracts/serviceTokens";
 export type {
   TransactionAcquisitionMetrics,
   TransactionAcquisitionSnapshot,
@@ -87,6 +103,7 @@ export {
   ForbiddenError,
   HttpError,
   InternalServerError,
+  InvalidCredentialsError,
   isHttpErrorLike,
   NotFoundError,
   PayloadTooLargeError,
@@ -100,7 +117,13 @@ export type {
   RouteModelAuthorization,
   RouteModelBindingPorts,
 } from "@getstrata/core/http/securedRouteModelBinding";
-export { CORE_VIEW_RENDERER_TOKEN } from "@getstrata/core/view/tokens";
+export type { QueueHandoff, QueueIdentity } from "@getstrata/core/queue/queueHandoff";
+export {
+  createIdentityQueue,
+  createQueueHandoff,
+  QueueHandoffError,
+} from "@getstrata/core/queue/queueHandoff";
+export { CORE_VIEW_RENDERER_TOKEN, CORE_WEB_ERROR_VIEW_TOKEN } from "@getstrata/core/view/tokens";
 export {
   BaseRepository,
   BelongsToManyRelationQuery,
@@ -136,14 +159,22 @@ export {
   runWithAuthContext,
   runWithAuthUser,
 } from "../core/auth/authContext.ts";
+export type { BasicAuthGuardOptions } from "../core/auth/basicAuthGuard.ts";
 export { BasicAuthGuard } from "../core/auth/basicAuthGuard.ts";
-export type { AuthGuard } from "../core/auth/guard.ts";
+export type { AuthGuard, AuthOutcome } from "../core/auth/guard.ts";
 export {
   ApiTokenGuard,
   AuthManager,
+  absentAuth,
+  authenticatedAuth,
+  authenticateProof,
+  authUserFromOutcome,
   CompositeGuard,
   DatabaseTokenGuard,
   GuestGuard,
+  invalidAuth,
+  requireAuthCapability,
+  validatedAuthOutcome,
 } from "../core/auth/guard.ts";
 export type { JwtPayload } from "../core/auth/jwt.ts";
 export { jwtTtlSeconds, signJwt, verifyJwt } from "../core/auth/jwt.ts";
@@ -180,7 +211,6 @@ export {
   hashOneTimeToken,
 } from "../core/auth/oneTimeToken.ts";
 export { completePasswordLogin } from "../core/auth/passwordLogin.ts";
-export { Policy, PolicyGate } from "../core/auth/policy.ts";
 export type {
   SamlAssertionReplayStore,
   SamlServiceProviderConfig,
@@ -219,13 +249,8 @@ export {
   fieldEncryptionRotationRepository,
   runFieldEncryptionRotationBatch,
 } from "../core/crypto/fieldEncryptionRotation";
-export {
-  bindDatabaseConnection,
-  getBoundDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "../core/database/bindConnection.ts";
 export { createDatabaseBindings } from "../core/database/bindings";
-export { bindBunSql, createBunSqlPool } from "../core/database/bunSql.ts";
+export { createBunSqlPool } from "../core/database/bunSql.ts";
 export { createDatabaseConnection } from "../core/database/connection.ts";
 export {
   getActiveDatabaseConnection,
@@ -233,21 +258,12 @@ export {
   runWithDatabaseConnection,
 } from "../core/database/connectionContext.ts";
 export type { DatabaseConnection } from "../core/database/connectionContracts.ts";
-export {
-  getDefaultDatabasePool,
-  getDefaultDatabaseQuery,
-  isDefaultDatabaseConnection,
-  registerDefaultDatabasePool,
-  resetDefaultDatabasePoolForTests,
-} from "../core/database/defaultConnection.ts";
 export type { SqlDialect } from "../core/database/dialect.ts";
 export {
   currentSqlDialect,
   dialectFor,
-  resetSqlDialect,
   runWithSqlDialect,
   sqlTimestamp,
-  useSqlDialect,
 } from "../core/database/dialect.ts";
 export { foreignKeyFromTable, pivotTableName, singularize } from "../core/database/inflection.ts";
 export { withMigrationLock } from "../core/database/migrations/advisoryLock.ts";
@@ -285,14 +301,6 @@ export {
   createMysqlPool,
   resetMysqlLoaderForTests,
 } from "../core/database/mysqlConnection.ts";
-export {
-  getNamedConnection,
-  hasNamedConnection,
-  registerNamedConnection,
-  resetNamedConnections,
-  runOnNamedConnection,
-  unregisterNamedConnection,
-} from "../core/database/namedConnections.ts";
 export {
   buildAdvancedWhereClause,
   buildCountQuery,
@@ -343,10 +351,6 @@ export {
   morphOne,
   morphTo,
 } from "../core/database/relationships.ts";
-export {
-  repositoryConnection,
-  resolveRepositoryConnection,
-} from "../core/database/repositoryConnection.ts";
 export {
   projectPluck,
   uniqueColumnSelect,
@@ -431,17 +435,6 @@ export {
   renderOutboxMetrics,
   SqlOutbox,
 } from "../core/events/outbox/index.ts";
-export {
-  auth,
-  cache,
-  config,
-  events,
-  log,
-  mail,
-  policyGate,
-  queue,
-  storage,
-} from "../core/facades/index.ts";
 export { createBodySizeLimitMiddleware } from "../core/http/bodySizeLimitMiddleware.ts";
 export { readClientIp, trustForwardedFor } from "../core/http/clientIp.ts";
 export {
@@ -453,10 +446,8 @@ export type {
   ContentSecurityPolicyOptions,
 } from "../core/http/contentSecurityPolicy.ts";
 export {
-  configureContentSecurityPolicy,
   generateCspNonce,
   HTMX_2_0_4_INDICATOR_STYLE_HASH,
-  resetContentSecurityPolicyForTests,
   resolveContentSecurityPolicy,
   resolveHtmlContentSecurityPolicy,
   serverHtmxContentSecurityPolicy,
@@ -616,19 +607,19 @@ export { WebFormRequest } from "../core/http/webFormRequest.ts";
 export {
   installGracefulShutdownSignals,
   LifecycleCoordinator,
-  registerShutdownHandler,
-  resetGracefulShutdownForTests,
-  runGracefulShutdown,
   type ShutdownContext,
   type ShutdownResult,
 } from "../core/lifecycle/gracefulShutdown.ts";
 export { createRequestLoggingMiddleware } from "../core/logging/requestLoggingMiddleware.ts";
-export type { MailDriver, MailMessage } from "../core/mail/mailer.ts";
+export type { MailDriver, MailMessage, SmtpConfig, SmtpTransport } from "../core/mail/mailer.ts";
 export {
   buildSmtpPayload,
+  createMailDriver,
   LogMailDriver,
   Mailer,
-  mailer,
+  resolveSmtpConfig,
+  SmtpMailDriver,
+  snapshotSmtpConfig,
 } from "../core/mail/mailer.ts";
 export type { MarkdownMailLayoutOptions, RenderedMarkdownMail } from "../core/mail/markdownMail.ts";
 export {
@@ -677,7 +668,7 @@ export {
 } from "../core/queue/failedJobMetrics.ts";
 export type { Queue, QueuePriority } from "../core/queue/index.ts";
 export { AsyncQueue, createQueue, Job, SyncQueue } from "../core/queue/index.ts";
-export { JobRegistry } from "../core/queue/jobRegistry.ts";
+export { JobRegistry, QUEUE_JOB_REGISTRY_TOKEN } from "../core/queue/jobRegistry.ts";
 export {
   createFailedJobService,
   createProductionQueue,
@@ -685,7 +676,6 @@ export {
   createTrackedJob,
   FailedJobRepository,
   FailedJobService,
-  jobRegistry,
   QueueWorker,
   RedisQueue,
   ResilientQueue,
@@ -711,18 +701,6 @@ export {
   smtpEhloHost,
   webhookSignatureHeader,
 } from "../core/runtime/appKeyPrefix.ts";
-export {
-  clearActiveApplicationContext,
-  resolveApplicationAuth,
-  resolveApplicationCache,
-  resolveApplicationConfig,
-  resolveApplicationDependencies,
-  resolveApplicationEventBus,
-  resolveApplicationLogger,
-  resolveApplicationPolicyGate,
-  resolveApplicationQueue,
-  setActiveApplicationContext,
-} from "../core/runtime/applicationRegistry.ts";
 export type {
   ScheduledTask,
   ScheduledTaskContext,
@@ -752,12 +730,13 @@ export {
 export type { SecurityEventDetails } from "../core/security/securityEvents.ts";
 export { logSecurityEvent } from "../core/security/securityEvents.ts";
 export { signedWebhookHeaders, signWebhookBody } from "../core/security/webhookSignature.ts";
-export type { StorageDriver } from "../core/storage/storage.ts";
+export type { S3StorageConfig, StorageConfig, StorageDriver } from "../core/storage/storage.ts";
 export {
   createStorageDriver,
   LocalStorageDriver,
-  resetDefaultStorage,
+  resolveStorageConfig,
   StorageManager,
+  snapshotStorageConfig,
 } from "../core/storage/storage.ts";
 export {
   enableTenantRlsSql,
@@ -801,10 +780,8 @@ export {
 } from "../core/tracing/traceContext.ts";
 export type { TracingOptions, TracingRuntime } from "../core/tracing/tracingMiddleware.ts";
 export {
-  acquireTracingRuntime,
   createTracingMiddleware,
   createTracingRuntime,
-  getTracingRuntime,
 } from "../core/tracing/tracingMiddleware.ts";
 export type { ValidationRule, ValidationSchema } from "../core/validation/rules.ts";
 export {
@@ -816,8 +793,7 @@ export {
   validateObject,
 } from "../core/validation/rules.ts";
 export {
-  configureWebErrorView,
-  configureWebLayoutData,
+  createWebErrorView,
   createWebLayoutDataResolver,
   DEFAULT_VIEWS_DIRECTORY,
   EtaViewEngine,
@@ -842,6 +818,11 @@ export type {
   ViewNamespaceOptions,
   ViewResponseOptions,
 } from "../core/view/viewRenderer.ts";
+export type {
+  WebErrorView,
+  WebErrorViewInput,
+  WebErrorViewOptions,
+} from "../core/view/webErrorView.ts";
 export type {
   WebLayoutAuthUser,
   WebLayoutData,

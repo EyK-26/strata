@@ -78,7 +78,7 @@ describe("upload mime allowlist", () => {
 
   test("UPLOAD_ALLOW_UNKNOWN_MIME=true restores the permissive behaviour", () => {
     process.env.UPLOAD_ALLOW_UNKNOWN_MIME = "true";
-    expect(isAllowedMimeType("application/octet-stream")).toBe(true);
+    expect(isAllowedMimeType("application/octet-stream", true)).toBe(true);
     delete process.env.UPLOAD_ALLOW_UNKNOWN_MIME;
   });
 

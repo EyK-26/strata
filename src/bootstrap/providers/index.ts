@@ -1,22 +1,32 @@
+import { createStorageDriver, resolveStorageConfig } from "@getstrata/core/storage/storage";
 import type { ServiceProvider } from "../contracts";
-import { legacyCacheProvider } from "../legacyCache";
 import authProvider from "./auth";
-import configProvider from "./config";
+import { createCacheProvider } from "./cacheProvider";
+import { createConfigProvider } from "./config";
 import policyProvider from "./policy";
-import queueProvider from "./queue";
-import storageProvider from "./storage";
-import tracingProvider from "./tracing";
-import { viewProvider } from "./view";
+import { createQueueProvider } from "./queue";
+import { createStorageProvider } from "./storage";
+import { createTracingProvider } from "./tracing";
+import { createViewProvider } from "./view";
 
-const coreProviders: ServiceProvider[] = [
-  configProvider,
-  tracingProvider,
-  legacyCacheProvider,
-  storageProvider,
-  authProvider,
-  policyProvider,
-  queueProvider,
-  viewProvider,
-];
+function createCoreProviders(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): ServiceProvider[] {
+  env = Object.freeze({ ...env });
+  const configProvider = createConfigProvider(env);
+  const cacheProvider = createCacheProvider(env);
+  const storageProvider = createStorageProvider(createStorageDriver(resolveStorageConfig(env)));
+  return [
+    configProvider,
+    createTracingProvider({ env }),
+    cacheProvider,
+    storageProvider,
+    authProvider,
+    policyProvider,
+    createQueueProvider(env),
+    createViewProvider({ env }),
+  ];
+}
 
-export { coreProviders };
+export { resolveHttpResponsePolicy } from "./config";
+export { createCoreProviders };

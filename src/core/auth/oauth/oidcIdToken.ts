@@ -1,14 +1,13 @@
 import { createHash, createPublicKey, createVerify, type KeyObject } from "node:crypto";
-import { isProductionEnv } from "../../runtime/appEnv";
 import { safeFetch } from "../../security/safeFetch";
 import { timingSafeCompareString } from "../../security/timingSafeCompare";
 import type { JwtPayload } from "../jwt";
 
 interface OidcDiscovery {
-  issuer?: string;
-  authorization_endpoint?: string;
-  token_endpoint?: string;
-  jwks_uri?: string;
+  readonly issuer?: string;
+  readonly authorization_endpoint: string;
+  readonly token_endpoint: string;
+  readonly jwks_uri: string;
 }
 
 interface JsonWebKeyLike {
@@ -21,8 +20,45 @@ interface JsonWebKeyLike {
 }
 
 const JWKS_TTL_MS = 60 * 60 * 1000;
-const discoveryCache = new Map<string, { discovery: OidcDiscovery; fetchedAt: number }>();
-const jwksCache = new Map<string, { keys: JsonWebKeyLike[]; fetchedAt: number }>();
+interface OidcNetworkPolicy {
+  readonly production: boolean;
+  readonly allowPrivate?: boolean;
+}
+interface OidcClient {
+  loadDiscovery(issuer: string): Promise<OidcDiscovery>;
+  verifyIdToken(token: string, options: OidcVerificationOptions): Promise<JwtPayload>;
+  fetchOptions(url: string): ReturnType<typeof oidcSafeFetchOptions>;
+}
+interface OidcState {
+  readonly policy: OidcNetworkPolicy;
+  readonly discoveryCache: Map<string, { discovery: OidcDiscovery; fetchedAt: number }>;
+  readonly jwksCache: Map<string, { keys: JsonWebKeyLike[]; fetchedAt: number }>;
+}
+interface OidcVerificationOptions {
+  issuer: string;
+  clientId: string;
+  nonce: string;
+  jwksUri: string;
+  accessToken?: string;
+}
+function createOidcClient(input: OidcNetworkPolicy = { production: true }): OidcClient {
+  if (
+    typeof input.production !== "boolean" ||
+    (input.allowPrivate !== undefined && typeof input.allowPrivate !== "boolean")
+  )
+    throw new TypeError("OIDC requires an explicit valid network policy.");
+  const state: OidcState = {
+    policy: Object.freeze({ ...input }),
+    discoveryCache: new Map(),
+    jwksCache: new Map(),
+  };
+  return Object.freeze({
+    loadDiscovery: (issuer: string) => loadOidcDiscovery(issuer, state),
+    verifyIdToken: (token: string, options: OidcVerificationOptions) =>
+      verifyOidcIdToken(token, options, state),
+    fetchOptions: (url: string) => oidcSafeFetchOptions(url, state.policy),
+  });
+}
 
 function issuerOrigin(issuer: string): string {
   return issuer.replace(/\/$/, "");
@@ -38,14 +74,13 @@ function oidcLoopbackHost(hostname: string): boolean {
 
 /**
  * Loopback issuers work in local/dev without an extra flag. Other private hosts
- * need OIDC_ALLOW_PRIVATE=true. Production ignores both (safeFetch forces
- * allowPrivate off).
+ * require the captured allowPrivate policy. Production always blocks private hosts.
  */
-function oidcOutboundAllowsPrivate(url: string): boolean {
-  if (isProductionEnv()) {
+function oidcOutboundAllowsPrivate(url: string, policy: OidcNetworkPolicy): boolean {
+  if (policy.production) {
     return false;
   }
-  if (process.env.OIDC_ALLOW_PRIVATE === "true") {
+  if (policy.allowPrivate) {
     return true;
   }
   try {
@@ -55,68 +90,87 @@ function oidcOutboundAllowsPrivate(url: string): boolean {
   }
 }
 
-function oidcSafeFetchOptions(url: string): {
+function oidcSafeFetchOptions(
+  url: string,
+  policy: OidcNetworkPolicy,
+): {
+  production: boolean;
   allowHttp: boolean;
   allowPrivate: boolean;
   timeoutMs: number;
   maxRedirects: number;
 } {
   return {
-    allowHttp: !isProductionEnv(),
-    allowPrivate: oidcOutboundAllowsPrivate(url),
+    production: policy.production,
+    allowHttp: !policy.production,
+    allowPrivate: oidcOutboundAllowsPrivate(url, policy),
     timeoutMs: 10_000,
     maxRedirects: 0,
   };
 }
 
-async function fetchJson(url: string): Promise<unknown> {
+async function fetchJson(url: string, state: OidcState): Promise<unknown> {
   const response = await safeFetch(
     url,
     { headers: { accept: "application/json" } },
-    oidcSafeFetchOptions(url),
+    oidcSafeFetchOptions(url, state.policy),
   );
 
   return await response.json();
 }
 
-async function loadOidcDiscovery(issuer: string): Promise<OidcDiscovery> {
+async function loadOidcDiscovery(issuer: string, state: OidcState): Promise<OidcDiscovery> {
   const key = issuerOrigin(issuer);
-  const cached = discoveryCache.get(key);
+  const cached = state.discoveryCache.get(key);
   if (cached && Date.now() - cached.fetchedAt < JWKS_TTL_MS) {
     return cached.discovery;
   }
 
-  const discovery = (await fetchJson(`${key}/.well-known/openid-configuration`)) as OidcDiscovery;
+  const raw = await fetchJson(`${key}/.well-known/openid-configuration`, state);
+  const document =
+    raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const { authorization_endpoint, token_endpoint, jwks_uri, issuer: declaredIssuer } = document;
   if (
-    !discovery?.authorization_endpoint?.trim() ||
-    !discovery.jwks_uri?.trim() ||
-    !discovery.token_endpoint?.trim()
+    typeof authorization_endpoint !== "string" ||
+    !authorization_endpoint.trim() ||
+    typeof token_endpoint !== "string" ||
+    !token_endpoint.trim() ||
+    typeof jwks_uri !== "string" ||
+    !jwks_uri.trim()
   ) {
     throw new Error(
       "OIDC discovery document did not include authorization_endpoint, jwks_uri, and token_endpoint.",
     );
   }
+  // Public clients share this cache entry: retain only validated immutable strings.
+  const discovery: OidcDiscovery = Object.freeze({
+    ...(typeof declaredIssuer === "string" ? { issuer: declaredIssuer } : {}),
+    authorization_endpoint: authorization_endpoint.trim(),
+    token_endpoint: token_endpoint.trim(),
+    jwks_uri: jwks_uri.trim(),
+  });
 
-  discoveryCache.set(key, { discovery, fetchedAt: Date.now() });
+  state.discoveryCache.set(key, { discovery, fetchedAt: Date.now() });
   return discovery;
 }
 
 async function loadOidcJwks(
   jwksUri: string,
+  state: OidcState,
   options: { force?: boolean } = {},
 ): Promise<JsonWebKeyLike[]> {
-  const cached = jwksCache.get(jwksUri);
+  const cached = state.jwksCache.get(jwksUri);
   if (!options.force && cached && Date.now() - cached.fetchedAt < JWKS_TTL_MS) {
     return cached.keys;
   }
 
-  const body = (await fetchJson(jwksUri)) as { keys?: JsonWebKeyLike[] };
+  const body = (await fetchJson(jwksUri, state)) as { keys?: JsonWebKeyLike[] };
   const keys = Array.isArray(body.keys) ? body.keys : [];
   if (keys.length === 0) {
     throw new Error("OIDC JWKS document did not include signing keys.");
   }
 
-  jwksCache.set(jwksUri, { keys, fetchedAt: Date.now() });
+  state.jwksCache.set(jwksUri, { keys, fetchedAt: Date.now() });
   return keys;
 }
 
@@ -216,13 +270,8 @@ function assertIdTokenClaims(
 
 async function verifyOidcIdToken(
   token: string,
-  options: {
-    issuer: string;
-    clientId: string;
-    nonce: string;
-    jwksUri: string;
-    accessToken?: string;
-  },
+  options: OidcVerificationOptions,
+  state: OidcState,
 ): Promise<JwtPayload> {
   const parts = token.split(".");
   if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
@@ -234,10 +283,10 @@ async function verifyOidcIdToken(
     throw new Error("OIDC ID token algorithm must be RS256.");
   }
 
-  let keys = await loadOidcJwks(options.jwksUri);
+  let keys = await loadOidcJwks(options.jwksUri, state);
   let candidates = header.kid ? keys.filter((key) => key.kid === header.kid) : keys;
   if (header.kid && candidates.length === 0) {
-    keys = await loadOidcJwks(options.jwksUri, { force: true });
+    keys = await loadOidcJwks(options.jwksUri, state, { force: true });
     candidates = keys.filter((key) => key.kid === header.kid);
   }
   const signingInput = `${parts[0]}.${parts[1]}`;
@@ -263,16 +312,5 @@ async function verifyOidcIdToken(
   return payload;
 }
 
-function resetOidcDiscoveryCacheForTests(): void {
-  discoveryCache.clear();
-  jwksCache.clear();
-}
-
-export type { OidcDiscovery };
-export {
-  loadOidcDiscovery,
-  oidcAccessTokenHash,
-  oidcSafeFetchOptions,
-  resetOidcDiscoveryCacheForTests,
-  verifyOidcIdToken,
-};
+export type { OidcClient, OidcDiscovery, OidcNetworkPolicy, OidcVerificationOptions };
+export { createOidcClient, oidcAccessTokenHash };

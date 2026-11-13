@@ -1,10 +1,9 @@
-import { authUsesJwt, authUsesToken } from "../types.ts";
 import { renderMfaChallengeRoutes } from "./renderBrowserRoutes.ts";
 import type { AuthRenderingContext } from "./renderingContext.ts";
 import { portAuthRouteSource } from "./routePersistence.ts";
 
 export function renderApiAuthRoutes({
-  layers,
+  plan,
   cookie,
   github,
   oidc,
@@ -15,7 +14,7 @@ export function renderApiAuthRoutes({
   jsonAccounts,
 }: Pick<
   AuthRenderingContext,
-  | "layers"
+  | "plan"
   | "cookie"
   | "github"
   | "oidc"
@@ -25,21 +24,20 @@ export function renderApiAuthRoutes({
   | "jsonCookieAccounts"
   | "jsonAccounts"
 >) {
-  const browserMfa =
-    cookie && mfa && (layers.frontend === "api" || layers.frontend === "spa-react");
+  const browserMfa = plan.decisions.mfaViews;
   const mfaContinuation = browserMfa
     ? `
         ...kernel.wrapRouteMap({
 ${renderMfaChallengeRoutes()}
         }, kernel.group("api")),`
     : "";
-  const tokenLogin = authUsesToken(layers.auth)
+  const tokenLogin = plan.decisions.token
     ? `
         "/api/v1/auth/login": {
           POST: kernel.wrap("api", kernel.wrapLogin(async (request, _ports) => {
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
             return runWithLoginUser(_ports, email, async (candidate, _ports) => {
-            const mfaResult = await authenticatePasswordUser(_ports, candidate, password, mfa_code);
+            const mfaResult = await authenticatePasswordUser(_ports, authServices, candidate, password, mfa_code);
             if (!mfaResult.ok) {
               if (mfaResult.error === "invalid_credentials") {
                 return privateJsonResponse({ error: "Invalid credentials" }, { status: 422 });
@@ -110,13 +108,13 @@ ${renderMfaChallengeRoutes()}
         },`
     : "";
 
-  const jwtLogin = authUsesJwt(layers.auth)
+  const jwtLogin = plan.decisions.jwt
     ? `
         "/api/auth/token": {
           POST: kernel.wrap("api", kernel.wrapLogin(async (request, _ports) => {
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
             return runWithLoginUser(_ports, email, async (candidate, _ports) => {
-            const mfaResult = await authenticatePasswordUser(_ports, candidate, password, mfa_code);
+            const mfaResult = await authenticatePasswordUser(_ports, authServices, candidate, password, mfa_code);
             if (!mfaResult.ok) {
               if (mfaResult.error === "invalid_credentials") {
                 return privateJsonResponse({ error: "Invalid credentials" }, { status: 422 });
@@ -190,9 +188,8 @@ ${renderMfaChallengeRoutes()}
         },`
     : "";
 
-  const jsonVerify =
-    jsonAccounts && verify
-      ? `
+  const jsonVerify = plan.decisions.jsonVerification
+    ? `
         "/api/v1/auth/verify-email": {
           POST: kernel.wrap("api", kernel.wrapSigned(async (request, _ports) => {
             if (!(await completeSignedEmailVerification(_ports, request))) {
@@ -201,7 +198,7 @@ ${renderMfaChallengeRoutes()}
             return privateJsonResponse({ ok: true });
           })),
         },`
-      : "";
+    : "";
 
   const jsonAccountManagement = jsonCookieAccounts
     ? `
@@ -246,7 +243,7 @@ ${renderMfaChallengeRoutes()}
             const fields = await parseJsonBody(request, (payload) => validateObject(payload, { secret: [required(), stringRule()], code: [required(), stringRule()] }));
             const secret = String(fields.secret).trim();
             if (!verifyTotp(secret, String(fields.code).trim())) return privateJsonResponse({ error: "Could not confirm that code." }, { status: 422 });
-            const recoveryCodes = await enrollMfa(_ports, user, secret);
+            const recoveryCodes = await enrollMfa(_ports, authServices, user, secret);
             return privateJsonResponse({ recoveryCodes });
           }))),
         },`
@@ -261,14 +258,13 @@ ${renderMfaChallengeRoutes()}
           }),
         },`;
 
-  const cookieJsonAuth =
-    cookie && !bearerApi
-      ? `
+  const cookieJsonAuth = plan.decisions.cookieJsonLogin
+    ? `
         "/api/v1/auth/login": {
           POST: kernel.wrap("api", kernel.wrapLogin(async (request, _ports) => {
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
             return runWithLoginUser(_ports, email, async (candidate, _ports) => {
-            const mfaResult = await authenticatePasswordUser(_ports, candidate, password, mfa_code);
+            const mfaResult = await authenticatePasswordUser(_ports, authServices, candidate, password, mfa_code);
             if (!mfaResult.ok) {
               if (mfaResult.error === "invalid_credentials") {
                 return privateJsonResponse({ error: "Invalid credentials" }, { status: 422 });
@@ -305,7 +301,7 @@ ${renderMfaChallengeRoutes()}
             return payload;
           }),
         },`
-      : "";
+    : "";
 
   const samlRoutes = cookie
     ? `
@@ -355,7 +351,7 @@ ${renderMfaChallengeRoutes()}
             }
             const redirectUri = authServices.config.github.redirectUri;
             const issued = createOAuthState(authServices.config.oauth);
-            const url = new GitHubOAuthProvider({ clientId, clientSecret, redirectUri }).getAuthorizationUrl(issued.state);
+            const url = new GitHubOAuthProvider({ clientId, clientSecret, redirectUri, production: authServices.config.github.production, userAgent: authServices.config.github.userAgent }).getAuthorizationUrl(issued.state);
             return new Response(null, { status: 302, headers: { location: url } });
           }),
         },
@@ -376,7 +372,7 @@ ${renderMfaChallengeRoutes()}
               return privateJsonResponse({ error: "Invalid GitHub OAuth state." }, { status: 403 });
             }
             const redirectUri = authServices.config.github.redirectUri;
-            const profile = await new GitHubOAuthProvider({ clientId, clientSecret, redirectUri })
+            const profile = await new GitHubOAuthProvider({ clientId, clientSecret, redirectUri, production: authServices.config.github.production, userAgent: authServices.config.github.userAgent })
               .exchangeCode(code)
               .catch(() => null);
             if (!profile) {
@@ -402,7 +398,7 @@ ${renderMfaChallengeRoutes()}
             }
             const redirectUri = authServices.config.oidc.redirectUri;
             const issued = createOAuthState(authServices.config.oauth);
-            const provider = new OidcProvider({ name: "oidc", issuer, clientId, clientSecret, redirectUri });
+            const provider = new OidcProvider({ name: "oidc", issuer, clientId, clientSecret, redirectUri, networkPolicy: authServices.config.oidc.networkPolicy });
             const { url, handshake } = await provider.createAuthorization(issued.state);
             const redirect = new Response(null, { status: 302, headers: { location: url } });
             redirect.headers.append(
@@ -433,7 +429,7 @@ ${renderMfaChallengeRoutes()}
               return denied;
             }
             const redirectUri = authServices.config.oidc.redirectUri;
-            const profile = await new OidcProvider({ name: "oidc", issuer, clientId, clientSecret, redirectUri })
+            const profile = await new OidcProvider({ name: "oidc", issuer, clientId, clientSecret, redirectUri, networkPolicy: authServices.config.oidc.networkPolicy })
               .exchangeCode(code, redirectUri, pkce)
               .catch(() => null);
             if (!profile) {
@@ -448,9 +444,8 @@ ${renderMfaChallengeRoutes()}
         },`
     : "";
 
-  const apiRoutes =
-    bearerApi || cookie
-      ? `
+  const apiRoutes = plan.decisions.users
+    ? `
     routes({ kernel, dependencies }) {
       const authServices = dependencies.container.resolve(STARTER_AUTH_SERVICES);${
         browserMfa
@@ -462,6 +457,6 @@ ${renderMfaChallengeRoutes()}
       return {${mfaContinuation}${csrfRoute}${samlRoutes}${githubRoutes}${oidcRoutes}${cookieJsonAuth}${tokenLogin}${jsonRegister}${jwtLogin}${apiUser}${jsonPassword}${jsonVerify}${jsonAccountManagement}
       };
     },`
-      : "";
+    : "";
   return portAuthRouteSource(apiRoutes);
 }

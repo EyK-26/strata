@@ -12,7 +12,7 @@ Distinct discovered classes/factories sharing a job name fail before any registr
 
 Listener files have a default registrar function returning `void` or `Promise<void>`. Default re-exports and legacy CommonJS wrappers are supported; named-only registrars require an explicit manifest. Aliases of the same function are returned once. Malformed default exports fail instead of silently disappearing. Registrars may register resources and callbacks but must not perform durable business effects at startup. Providers remain responsible for registration-owned cleanup.
 
-Module discovery requires `configureModulesDirectory(directory)` or `configureModulesManifest(modules)` before default startup. A filesystem module occupies one immediate child folder with exactly one `index.ts`, `index.js`, `index.mts` or `index.mjs`. That entrypoint must default-export its `AppModule`; a named declaration re-exported as default is supported. `exclude` skips child folder names. Missing or ambiguous entrypoints, malformed names/order/routes/provider hooks and duplicate module names fail startup. Module `order` sorts ascending (default 100), with lexical folder order breaking ties. Manifest order breaks equal-priority ties. Module providers retain their register-all/boot-all lifecycle; discovery does not run them.
+Module discovery requires an explicit `ensureModulesLoaded({ modulesDir: directory })` or `ensureModulesLoaded({ manifest: modules })` call. Retain its immutable result and pass it to route builders and `collectProviders(modules)`; no process-global module projection or configuration exists. A filesystem module occupies one immediate child folder with exactly one `index.ts`, `index.js`, `index.mts` or `index.mjs`. That entrypoint must default-export its `AppModule`; a named declaration re-exported as default is supported. `exclude` skips child folder names. Missing or ambiguous entrypoints, malformed names/order/routes/provider hooks and duplicate module names fail startup. Module `order` sorts ascending (default 100), with lexical folder order breaking ties. Manifest order breaks equal-priority ties. Module providers retain their register-all/boot-all lifecycle; discovery does not run them.
 
 ## Awaited startup
 
@@ -28,19 +28,19 @@ for (const registerListener of await discoverListeners()) {
 
 Do not pass an async discovery function to `createAppQueue`'s synchronous `registerJobs` callback. Await discovery before constructing the queue instead. Generated providers and the framework worker entrypoint follow this order.
 
-Concurrent loads of the same directory/exclusions or manifest share one promise. Successful empty results are cached too. A failed discovery promise is evicted, so a repaired filesystem or validation condition can be retried. Runtime ESM caching still applies: editing a module whose import already rejected may require process restart. This is startup discovery, not a hot-reload or cache-busting API. Reset helpers invalidate discovery state for tests; they do not unload ESM or unregister job factories. Pending work from an invalidated load cannot publish stale jobs or overwrite a newly configured module source. Listener registrars run once per provider boot; loading them once does not make their effects globally once-only across application lifetimes.
+Concurrent loads of the same directory/exclusions or manifest share one promise. Successful empty results are cached too. A failed discovery promise is evicted, so a repaired filesystem or validation condition can be retried. Runtime ESM caching still applies: editing a module whose import already rejected may require process restart. This is startup discovery, not a hot-reload or cache-busting API. Reset helpers invalidate discovery state for tests; they do not unload ESM or unregister job factories. Pending work from an invalidated load cannot publish stale jobs . Listener registrars run once per provider boot; loading them once does not make their effects globally once-only across application lifetimes.
 
 ## Explicit manifests and bundles
 
 ```ts
 import { discoverJobs } from "@getstrata/bootstrap/discoverJobs";
 import { discoverListeners } from "@getstrata/bootstrap/discoverListeners";
-import { configureModulesManifest } from "@getstrata/bootstrap/discoverModules";
+import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import NotificationJob from "./jobs/NotificationJob.ts";
 import registerListeners from "./listeners/notifications.ts";
 import commerceModule from "./modules/commerce/index.ts";
 
-configureModulesManifest([commerceModule]);
+const modules = await ensureModulesLoaded({ manifest: [commerceModule] });
 await discoverJobs({
   manifest: [NotificationJob, {
     name: "application.injected-job",
@@ -51,10 +51,15 @@ const registrars = await discoverListeners({ manifest: [registerListeners] });
 for (const register of registrars) await register();
 ```
 
-Use static imports so the bundler includes modules. Factory closures retain application DI decisions and are not invoked during discovery. A factory must return a valid job when the worker invokes it. Configure module manifests before `createAppContext()`; pass the job/listener manifests from your provider startup rather than duplicating their registration in both bootstrap and providers. A manifest bypasses filesystem scanning; keep its identity stable for a given startup. Explicit `modulesDir` overrides a configured module manifest for that call. Calling `configureModulesDirectory` clears a configured manifest.
+Use static imports so the bundler includes modules. Factory closures retain application DI decisions and are not invoked during discovery. A factory must return a valid job when the worker invokes it. Pass `collectProviders(modules)` explicitly to `createAppContext()`; pass the job/listener manifests from your provider startup rather than duplicating their registration in both bootstrap and providers. A manifest bypasses filesystem scanning. For repeated module loads within one application, use `const discovery = createModuleDiscovery(options)` and `await discovery.load()`. This owner captures the source directory, manifest array and exclusions, shares one pending/successful result, and evicts failed attempts for retry. Independent owners never mutate each other’s results. One-shot `ensureModulesLoaded(options)` has no shared cache.
 
 ## Source compatibility and release
 
 `discoverJobs()` now returns `Promise<string[]>` and `discoverListeners()` returns `Promise<ListenerRegistrar[]>`. Existing synchronous custom callers must migrate to `await`; this is a public source compatibility change, not a patch-only fix. Previously ignored malformed files also become startup errors. Release this contract change through the agreed breaking-change/prerelease process and update application callers before stable promotion. No package version is bumped by this PR.
 
-Generated entrypoints and all checked-in example apps adopt the awaited shape. Models keep their separate existing `discoverModels`/`bootModels` contracts; their constructor and repository semantics differ from job/listener/module discovery. Tests cover top-level await, deterministic nested exports, malformed/duplicate diagnostics, failed-load retry, stale pending loads after reset, custom factories, async registrar boot, actual Bun bundles and the packed-package TypeScript matrix.
+Generated entrypoints adopt awaited infrastructure discovery. Models use explicit
+`defineRepository`/`defineModel` definitions registered with the application's
+`createDatabaseBindings`; the former global `discoverModels`/`bootModels` APIs are
+removed. Tests cover trusted imports, deterministic nested exports, malformed and
+duplicate diagnostics, failed-load retry, custom factories, asynchronous registrar
+boot, actual Bun bundles and packed-package contracts.

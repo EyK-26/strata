@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createCorsMiddleware, resolveCorsConfig } from "@getstrata/core/http/corsMiddleware";
+import { resolveHttpResponsePolicy } from "../../src/bootstrap/providers/config";
+
+const corsOptions = () => resolveHttpResponsePolicy(process.env).cors;
 
 const previous = {
   CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS,
@@ -28,7 +31,7 @@ afterEach(() => {
 });
 
 async function run(origin: string | null, method = "GET"): Promise<Response> {
-  const middleware = createCorsMiddleware();
+  const middleware = createCorsMiddleware(corsOptions());
   const request = new Request("http://app.test/api/things", {
     method,
     headers: origin ? { origin } : {},
@@ -39,7 +42,7 @@ async function run(origin: string | null, method = "GET"): Promise<Response> {
 describe("createCorsMiddleware", () => {
   test("preserves representation Vary fields and wildcard for allowed, denied and absent origins", async () => {
     setEnv({ CORS_ALLOWED_ORIGINS: "https://app.example" });
-    const middleware = createCorsMiddleware();
+    const middleware = createCorsMiddleware(corsOptions());
     for (const origin of ["https://app.example", "https://evil.example", null]) {
       for (const vary of [
         "HX-Request, HX-Boosted, HX-History-Restore-Request",
@@ -69,7 +72,7 @@ describe("createCorsMiddleware", () => {
       APP_ENV: "local",
       NODE_ENV: undefined,
     });
-    expect(resolveCorsConfig().allowedOrigins).toEqual(["https://app.example"]);
+    expect(resolveCorsConfig(corsOptions()).allowedOrigins).toEqual(["https://app.example"]);
     const allowed = await run("https://app.example");
     expect(allowed.headers.get("access-control-allow-origin")).toBe("https://app.example");
     expect(allowed.headers.get("access-control-allow-credentials")).toBe("true");
@@ -85,7 +88,7 @@ describe("createCorsMiddleware", () => {
       APP_ENV: "production",
       NODE_ENV: undefined,
     });
-    expect(resolveCorsConfig().allowedOrigins).toEqual(["https://app.example"]);
+    expect(resolveCorsConfig(corsOptions()).allowedOrigins).toEqual(["https://app.example"]);
     const response = await run("https://evil.example");
     expect(response.status).toBe(200);
     expect(response.headers.get("access-control-allow-origin")).toBeNull();
@@ -143,7 +146,7 @@ describe("application-approved CORS headers", () => {
       CORS_ADDITIONAL_ALLOWED_HEADERS:
         " Idempotency-Key, authorization, IDEMPOTENCY-KEY, X-Correlation-Id ",
     });
-    const middleware = createCorsMiddleware();
+    const middleware = createCorsMiddleware(corsOptions());
     let calls = 0;
     const response = await middleware(
       new Request("http://api.example/orders", {
@@ -178,7 +181,10 @@ describe("application-approved CORS headers", () => {
       CORS_ADDITIONAL_ALLOWED_HEADERS: "X-From-Env",
     });
     const names = ["Idempotency-Key", "AUTHORIZATION"];
-    const middleware = createCorsMiddleware({ additionalAllowedHeaders: names });
+    const middleware = createCorsMiddleware({
+      ...corsOptions(),
+      additionalAllowedHeaders: [...(corsOptions()?.additionalAllowedHeaders ?? []), ...names],
+    });
     names.push("X-Unapproved");
     const response = await middleware(
       new Request("http://api.example/orders", { headers: { Origin: "https://app.example" } }),
@@ -209,10 +215,10 @@ describe("application-approved CORS headers", () => {
 
   test("an empty extra-header setting preserves defaults without granting wildcard credentials", async () => {
     setEnv({ CORS_ALLOWED_ORIGINS: "*", CORS_ADDITIONAL_ALLOWED_HEADERS: "  ", APP_ENV: "local" });
-    expect(resolveCorsConfig().allowedHeaders).toEqual(
+    expect(resolveCorsConfig(corsOptions()).allowedHeaders).toEqual(
       resolveCorsConfig({ additionalAllowedHeaders: [] }).allowedHeaders,
     );
-    expect(resolveCorsConfig().allowedHeaders).not.toContain("Idempotency-Key");
+    expect(resolveCorsConfig(corsOptions()).allowedHeaders).not.toContain("Idempotency-Key");
     const response = await run("https://any.example", "OPTIONS");
     expect(response.headers.get("access-control-allow-origin")).toBe("*");
     expect(response.headers.get("access-control-allow-credentials")).toBeNull();
@@ -231,7 +237,7 @@ describe("application-approved CORS headers", () => {
       "X-Key\r\nInjected: true",
     ]) {
       setEnv({ CORS_ADDITIONAL_ALLOWED_HEADERS: value });
-      expect(() => createCorsMiddleware()).toThrow(TypeError);
+      expect(() => createCorsMiddleware(corsOptions())).toThrow(TypeError);
     }
   });
 
@@ -251,7 +257,7 @@ describe("application-approved CORS headers", () => {
       CORS_ALLOWED_ORIGINS: "https://app.example",
       CORS_ADDITIONAL_ALLOWED_HEADERS: "Idempotency-Key",
     });
-    const middleware = createCorsMiddleware();
+    const middleware = createCorsMiddleware(corsOptions());
     let calls = 0;
     const server = Bun.serve({
       port: 0,

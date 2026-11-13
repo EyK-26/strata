@@ -3,7 +3,7 @@ import {
   GENERATED_MYSQL_ROOT_PASSWORD,
   GENERATED_POSTGRES_SUPERUSER_PASSWORD,
 } from "./databaseDefaults.ts";
-import { needsFrontendBuild, type StarterLayers, selectedDockerServices } from "./types.ts";
+import type { StarterFeaturePlan } from "./featurePlan.ts";
 
 /** Real dependency readiness, bounded by the generated Compose wait command. */
 function renderServiceHealthcheck(test: string[]): string {
@@ -15,8 +15,8 @@ function renderServiceHealthcheck(test: string[]): string {
       start_period: 5s`;
 }
 
-function renderDockerCompose(projectName: string, layers: StarterLayers): string | null {
-  const selected = selectedDockerServices(layers);
+function renderDockerCompose(projectName: string, plan: StarterFeaturePlan): string | null {
+  const selected = plan.services.docker;
   if (selected.length === 0) {
     return null;
   }
@@ -104,8 +104,9 @@ ${services.join("\n\n")}
 ${volumes.length > 0 ? `\nvolumes:\n${volumes.join("\n")}\n` : ""}`;
 }
 
-function renderDockerfile(layers: StarterLayers): string {
-  const frontend = needsFrontendBuild(layers.frontend);
+function renderDockerfile(plan: StarterFeaturePlan): string {
+  const layers = plan.layers;
+  const frontend = plan.decisions.frontendBuild;
   const lines = [
     '# Production image. Build once, run with env from your platform; see README "Deploy".',
     "FROM oven/bun:1.4.4 AS deps",
@@ -155,7 +156,7 @@ function renderDockerfile(layers: StarterLayers): string {
   return `${lines.join("\n")}\n`;
 }
 
-function renderDockerignore(layers: StarterLayers): string {
+function renderDockerignore(plan: StarterFeaturePlan): string {
   const lines = [
     ".git",
     "node_modules",
@@ -169,7 +170,7 @@ function renderDockerignore(layers: StarterLayers): string {
     "coverage",
     "docker-compose.yml",
   ];
-  if (needsFrontendBuild(layers.frontend)) {
+  if (plan.decisions.frontendBuild) {
     lines.push("frontend/node_modules", "frontend/dist");
   }
   return `${lines.join("\n")}\n`;

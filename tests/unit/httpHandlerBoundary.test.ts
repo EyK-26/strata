@@ -68,7 +68,7 @@ async function fixture() {
     metadata: () => {
       counts.metadata++;
       return {
-        authenticate: async () => ({ user: null, credentialSource: null }),
+        authenticate: async () => ({ status: "absent", user: null, credentialSource: null }),
         memberships: async () => [],
         userTenantId: async () => 1,
         tenant: async () => null,
@@ -94,7 +94,7 @@ async function fixture() {
   const kernel = createHttpKernel({
     container,
     cache: new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
-    storage: new StorageManager(createStorageDriver()),
+    storage: new StorageManager(createStorageDriver({ driver: "local", rootDirectory: "storage" })),
     invoke: (envelope, work) => {
       counts.invoke++;
       return canonical(envelope, work);

@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 3.0.0
+
+Breaking application-owned runtime, typed authorization and persistence, immutable starter plans, isolated adapters and authenticated queue handoffs.
+
 ## 2.2.60
 
 - Align published core/bootstrap peers with 2.2.60. Failed-job operations receive the core persistence correction; CLI commands and replay admission/deletion ordering are unchanged.

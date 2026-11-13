@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 3.0.0
+
+Breaking application-owned runtime, typed authorization and persistence, immutable starter plans, isolated adapters and authenticated queue handoffs.
+
 ## 2.2.60
 
 - Align the core requirement with the 2.2.60 PostgreSQL failed-job persistence correction. Bootstrap, HTTP/auth, lifecycle and public/protected contracts are unchanged.

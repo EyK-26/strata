@@ -82,7 +82,7 @@ Bind an `AuthUserDirectory` that can `resolveUserFromToken`, `findByEmail`, and 
 
 ## Module providers and infra defaults
 
-After `ensureModulesLoaded()`, generated apps run each module's `providers` through the same `register` / `boot` phases as `starterProviders`. Module DI (services, policies) therefore works without calling `collectProviders()` (which would swap in the monorepo `coreProviders` auth stack).
+After `const modules = await ensureModulesLoaded({ modulesDir })`, generated apps run each module's `providers` through the same `register` / `boot` phases as `starterProviders`. Module DI (services, policies) therefore works without calling `collectProviders()` (which would swap in the monorepo `coreProviders` auth stack).
 
 Starter apps also call `registerDefaultJobs` and `await discoverJobs()` when wiring the queue and `registerInvalidateCacheOnModelWriteListeners` during provider boot so cache tags flush through the default invalidation job. `src/listeners/*.ts` registrars are loaded via `await discoverListeners()` in the same boot phase (registration-owned cleanup, same pattern as the monorepo `core.listeners` provider). `src/jobs/*.ts` classes with `static jobName` are registered the same way.
 
@@ -100,11 +100,13 @@ Generated HTTP binds its socket only after bootstrap succeeds, and bind failure 
 
 ### Business transactions and request tenancy
 
-Use `runInTransaction` from `@getstrata/core/database/transaction` around an atomic business operation. Repository queries and queries through the default connection use its active connection. Nested transactions use SQL savepoints: a thrown failure rolls back the nested writes and deferred model events, even if the controller subsequently converts that failure into an HTTP response. Successful nested writes and events remain subject to the outer transaction's commit or rollback.
-
-Keep error-to-response mapping outside the business transaction. Returning a Response, including a deliberate 4xx, is a successful callback and does not request rollback. Await nested transactions sequentially; concurrent sibling savepoints on one connection are rejected. Explicitly supplied repository connections remain the caller's responsibility.
-
-`runWithTenantDatabase` also gives nested RLS scopes a savepoint and restores the previous tenant/bypass settings. Switching tenants inside an active transaction is rejected before changing SQL settings. Nested migration bypass scopes use the same connection and restore the enclosing scope; use bypass only for trusted infrastructure operations. PostgreSQL represents a previously unset custom setting as an empty value after restoration, so treat empty and missing settings as having no identity.
+Use `DatabaseSession.transaction(async tx => ...)` for atomic business work and
+select repositories/models from `tx`. Nested transactions use savepoints: throws
+roll back nested writes and deferred effects; successful inner work remains subject
+to the outer commit. Map errors outside the transaction: returning a deliberate
+4xx Response is still a successful callback. Await sibling savepoints sequentially.
+Tenant/bypass policy runs through the execution's explicit `ScopedPolicy`; switching
+owners or tenants is rejected.
 
 Greenfield apps from `create-strata` use **file-based** migrations in `src/db/migrations/` plus `@getstrata/core/database/migrations` (`migrateDatabase`) from `src/db/migrate.ts`. Seed stays in `migrate.ts`. The runner records applied files in **`framework_migrations`**. See [STARTER.md](./STARTER.md#migrations).
 
@@ -230,14 +232,12 @@ uses the provider default (otherwise the engine's existing `layouts/app.eta`).
 Eta continues to own escaping and includes; templates and navigation stay in
 the app. Direct `EtaViewEngine.render()` remains available for string output.
 
-The factory resolves auth/CSRF/flash/CSP data on each render using the existing
-request context and configured directory, without reading or changing legacy
-global layout configuration. Its options are local to that app; use it instead
-of registering the legacy `viewProvider` alongside it. It registers both the
-existing string-output `core.view` engine and the new typed response renderer.
-The legacy provider/global configuration APIs remain compatible, including
-their existing error-view setup. The factory does not change global error-view
-configuration or automatically negotiate HTMX fragments. Explicit scoped
+The factory captures the application's directory, layout, CSRF/flash policy and
+error renderer, then resolves request data from that owner's execution context.
+It registers the typed engine/response-renderer/error-renderer tokens. The static
+`viewProvider` and global layout/error configuration APIs are removed. HTMX fragment
+selection remains explicit; templates and navigation stay application-owned.
+Explicit scoped
 error rendering remains separate follow-up work. Generated HTML apps now register
 the factory and resolve the typed renderer directly; see [STARTER.md](STARTER.md).
 
@@ -357,50 +357,41 @@ The global HTTP error boundary encloses authentication, tenancy, the business tr
 
 ### SQLite transactions
 
-`createSqliteConnection` supports awaited `begin()` callbacks and the standard `runInTransaction` API. Nested framework transactions use savepoints. A single native SQLite connection serializes root transactions and unrelated queries; transaction-local queries use the bound handle, so another request cannot observe uncommitted writes. Failed callbacks and deferred constraint failures roll back before the next operation starts. Do not nest native `begin()` calls or issue manual transaction-control SQL inside a managed callback; use `runInTransaction`. Drain operations before closing the connection. This does not turn SQLite into a distributed writer database: file locking and the existing busy timeout still apply between processes.
+`createSqliteConnection` supports awaited `begin()` callbacks and owned `DatabaseSession.transaction`. Nested framework transactions use savepoints. A single native SQLite connection serializes root transactions and unrelated queries; transaction-local queries use the bound handle, so another request cannot observe uncommitted writes. Failed callbacks and deferred constraint failures roll back before the next operation starts. Do not nest native `begin()` calls or issue manual transaction-control SQL inside a managed callback; use the selected session's `transaction` method. Drain operations before closing the connection. This does not turn SQLite into a distributed writer database: file locking and the existing busy timeout still apply between processes.
 
 ### MySQL transactions
 
-The MySQL adapter reserves a pool connection for each awaited transaction and binds transaction-local pool/repository queries to that session. `runInTransaction` nests through savepoints. Queries with bound values use the prepared protocol; parameterless savepoint/DDL operations use the driver's query protocol. Failed callbacks or commits roll back before release. Uncertain BEGIN and failed rollback discard the session rather than returning it to the pool. Adapters supplied through `createMysqlConnectionFromPool` need `getConnection()` to support transactions; use `runInTransaction` for nesting and do not reuse transaction handles after completion.
+The MySQL adapter reserves a pool connection for each awaited transaction and binds transaction-local pool/repository queries to that session. Selected-session `transaction` nests through savepoints. Queries with bound values use the prepared protocol; parameterless savepoint/DDL operations use the driver's query protocol. Failed callbacks or commits roll back before release. Uncertain BEGIN and failed rollback discard the session rather than returning it to the pool. Adapters supplied through `createMysqlConnectionFromPool` need `getConnection()` to support transactions; use the selected session's `transaction` method for nesting and do not reuse transaction handles after completion.
 
 MySQL has no native mutation `RETURNING`. Entity-returning repository creates, upserts, ID updates/increments and restores therefore run their write and row readback in one framework transaction on one reserved session. Generated keys come from that statement's insert metadata; supplied string keys and stored defaults are preserved. No-op ID updates/increments return the live row even when the MySQL client reports changed rather than matched rows. Soft-delete and force-delete return false for absent/scoped-out rows, and observers receive rows rather than driver headers. Set-based conditional writes still use `affectedRows` metadata and bypass per-row observers. Postgres and SQLite retain their native RETURNING statements.
 
-Injected repositories can select a root pool through `runInTransaction(operation, { connection })`; default repository queries inside the callback share that active connection. Nested calls use savepoints and reject switching to an unrelated pool. The callback connection works with `repository.withConnection(db)`, including row locks. A transaction callback must not outlive its owning scope. Transactional observers still require an explicit outer framework transaction; do not use repository readback transactions as an implicit business transaction.
+Select repositories and models from the supplied transaction session. Nested calls
+use savepoints and reject switching to an unrelated pool. A callback must not
+outlive its execution. Use an explicit outer business transaction when writes and
+observers must commit together.
 
-Repositories with constructor-initialized state or JavaScript `#private` fields must override
-`protected cloneWithConnection(connection): this` to construct a valid instance using that
-state and the supplied connection. `withConnection` delegates to this hook and leaves the
-original repository unchanged. The default hook preserves the existing shallow copy and
-prototype behavior for ordinary repositories; it cannot create native private-field brands.
-An override must return the same concrete repository type, carry all required state and
-use the supplied connection. Subclasses that introduce additional private state must extend
-that contract rather than relying on an inherited constructor for a different concrete type.
+Repositories with constructor-initialized state or JavaScript `#private` fields
+use a `defineRepository` construction function. Its `create(binding, ...dependencies)`
+returns a new valid instance using the supplied owner/session binding. Declare
+those definitions in `createDatabaseBindings` and select them with
+`database.repository(definition)`. The framework does not copy prototypes or invoke
+`cloneWithConnection`; the former protected override and `withConnection` rebinding
+contract are removed. See [explicit model binding](DATABASE.md#declarative-model-binding).
 
 MySQL upsert uses the engine's native unique-index semantics, which do not target a single named conflict constraint. Supply non-null conflict-column values so zero-insert-ID results can be resolved deterministically; an unresolved row rolls back instead of returning metadata. An explicit empty update-column list returns null for an existing conflict and a row for a new insert. This path locks the conflict lookup and may deadlock under contention, like other transactional MySQL upserts; callers must handle transaction failures rather than retry external effects blindly.
 
 
 ### Recoverable model cache invalidation
 
-The 2.x generated queue listener remains a compatibility path: a failed queue dispatch after commit can produce HTTP 500 with no persisted cache retry. SQL applications can opt into durable invalidation through the existing outbox schema. This is a migration, not an automatic bootstrap DDL or a silent error fallback.
+The retired 2.x queue listener is not a durability guarantee. Declare durable cache invalidation effects against the application repository/model definitions and owned SQL outbox. Publication participates in the selected business transaction; workers enter fresh trusted tenant/actor executions.
 
-Include `createModelCacheInvalidationListener()` from `@getstrata/bootstrap/listeners/invalidateCacheOnModelWrite` in the application's **one** `SqlOutbox` registry, alongside all business listeners. After module discovery and before admitting requests/jobs, call `registerInvalidateCacheOnModelWriteListeners(eventBus, { outbox })`. This replaces the generated queue registrations; later generated-provider calls cannot downgrade it. The returned cleanup restores the previous registration. No separate cache-only worker registry may claim the shared delivery table.
-
-```ts
-const outbox = new SqlOutbox({ listeners: [
-  createModelCacheInvalidationListener(),
-  // ...all application durable listeners
-] });
-const stopCacheListeners = registerInvalidateCacheOnModelWriteListeners(eventBus, { outbox });
-await runInTransaction(async () => {
-  await Product.create(attributes);
-});
-// Separate process, same complete registry and shared cache:
-await outbox.work({ signal: shutdown.signal });
-```
+Use one complete durable listener registry for cache invalidation and business
+listeners. Include the owned outbox services in the application and register effects
+before admitting HTTP/jobs. Do not let a cache-only worker claim the shared table.
 
 Row model events publish versioned cache intents through the active business connection before commit. Publication/schema failure rolls back the business write; cache/Redis availability does not participate in the commit response. Later synchronous hooks retain their normal order. The worker directly invokes the framework cache invalidation job, bypassing the Redis queue handoff, and the SQL outbox provides leases, retry, failed-delivery retention and `replay(eventId, "strata.cache.invalidate-tags.v1")`. Tune retry/attempt policy and alert on failed or aged cache deliveries.
 
-Durable mode requires explicit framework transactions around row writes (including workers and CLI commands). The RLS request scope already supplies one. Standalone writes or repositories bound to an unrelated connection fail **before SQL mutation**; this prevents an outbox record from claiming another connection's write. Direct SQL and bulk/projection APIs remain supported escape hatches: explicitly publish `strata.cache.invalidate-tags` with `{ tags }` inside their business transaction when they bypass row events. `EventBus.listenTransactional` hooks are invoked only by model event publication, inside the transaction; normal `dispatch`/`listen` hooks remain synchronous/in-process. Hooks must only persist intents, never perform remote delivery.
+Durable mode requires explicit framework transactions around row writes (including workers and CLI commands). The RLS request scope already supplies one. Standalone writes or repositories bound to an unrelated connection fail **before SQL mutation**; this prevents an outbox record from claiming another connection's write. Direct SQL and bulk/projection APIs remain supported escape hatches: explicitly publish `strata.cache.invalidate-tags` with `{ tags }` inside their business transaction when they bypass row events. Transactional repository effects execute inside the selected transaction; after-commit effects run after durability. Hooks must only persist intents, never perform remote delivery.
 
 Rollout: stop/drain old writers and workers, deploy the outbox file migration with the migration owner, install the complete registry and registrar, and then restart writers and the outbox worker. Preserve old queue jobs and pending SQL deliveries. Use a shared cache for multi-process workers; an array/memory cache belongs to its own process and cannot be invalidated by a different process. Invalidation is eventually consistent: worker lag can expose stale cached values, so use bounded TTLs and bypass cache for authoritative/financial decisions. This fixes recoverability of the handoff. The Redis cache driver also provides shared generation fencing, bounded metadata/LRU eviction and renewable fill leases; see [shared Redis cache](REDIS-CACHE.md) for consistency limits, configuration and the required cold-cache rollout. Existing generated apps must opt in; the legacy 2.x queue mode is not made durable by upgrading packages alone.
 
@@ -408,48 +399,26 @@ Rollout: stop/drain old writers and workers, deploy the outbox file migration wi
 
 Import `SqlOutbox` and `createOutboxMigration` from `@getstrata/core/events/outbox`. A new `create-strata` app already writes `0005_outbox.ts`, `src/outbox/registry.ts`, and `bun run outbox:work`. An existing app adds a numbered file migration exporting `createOutboxMigration("0010_outbox", "pgsql", { rls: true })` (use the selected driver and enable RLS only for Postgres RLS apps). This helper owns the infrastructure schema; do not copy its SQL into the application. Run migrations separately from workers. MySQL requires 8.0.16+ (8.4 is tested) for `SKIP LOCKED` and enforced checks. Grant the runtime role SELECT/INSERT/UPDATE on both outbox tables. DDL requires the migration owner; migration bypass is a row policy, not DDL permission. Downgrade refuses tables containing any undelivered event.
 
-```typescript
-const outbox = new SqlOutbox({
-  listeners: [{
-    name: "orders.receipt.v1", event: "orders.created",
-    async handle(event, { signal }) {
-      // Application handler: use event.id as the provider/business idempotency key.
-      await sendReceipt(event.payload, { signal, idempotencyKey: event.id });
-    },
-  }],
-});
-await runInTransaction(async () => {
-  const order = await orders.create(input);
-  await outbox.publish("orders.created", { orderId: order.id }, {
-    id: `order:${order.id}:created`, version: 1,
-  });
-});
-// Separate bootstrapped worker process; abort during shutdown and await completion.
-await outbox.work({ signal: shutdown.signal });
-```
+Compose `createSqlOutboxBindings({ invoke, connection, tenancy, listeners })` and
+include its service declarations in the application. Publish using
+`outbox.publish(tx, name, payload, { tenantId, id, version })` with that owner's
+`TransactionSession`; the tenant must match the execution envelope.
 
-Publication requires a framework business transaction (`runInTransaction` or `runWithTenantDatabase`). A savepoint keeps publication atomic even if the caller catches its error. Event payloads are JSON, versioned, limited to 64 KiB by default, and accompanied by the current tenant identity. The transaction captures the registered listener names and attempt budget. Reusing an event ID requires the same name, version, tenant and serialized payload; it never adds listeners retroactively. Canonicalize application payloads if object key ordering may differ between retries. Keep IDs globally unique (include the tenant when business IDs are tenant-local). Retain event rows for the required idempotency/audit window; deleting them permits that ID to be published again.
+
+Publication requires an owned business `TransactionSession`. A savepoint keeps publication atomic even if the caller catches its error. Event payloads are JSON, versioned, limited to 64 KiB by default, and accompanied by the current tenant identity. The transaction captures the registered listener names and attempt budget. Reusing an event ID requires the same name, version, tenant and serialized payload; it never adds listeners retroactively. Canonicalize application payloads if object key ordering may differ between retries. Keep IDs globally unique (include the tenant when business IDs are tenant-local). Retain event rows for the required idempotency/audit window; deleting them permits that ID to be published again.
 
 Durable listeners execute only in workers outside the business transaction; publication never calls a listener or a Redis queue. This differs from synchronous observers and commit-aware in-process model listeners, which are useful hooks but do not survive process death. Register the same durable listeners in producers and workers. Removing or renaming a listener leaves its existing delivery recoverable as a failure. Do not automatically convert all model hooks to durable events: apps choose which effects need durability.
 
 The official `runOutboxWorkerCommand` from `@getstrata/cli/outboxWorker` owns stop/drain/flush/close handling. Generated apps pass `listeners`, which constructs an outbox with framework defaults. Apps with a configured outbox pass `outbox` instead, preserving their tenant resolver, lease/retry settings and complete listener registry. Choose exactly one source; TypeScript and runtime validation reject ambiguous configuration. A supplied instance is reused directly after successful boot, with the same cancellation and cleanup contracts.
 
-```typescript
-await runOutboxWorkerCommand({
-  outbox: appOutbox,
-  boot: async () => { app = await bootstrapApp({ migrate: false }); },
-  drain: () => app?.context.drain(),
-  flush: () => app?.context.flush(),
-  close: async () => {
-    try { await app?.context.dispose(); }
-    finally { await closeDatabase(); }
-  },
-});
-```
+Generated `outbox:work` wiring supplies the owned application and outbox. Shutdown
+stops admission, drains work, flushes and closes through the application handle.
+Do not combine that handle with retired `context.dispose`/global database cleanup.
+
 
 Workers use database time, indexed claim scans, renewable unique ownership tokens and ownership-checked acknowledgement. Expired ownership is reclaimed before new work. Short coordination transactions retry only database deadlock/serialization aborts, with a bounded retry budget; persistent infrastructure errors propagate to the worker supervisor. Delivery is **at least once**. A lease fences acknowledgement, not arbitrary provider effects: a killed worker may have already sent email or charged a provider. Handlers must support replay and observe the abort signal. Cancellation does not delete work. Failed delivery persists a bounded code, not provider exception text; attempts and exponential retry deadlines survive restart. Defaults are a 60-second lease, five attempts, and a one-second initial retry delay capped at five minutes. Provision pool headroom for lease renewal in addition to active listeners. SQLite has one writer per connection; keep application write transactions short.
 
-Tenant listeners resolve the captured tenant and run through `runWithTenantDatabase`, with Postgres RLS bypass disabled. Missing tenants fail closed. The default resolver uses the generated tenant directory; inject the application's trusted directory when its schema differs. Non-RLS handlers receive tenant context and must explicitly use `runInTransaction` for atomic business writes. Platform events have no tenant; reserve them for authorized platform code.
+Tenant listeners resolve the captured tenant and run through their explicit scoped policy, with Postgres RLS bypass disabled. Missing tenants fail closed. The default resolver uses the generated tenant directory; inject the application's trusted directory when its schema differs. Non-RLS handlers receive tenant context and must explicitly use the selected session's `transaction` method for atomic business writes. Platform events have no tenant; reserve them for authorized platform code.
 
 Use `processNext({ signal })` for bounded worker orchestration/tests, or `work({ signal, pollMs })` for the framework polling loop. Monitor pending age, expired leases, attempts, and failed deliveries in the two SQL tables. `replay(eventId, listenerName)` atomically resets only that failed listener's delivery, preserving the original event and completed listeners. Expose replay solely through an authorized operator command, never an anonymous endpoint. Outbox schema/data must survive rolling deployment and restore. This API is additive and opt-in; the starter does not silently change existing listener execution semantics.
 
@@ -499,7 +468,7 @@ Generated apps consume the environment policy above. Custom native server compos
 
 ## Typed service tokens and narrow controller dependencies
 
-Use `createServiceToken<T>()` from `@getstrata/core/contracts/container` for new application bindings. Tokens remain string keys at runtime, preserving existing container lifecycle and interoperating with legacy registrations. Their invariant type supplies inference and rejects a mismatched value/factory or an explicit resolution generic that disagrees with the token.
+Use `createServiceToken<T>()` from `@getstrata/core/contracts/container` for new application bindings. Tokens carry opaque symbol identities and use the existing container lifecycle. Their invariant type supplies inference and rejects a mismatched value/factory or an explicit resolution generic that disagrees with the token.
 
 ```typescript
 import { createServiceToken } from "@getstrata/core/contracts/container";
@@ -516,7 +485,7 @@ class CatalogController {
 }
 ```
 
-`container.set`, `instance`, `singleton`, `bind`, `get`, `resolve`, `make` and `resolveService(dependencies, token)` preserve the token's service type. Existing `container.resolve<T>("legacy.key")` callers remain supported. Keep token names unique and export one token declaration per service: creating the same name with a different type does not create a distinct runtime identity. This is a compile-time contract, not runtime validation of values registered through legacy strings, `any`, explicit assertions or JavaScript. Widening a token deliberately to `string` also leaves typed resolution. Prefer typed tokens at both registration and resolution boundaries.
+`container.set`, `instance`, `singleton`, `bind`, `get`, `resolve`, `make` and `resolveService(dependencies, token)` require an opaque typed token and preserve its service type. String service keys reject, including calls from JavaScript. Each `createServiceToken` call creates a distinct identity even when labels match; export one canonical token declaration for each shared service. TypeScript checks registered values, but `any`, assertions and JavaScript can bypass value typing. Token identity is validated at runtime; arbitrary service payloads are not runtime type-checked.
 
 Use constructor parameters for the services a controller actually needs; resolve them in module/provider composition. Stateful services can remain classes, while stateless business operations can remain functions. This API does not alter request scoping, model typing, middleware typing, queues or transactions, and upgrading packages does not rewrite existing controllers.
 
@@ -581,7 +550,12 @@ Writes and filters infer declared field names and value types. Use `Product.quer
 
 ### Model composition
 
-For ordinary SQL models, extend `defineModel(table)` from `@getstrata/core/database/model` with a typed `defineTable` definition. Generated startup awaits `discoverModels` from `@getstrata/bootstrap/discoverModels`; the framework supplies default repositories and registers relationship names before boot. Use `bootModels([...])` with static imports when filesystem discovery is unsuitable, and retain `registerModelRepository` only for explicit custom repository bindings. Existing manually registered models are compatible. See [DATABASE.md](./DATABASE.md#declarative-model-binding) for startup ordering, aliases and migration guidance.
+For ordinary SQL models, declare `defineRepository({ name, table, dependencies, create })`
+and `defineModel({ name, repository, dependencies, attributes, construct })`, then
+register those definitions with the application's `createDatabaseBindings`. An owned
+execution selects `database.model(definition)`; that bound facade provides query,
+create and instance write APIs. There is no global model discovery, registration or
+default repository. See [DATABASE.md](DATABASE.md#declarative-model-binding).
 
 ### Graceful lifecycle
 
@@ -672,7 +646,12 @@ Authentication and membership contexts remain request-local. Concurrent users mu
 
 ### Configured error rendering through response wrappers
 
-The error renderer configured through `configureWebErrorView` also applies to the published `withErrorHandling` and `createWebErrorMiddleware` wrappers, not only direct `webErrorResponse` calls. The application owns its templates and display data; the wrapper preserves the mapped status and per-request error input. Explicit `withJsonErrorHandling`/API error middleware retains the JSON error contract even when the client accepts HTML. `configureWebErrorView({})` restores default framework error rendering; use it for cleanup of isolated fixture configuration, not as a per-request layout switch.
+The error renderer supplied through `createViewProvider({ error: { render } })`
+is application-owned. The HTTP kernel carries its renderer, enabled mode and
+production redaction policy in request metadata; generic wrappers preserve that
+owner and mapped status. Explicit JSON/API boundaries retain JSON even when the
+client accepts HTML. Direct wrappers may receive explicit rendering options;
+ownerless wrappers default to JSON. There is no global configure/reset API.
 
 Framework HTML and JSON error responses use `Cache-Control: no-store`, including configured/fallback error renderers and custom-body `notFoundHtmlResponse` calls. Error views/details can contain request-specific data; neither cookies nor `Set-Cookie` are a cache-protection policy ([RFC 9111 section 7.3](https://www.rfc-editor.org/rfc/rfc9111.html#section-7.3)). This default does not change successful response caching or make malicious caches trustworthy. An application deliberately producing public, cacheable not-found content should create an explicit normal response with its reviewed headers rather than using the framework error boundary as a cache-control escape hatch.
 

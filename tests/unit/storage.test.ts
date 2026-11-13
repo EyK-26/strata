@@ -182,7 +182,9 @@ describe("storage", () => {
     delete process.env.STORAGE_DRIVER;
 
     try {
-      expect(createStorageDriver()).toBeInstanceOf(LocalStorageDriver);
+      expect(createStorageDriver({ driver: "local", rootDirectory: "storage" })).toBeInstanceOf(
+        LocalStorageDriver,
+      );
     } finally {
       if (previous === undefined) {
         delete process.env.STORAGE_DRIVER;

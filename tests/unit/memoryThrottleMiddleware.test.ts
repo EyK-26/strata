@@ -50,6 +50,7 @@ describe("createMemoryThrottleMiddleware", () => {
         maxAttempts: 1,
         decaySeconds: 60,
         keyPrefix: "test-throttle-c:",
+        trustForwardedFor: true,
       });
       const next = async () => Response.json({ ok: true });
 
@@ -140,7 +141,10 @@ describe("createMemoryThrottleMiddleware", () => {
 
       expect((await middleware(request, next)).status).toBe(200);
 
-      const blocked = await middleware(request, next);
+      const blocked = await runWithRequestMeta(
+        { ipAddress: null, userAgent: null, viewsEnabled: true },
+        () => middleware(request, next),
+      );
       expect(blocked.status).toBe(429);
       expect(blocked.headers.get("content-type")).toContain("text/html");
       expect(await blocked.text()).toContain("Too many requests.");

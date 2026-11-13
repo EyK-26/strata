@@ -1,5 +1,9 @@
 import { toHttpError } from "@getstrata/core/errors/http";
-import { logServerError, webErrorResponse } from "@getstrata/core/http/webErrorResponse";
+import {
+  logServerError,
+  type WebErrorResponseOptions,
+  webErrorResponse,
+} from "@getstrata/core/http/webErrorResponse";
 import { mapDatabaseHttpError } from "./databaseError";
 import type { Middleware } from "./middleware";
 import { currentRequestMeta, runWithRequestMeta } from "./requestMetaContext";
@@ -41,19 +45,23 @@ function errorResponse(error: unknown): Response {
 
 function withErrorHandling<THandler extends (request: Request) => Response | Promise<Response>>(
   handler: THandler,
+  options?: WebErrorResponseOptions,
 ): (...args: Parameters<THandler>) => Promise<Response>;
 function withErrorHandling<TArgs extends unknown[]>(
   handler: (...args: TArgs) => Response | Promise<Response>,
+  options?: WebErrorResponseOptions,
 ): (...args: TArgs) => Promise<Response>;
 function withErrorHandling<TArgs extends unknown[]>(
   handler: (...args: TArgs) => Response | Promise<Response>,
+  options: WebErrorResponseOptions = {},
 ): (...args: TArgs) => Promise<Response> {
+  const captured = { ...options };
   return async (...args: TArgs): Promise<Response> => {
     try {
       return await handler(...args);
     } catch (error) {
       const request = args.find((arg): arg is Request => arg instanceof Request);
-      const webResponse = await webErrorResponse(error, request);
+      const webResponse = await webErrorResponse(error, request, captured);
 
       if (webResponse) {
         return webResponse;
@@ -93,9 +101,18 @@ function createJsonErrorMiddleware(): Middleware {
     });
 }
 
-function createWebErrorMiddleware(): Middleware {
+function createWebErrorMiddleware(options: WebErrorResponseOptions = {}): Middleware {
+  const captured = { ...options };
   return async (request, next) =>
-    await withErrorHandling(async (_request: Request) => next())(request);
+    await runWithRequestMeta(
+      {
+        ...currentRequestMeta(),
+        webErrorView: captured.render,
+        viewsEnabled: captured.enabled ?? false,
+        webErrorsProduction: captured.production ?? true,
+      },
+      () => withErrorHandling(async (_request: Request) => next(), captured)(request),
+    );
 }
 
 export {

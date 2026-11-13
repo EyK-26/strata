@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { registerDefaultJobs } from "@getstrata/bootstrap/queue/defaultJobs";
 import { Job } from "@getstrata/core/queue";
-import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+
+const jobRegistry = new JobRegistry();
+
 import { type QueueJobEnvelope, runQueueJob } from "@getstrata/core/queue/jobRunner";
 import { QUEUE_LIST_KEY, RedisQueue } from "@getstrata/core/queue/redisQueue";
 import { RedisClient } from "bun";
@@ -15,7 +18,7 @@ describe("Redis queue integration", () => {
   test("dispatches and runs a tracked redis job envelope", async () => {
     const redisUrl = `${process.env.REDIS_URL ?? "redis://redis:6379"}/15`;
 
-    registerDefaultJobs();
+    registerDefaultJobs(jobRegistry);
 
     const messages: string[] = [];
 
@@ -28,7 +31,7 @@ describe("Redis queue integration", () => {
     const echoJob = new EchoJob();
     jobRegistry.register("test.echo.integration", () => echoJob);
     jobRegistry.track("test.echo.integration", echoJob);
-    const queue = new RedisQueue(redisUrl);
+    const queue = new RedisQueue(redisUrl, jobRegistry);
     const client = new RedisClient(redisUrl);
     await withQueuePersistence(async ({ services: failedJobs }) => {
       await client.del(QUEUE_LIST_KEY);
@@ -39,7 +42,7 @@ describe("Redis queue integration", () => {
 
       const [, rawPayload] = popped as [string, string];
       const envelope = JSON.parse(rawPayload) as QueueJobEnvelope;
-      await runQueueJob(envelope, failedJobs);
+      await runQueueJob(envelope, failedJobs, jobRegistry);
 
       expect(messages).toEqual(["redis-integration"]);
     });

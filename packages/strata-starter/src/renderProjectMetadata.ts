@@ -1,4 +1,4 @@
-import { needsFrontendBuild, type StarterLayers } from "./types.ts";
+import type { StarterFeaturePlan } from "./featurePlan.ts";
 
 function renderGitignore(): string {
   return `node_modules
@@ -17,7 +17,7 @@ coverage
 
 function renderPackageJson(
   projectName: string,
-  options: { workspaceDependencies?: boolean; layers?: StarterLayers } = {},
+  options: { workspaceDependencies?: boolean; plan?: StarterFeaturePlan } = {},
 ): string {
   const coreDeps: Record<string, string> = options.workspaceDependencies
     ? {
@@ -26,12 +26,12 @@ function renderPackageJson(
         "@getstrata/core": "workspace:*",
       }
     : {
-        "@getstrata/bootstrap": "^2.2.60",
-        "@getstrata/cli": "^2.2.60",
-        "@getstrata/core": "^2.2.60",
+        "@getstrata/bootstrap": "^3.0.0",
+        "@getstrata/cli": "^3.0.0",
+        "@getstrata/core": "^3.0.0",
       };
   coreDeps.eta = "^4.6.0";
-  if (options.layers?.database === "mysql") {
+  if (options.plan?.decisions.mysqlDependency) {
     coreDeps.mysql2 = "^3.24.3";
   }
 
@@ -45,7 +45,7 @@ function renderPackageJson(
     "outbox:work": "strata outbox:work",
     check: "tsc --noEmit",
   };
-  if (options.layers && needsFrontendBuild(options.layers.frontend)) {
+  if (options.plan?.decisions.frontendBuild) {
     scripts["frontend:install"] = "cd frontend && bun install";
     scripts["frontend:build"] = "cd frontend && bun run build";
     scripts["frontend:dev"] = "cd frontend && bun run dev";
@@ -71,7 +71,8 @@ function renderPackageJson(
   )}\n`;
 }
 
-function renderLayersManifest(projectName: string, layers: StarterLayers): string {
+function renderLayersManifest(projectName: string, plan: StarterFeaturePlan): string {
+  const layers = plan.layers;
   return `${JSON.stringify(
     {
       name: projectName,

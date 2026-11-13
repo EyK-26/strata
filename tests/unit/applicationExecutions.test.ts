@@ -30,14 +30,14 @@ test("execution children require a sealed parent and inherit typed values withou
   const parent = new ServiceContainer();
   const value = {};
   parent.set(Token, value);
-  parent.set("legacy", 1);
+
   assert.throws(() => new ServiceContainer(parent));
   parent.seal();
   const child = new ServiceContainer(parent);
   assert.equal(child.has(Token), true);
   assert.equal(child.resolve(Token), value);
-  assert.equal(child.has("legacy"), false);
-  assert.throws(() => child.resolve("legacy"));
+  assert.throws(() => child.has("legacy" as never), /opaque service token/);
+  assert.throws(() => child.resolve("legacy" as never));
   child.alias(Alias, Token);
   assert.equal(child.resolve(Alias), value);
   child.set(Token, {});

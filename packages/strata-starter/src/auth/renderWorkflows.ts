@@ -1,7 +1,7 @@
 import type { AuthRenderingContext } from "./renderingContext.ts";
 
 export function renderAuthHelpers({
-  layers,
+  plan,
   cookie,
   mfa,
   verify,
@@ -9,7 +9,7 @@ export function renderAuthHelpers({
   samlTenantCreateField,
 }: Pick<
   AuthRenderingContext,
-  "layers" | "cookie" | "mfa" | "verify" | "tenantCreateField" | "samlTenantCreateField"
+  "plan" | "cookie" | "mfa" | "verify" | "tenantCreateField" | "samlTenantCreateField"
 >) {
   const helpers = `
 function withAuthDatabase(ports: BusinessRequestPorts, database: SelectedSession): BusinessRequestPorts {
@@ -29,7 +29,7 @@ async function deferAuthEffect(ports: BusinessRequestPorts, work: () => void | P
   else await work();
 }
 ${
-  layers.tenancy === "none"
+  !plan.decisions.tenantTable
     ? ""
     : `function establishedTenantId(ports: BusinessRequestPorts): number {
   const id = ports.established.tenant?.id;
@@ -42,7 +42,7 @@ type StarterPasswordLoginResult =
   | { ok: false; error: "invalid_credentials" }
   | (PasswordLoginResult & { user: StarterAuthUserRecord });
 
-async function authenticatePasswordUser(ports: BusinessRequestPorts,
+async function authenticatePasswordUser(ports: BusinessRequestPorts, services: StarterAuthServices,
   user: StarterAuthUserRecord | null,
   password: string,
   mfaCode: string | undefined,
@@ -50,7 +50,7 @@ async function authenticatePasswordUser(ports: BusinessRequestPorts,
   if (!user?.password || !(await verifyPassword(password, user.password))) {
     return { ok: false, error: "invalid_credentials" };
   }
-  const result = completePasswordLogin(user, { mfaCode });
+  const result = completePasswordLogin(user, { mfaCode }, services.mfaSecrets);
   if (!result.ok) return { ...result, user };
   await persistAuthRecovery(ports, user.id, user.mfa_recovery_codes, result.consumedRecoveryHash);
   return { ...result, user };
@@ -179,7 +179,7 @@ async function completeSignedPasswordReset(ports: BusinessRequestPorts, request:
     const userId = await consumeSignedAuthToken(ports, request, AUTH_ONE_TIME_PURPOSES.passwordReset);
     if (!userId) return false;
     await runAuthWrite(ports, userId, async (ports) => {
-      const user = await ports.database.model(User).where({ id: userId })${layers.database === "sqlite" ? "" : ".lockForUpdate()"}.first();
+      const user = await ports.database.model(User).where({ id: userId })${plan.decisions.rowLocks ? ".lockForUpdate()" : ""}.first();
       if (!user) throw new Error("Reset account no longer exists.");
       await user.update({ password: await hashPassword(password) });
       await revokeStoredUserSessions(ports.database, userId, { incrementAuthVersion: true });
@@ -270,9 +270,9 @@ async function completeBrowserSsoLogin(
 export function renderMfaEnrollment(mfa: boolean): string {
   return mfa
     ? `
-async function enrollMfa(ports: BusinessRequestPorts, user: { id: string | number; authVersion?: number }, secret: string) {
+async function enrollMfa(ports: BusinessRequestPorts, services: StarterAuthServices, user: { id: string | number; authVersion?: number }, secret: string) {
   const recoveryCodes = generateRecoveryCodes();
-  const stored = protectMfaSecret(secret);
+  const stored = services.mfaSecrets.protectMfaSecret(secret);
   const previous = await runAuthWrite(ports, Number(user.id), (ports) => ports.database.model(User).find(Number(user.id)));
   if (!previous || previous.get("auth_version") !== user.authVersion || !(previous.get("is_active") === true || previous.get("is_active") === 1)) throw new ConflictError("MFA configuration changed. Reload and confirm again.");
   await runAuthTransaction(ports, async (ports) => {

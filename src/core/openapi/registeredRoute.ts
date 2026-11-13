@@ -44,10 +44,10 @@ type OpenApiRouteMap = Record<
   >
 >;
 interface RegisteredRoute {
-  method: string;
-  path: string;
-  middleware: string[];
-  openApi?: OpenApiOperation;
+  readonly method: string;
+  readonly path: string;
+  readonly middleware: readonly string[];
+  readonly openApi?: Readonly<OpenApiOperation>;
 }
 
 export type {

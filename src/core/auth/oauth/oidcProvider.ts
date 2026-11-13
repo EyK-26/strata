@@ -1,11 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { safeFetch } from "../../security/safeFetch";
-import {
-  loadOidcDiscovery,
-  oidcSafeFetchOptions,
-  resetOidcDiscoveryCacheForTests,
-  verifyOidcIdToken,
-} from "./oidcIdToken";
+import { createOidcClient, type OidcClient, type OidcNetworkPolicy } from "./oidcIdToken";
 import type { OAuthProfile, OAuthProvider } from "./types";
 
 interface OidcProviderOptions {
@@ -14,7 +9,8 @@ interface OidcProviderOptions {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
-  scopes?: string[];
+  scopes?: readonly string[];
+  networkPolicy?: OidcNetworkPolicy;
 }
 
 interface OidcHandshake {
@@ -44,20 +40,18 @@ function codeChallenge(verifier: string): string {
   return createHash("sha256").update(verifier).digest("base64url");
 }
 
-function requireOidcEndpoint(value: string | undefined, name: string): string {
-  const trimmed = value?.trim() ?? "";
-  if (!trimmed) {
-    throw new Error(`OIDC discovery document did not include ${name}.`);
-  }
-
-  return trimmed;
-}
-
 class OidcProvider implements OAuthProvider {
   readonly name: string;
 
-  constructor(private readonly options: OidcProviderOptions) {
+  private readonly options: OidcProviderOptions;
+  private readonly client: OidcClient;
+  constructor(options: OidcProviderOptions) {
+    this.options = Object.freeze({
+      ...options,
+      scopes: options.scopes && Object.freeze([...options.scopes]),
+    });
     this.name = options.name;
+    this.client = createOidcClient(options.networkPolicy);
   }
 
   getAuthorizationUrl(_state: string, _redirectUri = this.options.redirectUri): string {
@@ -70,14 +64,14 @@ class OidcProvider implements OAuthProvider {
     state = createOidcHandshake().state,
     redirectUri = this.options.redirectUri,
   ): Promise<{ url: string; handshake: OidcHandshake }> {
-    const discovery = await loadOidcDiscovery(this.options.issuer);
+    const discovery = await this.client.loadDiscovery(this.options.issuer);
     const handshake = { ...createOidcHandshake(), state };
     return {
       url: this.buildAuthorizationUrl(
         state,
         handshake,
         redirectUri,
-        requireOidcEndpoint(discovery.authorization_endpoint, "authorization_endpoint"),
+        discovery.authorization_endpoint,
       ),
       handshake,
     };
@@ -114,7 +108,7 @@ class OidcProvider implements OAuthProvider {
       );
     }
 
-    const discovery = await loadOidcDiscovery(this.options.issuer);
+    const discovery = await this.client.loadDiscovery(this.options.issuer);
     const body = new URLSearchParams({
       grant_type: "authorization_code",
       code,
@@ -124,7 +118,7 @@ class OidcProvider implements OAuthProvider {
       code_verifier: handshake.codeVerifier,
     });
 
-    const tokenEndpoint = requireOidcEndpoint(discovery.token_endpoint, "token_endpoint");
+    const tokenEndpoint = discovery.token_endpoint;
     const tokenResponse = await safeFetch(
       tokenEndpoint,
       {
@@ -132,7 +126,7 @@ class OidcProvider implements OAuthProvider {
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body,
       },
-      oidcSafeFetchOptions(tokenEndpoint),
+      this.client.fetchOptions(tokenEndpoint),
     );
 
     const tokenBody = (await tokenResponse.json()) as OidcTokenResponse;
@@ -145,11 +139,11 @@ class OidcProvider implements OAuthProvider {
       throw new Error("OIDC token exchange did not return an ID token.");
     }
 
-    const payload = await verifyOidcIdToken(tokenBody.id_token, {
+    const payload = await this.client.verifyIdToken(tokenBody.id_token, {
       issuer: this.options.issuer,
       clientId: this.options.clientId,
       nonce: handshake.nonce,
-      jwksUri: requireOidcEndpoint(discovery.jwks_uri, "jwks_uri"),
+      jwksUri: discovery.jwks_uri,
       accessToken: tokenBody.access_token,
     });
 
@@ -170,4 +164,4 @@ class OidcProvider implements OAuthProvider {
 }
 
 export type { OidcHandshake, OidcProviderOptions };
-export { createOidcHandshake, OidcProvider, resetOidcDiscoveryCacheForTests };
+export { createOidcHandshake, OidcProvider };

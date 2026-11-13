@@ -22,8 +22,27 @@ import { Model } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 import { absoluteTemporarySignedUrl } from "@getstrata/core/http/signedUrl";
 import { failedJobRepository } from "@getstrata/core/queue/failedJobRepository";
-import { createFailedJobService } from "@getstrata/core/queue/queueServices";
+import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+import {
+  createIdentityQueue,
+  createQueueHandoff,
+  QueueHandoffError,
+} from "@getstrata/core/queue/queueHandoff";
+import {
+  createFailedJobService,
+  createSystemQueueServices,
+} from "@getstrata/core/queue/queueServices";
+import {
+  queueInvalidKey,
+  queueProcessingKey,
+  queueProcessingLeaseKey,
+  RedisStreamsQueue,
+  RedisStreamsWorker,
+  streamDeadLetterKey,
+  streamQueueKey,
+} from "@getstrata/core/queue/redisQueue";
 import { createStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
+import { RedisClient } from "bun";
 
 type Row = { id: number; title: string };
 const Label = createServiceToken<string>("installed.bound.label");
@@ -108,7 +127,9 @@ const provider: ServiceProvider = {
     context.dependencies.cache = new CacheRepository(
       new SimpleCacheStore(new SimpleCache(60_000, 20)),
     );
-    context.dependencies.storage = new StorageManager(createStorageDriver());
+    context.dependencies.storage = new StorageManager(
+      createStorageDriver({ driver: "local", rootDirectory: "storage" }),
+    );
   },
 };
 const contexts = await Promise.all(
@@ -130,10 +151,19 @@ const contexts = await Promise.all(
       http: {
         tenancy: "column",
         signatureSecret: `installed-${label}-signing-secret`,
+        csrf: {
+          token: {
+            secret: `installed-${label}-csrf-secret-32-characters`,
+            cookieName: `installed_${label}_csrf`,
+            production: true,
+          },
+          allowDevelopmentHeaders: false,
+        },
         production: true,
         allowTenantDevHeaders: false,
         metadata: () => ({
           authenticate: async () => ({
+            status: "authenticated",
             user: { id: label === "one" ? 1 : 2, role: "member" },
             credentialSource: "session",
           }),
@@ -154,7 +184,7 @@ try {
         assert.equal(database.repository(notes), database.repository(notes));
         assert.ok(database.repository(failedJobRepository) instanceof BaseRepository);
         await database.execute({
-          text: "CREATE TABLE failed_job (id INTEGER PRIMARY KEY,job_name TEXT,job_id TEXT,payload TEXT,exception TEXT,failed_at TEXT)",
+          text: "CREATE TABLE failed_job (id INTEGER PRIMARY KEY,job_name TEXT,job_id TEXT,handoff TEXT,payload TEXT,exception TEXT,failed_at TEXT)",
           params: [],
         });
         assert.deepEqual(
@@ -203,6 +233,12 @@ try {
       return Response.json({ label: repository.label(), memo: entity.memo() });
     })(new Request("http://installed.test/notes", { headers: { accept: "application/json" } }));
     assert.equal(response.status, 200);
+    assert.ok(
+      response.headers
+        .get("set-cookie")
+        ?.startsWith(`installed_${index === 0 ? "one" : "two"}_csrf=`),
+    );
+    assert.ok(response.headers.get("set-cookie")?.includes("; Secure"));
     assert.deepEqual(await response.json(), {
       label: index === 0 ? "one" : "two",
       memo: "private-constructor-state",
@@ -265,9 +301,136 @@ try {
     })(new Request(wrong, { headers: { accept: "application/json" } }));
     assert.equal(denied.status, 403);
   }
+  // Root workers must catch the same canonical admission error thrown by granular services.
+  assert.equal((Core as Record<string, unknown>).QueueHandoffError, QueueHandoffError);
+  const queueContext = contexts[0];
+  assert.ok(queueContext);
+  const redisUrl = process.env.REDIS_URL;
+  assert.ok(redisUrl, "Packed queue proof requires the configured local Redis fixture");
+  const redis = new RedisClient(redisUrl);
+  try {
+    for (const transport of ["lists", "streams"] as const) {
+      const keys = ["high", "default", "low"].map(
+        (name) => `strata:packed-handoff:${crypto.randomUUID()}:${name}`,
+      ) as [string, string, string];
+      const handoff = createQueueHandoff({
+        key: new Uint8Array(32).fill(19),
+        audience: "packed-queue",
+      });
+      const services = createSystemQueueServices(queueContext.invoke, {}, handoff);
+      const registry = new JobRegistry();
+      let factories = 0;
+      let handled = 0;
+      class PackedJob extends Core.Job {
+        async handle(_payload: object, context?: import("@getstrata/core/queue").JobContext) {
+          handled++;
+          assert.deepEqual(context?.actor, { kind: "principal", claims: { id: 7 } });
+          assert.deepEqual(context?.tenant, { id: 1 });
+          assert.ok(context?.database);
+          assert.equal(context.database.repository(notes).label(), "one");
+          await context.database.execute({ text: "SELECT 1", params: [] });
+        }
+      }
+      registry.register("packed-job", () => {
+        factories++;
+        return new PackedJob();
+      });
+      const job = registry.track("packed-job", new PackedJob());
+      const queue =
+        transport === "lists"
+          ? new Core.RedisQueue(redisUrl, registry, keys)
+          : new RedisStreamsQueue(redisUrl, registry, keys);
+      const worker: { processNext(): Promise<boolean>; close(): void } =
+        transport === "lists"
+          ? new Core.QueueWorker(
+              redisUrl,
+              services,
+              registry,
+              0,
+              keys,
+              { maxAttempts: 1, backoffMs: 0 },
+              300,
+            )
+          : new RedisStreamsWorker(
+              redisUrl,
+              services,
+              registry,
+              0,
+              keys,
+              { maxAttempts: 1, backoffMs: 0 },
+              300,
+            );
+      try {
+        const identity = {
+          actor: { kind: "principal" as const, claims: { id: 7 } },
+          tenant: { id: 1 },
+        };
+        let producer: ReturnType<typeof createIdentityQueue> | undefined;
+        await queueContext.application.run({ kind: "request", ...identity }, () => {
+          producer = createIdentityQueue(queue, registry, handoff, identity);
+        });
+        assert.ok(producer);
+        await producer.dispatch(job, {});
+        assert.equal(await worker.processNext(), true);
+        assert.equal(factories, 1);
+        assert.equal(handled, 1);
+        for (const envelope of [
+          { name: "packed-job", payload: {} },
+          {
+            name: "packed-job",
+            payload: { changed: true },
+            handoff: handoff.seal("packed-job", {}, identity),
+          },
+          {
+            name: "packed-job",
+            payload: {},
+            handoff: createQueueHandoff({
+              key: new Uint8Array(32).fill(19),
+              audience: "other-application",
+            }).seal("packed-job", {}, identity),
+          },
+        ]) {
+          if (transport === "lists") await redis.lpush(keys[1], JSON.stringify(envelope));
+          else
+            await redis.send("XADD", [
+              streamQueueKey(keys[1]),
+              "*",
+              "payload",
+              JSON.stringify(envelope),
+            ]);
+          assert.equal(await worker.processNext(), true);
+        }
+        assert.equal(factories, 1);
+        assert.equal(handled, 1);
+        assert.equal(
+          transport === "lists"
+            ? await redis.llen(queueInvalidKey(keys[1]))
+            : Number(await redis.send("XLEN", [streamDeadLetterKey(keys[1])])),
+          3,
+        );
+        assert.deepEqual(await services.listRecent(), []);
+      } finally {
+        worker.close();
+        queue.close();
+        for (const key of keys)
+          await redis.del(
+            key,
+            queueProcessingKey(key),
+            queueProcessingLeaseKey(key),
+            queueInvalidKey(key),
+            streamQueueKey(key),
+            `${streamQueueKey(key)}:retries`,
+            streamDeadLetterKey(key),
+          );
+      }
+    }
+  } finally {
+    redis.close();
+  }
   console.log(
     JSON.stringify({
       canonicalClasses: true,
+      packedQueueHandoff: true,
       privateArtifactsHidden: true,
       privateStateBind: true,
       definitionIsolation: true,

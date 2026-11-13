@@ -1,6 +1,6 @@
-import { isViewsEnabled } from "../runtime/frontendMode";
 import { htmlErrorResponse } from "../view/webErrorView";
 import { requestPrefersJson } from "./contentNegotiation";
+import { currentRequestMeta } from "./requestMetaContext";
 
 async function tooManyRequestsResponse(
   request: Request,
@@ -9,7 +9,11 @@ async function tooManyRequestsResponse(
 ): Promise<Response> {
   const retryAfter = { "retry-after": String(decaySeconds) };
 
-  if (requestPrefersJson(request) || !isViewsEnabled()) {
+  if (
+    currentRequestMeta().errorFormat === "json" ||
+    requestPrefersJson(request) ||
+    !(currentRequestMeta().viewsEnabled ?? false)
+  ) {
     return Response.json(
       { error: message },
       {

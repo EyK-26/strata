@@ -1,3 +1,4 @@
+import { createServiceToken } from "@getstrata/core/contracts/token";
 import type { Job } from "./index";
 
 type JobFactory = () => Job;
@@ -11,12 +12,19 @@ class JobRegistry {
   }
 
   resolveName(job: Job): string | undefined {
-    return this.instances.get(job);
+    const tracked = this.instances.get(job);
+    if (tracked) return tracked;
+    const name = (job.constructor as typeof Job).jobName;
+    return name && this.has(name) ? name : undefined;
   }
 
   track(name: string, job: Job): Job {
     this.instances.set(job, name);
     return job;
+  }
+
+  has(name: string): boolean {
+    return this.factories.has(name);
   }
 
   create(name: string): Job | undefined {
@@ -34,20 +42,6 @@ class JobRegistry {
   }
 }
 
-const JOB_REGISTRY_KEY = Symbol.for("@getstrata/jobRegistry");
+const QUEUE_JOB_REGISTRY_TOKEN = createServiceToken<JobRegistry>("core.queueJobRegistry");
 
-function readSharedJobRegistry(): JobRegistry {
-  const globalRegistry = (globalThis as Record<symbol, JobRegistry | undefined>)[JOB_REGISTRY_KEY];
-
-  if (globalRegistry) {
-    return globalRegistry;
-  }
-
-  const registry = new JobRegistry();
-  (globalThis as Record<symbol, JobRegistry>)[JOB_REGISTRY_KEY] = registry;
-  return registry;
-}
-
-const jobRegistry = readSharedJobRegistry();
-
-export { JobRegistry, jobRegistry };
+export { JobRegistry, QUEUE_JOB_REGISTRY_TOKEN };

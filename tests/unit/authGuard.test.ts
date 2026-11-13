@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { ApiTokenGuard, AuthManager, CompositeGuard, GuestGuard } from "@getstrata/core/auth/guard";
 import { UnauthorizedError } from "@getstrata/core/errors/http";
+import { authFixtureOutcome } from "../helpers/authOutcome";
 import { guestGuardOptions } from "../helpers/devAuthHeaders";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -123,8 +124,12 @@ describe("AuthManager", () => {
 
   test("failed bearer does not fall back to a session or guest guard", async () => {
     const sessionGuard = {
-      resolve() {
-        return { id: 99, role: "session" };
+      authenticate() {
+        return authFixtureOutcome(
+          (async () => {
+            return { id: 99, role: "session" };
+          })(),
+        );
       },
     };
     const auth = new AuthManager(new CompositeGuard([sessionGuard]));
@@ -151,13 +156,16 @@ describe("Basic request resolution", () => {
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const auth = new AuthManager({ resolve: () => null });
+    const auth = new AuthManager({ authenticate: () => authFixtureOutcome(null) });
     auth.registerGuard("basic", {
-      resolve: async () => {
-        calls++;
-        await gate;
-        return { id: calls };
-      },
+      authenticate: () =>
+        authFixtureOutcome(
+          (async () => {
+            calls++;
+            await gate;
+            return { id: calls };
+          })(),
+        ),
     });
     const req = request();
     const results = Promise.all([auth.user(req), auth.check(req), auth.requireUser(req)]);
@@ -168,8 +176,8 @@ describe("Basic request resolution", () => {
   });
   test("invalidates Basic results after credential, scheme or guard changes", async () => {
     let calls = 0;
-    const auth = new AuthManager({ resolve: () => null });
-    auth.registerGuard("basic", { resolve: () => ({ id: ++calls }) });
+    const auth = new AuthManager({ authenticate: () => authFixtureOutcome(null) });
+    auth.registerGuard("basic", { authenticate: () => authFixtureOutcome({ id: ++calls }) });
     const req = request();
     expect((await auth.user(req))?.id).toBe(1);
     req.headers.set("x-mfa-code", "another-proof");
@@ -180,17 +188,20 @@ describe("Basic request resolution", () => {
     expect(await auth.user(req)).toBeNull();
     req.headers.set("authorization", "Basic another");
     expect((await auth.user(req))?.id).toBe(4);
-    auth.registerGuard("basic", { resolve: () => ({ id: 99 }) });
+    auth.registerGuard("basic", { authenticate: () => authFixtureOutcome({ id: 99 }) });
     expect((await auth.user(req))?.id).toBe(99);
   });
   test("retains denial only within that request and does not retain infrastructure errors", async () => {
     let calls = 0;
-    const auth = new AuthManager({ resolve: () => null });
+    const auth = new AuthManager({ authenticate: () => authFixtureOutcome(null) });
     auth.registerGuard("basic", {
-      resolve: () => {
-        calls++;
-        return null;
-      },
+      authenticate: () =>
+        authFixtureOutcome(
+          (async () => {
+            calls++;
+            return null;
+          })(),
+        ),
     });
     const req = request();
     expect(await auth.user(req)).toBeNull();
@@ -200,13 +211,16 @@ describe("Basic request resolution", () => {
     expect(calls).toBe(2);
     let failed = true;
     auth.registerGuard("basic", {
-      resolve: () => {
-        if (failed) {
-          failed = false;
-          throw new Error("SQL unavailable");
-        }
-        return { id: 7 };
-      },
+      authenticate: () =>
+        authFixtureOutcome(
+          (async () => {
+            if (failed) {
+              failed = false;
+              throw new Error("SQL unavailable");
+            }
+            return { id: 7 };
+          })(),
+        ),
     });
     await expect(auth.user(req)).rejects.toThrow("SQL unavailable");
     expect(await auth.user(req)).toEqual({ id: 7 });
@@ -217,8 +231,10 @@ describe("Basic request resolution", () => {
     const old = new Promise<null>((_resolve, reject) => {
       rejectOld = reject;
     });
-    const auth = new AuthManager({ resolve: () => null });
-    auth.registerGuard("basic", { resolve: () => (++calls === 1 ? old : { id: 8 }) });
+    const auth = new AuthManager({ authenticate: () => authFixtureOutcome(null) });
+    auth.registerGuard("basic", {
+      authenticate: () => authFixtureOutcome(++calls === 1 ? old : { id: 8 }),
+    });
     const req = request();
     const failure = auth.user(req).catch((error: unknown) => error);
     req.headers.set("x-mfa-code", "new-proof");

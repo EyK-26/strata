@@ -42,7 +42,7 @@ schema.create("workflow_contacts", (table) => {
 });
 ```
 
-Its down callback uses `schema.drop("workflow_contacts")`. The generated callbacks run inside `Schema.run(db, resolveDatabaseDriver(), ...)`. Apply the migration with the app's migration identity:
+Its down callback uses `schema.drop("workflow_contacts")`. The generated callbacks run inside `Schema.run(db, currentSqlDialect().driver, ...)`. Apply the migration with the app's migration identity:
 
 ```sh
 bunx strata migrate

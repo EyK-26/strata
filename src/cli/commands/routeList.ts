@@ -1,10 +1,7 @@
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { registerOpenApiRoutes } from "./registerOpenApiRoutes";
 
 async function routeListCommand(): Promise<void> {
-  await registerOpenApiRoutes();
-
-  const routes = routeRegistry.list();
+  const routes = await registerOpenApiRoutes();
 
   if (routes.length === 0) {
     console.log("No routes registered.");

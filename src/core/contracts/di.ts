@@ -3,7 +3,6 @@ import type { StorageManager } from "../storage/storage";
 import type {
   ConfigStore,
   ConfigStoreLike,
-  LegacyServiceKey,
   ServiceContainer,
   ServiceFactory,
   ServiceToken,
@@ -81,15 +80,8 @@ function assertAppDependenciesComplete(
   }
 }
 
-function resolveService<T>(dependencies: AppDependencies, token: ServiceToken<T>): T;
-function resolveService<T>(dependencies: AppDependencies, token: LegacyServiceKey): T;
-function resolveService<T>(
-  dependencies: AppDependencies,
-  token: ServiceToken<T> | LegacyServiceKey,
-): T {
-  return typeof token === "string"
-    ? dependencies.container.resolve<T>(token)
-    : dependencies.container.resolve(token);
+function resolveService<T>(dependencies: AppDependencies, token: ServiceToken<T>): T {
+  return dependencies.container.resolve(token);
 }
 
 export type {

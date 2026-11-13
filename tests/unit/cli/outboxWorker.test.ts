@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { createPersistenceInvocation } from "@getstrata/bootstrap/persistenceInvocation";
 import { runOutboxWorkerCommand } from "@getstrata/cli/outboxWorker";
 import { createDatabaseBindings } from "@getstrata/core/database/bindings";
@@ -7,15 +7,10 @@ import {
   createOutboxWorkerTransport,
   createSqlOutboxBindings,
 } from "@getstrata/core/events/outbox";
-import {
-  LifecycleCoordinator,
-  resetGracefulShutdownForTests,
-} from "@getstrata/core/lifecycle/gracefulShutdown";
+import { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
 import { createApplication } from "@getstrata/core/runtime/application";
 import { bounded, deferred, pending } from "../../fixtures/applicationOwnershipSupport";
 import { captureConsole } from "./helpers";
-
-afterEach(() => resetGracefulShutdownForTests());
 
 function ownedWorker(
   options: {

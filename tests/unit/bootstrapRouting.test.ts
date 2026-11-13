@@ -97,6 +97,7 @@ describe("bootstrap web routing", () => {
             async () => new Response("<html>ok</html>"),
             ports,
           ),
+          { enabled: true },
         ),
       },
     });

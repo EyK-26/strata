@@ -163,7 +163,7 @@ describe("create-strata integration extras", () => {
       "export function createQueueProvider(queue:Queue,services:QueueServices)",
     );
     expect(await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8")).toContain(
-      "discoverJobs()",
+      "discoverJobs(registry)",
     );
   });
 

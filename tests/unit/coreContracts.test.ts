@@ -21,21 +21,21 @@ describe("@getstrata/core contracts", () => {
     let singletonCount = 0;
     let transientCount = 0;
 
-    container.singleton("singleton", () => {
+    container.singleton(Singleton, () => {
       singletonCount += 1;
       return { marker: singletonCount };
     });
-    container.bind("transient", () => {
+    container.bind(Transient, () => {
       transientCount += 1;
       return { marker: transientCount };
     });
 
-    expect(container.resolve<{ marker: number }>("singleton")).toEqual({ marker: 1 });
-    expect(container.make<{ marker: number }>("singleton")).toEqual({ marker: 1 });
-    expect(container.resolve<{ marker: number }>("transient")).toEqual({ marker: 1 });
-    expect(container.resolve<{ marker: number }>("transient")).toEqual({ marker: 2 });
-    expect(container.instance("demo", "value")).toBe("value");
-    expect(container.make<string>("demo")).toBe("value");
+    expect(container.resolve<{ marker: number }>(Singleton)).toEqual({ marker: 1 });
+    expect(container.make<{ marker: number }>(Singleton)).toEqual({ marker: 1 });
+    expect(container.resolve<{ marker: number }>(Transient)).toEqual({ marker: 1 });
+    expect(container.resolve<{ marker: number }>(Transient)).toEqual({ marker: 2 });
+    expect(container.instance(Demo, "value")).toBe("value");
+    expect(container.make<string>(Demo)).toBe("value");
   });
 
   test("typed tokens preserve opaque identity and binding lifecycle", () => {
@@ -54,9 +54,10 @@ describe("@getstrata/core contracts", () => {
     const instance = { count: 10 };
     expect(container.instance(token, instance)).toBe(instance);
     expect(container.resolve(token)).toBe(instance);
-    container.set("typed.counter", { count: 11 });
+    const sameName = createServiceToken<{ count: number }>("typed.counter");
+    container.set(sameName, { count: 11 });
     expect(container.resolve(token).count).toBe(10);
-    expect(container.resolve<{ count: number }>("typed.counter").count).toBe(11);
+    expect(container.resolve(sameName).count).toBe(11);
     const dependencies = { container, invoke, cache: {} as never, storage: {} as never };
     expect(resolveService(dependencies, token).count).toBe(10);
     expect(() => container.resolve(createServiceToken<number>("missing"))).toThrow(
@@ -89,7 +90,7 @@ describe("@getstrata/core contracts", () => {
 
   test("resolveService reads from the app dependency container", () => {
     const container = new ServiceContainer();
-    container.set("demo", "value");
+    container.set(Demo, "value");
 
     expect(
       resolveService<string>(
@@ -99,7 +100,7 @@ describe("@getstrata/core contracts", () => {
           cache: {} as never,
           storage: {} as never,
         },
-        "demo",
+        Demo,
       ),
     ).toBe("value");
   });
@@ -136,3 +137,7 @@ describe("@getstrata/core contracts", () => {
     expect(config.getRequired<boolean>("demo")).toBe(true);
   });
 });
+
+const Singleton = createServiceToken<{ marker: number }>("singleton");
+const Transient = createServiceToken<{ marker: number }>("transient");
+const Demo = createServiceToken<string>("demo");

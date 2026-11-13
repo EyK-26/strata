@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { databaseConfig } from "../../src/config/database";
+import { FixtureDatabase, fixtureDatabase } from "../helpers/fixtureDatabase";
 import { createMockDatabaseConnection } from "./testHelpers";
 
 describe("databaseConfig", () => {
@@ -29,13 +30,10 @@ describe("createDatabaseConnection", () => {
 
 describe("pingDatabase", () => {
   test("returns true for a healthy database", async () => {
-    const { pingDatabase } = await import("../../src/db/connection");
-
-    expect(await pingDatabase()).toBe(true);
+    expect(await fixtureDatabase.ping()).toBe(true);
   });
 
   test("returns false when the query fails", async () => {
-    const { pingDatabase } = await import("../../src/db/connection");
     const failingConnection = Object.assign(
       async () => {
         throw new Error("connection down");
@@ -48,30 +46,26 @@ describe("pingDatabase", () => {
       },
     ) as never;
 
-    await expect(pingDatabase(failingConnection)).resolves.toBe(false);
+    await expect(fixtureDatabase.ping(failingConnection)).resolves.toBe(false);
   });
 });
 
-describe("database proxy", () => {
-  test("forwards tagged template calls through the active connection", async () => {
-    const { default: db, resetDatabaseConnectionForTests } = await import(
-      "../../src/db/connection"
-    );
+describe("private fixture connection", () => {
+  test("retains an explicitly selected tagged connection", async () => {
     const calls: unknown[][] = [];
     const connection = createMockDatabaseConnection(async (...args: unknown[]) => {
       calls.push(args);
       return [{ ok: true }];
     });
 
-    resetDatabaseConnectionForTests(connection);
+    const owner = new FixtureDatabase(() => connection);
 
     try {
-      const result = await db`SELECT ${1}`;
+      const result = await owner.connection()`SELECT ${1}`;
       expect(result).toEqual([{ ok: true }]);
       expect(calls.length).toBe(1);
     } finally {
-      const { restoreDefaultDatabaseConnection } = await import("./testHelpers");
-      await restoreDefaultDatabaseConnection();
+      await owner.close();
     }
   });
 });

@@ -1,21 +1,18 @@
-import { authUsesJwt, authUsesToken } from "../types.ts";
 import type { AuthRenderingContext } from "./renderingContext.ts";
 
 export function renderAuthImports({
-  layers,
+  plan,
   cookie,
   github,
   oidc,
   mfa,
-  verify,
-  bearerApi,
 }: Pick<
   AuthRenderingContext,
-  "layers" | "cookie" | "github" | "oidc" | "mfa" | "verify" | "bearerApi" | "jsonCookieAccounts"
+  "plan" | "cookie" | "github" | "oidc" | "mfa" | "verify" | "bearerApi" | "jsonCookieAccounts"
 >) {
   const imports: string[] = [];
 
-  if (authUsesToken(layers.auth) || cookie) {
+  if (plan.decisions.token || cookie) {
     imports.push(`import { randomBytes } from "node:crypto";`);
   }
   imports.push(
@@ -40,7 +37,7 @@ export function renderAuthImports({
   }
   imports.push(`import { ConflictError } from "@getstrata/core/errors/http";`);
   imports.push(`import { isUniqueConstraintError } from "@getstrata/core/database/errors";`);
-  if (authUsesJwt(layers.auth)) {
+  if (plan.decisions.jwt) {
     imports.push(`import { signJwt } from "@getstrata/core/auth/jwt";`);
   }
   imports.push(`import { hashPassword, verifyPassword } from "@getstrata/core/auth/password";`);
@@ -59,11 +56,10 @@ export function renderAuthImports({
     `import { emailRule, minLength, required, stringRule, validateObject } from "@getstrata/core/validation/rules";`,
   );
   imports.push(`import { parseJsonBody } from "@getstrata/core/http/validation";`);
-  if (authUsesToken(layers.auth)) {
+  if (plan.decisions.token) {
     imports.push(`import { hashApiToken } from "@getstrata/core/auth/tokenHash";`);
   }
   if (mfa) {
-    imports.push(`import { protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";`);
   }
   if (cookie) {
     imports.push(`import { flashResponse } from "@getstrata/core/http/flashSession";`);
@@ -76,12 +72,12 @@ export function renderAuthImports({
         : `import { createOAuthState, verifyOAuthState } from "@getstrata/core/security/oauthState";`,
     );
   }
-  if (bearerApi || cookie) {
+  if (plan.decisions.users) {
     imports.push(`import { privateJsonResponse } from "@getstrata/core/http/response";`);
     imports.push(`import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";`);
   }
   imports.push(
-    cookie && verify
+    plan.decisions.cookieVerification
       ? `import { absoluteTemporarySignedUrl, assertValidSignature } from "@getstrata/core/http/signedUrl";`
       : `import { absoluteTemporarySignedUrl } from "@getstrata/core/http/signedUrl";`,
   );
@@ -98,7 +94,7 @@ export function renderAuthImports({
   );
   imports.push(`import { User } from "../../models/User.ts";`);
   imports.push(`import { AuthOneTimeToken } from "../../models/AuthOneTimeToken.ts";`);
-  if (authUsesToken(layers.auth)) {
+  if (plan.decisions.token) {
     imports.push(`import { ApiToken } from "../../models/ApiToken.ts";`);
   }
   if (cookie) {

@@ -171,11 +171,11 @@ describe("createSpaRoutes", () => {
     expect(merged["/app/*"]).toBeUndefined();
   });
 
-  test("mergeSpaRoutes keeps app routes on top of the SPA prefix", () => {
+  test("mergeSpaRoutes rejects an application handler colliding with the SPA mount", () => {
     process.env.FRONTEND_MODE = "hybrid";
     const existing = { "/apply": async () => new Response("module") };
-    const merged = mergeSpaRoutes(createDependencies(), existing, { prefix: "/apply" });
-    expect(merged["/apply"]).toBe(existing["/apply"]);
-    expect(merged["/apply/*"]).toBeDefined();
+    expect(() => mergeSpaRoutes(createDependencies(), existing, { prefix: "/apply" })).toThrow(
+      "Duplicate route",
+    );
   });
 });

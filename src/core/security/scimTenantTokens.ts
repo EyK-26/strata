@@ -27,7 +27,7 @@ function parseScimTenantTokens(raw: string | undefined): Map<number, string> {
 
 function resolveScimTenantFromToken(
   token: string,
-  env: Readonly<Record<string, string | undefined>> = process.env,
+  env: Readonly<Record<string, string | undefined>>,
 ): number | null {
   const presented = token.trim();
 

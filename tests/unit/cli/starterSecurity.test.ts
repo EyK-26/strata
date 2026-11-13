@@ -2,7 +2,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
 import type { ExecutionPersistence } from "@getstrata/core/contracts/persistence";
 import { generateTotp, generateTotpSecret } from "@getstrata/core/security/totp";
 import {
@@ -46,7 +45,6 @@ function restoreRuntime(): void {
       process.env[key] = value;
     }
   }
-  resetDiscoverModulesForTests();
 }
 
 afterEach(async () => {
@@ -218,13 +216,34 @@ describe("starter security flows", () => {
         },
         body: new URLSearchParams({ email: "demo@example.com" }),
       });
-      expect(forged.status).toBe(403);
+      expect(forged.status).toBe(401);
+      expect(forged.headers.get("location")).toBeNull();
+
+      const forgedWithCsrf = await fetch(`${origin}/forgot-password`, {
+        method: "POST",
+        redirect: "manual",
+        headers: {
+          cookie: cookies,
+          authorization: "Bearer garbage-token",
+          origin,
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ _token: csrf, email: "demo@example.com" }),
+      });
+      expect(forgedWithCsrf.status).toBe(401);
+      expect(forgedWithCsrf.headers.get("location")).toBeNull();
+      const missingCsrf = await fetch(`${origin}/forgot-password`, {
+        method: "POST",
+        redirect: "manual",
+        headers: { cookie: cookies, origin, "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ email: "demo@example.com" }),
+      });
+      expect(missingCsrf.status).toBe(403);
 
       const allowed = await fetch(`${origin}/forgot-password`, {
         method: "POST",
         headers: {
           cookie: cookies,
-          authorization: "Bearer garbage-token",
           origin,
           "content-type": "application/x-www-form-urlencoded",
         },

@@ -3,7 +3,7 @@ import { readRequestCookie } from "../http/cookies";
 import { isProductionEnv } from "../runtime/appEnv";
 import { appCookieName, requireConfiguredSecret } from "../runtime/appKeyPrefix";
 
-const SESSION_COOKIE = appCookieName("session");
+const SESSION_COOKIE = "strata_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 const SESSION_REMEMBER_TTL_SECONDS = 60 * 60 * 24 * 30;
 
@@ -18,6 +18,21 @@ interface SignedSession {
   authVersion?: number;
 }
 
+export interface SessionWriteOptions extends SessionReadOptions {
+  readonly rememberTtlSeconds: number;
+  readonly production: boolean;
+}
+export function sessionCookieOptionsFromEnvironment(
+  env: Readonly<Record<string, string | undefined>>,
+): SessionWriteOptions {
+  return Object.freeze({
+    cookieName: sessionCookieName(env),
+    secret: requireConfiguredSecret(["SESSION_SECRET"], "session-secret", env),
+    ttlSeconds: sessionTtlSeconds(env),
+    rememberTtlSeconds: sessionRememberTtlSeconds(env),
+    production: isProductionEnv(env),
+  });
+}
 export interface SessionReadOptions {
   readonly cookieName: string;
   readonly secret: string;
@@ -37,8 +52,8 @@ export function createSessionReader(
   return (request) => readSession(request, snapshot);
 }
 
-function sessionCookieName(): string {
-  return process.env.SESSION_COOKIE_NAME?.trim() || appCookieName("session");
+function sessionCookieName(env: Readonly<Record<string, string | undefined>>): string {
+  return env.SESSION_COOKIE_NAME?.trim() || appCookieName("session", env);
 }
 
 function parsePositiveSeconds(raw: string | undefined, fallback: number): number {
@@ -46,21 +61,17 @@ function parsePositiveSeconds(raw: string | undefined, fallback: number): number
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function sessionTtlSeconds(): number {
-  return parsePositiveSeconds(process.env.SESSION_TTL_SECONDS, SESSION_TTL_SECONDS);
+function sessionTtlSeconds(env: Readonly<Record<string, string | undefined>>): number {
+  return parsePositiveSeconds(env.SESSION_TTL_SECONDS, SESSION_TTL_SECONDS);
 }
 
-function sessionRememberTtlSeconds(): number {
-  return parsePositiveSeconds(
-    process.env.SESSION_REMEMBER_TTL_SECONDS,
-    SESSION_REMEMBER_TTL_SECONDS,
-  );
+function sessionRememberTtlSeconds(env: Readonly<Record<string, string | undefined>>): number {
+  return parsePositiveSeconds(env.SESSION_REMEMBER_TTL_SECONDS, SESSION_REMEMBER_TTL_SECONDS);
 }
 
-function resolveSessionSecret(): string {
-  return requireConfiguredSecret(["SESSION_SECRET"], "session-secret");
+function missingSessionSecret(): never {
+  throw new TypeError("Explicit session secret is required.");
 }
-
 function signSession(
   userId: number,
   issuedAt: number,
@@ -74,7 +85,7 @@ function signSession(
       : ttlSeconds === undefined
         ? `${userId}.${issuedAt}`
         : `${userId}.${issuedAt}.${ttlSeconds}`;
-  const signature = createHmac("sha256", secret ?? resolveSessionSecret())
+  const signature = createHmac("sha256", secret ?? missingSessionSecret())
     .update(payload)
     .digest("hex");
 
@@ -87,8 +98,8 @@ function readSignedSession(
   cookieSignature: string | undefined,
   ttlSeconds: number,
   remember: boolean,
-  authVersion?: number,
-  options?: SessionReadOptions,
+  authVersion: number | undefined,
+  options: SessionReadOptions,
 ): SignedSession | null {
   const userId = Number.parseInt(userIdRaw, 10);
   const issuedAt = Number.parseInt(issuedAtRaw, 10);
@@ -107,10 +118,10 @@ function readSignedSession(
 
   const expectedSignature = (
     authVersion !== undefined
-      ? signSession(userId, issuedAt, ttlSeconds, authVersion, options?.secret)
+      ? signSession(userId, issuedAt, ttlSeconds, authVersion, options.secret)
       : remember
-        ? signSession(userId, issuedAt, ttlSeconds, undefined, options?.secret)
-        : signSession(userId, issuedAt, undefined, undefined, options?.secret)
+        ? signSession(userId, issuedAt, ttlSeconds, undefined, options.secret)
+        : signSession(userId, issuedAt, undefined, undefined, options.secret)
   )
     .split(".")
     .pop();
@@ -133,8 +144,8 @@ function readSignedSession(
   return { userId, issuedAt, ...(authVersion !== undefined ? { authVersion } : {}) };
 }
 
-function readSession(request: Request, options?: SessionReadOptions): SignedSession | null {
-  const cookieValue = readRequestCookie(request, options?.cookieName ?? sessionCookieName());
+function readSession(request: Request, options: SessionReadOptions): SignedSession | null {
+  const cookieValue = readRequestCookie(request, options.cookieName);
 
   if (!cookieValue) {
     return null;
@@ -183,15 +194,15 @@ function readSession(request: Request, options?: SessionReadOptions): SignedSess
     String(userIdRaw),
     String(issuedAtRaw),
     cookieSignature,
-    options?.ttlSeconds ?? sessionTtlSeconds(),
+    options.ttlSeconds,
     false,
     undefined,
     options,
   );
 }
 
-function readSessionUserId(request: Request): number | null {
-  return readSession(request)?.userId ?? null;
+function readSessionUserId(request: Request, options: SessionReadOptions): number | null {
+  return readSession(request, options)?.userId ?? null;
 }
 
 function isSessionInvalidated(
@@ -223,6 +234,7 @@ interface SessionCookieDetails {
 function createSessionCookieDetails(
   userId: number,
   options: CreateSessionCookieOptions = {},
+  config: SessionWriteOptions,
 ): SessionCookieDetails {
   if (
     options.authVersion !== undefined &&
@@ -230,17 +242,17 @@ function createSessionCookieDetails(
   )
     throw new RangeError("authVersion must be a non-negative safe integer.");
   const issuedAt = Date.now();
-  const ttlSeconds = options.remember ? sessionRememberTtlSeconds() : sessionTtlSeconds();
+  const ttlSeconds = options.remember ? config.rememberTtlSeconds : config.ttlSeconds;
   const value =
     options.authVersion !== undefined
-      ? signSession(userId, issuedAt, ttlSeconds, options.authVersion)
+      ? signSession(userId, issuedAt, ttlSeconds, options.authVersion, config.secret)
       : options.remember
-        ? signSession(userId, issuedAt, ttlSeconds)
-        : signSession(userId, issuedAt);
-  const secure = isProductionEnv() ? "; Secure" : "";
+        ? signSession(userId, issuedAt, ttlSeconds, undefined, config.secret)
+        : signSession(userId, issuedAt, undefined, undefined, config.secret);
+  const secure = config.production ? "; Secure" : "";
 
   return {
-    header: `${sessionCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttlSeconds}${secure}`,
+    header: `${config.cookieName}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttlSeconds}${secure}`,
     userId,
     issuedAt,
     ttlSeconds,
@@ -248,14 +260,20 @@ function createSessionCookieDetails(
   };
 }
 
-function createSessionCookie(userId: number, options: CreateSessionCookieOptions = {}): string {
-  return createSessionCookieDetails(userId, options).header;
+function createSessionCookie(
+  userId: number,
+  options: CreateSessionCookieOptions = {},
+  config: SessionWriteOptions,
+): string {
+  return createSessionCookieDetails(userId, options, config).header;
 }
 
-function clearSessionCookie(): string {
-  const secure = isProductionEnv() ? "; Secure" : "";
+function clearSessionCookie(
+  config: Pick<SessionWriteOptions, "production" | "cookieName">,
+): string {
+  const secure = config.production ? "; Secure" : "";
 
-  return `${sessionCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
+  return `${config.cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
 }
 
 export type { CreateSessionCookieOptions, SessionCookieDetails, SignedSession };

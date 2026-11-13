@@ -1,9 +1,9 @@
-import { authNeedsUsers, type StarterLayers } from "./types.ts";
+import type { StarterFeaturePlan } from "./featurePlan.ts";
 
-function renderCliRegisterTs(layers?: StarterLayers): string {
+function renderCliRegisterTs(plan?: StarterFeaturePlan): string {
   return `import type { StrataCommandMap } from "@getstrata/cli";
 
-const commands: StrataCommandMap = {${layers && authNeedsUsers(layers.auth) ? '\n  "auth:provision-admin": async () => (await import("./initialAdmin.ts")).initialAdminCommand,' : ""}
+const commands: StrataCommandMap = {${plan?.decisions.users ? '\n  "auth:provision-admin": async () => (await import("./initialAdmin.ts")).initialAdminCommand,' : ""}
   "make:module": async () => (await import("@getstrata/cli/scaffold")).makeModuleCommand,
   "make:model": async () => (await import("@getstrata/cli/scaffold")).makeModelCommand,
   "make:view": async () => (await import("@getstrata/cli/scaffold")).makeViewCommand,

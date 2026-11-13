@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
 
 const moduleUrl = import.meta.resolve("@getstrata/core/mail/mailer");
-test("the public default accessor retains a stable Mailer identity", async () => {
-  const { Mailer, mailer } = await import("@getstrata/core/mail/mailer");
-  const instance = mailer();
-  expect(instance).toBeInstanceOf(Mailer);
-  expect(mailer()).toBe(instance);
+test("mail module exposes explicit owned construction without a global accessor", async () => {
+  const exports = await import("@getstrata/core/mail/mailer");
+  expect("mailer" in exports).toBe(false);
+  const first = new exports.Mailer({ async send() {} });
+  const second = new exports.Mailer({ async send() {} });
+  expect(first).not.toBe(second);
 });
 async function fresh(script: string, driver = "smtp") {
   const env = Object.fromEntries(
@@ -16,7 +17,7 @@ async function fresh(script: string, driver = "smtp") {
       process.execPath,
       "--no-env-file",
       "-e",
-      `import {strict as assert} from "node:assert";const {Mailer,mailer,createMailDriver,LogMailDriver}=await import(${JSON.stringify(moduleUrl)});${script}`,
+      `import {strict as assert} from "node:assert";const {Mailer,createMailDriver,LogMailDriver}=await import(${JSON.stringify(moduleUrl)});${script}`,
     ],
     { env: { ...env, MAIL_DRIVER: driver }, stdout: "pipe", stderr: "pipe" },
   );
@@ -38,13 +39,6 @@ test("explicit SMTP selection still rejects missing host and missing sender", as
   expect(
     await fresh(
       `assert.throws(()=>createMailDriver(),/requires MAIL_HOST/);process.env.MAIL_HOST="smtp.example.test";assert.throws(()=>createMailDriver(),/requires MAIL_FROM/);`,
-    ),
-  ).toMatchObject({ exit: 0, stderr: "" });
-});
-test("default mailer validates on access, caches success and permits correction after failed configuration", async () => {
-  expect(
-    await fresh(
-      `assert.throws(()=>mailer(),/requires MAIL_HOST/);process.env.MAIL_DRIVER="log";const first=mailer();assert.ok(first instanceof Mailer);process.env.MAIL_DRIVER="smtp";assert.equal(mailer(),first);assert.throws(()=>createMailDriver(),/requires MAIL_HOST/);`,
     ),
   ).toMatchObject({ exit: 0, stderr: "" });
 });

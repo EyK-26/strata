@@ -1,9 +1,11 @@
-import { jobRegistry } from "./jobRegistry.ts";
-
 type QueuePriority = "high" | "default" | "low";
 
 /** Logical identity is stable across automatic recovery and supported manual replay. */
 interface JobContext {
+  /** Verified execution identity and owned policy supplied by application queue services. */
+  readonly actor?: import("../contracts/application").ExecutionActor;
+  readonly tenant?: import("../contracts/application").ApplicationConfig;
+  readonly policy?: import("../contracts/persistence").ScopedPolicy;
   /** One-based execution attempt supplied by the framework retry owner. */
   readonly auditExport?: () => Promise<number>;
   readonly cache?: import("../../types/services").CacheLike;
@@ -20,14 +22,12 @@ abstract class Job<TPayload extends object = object> {
   readonly backoffMs?: number;
   readonly priority?: QueuePriority;
 
-  constructor() {
-    const jobName = (this.constructor as typeof Job).jobName;
-    if (jobName) {
-      jobRegistry.track(jobName, this);
-    }
-  }
-
   abstract handle(payload: TPayload, context?: JobContext): Promise<void>;
+}
+
+interface QueueDispatchOptions {
+  /** Opaque authenticated identity snapshot created by application composition. */
+  readonly handoff?: string;
 }
 
 interface Queue {
@@ -37,12 +37,23 @@ interface Queue {
     job: Job<TPayload>,
     payload: TPayload,
     jobId: string,
+    options?: QueueDispatchOptions,
   ): Promise<void>;
-  dispatch<TPayload extends object>(job: Job<TPayload>, payload: TPayload): Promise<void>;
+  dispatch<TPayload extends object>(
+    job: Job<TPayload>,
+    payload: TPayload,
+    options?: QueueDispatchOptions,
+  ): Promise<void>;
 }
 
 class SyncQueue implements Queue {
-  async dispatch<TPayload extends object>(job: Job<TPayload>, payload: TPayload): Promise<void> {
+  async dispatch<TPayload extends object>(
+    job: Job<TPayload>,
+    payload: TPayload,
+    options?: QueueDispatchOptions,
+  ): Promise<void> {
+    if (options?.handoff !== undefined)
+      throw new Error("Identity handoff requires an application queue.");
     await job.handle(payload);
   }
 }
@@ -69,7 +80,13 @@ class AsyncQueue implements Queue {
     });
   }
 
-  async dispatch<TPayload extends object>(job: Job<TPayload>, payload: TPayload): Promise<void> {
+  async dispatch<TPayload extends object>(
+    job: Job<TPayload>,
+    payload: TPayload,
+    options?: QueueDispatchOptions,
+  ): Promise<void> {
+    if (options?.handoff !== undefined)
+      throw new Error("Identity handoff requires an application queue.");
     this.enqueue(
       () => job.handle(payload),
       (error) => {
@@ -92,5 +109,5 @@ function createQueue(driver: "sync" | "async"): Queue {
   return driver === "async" ? new AsyncQueue() : new SyncQueue();
 }
 
-export type { JobContext, Queue, QueuePriority };
+export type { JobContext, Queue, QueueDispatchOptions, QueuePriority };
 export { AsyncQueue, createQueue, Job, SyncQueue };

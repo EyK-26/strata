@@ -1,12 +1,21 @@
-import { type HttpError, toHttpError, ValidationError } from "@getstrata/core/errors/http";
+import {
+  type HttpError,
+  InvalidCredentialsError,
+  toHttpError,
+  ValidationError,
+} from "@getstrata/core/errors/http";
 import { appLogger } from "@getstrata/core/logging/logger";
-import { isProductionEnv } from "../runtime/appEnv";
-import { isViewsEnabled } from "../runtime/frontendMode";
-import { htmlErrorResponse } from "../view/webErrorView";
+import { htmlErrorResponse, type WebErrorView } from "../view/webErrorView";
 import { requestPrefersJson } from "./contentNegotiation";
 import { mapDatabaseHttpError } from "./databaseError";
 import { currentRequestMeta } from "./requestMetaContext";
 import { loginRedirectLocation } from "./safeInternalPath";
+
+interface WebErrorResponseOptions {
+  enabled?: boolean;
+  production?: boolean;
+  render?: WebErrorView;
+}
 
 type FieldErrors = Record<string, string[]>;
 
@@ -47,8 +56,8 @@ function errorPageTitle(status: number, message: string): string {
   return message;
 }
 
-function publicErrorMessage(status: number, message: string): string {
-  if (status >= 500 && isProductionEnv()) {
+function publicErrorMessage(status: number, message: string, production: boolean): string {
+  if (status >= 500 && production) {
     return "Something went wrong.";
   }
 
@@ -66,11 +75,15 @@ function logServerError(error: unknown, mappedError: HttpError): void {
   });
 }
 
-async function webErrorResponse(error: unknown, request?: Request): Promise<Response | null> {
+async function webErrorResponse(
+  error: unknown,
+  request?: Request,
+  options: WebErrorResponseOptions = {},
+): Promise<Response | null> {
   if (
     currentRequestMeta().errorFormat === "json" ||
     !request ||
-    !isViewsEnabled() ||
+    !(options.enabled ?? currentRequestMeta().viewsEnabled ?? false) ||
     requestPrefersJson(request)
   ) {
     return null;
@@ -79,7 +92,7 @@ async function webErrorResponse(error: unknown, request?: Request): Promise<Resp
   const mappedError = toHttpError(error) ?? mapDatabaseHttpError(error);
   logServerError(error, mappedError);
 
-  if (mappedError.status === 401) {
+  if (mappedError.status === 401 && !(mappedError instanceof InvalidCredentialsError)) {
     return Response.redirect(loginRedirectLocation(request), 302);
   }
 
@@ -88,14 +101,21 @@ async function webErrorResponse(error: unknown, request?: Request): Promise<Resp
       ? normalizeFieldErrors(mappedError.details)
       : undefined;
 
-  return htmlErrorResponse({
-    status: mappedError.status,
-    title: errorPageTitle(mappedError.status, mappedError.message),
-    message: publicErrorMessage(mappedError.status, mappedError.message),
-    errors,
-    request,
-  });
+  return htmlErrorResponse(
+    {
+      status: mappedError.status,
+      title: errorPageTitle(mappedError.status, mappedError.message),
+      message: publicErrorMessage(
+        mappedError.status,
+        mappedError.message,
+        options.production ?? currentRequestMeta().webErrorsProduction ?? true,
+      ),
+      errors,
+      request,
+    },
+    options.render,
+  );
 }
 
-export type { FieldErrors };
+export type { FieldErrors, WebErrorResponseOptions };
 export { logServerError, normalizeFieldErrors, webErrorResponse };

@@ -76,17 +76,20 @@ assert.strictEqual(root.Model,model.Model);
 assert.strictEqual(model.defineModel,definitions.defineModel);
 assert.strictEqual(model.defineRepository,definitions.defineRepository);
 assert.ok(jobs.FailedJobRepository.prototype instanceof base.BaseRepository);
-const names=['BadRequestError','ConflictError','ForbiddenError','HttpError','InternalServerError','isHttpErrorLike','NotFoundError','PayloadTooLargeError','PreconditionFailedError','toHttpError','UnauthorizedError','UnprocessableEntityError','ValidationError'];
+const names=['BadRequestError','ConflictError','ForbiddenError','HttpError','InternalServerError','InvalidCredentialsError','isHttpErrorLike','NotFoundError','PayloadTooLargeError','PreconditionFailedError','toHttpError','UnauthorizedError','UnprocessableEntityError','ValidationError'];
 assert.deepEqual(Object.keys(errors).sort(),names.sort(),'The supported leaf export surface must remain exact.');
 for(const name of names)assert.strictEqual(root[name],errors[name],name+' must have one public identity.');
 const details={owned:'cold-import'};
-const constructors=['BadRequestError','ConflictError','ForbiddenError','InternalServerError','NotFoundError','PayloadTooLargeError','PreconditionFailedError','UnauthorizedError','UnprocessableEntityError','ValidationError'];
+const constructors=['BadRequestError','ConflictError','ForbiddenError','InternalServerError','InvalidCredentialsError','NotFoundError','PayloadTooLargeError','PreconditionFailedError','UnauthorizedError','UnprocessableEntityError','ValidationError'];
 for(const name of constructors){
  assert.equal(typeof errors[name],'function',name+' must remain a constructor.');
  const value=new errors[name]('owned failure',details);
  assert.ok(value instanceof root.HttpError,name+' must construct the canonical HttpError.');assert.ok(value instanceof root[name],name+' must retain its root constructor identity.');
  assert.strictEqual(value.details,details);assert.strictEqual(errors.toHttpError(value),value);
 }
+const invalidCredentials=new errors.InvalidCredentialsError('owned credentials',details);
+assert.ok(invalidCredentials instanceof root.UnauthorizedError,'Invalid credentials must retain unauthorized inheritance.');
+assert.equal(invalidCredentials.status,401);assert.strictEqual(root.toHttpError(invalidCredentials),invalidCredentials);
 const direct=new errors.HttpError(418,'owned status',details);
 assert.equal(direct.status,418);assert.strictEqual(root.toHttpError(direct),direct);
 let caught;
