@@ -179,6 +179,7 @@ const CORE_SUBPATHS = [
   "queue/failedJobService",
   "queue/jobRegistry",
   "queue/jobRunner",
+  "queue/queueConfig",
   "queue/queueMetrics",
   "queue/queueServices",
   "queue/queueWorkerTransport",

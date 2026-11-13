@@ -25,6 +25,7 @@ export const CORE_STANDALONE_SUBPATHS = [
   "database/definitions",
   "database/factory",
   "queue/failedJobRepository",
+  "queue/queueConfig",
   "database/tokens",
   "cache/tokens",
   "config/applicationConfig",

@@ -78,6 +78,28 @@ for (const subpath of canonical) {
     );
   }
 }
+// The policy adapter is consumed by installed bootstrap; source aliases must not hide missing exports.
+const queuePolicy = await import(
+  join(root, "packages/strata-core/dist/entries/queue/queueConfig.js")
+);
+for (const name of [
+  "resolveQueueConfig",
+  "snapshotQueueRetryPolicy",
+  "resolveRedisQueueTransport",
+  "readQueueVisibilityMs",
+])
+  assert.equal(typeof queuePolicy[name], "function", `Queue policy artifact is missing ${name}`);
+assert.equal(
+  "queueConfig" in queuePolicy,
+  false,
+  "Queue policy must not expose the removed ambient getter",
+);
+const capturedPolicy = queuePolicy.resolveQueueConfig({
+  QUEUE_MAX_ATTEMPTS: "2",
+  QUEUE_BACKOFF_MS: "0",
+});
+assert.equal(capturedPolicy.maxAttempts, 2);
+assert(Object.isFrozen(capturedPolicy), "Queue policy must be immutable");
 console.log(
   `Standalone canonical artifacts OK (${canonical.size}; packed identity is checked separately).`,
 );
