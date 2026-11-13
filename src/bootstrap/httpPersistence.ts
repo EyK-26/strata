@@ -5,6 +5,8 @@ import type { ApplicationConfig } from "@getstrata/core/contracts/application";
 import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
 import { InternalServerError, InvalidCredentialsError } from "@getstrata/core/errors/http";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { errorResponse } from "@getstrata/core/http/response";
+import { webErrorResponse } from "@getstrata/core/http/webErrorResponse";
 import { createPublicTenantSelector } from "@getstrata/core/tenant/publicTenantHost";
 import { runWithTenant, type TenantContext } from "@getstrata/core/tenant/tenantContext";
 import { DEFAULT_TENANT, resolveTenantForRequest } from "@getstrata/core/tenant/tenantMiddleware";
@@ -70,6 +72,9 @@ export function createHttpPersistence(
   invoke: PersistenceInvocation,
   options: HttpPersistenceOptions,
 ) {
+  const invalidSessionCookie = options.invalidSessionCookie
+    ? Object.freeze({ ...options.invalidSessionCookie })
+    : undefined;
   const selectPublic = options.publicTenancy
     ? createPublicTenantSelector(options.publicTenancy)
     : undefined;
@@ -101,7 +106,22 @@ export function createHttpPersistence(
           });
         }
         const lookup = options.metadata(ports);
-        const auth = snapshotAuth(await lookup.authenticate(request));
+        const outcome = validatedAuthOutcome(await lookup.authenticate(request));
+        if (
+          outcome.status === "invalid" &&
+          outcome.credentialSource === "session" &&
+          invalidSessionCookie &&
+          request.headers
+            .get("cookie")
+            ?.split(";")
+            .some((part) => part.trim().startsWith(`${invalidSessionCookie.name}=`))
+        ) {
+          const error = new InvalidCredentialsError();
+          const response = (await webErrorResponse(error, request)) ?? errorResponse(error);
+          response.headers.append("Set-Cookie", invalidSessionCookie.expiredHeader);
+          return response;
+        }
+        const auth = snapshotAuth(outcome);
         const memberships = auth.user ? await lookup.memberships(auth.user) : [];
         const resolveTenant = async (id: number) => {
           const result = await lookup.tenant(id);

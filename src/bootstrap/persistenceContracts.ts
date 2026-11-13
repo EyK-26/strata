@@ -55,6 +55,8 @@ export interface HttpPersistenceOptions {
   }>;
   readonly intendedUrl?: import("@getstrata/core/auth/intendedUrlCookie").IntendedUrlCookieOptions;
   readonly flash?: import("@getstrata/core/http/flashSession").FlashSessionOptions;
+  /** Expire only a supplied cookie rejected by the session authenticator; never retries as guest. */
+  readonly invalidSessionCookie?: Readonly<{ name: string; expiredHeader: string }>;
   readonly responsePolicy?: Readonly<{
     securityHeaders?: import("@getstrata/core/http/contentSecurityPolicy").ContentSecurityPolicyOptions;
     cors?: import("@getstrata/core/http/corsMiddleware").CorsOptions;

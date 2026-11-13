@@ -232,6 +232,7 @@ import type { WebErrorView } from "@getstrata/core/view";
 import { webServerResource, type NativeServerOptions } from "@getstrata/bootstrap/web/server";
 import type { Server } from "bun";
 import { abilityCatalog } from "@getstrata/core/auth/abilityCatalog";
+import { clearSessionCookie } from "@getstrata/core/auth/sessionCookie";
 import { intendedUrlCookieOptionsFromEnvironment } from "@getstrata/core/auth/intendedUrlCookie";
 import { flashSessionOptionsFromEnvironment } from "@getstrata/core/http/flashSession";
 import { csrfTokenOptionsFromEnvironment } from "@getstrata/core/http/csrfToken";
@@ -331,7 +332,7 @@ export async function bootstrapApp(options:BootstrapOptions={}):Promise<Bootstra
   }};
   const handle=createApplicationContext([],{
     connection:"main",
-    http:{metadata:auth.metadata,responsePolicy:resolveHttpResponsePolicy(env),intendedUrl:intendedUrlCookieOptionsFromEnvironment(env),flash:flashSessionOptionsFromEnvironment(env),features:{emailVerificationRequired:env.FEATURE_EMAIL_VERIFICATION==="true",viewsEnabled:["server-htmx","hybrid"].includes(env.FRONTEND_MODE??${JSON.stringify(layers.frontend)}),publicReadsEnabled:env.FEATURE_PUBLIC_READS==="true",etagEnabled:env.FEATURE_ETAG!=="false"},csrf:{token:csrfTokenOptionsFromEnvironment(env),allowDevelopmentHeaders:!production&&env.AUTH_DEV_HEADERS==="true",samlAcsUrl:env.SAML_ACS_URL??""},tenancy:${JSON.stringify(layers.tenancy)},production,allowTenantDevHeaders:!production&&env.TENANT_DEV_HEADERS==="true",signatureSecret:auth.config.signatureSecret,passwordConfirmation:auth.config.passwordConfirmation,
+    http:{metadata:auth.metadata,invalidSessionCookie:{name:auth.config.sessionCookie.cookieName,expiredHeader:clearSessionCookie(auth.config.sessionCookie)},responsePolicy:resolveHttpResponsePolicy(env),intendedUrl:intendedUrlCookieOptionsFromEnvironment(env),flash:flashSessionOptionsFromEnvironment(env),features:{emailVerificationRequired:env.FEATURE_EMAIL_VERIFICATION==="true",viewsEnabled:["server-htmx","hybrid"].includes(env.FRONTEND_MODE??${JSON.stringify(layers.frontend)}),publicReadsEnabled:env.FEATURE_PUBLIC_READS==="true",etagEnabled:env.FEATURE_ETAG!=="false"},csrf:{token:csrfTokenOptionsFromEnvironment(env),allowDevelopmentHeaders:!production&&env.AUTH_DEV_HEADERS==="true",samlAcsUrl:env.SAML_ACS_URL??""},tenancy:${JSON.stringify(layers.tenancy)},production,allowTenantDevHeaders:!production&&env.TENANT_DEV_HEADERS==="true",signatureSecret:auth.config.signatureSecret,passwordConfirmation:auth.config.passwordConfirmation,
       ...(production?{publicTenancy:{resolveTenantId:async(host:string)=>host===new URL(config.appUrl).hostname?1:null}}:{}),${layers.extras.scim ? "\n      scim:createScimAuthenticator({resolveToken:token=>resolveScimTenantFromToken(token,env),resolveTenant})," : ""}
     },
     onConstructed:owner=>{invoke=owner.invoke;options.onConstructed?.(owner.application);return undefined;},
