@@ -30,6 +30,7 @@ const PLACEHOLDER_SECRET_PATTERN = /change-me/i;
 /** Secrets that must not still hold generated placeholders when production checks run. */
 const SECRETS_TO_ROTATE = [
   "SESSION_SECRET",
+  "SIGNED_URL_SECRET",
   "TOKEN_HASH_PEPPER",
   "METRICS_TOKEN",
   "SCIM_BEARER_TOKEN",

@@ -369,6 +369,18 @@ describe("assertProductionSecrets", () => {
     ).toThrow(/replace the generated placeholder values for SESSION_SECRET/);
   });
 
+  test("blocks the generated signed URL secret in production API apps", () => {
+    expect(() =>
+      assertProductionSecrets({
+        APP_ENV: "production",
+        APP_URL: "https://app.example",
+        AUTH_DEV_HEADERS: "false",
+        FRONTEND_MODE: "api",
+        SIGNED_URL_SECRET: "dev-signed-url-secret-change-me-please-32ch",
+      }),
+    ).toThrow(/replace the generated placeholder values for SIGNED_URL_SECRET/);
+  });
+
   test("names every unrotated placeholder at once", () => {
     expect(() =>
       assertProductionSecrets({
