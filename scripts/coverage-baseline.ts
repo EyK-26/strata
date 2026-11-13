@@ -1,6 +1,5 @@
 export const COVERAGE_EXEMPT_FILES = [
   "src/bootstrap/app.ts",
-  "src/bootstrap/applicationRegistry.ts",
   "src/bootstrap/buildModuleRoutes.ts",
   "src/bootstrap/buildWebModuleRoutes.ts",
   "src/bootstrap/cache/modelCacheTags.ts",
@@ -129,7 +128,6 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/core/database/schema/index.ts",
   "src/core/database/schema/schema.ts",
   "src/core/database/whereBuilder.ts",
-  "src/core/facades/index.ts",
   "src/core/http/authMiddleware.ts",
   "src/core/http/authorizeMiddleware.ts",
   "src/core/http/bodySizeLimitMiddleware.ts",
@@ -198,7 +196,6 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/core/queue/queueMetrics.ts",
   "src/core/queue/redisQueue.ts",
   "src/core/queue/resilientQueue.ts",
-  "src/core/runtime/applicationRegistry.ts",
   "src/core/scheduler/osCron.ts",
   "src/core/scheduler/schedule.ts",
   "src/core/storage/storage.ts",

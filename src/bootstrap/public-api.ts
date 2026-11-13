@@ -16,17 +16,6 @@ export {
   Schedule,
   SchedulerLeaseLostError,
 } from "@getstrata/core/scheduler/schedule";
-export {
-  resolveApplicationAuth,
-  resolveApplicationCache,
-  resolveApplicationConfig,
-  resolveApplicationDependencies,
-  resolveApplicationEventBus,
-  resolveApplicationLogger,
-  resolveApplicationPolicyGate,
-  resolveApplicationQueue,
-  setActiveApplicationContext,
-} from "./applicationRegistry.ts";
 export type { BuildModuleRoutesOptions } from "./buildModuleRoutes.ts";
 export { buildModuleRoutes } from "./buildModuleRoutes.ts";
 export type { BuildWebModuleRoutesOptions } from "./buildWebModuleRoutes.ts";

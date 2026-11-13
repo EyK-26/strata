@@ -56,7 +56,6 @@ export const CORE_SHARED_SUBPATHS = [
   "notifications",
   "queue/jobRegistry",
   "runtime/appKeyPrefix",
-  "runtime/applicationRegistry",
   "scheduler/schedule",
   "security/safeUrl",
   "security/securityEvents",

@@ -65,7 +65,6 @@ coveragePathIgnorePatterns = [
   "src/bootstrap/queue/**",
   "src/bootstrap/web/**",
   "src/bootstrap/app.ts",
-  "src/bootstrap/applicationRegistry.ts",
   "src/bootstrap/buildModuleRoutes.ts",
   "src/bootstrap/buildWebModuleRoutes.ts",
   "src/bootstrap/config.ts",
@@ -159,8 +158,6 @@ coveragePathIgnorePatterns = [
   "src/testing/**",
 
   # Thin re-exports and optional telemetry
-  "src/core/facades/**",
-  "src/core/runtime/applicationRegistry.ts",
   "src/core/queue/jobRegistry.ts",
   "src/core/contracts/di.ts",
   "src/core/contracts/serviceTokens.ts",

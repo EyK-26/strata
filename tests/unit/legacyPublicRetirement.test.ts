@@ -54,6 +54,8 @@ test("cold public root/events retain caller-owned identity without eager global 
  assert.equal(typeof core.createDatabaseBindings,'function');const runtime=await import('@getstrata/core/runtime/application');assert.equal(typeof runtime.createApplication,'function');assert.equal(typeof core.createTransactionAcquisitionMetrics,'function');
  for(const name of ['bindDatabaseConnection','getBoundDatabaseConnection','resetBoundDatabaseConnection','registerDefaultDatabasePool','getDefaultDatabasePool','getDefaultDatabaseQuery','isDefaultDatabaseConnection','resetDefaultDatabasePoolForTests','bindBunSql','getNamedConnection','hasNamedConnection','registerNamedConnection','resetNamedConnections','runOnNamedConnection','unregisterNamedConnection','repositoryConnection','resolveRepositoryConnection'])assert.equal(name in core,false,name);
  for(const key of ['@getstrata/defaultDatabaseConnection','@getstrata/boundDatabaseConnection','@getstrata/namedConnections'])assert.equal(Object.hasOwn(globalThis,Symbol.for(key)),false,key);
+ for(const name of ['auth','cache','config','events','log','mail','policyGate','queue','storage','setActiveApplicationContext','clearActiveApplicationContext','resolveApplicationAuth','resolveApplicationCache','resolveApplicationConfig','resolveApplicationDependencies','resolveApplicationEventBus','resolveApplicationLogger','resolveApplicationPolicyGate','resolveApplicationQueue'])assert.equal(name in core,false,name);
+ assert.equal(Object.hasOwn(globalThis,Symbol.for('@getstrata/applicationContext')),false);
  const native=await import('@getstrata/core/database/bunSql');assert.equal(core.createBunSqlPool,native.createBunSqlPool);assert.equal(typeof core.createDatabaseQueryProxy,'function');assert.equal('bindBunSql' in native,false);
  const bus=new events.EventBus();const other=new core.EventBus();let calls=0;
  const name=events.modelEventName('orders','created');assert.equal(name,'orders.created');
@@ -76,6 +78,7 @@ test("actual Node resolves installed package entries and refuses the retired tra
  for(const name of ['@getstrata/core','@getstrata/core/events'])assert.equal(typeof fromApp.resolve(name),'string');
  assert.throws(()=>fromApp.resolve('@getstrata/core/database/transaction'),{code:'ERR_PACKAGE_PATH_NOT_EXPORTED'});
  for(const path of ['bindConnection','boundConnection','defaultConnection','namedConnections','repositoryConnection'])assert.throws(()=>fromApp.resolve('@getstrata/core/database/'+path),{code:'ERR_PACKAGE_PATH_NOT_EXPORTED'});
+ for(const path of ['@getstrata/core/facades','@getstrata/core/runtime/applicationRegistry','@getstrata/bootstrap/applicationRegistry'])assert.throws(()=>fromApp.resolve(path),{code:'ERR_PACKAGE_PATH_NOT_EXPORTED'});
  assert.equal(typeof fromApp.resolve('@getstrata/core/database/bunSql'),'string');
  console.log('legacy-public-node-resolution-ok');
  `,

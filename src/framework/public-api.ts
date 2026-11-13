@@ -406,17 +406,6 @@ export {
   renderOutboxMetrics,
   SqlOutbox,
 } from "../core/events/outbox/index.ts";
-export {
-  auth,
-  cache,
-  config,
-  events,
-  log,
-  mail,
-  policyGate,
-  queue,
-  storage,
-} from "../core/facades/index.ts";
 export { createBodySizeLimitMiddleware } from "../core/http/bodySizeLimitMiddleware.ts";
 export { readClientIp, trustForwardedFor } from "../core/http/clientIp.ts";
 export {
@@ -686,18 +675,6 @@ export {
   smtpEhloHost,
   webhookSignatureHeader,
 } from "../core/runtime/appKeyPrefix.ts";
-export {
-  clearActiveApplicationContext,
-  resolveApplicationAuth,
-  resolveApplicationCache,
-  resolveApplicationConfig,
-  resolveApplicationDependencies,
-  resolveApplicationEventBus,
-  resolveApplicationLogger,
-  resolveApplicationPolicyGate,
-  resolveApplicationQueue,
-  setActiveApplicationContext,
-} from "../core/runtime/applicationRegistry.ts";
 export type {
   ScheduledTask,
   ScheduledTaskContext,

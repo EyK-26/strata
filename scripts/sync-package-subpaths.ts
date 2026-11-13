@@ -110,7 +110,6 @@ const CORE_SUBPATHS = [
   "errors/http",
   "events",
   "events/outbox",
-  "facades",
   "http",
   "http/authMiddleware",
   "http/authorizeMiddleware",
@@ -190,7 +189,6 @@ const CORE_SUBPATHS = [
   "runtime/appKeyPrefix",
   "runtime/application",
   "runtime/frontendMode",
-  "runtime/applicationRegistry",
   "runtime/asyncContextStore",
   "scheduler/schedule",
   "scheduler/osCron",
@@ -226,7 +224,6 @@ const CORE_SUBPATHS = [
 ] as const;
 
 const BOOTSTRAP_SUBPATHS = [
-  "applicationRegistry",
   "buildModuleRoutes",
   "buildWebModuleRoutes",
   "cache/modelCacheTags",
@@ -275,7 +272,6 @@ function resolveCoreTypesPath(subpath: string): string {
     "database/schema",
     "events",
     "events/outbox",
-    "facades",
     "http",
     "notifications",
     "queue",
@@ -365,7 +361,6 @@ async function writeEntryFiles(
       "database/schema",
       "events",
       "events/outbox",
-      "facades",
       "http",
       "notifications",
       "queue",

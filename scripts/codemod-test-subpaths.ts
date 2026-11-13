@@ -95,7 +95,6 @@ const SUBPATHS = new Set([
   "queue/publicQueue",
   "queue/redisQueue",
   "queue/types",
-  "runtime/applicationRegistry",
   "runtime/asyncContextStore",
   "scheduler/schedule",
   "security/oauthState",
