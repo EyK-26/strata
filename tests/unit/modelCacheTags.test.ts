@@ -6,6 +6,7 @@ import {
 } from "@getstrata/bootstrap/cache/modelCacheTags";
 import {
   configureModulesDirectory,
+  discoverModules,
   ensureModulesLoaded,
   resetDiscoverModulesForTests,
 } from "@getstrata/bootstrap/discoverModules";
@@ -22,14 +23,14 @@ beforeAll(async () => {
 
 describe("cacheTagsForModelWrite", () => {
   test("maps organization writes to organization and report tags", () => {
-    expect(cacheTagsForModelWrite("organization", "created")).toEqual([
+    expect(cacheTagsForModelWrite("organization", "created", discoverModules())).toEqual([
       CACHE_TAGS.organizations,
       CACHE_TAGS.reports,
     ]);
   });
 
   test("adds project tags when an organization is deleted", () => {
-    expect(cacheTagsForModelWrite("organization", "deleted")).toEqual([
+    expect(cacheTagsForModelWrite("organization", "deleted", discoverModules())).toEqual([
       CACHE_TAGS.organizations,
       CACHE_TAGS.reports,
       CACHE_TAGS.projects,
@@ -37,24 +38,25 @@ describe("cacheTagsForModelWrite", () => {
   });
 
   test("falls back to a pluralized table tag for unknown models", () => {
-    expect(cacheTagsForModelWrite("invoice", "updated")).toEqual(["invoices"]);
+    expect(cacheTagsForModelWrite("invoice", "updated", discoverModules())).toEqual(["invoices"]);
+    expect(cacheTagsForModelWrite("notes", "updated", [])).toEqual(["notes"]);
   });
 
   test("returns no tags for audit log writes", () => {
-    expect(cacheTagsForModelWrite("audit_log", "created")).toEqual([]);
+    expect(cacheTagsForModelWrite("audit_log", "created", discoverModules())).toEqual([]);
   });
 });
 
 describe("discoverModelTableNames", () => {
   test("discovers model tables from module metadata", () => {
-    expect(discoverModelTableNames()).toEqual(["organization", "audit_log"]);
+    expect(discoverModelTableNames(discoverModules())).toEqual(["organization", "audit_log"]);
   });
 
   test("returns an empty list when no modules expose tableName", async () => {
     resetDiscoverModulesForTests();
     configureModulesDirectory(EMPTY_MODULES);
     await ensureModulesLoaded();
-    expect(discoverModelTableNames()).toEqual([]);
+    expect(discoverModelTableNames(discoverModules())).toEqual([]);
     resetDiscoverModulesForTests();
     configureModulesDirectory(FIXTURE_MODULES);
     await ensureModulesLoaded();

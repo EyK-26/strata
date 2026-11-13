@@ -91,7 +91,15 @@ try {
       layout: false,
       data: { loadUser: async () => null },
     });
-    await provider.register?.({ container, config, dependencies: { container }, onCleanup() {} });
+    await provider.register?.({
+      container,
+      config,
+      dependencies: { container },
+      invoke: () => {
+        throw new Error("This structural provider test must not invoke persistence.");
+      },
+      onCleanup() {},
+    });
     const renderer = container.resolve(Root.CORE_VIEW_RENDERER_TOKEN);
     assert.equal(container.resolve(Views.CORE_VIEW_RENDERER_TOKEN), renderer);
     assert.equal(

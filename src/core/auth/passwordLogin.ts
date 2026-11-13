@@ -1,7 +1,7 @@
+import { UnprocessableEntityError } from "@getstrata/core/errors/http";
 import type { AuthUserRecord } from "../contracts/authUserDirectory";
 import { revealMfaSecret } from "../crypto/mfaSecret";
-import { currentSqlDialect } from "../database/dialect";
-import { UnprocessableEntityError } from "../errors/http";
+import type { DatabaseSession, TransactionSession } from "../database/session";
 import { recoveryCodeMatches } from "../security/recoveryCodes";
 import { verifyTotp } from "../security/totp";
 import { isAccountActive } from "./accountState";
@@ -64,7 +64,7 @@ function completePasswordLogin(
 }
 
 async function persistConsumedRecoveryHash(
-  sql: { unsafe(query: string, params?: readonly unknown[]): Promise<unknown[]> },
+  sql: DatabaseSession | TransactionSession,
   userId: number,
   currentRaw: string | null | undefined,
   consumedHash: string | undefined,
@@ -77,12 +77,12 @@ async function persistConsumedRecoveryHash(
   if (typeof currentRaw !== "string" || !hashes.includes(consumedHash)) {
     throw new UnprocessableEntityError("mfa_invalid");
   }
-  const dialect = currentSqlDialect();
+  const dialect = sql.dialect;
   const returning = dialect.returningClause("id");
-  const rows = await sql.unsafe(
-    `UPDATE users SET mfa_recovery_codes = ${dialect.placeholder(1)} WHERE id = ${dialect.placeholder(2)} AND mfa_recovery_codes = ${dialect.placeholder(3)}${returning}`,
-    [JSON.stringify(hashes.filter((hash) => hash !== consumedHash)), userId, currentRaw],
-  );
+  const rows = await sql.execute({
+    text: `UPDATE users SET mfa_recovery_codes = ${dialect.placeholder(1)} WHERE id = ${dialect.placeholder(2)} AND mfa_recovery_codes = ${dialect.placeholder(3)}${returning}`,
+    params: [JSON.stringify(hashes.filter((hash) => hash !== consumedHash)), userId, currentRaw],
+  });
   const header = rows[0];
   const affected = returning
     ? rows.length

@@ -4,6 +4,8 @@ type CredentialSource = "session" | "bearer" | "basic" | "guest" | null;
 
 type AuthUser = {
   id: number | string;
+  readonly name?: string;
+  readonly email?: string;
   role?: string;
   /** Current state from a trusted directory/guard, never an unverified client claim. */
   isActive?: boolean;

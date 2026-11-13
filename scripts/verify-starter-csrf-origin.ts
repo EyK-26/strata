@@ -25,10 +25,109 @@ const fixture = await createGeneratedSecurityApp(
   ],
   { publishedVersion, parentDirectory: process.env.STARTER_JOURNEY_PARENT },
 );
-let child: Subprocess<"ignore", "pipe", "pipe"> | undefined;
+type ProbeOutcome = { code: number; stdout: string; stderr: string };
+type ProbeChild = {
+  process: Subprocess<"ignore", "pipe", "pipe">;
+  settled: Promise<PromiseSettledResult<number | string>[]>;
+  joined: boolean;
+};
+const children: ProbeChild[] = [];
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
-let childOutput: Promise<string> | undefined;
-let childErrors: Promise<string> | undefined;
+let browserContext: Awaited<ReturnType<NonNullable<typeof browser>["newContext"]>> | undefined;
+const failures: unknown[] = [];
+let result: Record<string, unknown> | undefined;
+const termination = new AbortController();
+const interrupted = new Error("CSRF browser qualification interrupted by SIGTERM");
+const terminate = () => {
+  termination.abort(interrupted);
+  process.exitCode = 143;
+};
+process.once("SIGTERM", terminate);
+function throwFailures(errors: unknown[], message: string): void {
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) throw new AggregateError(errors, message);
+}
+function observeChild(process: ProbeChild["process"]): ProbeChild {
+  // Observe all streams immediately, including synchronous read failures, and
+  // never finish observation before the actual process has exited.
+  const owner: ProbeChild = {
+    process,
+    joined: false,
+    settled: Promise.allSettled([
+      process.exited,
+      Promise.resolve().then(() => new Response(process.stdout).text()),
+      Promise.resolve().then(() => new Response(process.stderr).text()),
+    ]),
+  };
+  children.push(owner);
+  return owner;
+}
+async function joinChild(
+  owner: ProbeChild,
+  close: "ipc" | "terminate" | "exit",
+): Promise<ProbeOutcome> {
+  const errors: unknown[] = [];
+  const timeout = new Error("Generated probe did not settle within its bounded shutdown window.");
+  let expired = false;
+  const soft = setTimeout(() => {
+    expired = true;
+    try {
+      owner.process.kill("SIGTERM");
+    } catch (error) {
+      errors.push(error);
+    }
+  }, 30000);
+  const hard = setTimeout(() => {
+    try {
+      owner.process.kill("SIGKILL");
+    } catch (error) {
+      errors.push(error);
+    }
+  }, 35000);
+  let settled: Awaited<ProbeChild["settled"]>;
+  try {
+    if (owner.process.exitCode === null) {
+      try {
+        if (close === "ipc") owner.process.send("close");
+        else if (close === "terminate") owner.process.kill("SIGTERM");
+      } catch (error) {
+        errors.push(error);
+        try {
+          owner.process.kill("SIGTERM");
+        } catch (killError) {
+          errors.push(killError);
+        }
+      }
+    }
+    settled = await owner.settled;
+    owner.joined = true;
+  } finally {
+    clearTimeout(soft);
+    clearTimeout(hard);
+  }
+  if (expired) errors.push(timeout);
+  errors.push(...settled.flatMap((item) => (item.status === "rejected" ? [item.reason] : [])));
+  throwFailures(errors, "Generated probe process/streams/shutdown failed.");
+  const [code, stdout, stderr] = settled.map((item) => {
+    assert.equal(item.status, "fulfilled");
+    return item.value;
+  });
+  assert.ok(typeof code === "number");
+  assert.ok(typeof stdout === "string");
+  assert.ok(typeof stderr === "string");
+  return { code, stdout, stderr };
+}
+async function ownedFetch(
+  input: Parameters<typeof fetch>[0],
+  init: RequestInit & { tls?: { ca: string } } = {},
+) {
+  termination.signal.throwIfAborted();
+  return fetch(input, {
+    ...init,
+    signal: AbortSignal.any([termination.signal, init.signal ?? AbortSignal.timeout(10000)]),
+  });
+}
+
 try {
   const module = join(fixture.app, "src/modules/proxy-form");
   await mkdir(module, { recursive: true });
@@ -63,7 +162,7 @@ const app: AppModule={name:'proxy-form',webRoutes({kernel}){
       "-subj",
       "/CN=127.0.0.1",
       "-addext",
-      "subjectAltName=IP:127.0.0.1,DNS:forms.example.test",
+      "subjectAltName=IP:127.0.0.1,DNS:forms.localhost",
     ],
     { stdout: "pipe", stderr: "pipe" },
   );
@@ -72,27 +171,61 @@ const app: AppModule={name:'proxy-form',webRoutes({kernel}){
   const probe = join(fixture.app, "proxy-origin-probe.ts");
   await writeFile(
     probe,
-    `import {bootstrapApp,createAppServer} from './src/bootstrap/createApp.ts';
-import {closeDatabase} from './src/bootstrap/database.ts';
-let server: ReturnType<typeof createAppServer>|undefined;let context: Awaited<ReturnType<typeof bootstrapApp>>['context']|undefined;
-const edge=Bun.serve({hostname:'127.0.0.1',port:0,tls:{key:Bun.file('./fixture-key.pem'),cert:Bun.file('./fixture-cert.pem')},async fetch(request){
- if(!server)return new Response('starting',{status:503});
- const headers=new Headers(request.headers);headers.delete('content-length');headers.delete('forwarded');
- headers.set('x-forwarded-proto','https');headers.set('x-forwarded-host',headers.get('host')??'');headers.set('x-forwarded-for','127.0.0.1');
- let url:URL;try{url=new URL(request.url)}catch{return new Response('invalid authority',{status:400})}
- return fetch(new URL(url.pathname+url.search,server.url),{method:request.method,headers,...(request.method==='POST'?{body:await request.arrayBuffer()}:{}),redirect:'manual'});
-}});
-let closing:Promise<void>|undefined;
-const close=()=>closing??=(async()=>{await edge.stop(true);await server?.stop(true);try{await context?.dispose()}finally{await closeDatabase()}})();
-process.once('SIGTERM',()=>{void close().finally(()=>process.exit(0))});
-process.on('message',message=>{if(message==='close')void close().then(()=>process.exit(0))});
+    `import assert from 'node:assert/strict';
+import {bootstrapApp} from './src/bootstrap/createApp.ts';
+let server: Awaited<ReturnType<typeof bootstrapApp>>['server'];
+let application: Awaited<ReturnType<typeof bootstrapApp>>['application']|undefined;
+let edge: ReturnType<typeof Bun.serve>|undefined;
+const failures: unknown[]=[];
+let primaryCount=0;
+let requested=false, signalled=false, admitted=false;
+let notifyClose:()=>void=()=>{};
+const closeRequested=new Promise<void>(resolve=>{notifyClose=resolve});
+const requestClose=()=>{requested=true;notifyClose()};
+const terminate=()=>{signalled=true;process.exitCode=143;requestClose()};
+const message=(value:unknown)=>{if(value==='close')requestClose()};
+process.once('SIGTERM',terminate);process.on('message',message);
 try{
- const publicOrigin='https://forms.example.test:'+edge.port;
+ edge=Bun.serve({hostname:'127.0.0.1',port:0,tls:{key:Bun.file('./fixture-key.pem'),cert:Bun.file('./fixture-cert.pem')},async fetch(request){
+  if(!server)return new Response('starting',{status:503});
+  const headers=new Headers(request.headers);headers.delete('content-length');headers.delete('forwarded');
+  headers.set('x-forwarded-proto','https');headers.set('x-forwarded-host',headers.get('host')??'');headers.set('x-forwarded-for','127.0.0.1');
+  let url:URL;try{url=new URL(request.url)}catch{return new Response('invalid authority',{status:400})}
+  return fetch(new URL(url.pathname+url.search,server.url),{method:request.method,headers,...(request.method==='POST'?{body:await request.arrayBuffer()}:{}),redirect:'manual',signal:AbortSignal.timeout(10000)});
+ }});
+ const publicOrigin='https://forms.localhost:'+edge.port;
  process.env.APP_URL=publicOrigin;process.env.CSRF_TARGET_ORIGIN=process.env.INVALID_CSRF_TARGET??publicOrigin;
- const app=await bootstrapApp({migrate:false});context=app.context;
- server=createAppServer(app.routes,0,undefined,{hostname:'127.0.0.1'});
- process.send?.({edge:edge.url.origin,backend:server.url.origin,publicOrigin});
-}catch(error){await close();throw error}
+ const app=await bootstrapApp({migrate:false,mode:'http',server:{port:0,native:{hostname:'127.0.0.1'}},onConstructed:owner=>{application=owner;return undefined}});
+ // Early construction also retains the owner if startup rejects.
+ const constructed=application;application=app.application;server=app.server;
+ assert.equal(constructed,application,'Returned boot must retain the early constructed owner');
+ assert.ok(server);
+ if(!requested){
+  process.send?.({edge:edge.url.origin,backend:server.url.origin,publicOrigin});
+  admitted=true;
+ }
+ await closeRequested;
+ if(signalled)throw new Error('Generated probe interrupted by SIGTERM');
+ if(!admitted)throw new Error('Generated probe closed before readiness');
+}catch(error){failures.push(error);primaryCount=failures.length}
+finally{
+ try{await edge?.stop(true)}catch(error){failures.push(error)}
+ try{
+  if(application){const stopped=await application.stop({reason:'CSRF browser probe complete'});if(!stopped.successful)throw new Error('Generated probe application cleanup was not confirmed',{cause:stopped})}
+ }catch(error){failures.push(error)}
+ process.removeListener('SIGTERM',terminate);process.removeListener('message',message);
+ try{if(process.connected)process.disconnect()}catch(error){failures.push(error)}
+}
+console.log(JSON.stringify({probeCleanupConfirmed:failures.length===primaryCount,ownerObserved:application!==undefined,admitted,signalled}));
+if(signalled){
+ if(failures.length===1)console.error(failures[0]);
+ if(failures.length>1)console.error(new AggregateError(failures,'Generated probe startup/work/cleanup failed'));
+ process.exitCode=143;
+}else{
+ if(failures.length===1)throw failures[0];
+ if(failures.length>1)throw new AggregateError(failures,'Generated probe startup/work/cleanup failed');
+ assert.ok(admitted,'Successful close requires actual admission');
+}
 `,
   );
   const env = {
@@ -101,6 +234,7 @@ try{
     APP_ENV: "production",
     APP_DEBUG: "false",
     DATABASE_URL: fixture.runtimeUrl,
+    APP_DATABASE_URL: fixture.runtimeUrl,
     DB_CONNECTION: "sqlite",
     SESSION_SECRET: crypto.randomUUID() + crypto.randomUUID(),
     AUTH_DEV_HEADERS: "false",
@@ -138,34 +272,71 @@ try{
   const ready = new Promise<Ready>((resolve) => {
     notifyReady = resolve;
   });
-  child = Bun.spawn([process.execPath, probe], {
-    cwd: fixture.app,
-    env,
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
-    ipc(message) {
-      if (message && typeof message === "object" && "edge" in message && "publicOrigin" in message)
-        notifyReady(message as Ready);
-    },
+  termination.signal.throwIfAborted();
+  const child = observeChild(
+    Bun.spawn([process.execPath, probe], {
+      cwd: fixture.app,
+      env,
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+      ipc(message) {
+        if (
+          message &&
+          typeof message === "object" &&
+          "edge" in message &&
+          "backend" in message &&
+          "publicOrigin" in message
+        )
+          notifyReady(message as Ready);
+      },
+    }),
+  );
+  let rejectInterrupted: (reason: unknown) => void = () => {};
+  const aborted = new Promise<never>((_resolve, reject) => {
+    rejectInterrupted = reject;
   });
-  childOutput = new Response(child.stdout).text();
-  childErrors = new Response(child.stderr).text();
-  const timeout = setTimeout(() => child?.kill("SIGTERM"), 30000);
+  const interruptReady = () => rejectInterrupted(interrupted);
+  termination.signal.addEventListener("abort", interruptReady, { once: true });
+  let rejectTimeout: (reason: unknown) => void = () => {};
+  const expired = new Promise<never>((_resolve, reject) => {
+    rejectTimeout = reject;
+  });
+  const timeout = setTimeout(
+    () => rejectTimeout(new Error("Generated probe readiness timed out.")),
+    30000,
+  );
   let endpoints: Ready;
   try {
     endpoints = await Promise.race([
       ready,
-      child.exited.then(async () => {
-        throw new Error(`Generated probe exited before ready: ${await childErrors}`);
+      aborted,
+      expired,
+      child.settled.then((settled) => {
+        const reasons = settled.flatMap((item) =>
+          item.status === "rejected" ? [item.reason] : [],
+        );
+        const stderr = settled[2];
+        reasons.unshift(
+          new Error(
+            `Generated probe exited before ready: ${stderr?.status === "fulfilled" ? stderr.value : "stderr unavailable"}`,
+          ),
+        );
+        throwFailures(
+          reasons,
+          "Generated probe exited before readiness and stream observation failed.",
+        );
+        throw new Error("Unreachable readiness result");
       }),
     ]);
+    termination.signal.throwIfAborted();
   } finally {
     clearTimeout(timeout);
+    termination.signal.removeEventListener("abort", interruptReady);
   }
   const host = new URL(endpoints.publicOrigin).host;
   const formPath = "/proxy-form/na%C3%AFve";
-  const get = await fetch(endpoints.edge + formPath, { tls: { ca }, headers: { Host: host } });
+  const get = await ownedFetch(endpoints.edge + formPath, { tls: { ca }, headers: { Host: host } });
   assert.equal(get.status, 200);
   const html = await get.text();
   const token = html.match(/name="_token" value="([^"]+)"/)?.[1];
@@ -181,7 +352,7 @@ try{
   ) => {
     const headers = new Headers({ Host: host, Cookie: cookie, ...override });
     if (origin !== null) headers.set("Origin", origin);
-    return fetch(endpoints.edge + formPath, {
+    return ownedFetch(endpoints.edge + formPath, {
       method: "POST",
       tls: { ca },
       headers,
@@ -208,13 +379,13 @@ try{
     [`${endpoints.publicOrigin}/path`, token],
   ] as const)
     assert.equal((await post(origin, submittedToken)).status, 403);
-  const unknown = await fetch(endpoints.edge + formPath, {
+  const unknown = await ownedFetch(endpoints.edge + formPath, {
     tls: { ca },
     headers: { Host: "evil.example.test" },
   });
   assert.equal(unknown.status, 403);
   assert.equal(unknown.headers.getSetCookie().length, 0);
-  const direct = await fetch(endpoints.backend + formPath, {
+  const direct = await ownedFetch(endpoints.backend + formPath, {
     method: "POST",
     headers: {
       Cookie: cookie,
@@ -229,8 +400,8 @@ try{
   // Comma authorities have a parseable URL and fail the explicit Host policy.
   // Bun exposes a relative URL for userinfo-style wire Host; native admission must reject it.
   const malformedWireStatuses: number[] = [];
-  for (const host of ["forms.example.test,evil.example.test", "user@forms.example.test"]) {
-    const rejected = await fetch(endpoints.backend + formPath, { headers: { Host: host } });
+  for (const host of ["forms.localhost,evil.example.test", "user@forms.localhost"]) {
+    const rejected = await ownedFetch(endpoints.backend + formPath, { headers: { Host: host } });
     malformedWireStatuses.push(rejected.status);
     assert.equal(rejected.headers.getSetCookie().length, 0);
   }
@@ -238,65 +409,111 @@ try{
 
   browser = await chromium.launch({
     headless: true,
-    args: ["--host-resolver-rules=MAP forms.example.test 127.0.0.1", "--no-proxy-server"],
   });
-  const browserContext = await browser.newContext({ ignoreHTTPSErrors: true });
-  try {
+  browserContext = await browser.newContext({ ignoreHTTPSErrors: true });
+  {
     const page = await browserContext.newPage();
     assert.equal((await page.goto(endpoints.publicOrigin + formPath))?.status(), 200);
     const cookies = await browserContext.cookies(endpoints.publicOrigin);
     assert.equal(cookies.length, 1);
     assert.equal(cookies[0]?.secure, true);
     assert.equal(cookies[0]?.httpOnly, true);
-    const [response] = await Promise.all([
+    const actions = await Promise.allSettled([
       page.waitForResponse((response) => response.request().method() === "POST"),
       page.getByRole("button", { name: "Submit" }).click(),
-    ]);
+    ] as const);
+    throwFailures(
+      actions.flatMap((action) => (action.status === "rejected" ? [action.reason] : [])),
+      "Browser response/click failed.",
+    );
+    const responseResult = actions[0];
+    assert.equal(responseResult.status, "fulfilled");
+    const response = responseResult.value;
     assert.equal(response.status(), 422);
     assert.equal((await response.json()).protocol, "http:");
-  } finally {
-    await browserContext.close();
   }
+  await browserContext.close();
+  browserContext = undefined;
   await browser.close();
   browser = undefined;
-  child.send("close");
-  assert.equal(await child.exited, 0);
-  await childOutput;
-  await childErrors;
-  child = undefined;
-  const invalid = Bun.spawn([process.execPath, probe], {
-    cwd: fixture.app,
-    env: { ...env, INVALID_CSRF_TARGET: "https://forms.example.test/path" },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [invalidOut, invalidError, invalidCode] = await Promise.all([
-    new Response(invalid.stdout).text(),
-    new Response(invalid.stderr).text(),
-    invalid.exited,
-  ]);
-  assert.notEqual(invalidCode, 0);
-  assert.match(invalidOut + invalidError, /CSRF targetOrigin must be/);
-  console.log(
-    JSON.stringify({
-      version: publishedVersion ?? "candidate-packages",
-      generatedProvider: true,
-      adapter: false,
-      browser: 422,
-      validForm: 422,
-      securityControls: true,
-      nativeParams: true,
-      invalidStartupRefused: true,
-      malformedHostControls: true,
+  const closed = await joinChild(child, "ipc");
+  assert.equal(closed.code, 0, `Generated probe close: ${closed.stdout}${closed.stderr}`);
+  termination.signal.throwIfAborted();
+  const invalid = observeChild(
+    Bun.spawn([process.execPath, probe], {
+      cwd: fixture.app,
+      env: { ...env, INVALID_CSRF_TARGET: "https://forms.localhost/path" },
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
     }),
   );
+  const {
+    stdout: invalidOut,
+    stderr: invalidError,
+    code: invalidCode,
+  } = await joinChild(invalid, "exit");
+  assert.notEqual(invalidCode, 0);
+  assert.match(invalidOut + invalidError, /CSRF targetOrigin must be/);
+  assert.match(
+    invalidOut,
+    /"probeCleanupConfirmed":true/,
+    "Expected config refusal must also confirm cleanup.",
+  );
+  assert.match(invalidOut, /"admitted":false/, "Invalid target must fail before admission.");
+  assert.match(
+    invalidOut,
+    /"ownerObserved":true/,
+    "Invalid startup must observe the constructed application owner.",
+  );
+  result = {
+    version: publishedVersion ?? "candidate-packages",
+    generatedProvider: true,
+    adapter: false,
+    browser: 422,
+    validForm: 422,
+    securityControls: true,
+    nativeParams: true,
+    invalidStartupRefused: true,
+    malformedHostControls: true,
+  };
+} catch (error) {
+  failures.push(error);
 } finally {
-  await browser?.close();
-  if (child) {
-    child.kill("SIGTERM");
-    await child.exited;
-    await childOutput;
-    await childErrors;
+  try {
+    await browserContext?.close();
+  } catch (error) {
+    failures.push(error);
   }
-  await fixture.close();
+  try {
+    await browser?.close();
+  } catch (error) {
+    failures.push(error);
+  }
+  for (const owner of children) {
+    if (!owner.joined) {
+      try {
+        const outcome = await joinChild(owner, "terminate");
+        if (outcome.code !== 143 || !outcome.stdout.includes('"probeCleanupConfirmed":true'))
+          failures.push(
+            new Error(
+              `Generated probe emergency cleanup exited ${outcome.code}: ${outcome.stdout}${outcome.stderr}`,
+            ),
+          );
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+  }
+  try {
+    await fixture.close();
+  } catch (error) {
+    failures.push(error);
+  }
+  process.removeListener("SIGTERM", terminate);
+  if (termination.signal.aborted && !failures.some((error) => Object.is(error, interrupted)))
+    failures.push(interrupted);
 }
+throwFailures(failures, "CSRF browser qualification and owned cleanup failed.");
+assert.ok(result);
+console.log(JSON.stringify(result));

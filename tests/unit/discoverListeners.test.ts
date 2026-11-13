@@ -15,10 +15,6 @@ async function tempDir(): Promise<string> {
 describe("discoverListeners", () => {
   afterEach(async () => {
     process.chdir(repoRoot);
-    const { resetDiscoverListenersForTests } = await import(
-      "../../src/bootstrap/discoverListeners"
-    );
-    resetDiscoverListenersForTests();
     while (tempDirectories.length > 0) {
       const directory = tempDirectories.pop();
       if (directory) {
@@ -27,11 +23,9 @@ describe("discoverListeners", () => {
     }
   });
 
-  test("returns no registrars when src/listeners is absent", async () => {
-    const { discoverListeners, resetDiscoverListenersForTests } = await import(
-      "../../src/bootstrap/discoverListeners"
-    );
-    resetDiscoverListenersForTests();
+  test("returns no declarations when src/listeners is absent", async () => {
+    const { discoverListeners } = await import("../../src/bootstrap/discoverListeners");
+    process.chdir(await tempDir());
 
     const listeners = await discoverListeners();
 
@@ -44,10 +38,7 @@ describe("discoverListeners", () => {
     await mkdir(listenersDirectory, { recursive: true });
     await writeFile(
       join(listenersDirectory, "sample.ts"),
-      `export default function registerSampleListener(): void {
-  (globalThis as { sampleListenerLoaded?: boolean }).sampleListenerLoaded = true;
-}
-`,
+      `export default Object.freeze({services:Object.freeze([]),repositoryEffects:Object.freeze([])});`,
     );
 
     process.chdir(repoRoot);
@@ -59,11 +50,8 @@ describe("discoverListeners", () => {
     const listeners = await discoverListeners();
 
     expect(listeners).toHaveLength(1);
-    const [registerSampleListener] = listeners;
-    if (typeof registerSampleListener !== "function") {
-      throw new Error("expected a listener registrar");
-    }
-    registerSampleListener();
-    expect((globalThis as { sampleListenerLoaded?: boolean }).sampleListenerLoaded).toBe(true);
+    expect(listeners[0]?.services).toEqual([]);
+    expect(listeners[0]?.repositoryEffects).toEqual([]);
+    expect(Object.isFrozen(listeners[0])).toBe(true);
   });
 });

@@ -255,9 +255,7 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/db/migrations/0035_add_user_session_valid_after.ts",
   "src/db/migrations/0036_add_user_current_organization.ts",
   "src/db/migrations/0037_add_session_browser_metadata.ts",
-  "src/db/migrations/advisoryLock.ts",
   "src/db/migrations/index.ts",
-  "src/db/migrations/migrationDatabase.ts",
   "src/db/migrations/runner.ts",
   "src/db/migrations/types.ts",
   "src/db/seeders/0001_seed_fixture.ts",
@@ -273,6 +271,6 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/testing/webViewSmoke.ts",
 ] as const;
 
-export const COVERAGE_EXEMPT_LIMIT = 271;
+export const COVERAGE_EXEMPT_LIMIT = 269;
 
 export const COVERAGE_EXEMPT_SET: ReadonlySet<string> = new Set(COVERAGE_EXEMPT_FILES);

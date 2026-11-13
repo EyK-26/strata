@@ -1,15 +1,15 @@
 import { type EnvRecord, isProductionEnv } from "./appEnv";
 
-function appKeyPrefix(): string {
-  return process.env.APP_KEY_PREFIX?.trim() || "strata";
+function appKeyPrefix(env: EnvRecord = process.env): string {
+  return env.APP_KEY_PREFIX?.trim() || "strata";
 }
 
-function appCookieName(kind: string): string {
-  return `${appKeyPrefix()}_${kind}`;
+function appCookieName(kind: string, env: EnvRecord = process.env): string {
+  return `${appKeyPrefix(env)}_${kind}`;
 }
 
-function appDevSecret(kind: string): string {
-  return `${appKeyPrefix()}-dev-${kind}`;
+function appDevSecret(kind: string, env: EnvRecord = process.env): string {
+  return `${appKeyPrefix(env)}-dev-${kind}`;
 }
 
 /**
@@ -35,15 +35,15 @@ function requireConfiguredSecret(
     );
   }
 
-  return appDevSecret(devKind);
+  return appDevSecret(devKind, env);
 }
 
 function namespacedRedisKey(kind: string): string {
   return `${appKeyPrefix()}:${kind}`;
 }
 
-function smtpEhloHost(): string {
-  const raw = process.env.MAIL_EHLO?.trim() || `${appKeyPrefix()}.local`;
+function smtpEhloHost(env: EnvRecord = process.env): string {
+  const raw = env.MAIL_EHLO?.trim() || `${appKeyPrefix(env)}.local`;
   const safe = raw.replace(/[^a-zA-Z0-9.-]/g, "");
 
   return safe || "strata.local";

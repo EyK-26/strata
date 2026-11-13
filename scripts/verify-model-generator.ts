@@ -20,11 +20,16 @@ for (const database of ["sqlite", "postgres", "mysql"] as const) {
     "--no-docker",
   ]);
   const env: Record<string, string | undefined> = {
-    ...process.env,
+    ...Object.fromEntries(
+      Object.entries(process.env).filter(([key]) =>
+        ["PATH", "HOME", "TMPDIR", "USER", "SHELL"].includes(key),
+      ),
+    ),
     APP_ENV: "local",
     DATABASE_URL: fixture.runtimeUrl,
     APP_DATABASE_URL: fixture.runtimeUrl,
-    MIGRATION_DATABASE_URL: fixture.migrationUrl,
+    MIGRATION_DATABASE_URL: "",
+    SESSION_SECRET: crypto.randomUUID() + crypto.randomUUID(),
     TENANCY_DRIVER: "none",
     AUTH_DRIVER: "headers",
     CACHE_DRIVER: "array",
@@ -40,21 +45,76 @@ for (const database of ["sqlite", "postgres", "mysql"] as const) {
     APP_URL: "http://localhost:3000",
     CSRF_TARGET_ORIGIN: undefined,
   };
-  async function run(args: string[], expected = 0): Promise<string> {
-    const proc = Bun.spawn([process.execPath, ...args], {
+  const failures: unknown[] = [];
+  let activeChild: ReturnType<typeof Bun.spawn<"ignore", "pipe", "pipe">> | undefined;
+  let terminationTimer: ReturnType<typeof setTimeout> | undefined;
+  let interrupted = false;
+  const interruption = new Error("Installed model verification interrupted by SIGTERM.");
+  function throwFailures(errors: unknown[], message: string): void {
+    if (errors.length === 1) throw errors[0];
+    if (errors.length > 1) throw new AggregateError(errors, message);
+  }
+  function checkInterrupted(): void {
+    if (interrupted) throw interruption;
+  }
+  const terminate = () => {
+    interrupted = true;
+    process.exitCode = 143;
+    if (activeChild?.exitCode === null) {
+      try {
+        activeChild.kill("SIGTERM");
+      } catch (error) {
+        failures.push(error);
+      }
+      terminationTimer ??= setTimeout(() => {
+        try {
+          if (activeChild?.exitCode === null) activeChild.kill("SIGKILL");
+        } catch (error) {
+          failures.push(error);
+        }
+      }, 5000);
+    }
+  };
+  process.once("SIGTERM", terminate);
+  async function run(args: string[], expected = 0, migration = false): Promise<string> {
+    checkInterrupted();
+    const child = Bun.spawn([process.execPath, ...args], {
       cwd: fixture.app,
-      env,
+      env: { ...env, MIGRATION_DATABASE_URL: migration ? fixture.migrationUrl : "" },
+      stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
       timeout: 60000,
+      killSignal: "SIGKILL",
     });
-    const [stdout, stderr, exit] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-      proc.exited,
-    ]);
-    assert.equal(exit, expected, `${database}: ${args.join(" ")}\n${stdout}\n${stderr}`);
-    return stdout + stderr;
+    activeChild = child;
+    try {
+      const results = await Promise.allSettled([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ] as const);
+      const errors = results.flatMap((result) =>
+        result.status === "rejected" ? [result.reason] : [],
+      );
+      const [terminal, out, err] = results;
+      const output =
+        (out.status === "fulfilled" ? out.value : "") +
+        (err.status === "fulfilled" ? err.value : "");
+      if (terminal.status === "fulfilled")
+        try {
+          assert.equal(terminal.value, expected, `${database}: ${args.join(" ")}\n${output}`);
+        } catch (error) {
+          errors.push(error);
+        }
+      if (interrupted) errors.push(interruption);
+      throwFailures(errors, "Installed model child exit/output collection failed.");
+      return output;
+    } finally {
+      if (terminationTimer) clearTimeout(terminationTimer);
+      terminationTimer = undefined;
+      activeChild = undefined;
+    }
   }
   const cli = join(fixture.app, "node_modules/.bin/strata");
   try {
@@ -85,12 +145,44 @@ for (const database of ["sqlite", "postgres", "mysql"] as const) {
     await run([cli, "make:model", "Contact", "--table=workflow_contacts", "--key-type=string"]);
     const contactPath = join(fixture.app, "src/models/Contact.ts");
     const contact = await readFile(contactPath, "utf8");
+    let editedContact = contact;
+    for (const [before, after] of [
+      ["id: string;", "id: string;\n  name: string;"],
+      ['columns: ["id"]', 'columns: ["id", "name"]'],
+      ['attributes: { fillable: ["id"]', 'attributes: { fillable: ["id", "name"]'],
+    ]) {
+      assert.ok(before !== undefined && after !== undefined);
+      assert.equal(
+        editedContact.split(before).length,
+        2,
+        `Canonical Contact edit must match exactly once: ${before}`,
+      );
+      editedContact = editedContact.replace(before, after);
+    }
+    await writeFile(contactPath, editedContact);
+    assert.deepEqual(await readdir(migrations), initialMigrations);
+    assert.equal(
+      await readFile(registerPath, "utf8"),
+      registerBefore,
+      "Generation must leave application registration unchanged.",
+    );
+    // The application explicitly composes the generated definitions after proving generator behavior.
+    const repositoryDeclaration = "export const repositoryDefinitions = Object.freeze([";
+    const modelDeclaration = "export const modelDefinitions = Object.freeze([";
+    assert.equal(registerBefore.split(repositoryDeclaration).length, 2);
+    assert.equal(registerBefore.split(modelDeclaration).length, 2);
     await writeFile(
-      contactPath,
-      contact
-        .replace("id: string;", "id: string;\n  name: string;")
-        .replace('columns: ["id"]', 'columns: ["id", "name"]')
-        .replace('$fillable = ["id"]', '$fillable = ["id", "name"]'),
+      registerPath,
+      `import {NativeLeadDefinition,NativeLeadRepository} from './Native/Lead.ts';\nimport {CounterDefinition,CounterRepository} from './Counter.ts';\nimport {ContactDefinition,ContactRepository} from './Contact.ts';\n` +
+        registerBefore
+          .replace(
+            repositoryDeclaration,
+            `${repositoryDeclaration}NativeLeadRepository, CounterRepository, ContactRepository, `,
+          )
+          .replace(
+            modelDeclaration,
+            `${modelDeclaration}NativeLeadDefinition, CounterDefinition, ContactDefinition, `,
+          ),
     );
     await run([cli, "make:view", "contacts/show"]);
     await run([cli, "make:migration", "create_native_records"]);
@@ -117,67 +209,92 @@ const migration: Migration = {
 export default migration;
 `,
     );
-    await run([cli, "migrate"]);
-    await writeFile(
-      join(fixture.app, "src/models/DiscoveryProbe.ts"),
-      `import { NativeLead } from "./Native/Lead.ts";
-export class DiscoveredNativeLead extends NativeLead {
-  static override boot(): void { Reflect.set(globalThis, "__nativeDiscoveryBooted", true); }
-}
-`,
-    );
+    await run([cli, "migrate"], 0, true);
     await writeFile(
       join(fixture.app, "model-contract.ts"),
-      `import assert from "node:assert/strict";
-Reflect.set(globalThis, "__nativeDiscoveryBooted", false);
-const { bootstrapApp } = await import("./src/bootstrap/createApp.ts");
-const app = await bootstrapApp({ migrate: false });
-const { closeDatabase } = await import("./src/bootstrap/database.ts");
-try {
-  // The consumer never imports the probe or calls discoverModels/bootModels itself.
-  assert.equal(Reflect.get(globalThis, "__nativeDiscoveryBooted"), true);
-  const { NativeLead } = await import("./src/models/Native/Lead.ts");
-  const { Counter } = await import("./src/models/Counter.ts");
-  assert.strictEqual(NativeLead.repository(), NativeLead.repository());
-  assert.equal(NativeLead.repository().getTable().name, "native_records");
-  const id = crypto.randomUUID();
-  assert.equal((await NativeLead.create({ id })).toObject().id, id);
-  assert.equal((await NativeLead.find(id))?.toObject().id, id);
-  await assert.rejects(NativeLead.create({ id }));
-  // Numeric scaffolds do not grant mass assignment to generated IDs by default.
-  await Counter.repository().create({ id: 17 });
-  assert.equal((await Counter.find(17))?.toObject().id, 17);
-  assert.equal(Counter.repository().getTable().name, "counters");
-  const { Contact } = await import("./src/models/Contact.ts");
-  const { EtaViewEngine, htmlResponse } = await import("@getstrata/core/view");
-  const person = await Contact.create({ id: crypto.randomUUID(), name: "Příliš žluťoučký" });
-  assert.equal((await Contact.find(person.toObject().id))?.toObject().name, "Příliš žluťoučký");
-  await person.update({ name: "Updated <contact>" });
-  const stored = await Contact.find(person.toObject().id);
-  assert.equal(stored?.toObject().name, "Updated <contact>");
-  const html = await new EtaViewEngine("views").render("contacts/show", { title: stored?.toObject().name, message: "Příliš žluťoučký" }, { layout: false });
-  const response = htmlResponse(html);
-  assert.equal(response.headers.get("content-type"), "text/html; charset=utf-8");
-  assert.ok(html.includes("Updated &lt;contact&gt;"));
-  assert.ok(html.includes("Příliš žluťoučký"));
-  console.log(JSON.stringify({ installedModel: true, discovery: true, automaticRepository: true, uuidWrite: true, modelMigrationViewWorkflow: true }));
-} finally { await app.context.dispose(); await closeDatabase(); }
+      `import assert from 'node:assert/strict';
+import type {Application} from '@getstrata/core/contracts/application';
+import {PersistenceError} from '@getstrata/core/database/errors';
+import {bootstrapApp} from './src/bootstrap/createApp.ts';
+import {NativeLeadDefinition,NativeLeadRepository} from './src/models/Native/Lead.ts';
+import {CounterDefinition,CounterRepository} from './src/models/Counter.ts';
+import {ContactDefinition} from './src/models/Contact.ts';
+import {EtaViewEngine,htmlResponse} from '@getstrata/core/view';
+assert.equal(process.env.MIGRATION_DATABASE_URL??'','');
+const envelope={kind:'command' as const,actor:{kind:'system' as const,policy:'fixture.generated-models'}};
+function nativeDuplicate(error:unknown):boolean{
+ if(error instanceof PersistenceError)return error.code==='DATABASE_UNIQUE_CONSTRAINT'&&nativeDuplicate(error.cause);
+ if(error instanceof AggregateError)return error.errors.length>0&&error.errors.every(nativeDuplicate);
+ if(error===null||typeof error!=='object')return false;
+ const code=Reflect.get(error,'code')${database === "sqlite" ? "" : ",errno=Reflect.get(error,'errno')"};
+ return ${database === "sqlite" ? "code==='SQLITE_CONSTRAINT_PRIMARYKEY'||code==='SQLITE_CONSTRAINT_UNIQUE'" : database === "mysql" ? "code==='ER_DUP_ENTRY'&&errno===1062" : "errno==='23505'||code==='23505'"};
+}
+let owner:Application|undefined;const errors:unknown[]=[];
+try{
+ const app=await bootstrapApp({migrate:false,mode:'command',onConstructed:application=>{owner=application;return undefined;}});
+ const id=crypto.randomUUID();
+ await app.invoke(envelope,async({database})=>{
+  const leads=database.model(NativeLeadDefinition);const repository=database.repository(NativeLeadRepository);
+  assert.strictEqual(leads,database.model(NativeLeadDefinition));
+  assert.strictEqual(repository,database.repository(NativeLeadRepository));
+  assert.strictEqual(leads.repository(),repository);
+  assert.equal(repository.getTable().name,'native_records');
+  assert.equal((await leads.create({id})).toObject().id,id);
+  assert.equal((await leads.find(id))?.toObject().id,id);
+ });
+ // Expected native duplicate failure ends its invocation; unrelated workflow gets a new one.
+ await assert.rejects(()=>app.invoke(envelope,({database})=>database.model(NativeLeadDefinition).create({id})),nativeDuplicate);
+ await app.invoke(envelope,async({database})=>{
+  const counters=database.model(CounterDefinition);const repository=database.repository(CounterRepository);
+  assert.strictEqual(counters.repository(),repository);assert.equal(repository.getTable().name,'counters');
+  await repository.create({id:17});assert.equal((await counters.find(17))?.toObject().id,17);
+  // The id-only repository requires column values; native default insertion proves generated IDs.
+  await database.execute({text:${JSON.stringify(database === "mysql" ? "INSERT INTO counters () VALUES ()" : "INSERT INTO counters DEFAULT VALUES")},params:[]});
+  const numericRows=await repository.findAll();assert.equal(numericRows.length,2);
+  const generated=numericRows.find(row=>row.id!==17);assert.ok(generated);
+  assert.ok(Number.isSafeInteger(generated.id)&&generated.id>0);
+  const assigned=await counters.find(generated.id);assert.ok(assigned);
+  assigned.fill({id:9999});assert.equal(assigned.toObject().id,generated.id);
+  assert.equal(await counters.find(9999),null);
+  const contacts=database.model(ContactDefinition);
+  const person=await contacts.create({id:crypto.randomUUID(),name:'Příliš žluťoučký'});
+  assert.equal((await contacts.find(person.toObject().id))?.toObject().name,'Příliš žluťoučký');
+  await person.update({name:'Updated <contact>'});
+  const stored=await contacts.find(person.toObject().id);assert.equal(stored?.toObject().name,'Updated <contact>');
+  const html=await new EtaViewEngine('views').render('contacts/show',{title:stored?.toObject().name,message:'Příliš žluťoučký'},{layout:false});
+  assert.equal(htmlResponse(html).headers.get('content-type'),'text/html; charset=utf-8');
+  assert.ok(html.includes('Updated &lt;contact&gt;'));assert.ok(html.includes('Příliš žluťoučký'));
+ });
+}catch(error){errors.push(error);}
+if(owner)try{const stopped=await owner.stop({reason:'Generated model contract complete'});if(!stopped.successful)throw new Error('Generated model owner did not stop cleanly',{cause:stopped});}catch(error){errors.push(error);}
+if(errors.length===1)throw errors[0];if(errors.length>1)throw new AggregateError(errors,'Generated model contract and cleanup failed.');
+console.log(JSON.stringify({installedModel:true,explicitRegistration:true,selectedRepository:true,uuidWrite:true,modelMigrationViewWorkflow:true}));
 `,
     );
-    assert.match(await run(["model-contract.ts"]), /"automaticRepository":true/);
+    assert.match(await run(["model-contract.ts"]), /"explicitRegistration":true/);
     await run(["run", "check"]);
-    passed.push(database);
-    console.log(`PASS installed CLI/model/UUID migration/automatic repository ${database}`);
+    checkInterrupted();
+  } catch (error) {
+    failures.push(error);
   } finally {
-    await fixture.close();
+    try {
+      await fixture.close();
+    } catch (error) {
+      failures.push(error);
+    }
+    if (interrupted) failures.push(interruption);
+    process.removeListener("SIGTERM", terminate);
   }
+  throwFailures(failures, "Installed model verification and cleanup failed.");
+  passed.push(database);
+  console.log(`PASS installed CLI/model/UUID migration/explicit registration ${database}`);
 }
 assert.deepEqual(passed, ["sqlite", "postgres", "mysql"]);
 console.log(
   JSON.stringify({
     installedModelGenerator: true,
     dialects: passed,
-    automaticRepositories: true,
+    explicitRepositories: true,
     noImplicitMigration: true,
   }),
 );

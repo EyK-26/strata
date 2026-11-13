@@ -14,7 +14,7 @@ function renderPreloadTs(layers: StarterLayers, projectName: string): string {
     : `process.env.DATABASE_URL ??= ${JSON.stringify(fallback)};\n`;
   return `import { join } from "node:path";
 import { configureModulesDirectory } from "@getstrata/bootstrap/discoverModules";
-${needsEnsure(layers) ? 'import { isProductionEnv } from "@getstrata/core/runtime/appEnv";\n' : ""}import "../models/register.ts";
+${needsEnsure(layers) ? 'import { isProductionEnv } from "@getstrata/core/runtime/appEnv";\n' : ""}
 
 ${databaseDefaults}process.env.FRONTEND_MODE ??= ${JSON.stringify(layers.frontend)};
 process.env.SPA_PREFIX ??= ${JSON.stringify(layers.spaPrefix)};
@@ -35,16 +35,16 @@ function renderConfigTs(): string {
   databaseUrl: string;
 }
 
-export function loadConfig(): AppConfig {
-  const databaseUrl = process.env.DATABASE_URL;
+export function loadConfig(env:Readonly<Record<string,string|undefined>>=process.env): AppConfig {
+  const databaseUrl = env.DATABASE_URL;
   if (!databaseUrl) {
     throw new Error("DATABASE_URL is required");
   }
 
   return {
-    port: Number(process.env.PORT ?? 3000),
-    hostname: process.env.HOST?.trim() || undefined,
-    appUrl: process.env.APP_URL ?? "http://localhost:3000",
+    port: Number(env.PORT ?? 3000),
+    hostname: env.HOST?.trim() || undefined,
+    appUrl: env.APP_URL ?? "http://localhost:3000",
     databaseUrl,
   };
 }
@@ -76,16 +76,16 @@ import { normalizeTenantHostname } from "@getstrata/core/tenant/tenantMiddleware
 import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import { loadConfig } from "../config.ts";
 
-const configProvider: ServiceProvider = {
+export function createConfigProvider(appConfig:ReturnType<typeof loadConfig>,env:Readonly<Record<string,string|undefined>>):ServiceProvider {
+  return {
   name: "starter.config",
   register({ container, config }) {
-    const appConfig = loadConfig();
 
     container.set(CORE_CONFIG_TOKEN, config);
-    if (process.env.CSRF_TARGET_ORIGIN !== undefined)
-      config.set(CSRF_TARGET_ORIGIN_CONFIG_KEY, process.env.CSRF_TARGET_ORIGIN);
+    if (env.CSRF_TARGET_ORIGIN !== undefined)
+      config.set(CSRF_TARGET_ORIGIN_CONFIG_KEY, env.CSRF_TARGET_ORIGIN);
     // One approved origin for the starter tenant. Multi-tenant apps replace this lookup.
-    if (isProductionEnv()) {
+    if (isProductionEnv(env)) {
       const publicHost = normalizeTenantHostname(new URL(appConfig.appUrl).host);
       container.set(CORE_PUBLIC_TENANCY_TOKEN, {
         resolveTenantId: async (hostname) => hostname === publicHost ? 1 : null,
@@ -93,45 +93,28 @@ const configProvider: ServiceProvider = {
     }
     config.set(DATABASE_URL_CONFIG_KEY, appConfig.databaseUrl);
     config.set(APP_PORT_CONFIG_KEY, appConfig.port);
-    config.set(REDIS_URL_CONFIG_KEY, process.env.REDIS_URL ?? "");
+    config.set(REDIS_URL_CONFIG_KEY, env.REDIS_URL ?? "");
     config.set("app.url", appConfig.appUrl);
-    config.set("cache.driver", process.env.CACHE_DRIVER ?? "${layers.cache}");
+    config.set("cache.driver", env.CACHE_DRIVER ?? "${layers.cache}");
     config.set("cache.ttlMs", 3_600_000);
     config.set("cache.maxEntries", 100);
-    config.set("queue.driver", process.env.QUEUE_DRIVER ?? "${layers.queue}");
+    config.set("queue.driver", env.QUEUE_DRIVER ?? "${layers.queue}");
   },
 };
 
-export default configProvider;
+}
 `;
 }
 
 function renderQueueProvider(): string {
-  return `import { discoverJobs } from "@getstrata/bootstrap/discoverJobs";
-import { registerDefaultJobs } from "@getstrata/bootstrap/queue/defaultJobs";
-import type { ServiceProvider } from "@getstrata/core/contracts/di";
+  return `import type { ServiceProvider } from "@getstrata/core/contracts/di";
+import type { Queue } from "@getstrata/core/queue";
+import { FAILED_JOB_SERVICE_TOKEN, type QueueServices } from "@getstrata/core/queue/createAppQueue";
 import { CORE_QUEUE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
-import {
-  createAppQueue,
-  createFailedJobService,
-  FAILED_JOB_SERVICE_TOKEN,
-} from "@getstrata/core/queue/createAppQueue";
-
-const queueProvider: ServiceProvider = {
-  name: "starter.queue",
-  async register({ container, onCleanup }) {
-    const driver = (process.env.QUEUE_DRIVER ?? "sync") as "sync" | "async" | "redis";
-    const failedJobs = createFailedJobService();
-    container.set(FAILED_JOB_SERVICE_TOKEN, failedJobs);
-    registerDefaultJobs();
-    await discoverJobs();
-    const queue = createAppQueue(driver, process.env.REDIS_URL, failedJobs);
-    onCleanup(() => queue.close?.(), driver === "async" ? "drain" : "close");
-    container.set(CORE_QUEUE_TOKEN, queue);
-  },
-};
-
-export default queueProvider;
+/** Bridge graph-owned resources into transport module declarations; it never owns their shutdown. */
+export function createQueueProvider(queue:Queue,services:QueueServices):ServiceProvider {
+  return {name:"starter.queue",register({container}){container.set(CORE_QUEUE_TOKEN,queue);container.set(FAILED_JOB_SERVICE_TOKEN,services);}};
+}
 `;
 }
 
@@ -153,174 +136,206 @@ export default policyProvider;
 
 function renderProvidersIndex(): string {
   return `import { tracingProvider } from "@getstrata/bootstrap";
-import { discoverListeners } from "@getstrata/bootstrap/discoverListeners";
-import { registerInvalidateCacheOnModelWriteListeners } from "@getstrata/bootstrap/listeners/invalidateCacheOnModelWrite";
+import { createEventBindings, createEventsProvider } from "@getstrata/bootstrap/providers/events";
 import type { ServiceProvider } from "@getstrata/core/contracts/di";
-import authProvider from "./auth.ts";
-import cacheProvider from "./cache.ts";
-import configProvider from "./config.ts";
-import policyProvider from "./policy.ts";
-import queueProvider from "./queue.ts";
+import { createServiceToken } from "@getstrata/core/contracts/token";
+import { resourceService, valueService, service, type ServiceDeclaration } from "@getstrata/core/contracts/services";
+import { createAuditExporter } from "@getstrata/core/audit/exportAuditLogs";
+import { createCacheStore, snapshotCacheStoreOptions } from "@getstrata/core/cache/createCacheStore";
+import { CacheRepository } from "@getstrata/core/cache/repository";
+import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
+import { createAppQueue, createSystemQueueServices, type QueueServices, FAILED_JOB_SERVICE_TOKEN } from "@getstrata/core/queue/createAppQueue";
+import type { Queue } from "@getstrata/core/queue";
+import { CORE_CACHE_TOKEN, CORE_QUEUE_TOKEN } from "@getstrata/bootstrap/config";
+import { createStarterAuthProvider, type StarterAuthServices } from "./auth.ts";
+import { loadConfig } from "../config.ts";
+import { createConfigProvider } from "./config.ts";
 import storageProvider from "./storage.ts";
-import viewProvider from "./view.ts";
+import { createStarterViewProvider } from "./view.ts";
+import policyProvider from "./policy.ts";
+import { registerDefaultJobs } from "@getstrata/bootstrap/queue/defaultJobs";
+import { discoverJobs } from "@getstrata/bootstrap/discoverJobs";
 
-const listenersProvider: ServiceProvider = {
-  name: "starter.listeners",
-  async boot({ onCleanup }) {
-    onCleanup(registerInvalidateCacheOnModelWriteListeners());
-
-    for (const registerListener of await discoverListeners()) {
-      await registerListener();
-    }
-  },
-};
-
-const starterProviders: ServiceProvider[] = [
-  configProvider,
-  tracingProvider,
-  cacheProvider,
-  storageProvider,
-  queueProvider,
-  authProvider,
-  viewProvider,
-  policyProvider,
-  listenersProvider,
-];
-
-export { starterProviders };
+export const STARTER_CACHE_TOKEN = createServiceToken<CacheRepository>("starter.cache");
+export const STARTER_QUEUE_TOKEN = createServiceToken<Queue>("starter.queue");
+export const STARTER_QUEUE_SERVICES_TOKEN = createServiceToken<QueueServices>("starter.queueServices");
+export const STARTER_AUDIT_EXPORT_TOKEN=createServiceToken<()=>Promise<number>>("starter.auditExporter");
+export const STARTER_BILLING_OPTIONS_TOKEN=createServiceToken<Readonly<{enabled:boolean;stripeSecret:string}>>("starter.billing.options");
+export const STARTER_WEBHOOK_OPTIONS_TOKEN = createServiceToken<Readonly<{allowPrivate:boolean;signatureHeader:string}>>("starter.webhook.options");
+export function createStarterServices(env:Readonly<Record<string,string|undefined>>, invoke:import("@getstrata/core/contracts/persistence").PersistenceInvocation):readonly ServiceDeclaration[] {
+  const cacheOptions = snapshotCacheStoreOptions({driver:(env.CACHE_DRIVER??"array") as "array"|"redis",ttlMs:3600000,maxEntries:100,redisUrl:env.REDIS_URL,namespace:(env.APP_KEY_PREFIX?.trim()||"strata")+":cache:v3:"});
+  const driver=(env.QUEUE_DRIVER??"sync") as "sync"|"async"|"redis";
+  if(!["sync","async","redis"].includes(driver))throw new TypeError("Unsupported queue driver.");
+  return Object.freeze([
+    ...createEventBindings(),
+    valueService(STARTER_BILLING_OPTIONS_TOKEN,Object.freeze({enabled:env.FEATURE_BILLING==="true",stripeSecret:env.STRIPE_WEBHOOK_SECRET?.trim()??""})),
+    service(STARTER_AUDIT_EXPORT_TOKEN,{lifetime:"application",dependencies:[] as const,create:()=>createAuditExporter({environment:env,runSql:work=>invoke({kind:"command",actor:{kind:"system",policy:"audit.export"}},({database,policy})=>env.TENANCY_DRIVER==="rls"?policy.run(database,{kind:"bypass"},work):database.transaction(work))})}),
+    service(STARTER_QUEUE_SERVICES_TOKEN,{lifetime:"application",dependencies:[STARTER_CACHE_TOKEN,STARTER_AUDIT_EXPORT_TOKEN] as const,create:(cache,auditExport)=>createSystemQueueServices(invoke,{cache,auditExport})}),
+    valueService(STARTER_WEBHOOK_OPTIONS_TOKEN,Object.freeze({allowPrivate:!isProductionEnv(env)&&env.WEBHOOK_ALLOW_PRIVATE==="true",signatureHeader:env.WEBHOOK_SIGNATURE_HEADER?.trim()||"x-"+(env.APP_KEY_PREFIX?.trim()||"strata")+"-signature"})),
+    resourceService(STARTER_CACHE_TOKEN,{lifetime:"application",dependencies:[] as const,create:()=>({name:"starter.cache",open:()=>({ok:true,value:new CacheRepository(createCacheStore(cacheOptions))}),close:cache=>cache.close()})}),
+    resourceService(STARTER_QUEUE_TOKEN,{lifetime:"application",dependencies:[STARTER_QUEUE_SERVICES_TOKEN] as const,create:services=>({name:"starter.queue",open:()=>({ok:true,value:createAppQueue(driver,env.REDIS_URL,services)}),drain:queue=>driver==="async"?queue.close?.():undefined,close:queue=>driver!=="async"?queue.close?.():undefined})}),
+  ]);
+}
+export function createStarterProviders(env:Readonly<Record<string,string|undefined>>, auth:StarterAuthServices, cache:CacheRepository, queue:Queue, queueServices:QueueServices,events:import("@getstrata/core/events").EventBus,billing:Readonly<{enabled:boolean;stripeSecret:string}>):readonly ServiceProvider[] {
+  const appConfig=loadConfig(env);
+  return Object.freeze([
+    createConfigProvider(appConfig,env),
+    {name:"starter.billing-config",register({container}){container.set(STARTER_BILLING_OPTIONS_TOKEN,billing);}},
+    tracingProvider,
+    {name:"starter.cache",register({container,dependencies}){container.set(CORE_CACHE_TOKEN,cache);dependencies.cache=cache;}},
+    storageProvider,
+    {name:"starter.queue",async register({container}){container.set(CORE_QUEUE_TOKEN,queue);container.set(FAILED_JOB_SERVICE_TOKEN,queueServices);registerDefaultJobs();await discoverJobs();}},
+    createStarterAuthProvider(auth),createStarterViewProvider(env),policyProvider,createEventsProvider(events),
+  ]);
+}
 `;
 }
 
 function renderCreateAppTs(layers: StarterLayers): string {
-  const ensureLine = needsEnsure(layers)
-    ? `import { ensureAppDatabase } from "./ensureDatabase.ts";\n`
+  const ensure = needsEnsure(layers)
+    ? 'import { ensureAppDatabase } from "./ensureDatabase.ts";\n'
     : "";
-  const metricsImport = layers.extras.metrics
-    ? `import { createMetricsRoutes, createMetricsRuntime, type MetricsRuntime, type MetricsRuntimeOptions } from "@getstrata/bootstrap/metricsRoutes";\n`
+  const metricsImports = layers.extras.metrics
+    ? 'import { createMetricsRoutes, createMetricsRuntime, type MetricsRuntime, type MetricsRuntimeOptions } from "@getstrata/bootstrap/metricsRoutes";\nimport { createOwnedReadOnlyObservation } from "@getstrata/core/database/ownedReadOnlyObservation";\n'
     : "";
-  const metricsSpread = layers.extras.metrics
-    ? "\n    ...createMetricsRoutes(metricsRuntime?.options),"
-    : "";
-  return `import { join } from "node:path";
-import "./preload.ts";
-import { createAppContext as createProviderAppContext, type InitializedAppContext } from "@getstrata/bootstrap/context";
-import type { AppRouteMap } from "@getstrata/bootstrap/contracts";
-import { mergeSpaRoutes } from "@getstrata/bootstrap/createSpaRoutes";
+  return `import "./preload.ts";
+import { join } from "node:path";
+import { createApplicationContext, type InitializedAppContext } from "@getstrata/bootstrap/context";
+import { assertAppDependenciesComplete, type AppRouteMap, type ServiceProvider } from "@getstrata/bootstrap/contracts";
+import type { Application } from "@getstrata/core/contracts/application";
+import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
+import { createDatabaseBindings } from "@getstrata/core/database/bindings";
+import { createSqlOutboxBindings, createOutboxWorkerTransport, type SqlOutbox } from "@getstrata/core/events/outbox";
+import { listeners as durableListeners } from "../outbox/registry.ts";
+import { failedJobRepository } from "@getstrata/core/queue/failedJobRepository";
+import type { QueueServices } from "@getstrata/core/queue/createAppQueue";
+import { createQueueWorkerTransport } from "@getstrata/core/queue/queueWorkerTransport";
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
-import {
-  configureModulesDirectory,
-  discoverModules,
-  ensureModulesLoaded,
-} from "@getstrata/bootstrap/discoverModules";
 import { createHealthRoutes } from "@getstrata/bootstrap/health";
-${metricsImport}import { assertProductionSecrets, assertRlsLiveDatabaseRole } from "@getstrata/bootstrap/secretsGuard";
-import { createWebServer, type NativeServerOptions } from "@getstrata/bootstrap/web/server";
-import type { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
+import { mergeSpaRoutes } from "@getstrata/bootstrap/createSpaRoutes";
+import { discoverListeners } from "@getstrata/bootstrap/discoverListeners";
+import { createModelCacheInvalidationEffects } from "@getstrata/bootstrap/listeners/invalidateCacheOnModelWrite";
+import { configureModulesDirectory, discoverModules, ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
+import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
+import { webServerResource, type NativeServerOptions } from "@getstrata/bootstrap/web/server";
+import type { Server } from "bun";
+import { abilityCatalog } from "@getstrata/core/auth/abilityCatalog";
+import { csrfTokenOptionsFromEnvironment } from "@getstrata/core/http/csrfToken";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
-import { isRlsTenancy } from "@getstrata/core/tenant/tenancyConfig";
+import { createDatabaseReadinessBindings } from "@getstrata/bootstrap/databaseReadiness";
+import { APPLICATION_EVENT_BUS_TOKEN } from "@getstrata/bootstrap/providers/events";
+${layers.extras.scim ? 'import { createScimAuthenticator } from "@getstrata/core/auth/scimAuthMiddleware";\nimport { resolveScimTenantFromToken } from "@getstrata/core/security/scimTenantTokens";\nimport { resolveTenant } from "@getstrata/core/tenant/resolveTenant";\n' : ""}${metricsImports}import { createStarterAuthServices } from "./providers/auth.ts";
+import { createStarterProviders, createStarterServices, STARTER_CACHE_TOKEN, STARTER_QUEUE_TOKEN, STARTER_QUEUE_SERVICES_TOKEN,STARTER_BILLING_OPTIONS_TOKEN,STARTER_AUDIT_EXPORT_TOKEN } from "./providers/index.ts";
+import { repositoryDefinitions, modelDefinitions } from "../models/register.ts";
+import { Note } from "../models/Note.ts";
 import { migrate } from "../db/migrate.ts";
 import { buildRoutes } from "../routes.ts";
-import { Note } from "../models/Note.ts";
 import { loadConfig } from "./config.ts";
-import { closeDatabase, getSql, pingDatabase } from "./database.ts";
-${ensureLine}import { starterProviders } from "./providers/index.ts";
-
+import { databaseOptions } from "./database.ts";
+${ensure}
 export interface BootstrapOptions {
-  /** Automatic migrations and local database provisioning; false uses existing infrastructure. */
-  migrate?: boolean;${layers.extras.metrics ? "\n  /** Explicit opt-in; HTTP-only metrics remain the default. */\n  runtimeMetrics?: MetricsRuntimeOptions;" : ""}
+  migrate?:boolean;
+  transports?:readonly import("@getstrata/core/contracts/application").TransportDefinition[];
+  services?:readonly import("@getstrata/core/contracts/services").ServiceDeclaration[];
+  persistence?:Pick<import("@getstrata/core/database/bindings").DatabaseDefinition,"repositories"|"models"|"repositoryEffects">;
+  mode?:"http"|"command"|"worker"|"outbox-worker";
+  server?:{port?:number;native?:NativeServerOptions};
+  onConstructed?:(application:Application)=>undefined;${layers.extras.metrics ? '\n  runtimeMetrics?:Omit<MetricsRuntimeOptions,"failedJobs"|"outbox"> & {failedJobs?:Omit<NonNullable<MetricsRuntimeOptions["failedJobs"]>,"observeReadOnly">;outbox?:Omit<NonNullable<MetricsRuntimeOptions["outbox"]>,"observeReadOnly">};' : ""}
 }
-
 export interface BootstrappedApp {
-  context: InitializedAppContext;
-  routes: AppRouteMap;
-  config: ReturnType<typeof loadConfig>;
+  application:Application;
+  auditExport:()=>Promise<number>;
+  invoke:PersistenceInvocation;
+  readonly outbox:Readonly<Pick<SqlOutbox,"publish">>;
+  context:InitializedAppContext;
+  routes:AppRouteMap;
+  config:ReturnType<typeof loadConfig>;
+  queue:import("@getstrata/core/queue").Queue;
+  queueServices:import("@getstrata/core/queue/createAppQueue").QueueServices;
+  server?:Server<unknown>;
+  worker?:ReturnType<typeof createQueueWorkerTransport>;
+  outboxWorker?:ReturnType<typeof createOutboxWorkerTransport>;
 }
-
-async function createAppContext(${layers.extras.metrics ? "metricsRuntime?: MetricsRuntime" : ""}): Promise<InitializedAppContext> {
-  await ensureModulesLoaded();
-  const moduleProviders = discoverModules().flatMap((module) => module.providers ?? []);
-${
-  layers.extras.metrics
-    ? `  const metricsProviders = metricsRuntime ? [{
-    name: "starter.runtime-metrics",
-    register({ onCleanup }: import("@getstrata/core/contracts/di").ProviderContext) {
-      onCleanup(() => metricsRuntime.close(), "drain");
-    },
-  }] : [];
-`
-    : ""
-}  return createProviderAppContext([...starterProviders, ...moduleProviders${layers.extras.metrics ? ", ...metricsProviders" : ""}]);
-}
-
-export async function bootstrapApp(options: BootstrapOptions = {}): Promise<BootstrappedApp> {
-  let context: InitializedAppContext | undefined;${layers.extras.metrics ? "\n  let metricsRuntime: MetricsRuntime | undefined;" : ""}
-  try {
-    const isProduction = isProductionEnv();
-    // Dev boots migrate for convenience. Production must not mutate schema on
-    // start, so run \`strata migrate\` as an explicit deploy step instead.
-    const { migrate: runMigrate = !isProduction } = options;
-
-    if (isProduction) {
-      assertProductionSecrets();
-    }
-
-${needsEnsure(layers) ? "    await ensureAppDatabase({ provision: !isProduction && runMigrate });\n" : ""}    const appConfig = loadConfig();
-    getSql();
-    if (!(await pingDatabase())) throw new Error("Database is not ready.");
-    if (isRlsTenancy()) {
-      await assertRlsLiveDatabaseRole();
-    }
-    configureModulesDirectory(join(import.meta.dir, "../modules"));
-    await ensureModulesLoaded();
-${layers.extras.metrics ? "    metricsRuntime = createMetricsRuntime(options.runtimeMetrics);\n" : ""}    context = await createAppContext(${layers.extras.metrics ? "metricsRuntime" : ""});
-
-    if (runMigrate) {
-      await migrate();
-    }
-
-    const documentKernel = createHttpKernel(context.dependencies);
-    const routes = mergeSpaRoutes(context.dependencies, {
-      ...createHealthRoutes(context.dependencies, {
-        pingOnHealth: true,
-        healthFormat: "text",
-        schemaCheck: async () => {
-          // Infrastructure probe: no tenant selection, bypass, user data or writes.
-          try { await Note.query().limit(1).select("id").get(); return true; }
-          catch { return false; }
-        },
-      }),
-      ...buildRoutes(context.dependencies),${metricsSpread}
-    }, {
-      distDirectory: join(import.meta.dir, "../../frontend/dist"),
-      wrap: (handler) => documentKernel.wrapPublicDocument(handler),
-    });
-
-    return { context, routes, config: appConfig };
-  } catch (error) {
-    const failures: unknown[] = [];
-    for (const cleanup of [() => context?.dispose(), ${layers.extras.metrics ? "() => metricsRuntime?.close(), " : ""}closeDatabase]) {
-      try { await cleanup(); } catch (failure) { failures.push(failure); }
-    }
-    if (failures.length) throw new AggregateError([error, ...failures], "Application startup and cleanup failed.", { cause: error });
-    throw error;
-  }
-}
-
-export async function createApp(options: BootstrapOptions = {}) {
-  return bootstrapApp({ migrate: false, ...options });
-}
-
-export function createAppServer(routes: AppRouteMap, port = 0, lifecycle?: LifecycleCoordinator, native?: NativeServerOptions) {
-  return createWebServer({
-    port,
-    publicDir: "./public",
-    lifecycle,
-    native,
-    routes,
+export function bootstrapApp(options:BootstrapOptions & {mode:"outbox-worker"}):Promise<BootstrappedApp & {outboxWorker:ReturnType<typeof createOutboxWorkerTransport>}>;
+export function bootstrapApp(options?:BootstrapOptions):Promise<BootstrappedApp>;
+export async function bootstrapApp(options:BootstrapOptions={}):Promise<BootstrappedApp> {
+  const env=Object.freeze({...process.env});
+  const production=isProductionEnv(env);
+  const runMigrate=options.migrate??!production;
+  if(production)assertProductionSecrets(env);
+  ${needsEnsure(layers) ? "await ensureAppDatabase({provision:!production&&runMigrate});" : ""}
+  // Schema commands finish and close their own separate resources before runtime starts.
+  if(runMigrate)await migrate();
+  const config=loadConfig(env);
+  const dbOptions=databaseOptions(env);
+  configureModulesDirectory(join(import.meta.dir,"../modules"));await ensureModulesLoaded();
+  const modules=Object.freeze([...discoverModules()]);
+  const listenerDeclarations=await discoverListeners({directory:join(import.meta.dir,"../listeners")});
+  const cacheEffects=createModelCacheInvalidationEffects(repositoryDefinitions,modules,{cache:STARTER_CACHE_TOKEN,queue:STARTER_QUEUE_TOKEN});
+  const catalog=[cacheEffects,...listenerDeclarations];
+  const secret=env.SESSION_SECRET?.trim()??"";
+  const abilities=abilityCatalog();
+  const auth=createStarterAuthServices({environment:env,production,allowDevHeaders:!production&&env.AUTH_DEV_HEADERS==="true",jwtSecret:env.JWT_SECRET?.trim()||secret,sessionSecret:secret,
+    signatureSecret:env.SIGNED_URL_SECRET?.trim()||secret||env.OAUTH_STATE_SECRET?.trim()||"",
+    readSession:()=>null,
+    abilities,roleAbilities:role=>[...(role==="admin"?abilities.admin:abilities.member)],
   });
+  let invoke:PersistenceInvocation|undefined;
+  let auditExport:(()=>Promise<number>)|undefined;
+  const run:PersistenceInvocation=(envelope,work)=>{if(!invoke)throw new Error("Application owner has not been constructed.");return invoke(envelope,work);};
+  let readyQueueServices:QueueServices|undefined;
+  const selectedQueueServices=()=>{if(!readyQueueServices)throw new Error("Queue services are not assembled.");return readyQueueServices;};
+  const queueServices:QueueServices={
+    recordFailure:(...args)=>selectedQueueServices().recordFailure(...args),
+    listRecent:(...args)=>selectedQueueServices().listRecent(...args),
+    retry:(...args)=>selectedQueueServices().retry(...args),
+    delete:(...args)=>selectedQueueServices().delete(...args),
+    flush:()=>selectedQueueServices().flush(),
+    runAttempt:(...args)=>selectedQueueServices().runAttempt(...args),
+  };
+  const outbox=createSqlOutboxBindings({invoke:run,connection:"main",tenancy:${JSON.stringify(layers.tenancy)},listeners:durableListeners});
+  let publisher:BootstrappedApp["outbox"]|undefined;
+  const mode=options.mode??"command";
+  if(mode==="worker"&&!env.REDIS_URL)throw new Error("queue:work requires REDIS_URL.");
+  const worker=mode==="worker"?createQueueWorkerTransport({redisUrl:env.REDIS_URL!,queueServices}):undefined;
+  const outboxWorker=mode==="outbox-worker"?createOutboxWorkerTransport(outbox.token):undefined;
+  let server:Server<unknown>|undefined;
+  let routes:AppRouteMap|undefined;
+  let kernel:ReturnType<typeof createHttpKernel>|undefined;${layers.extras.metrics ? "\n  let metrics:MetricsRuntime|undefined;" : ""}
+  const assembly:ServiceProvider={name:"starter.routes",async boot({dependencies,onCleanup}){
+    assertAppDependenciesComplete(dependencies);
+    kernel=createHttpKernel(dependencies);
+    ${layers.extras.metrics ? 'const {failedJobs,outbox,...runtime}=options.runtimeMetrics??{};metrics=createMetricsRuntime({...runtime,...(failedJobs?{failedJobs:{...failedJobs,observeReadOnly:createOwnedReadOnlyObservation(handle.application,"main",dbOptions)}}:{}),...(outbox?{outbox:{...outbox,observeReadOnly:createOwnedReadOnlyObservation(handle.application,"main",dbOptions,{postgresPolicy:"bypass"})}}:{})});onCleanup(()=>metrics!.close(),"drain");' : "void onCleanup;"}
+    routes=mergeSpaRoutes(dependencies,{
+      ...Object.fromEntries(Object.entries(createHealthRoutes(dependencies,{pingOnHealth:true,healthFormat:"text",schemaCheck:()=>dependencies.invoke({kind:"request",actor:{kind:"system",policy:"http.schema-health"}},async({database})=>{try{await database.model(Note).query().limit(1).select("id").get();return true;}catch{return false;}})})).map(([path,handler])=>[path,kernel!.wrapPublicDocument(handler)])),
+      ...buildRoutes(dependencies),${layers.extras.metrics ? "\n      ...Object.fromEntries(Object.entries(createMetricsRoutes({...metrics?.options,authorization:{token:env.METRICS_TOKEN,production}})).map(([path,handler])=>[path,kernel!.wrapPublicDocument(handler)]))," : ""}
+    },{distDirectory:join(import.meta.dir,"../../frontend/dist"),wrap:handler=>kernel!.wrapPublicDocument(handler)});
+  }};
+  const handle=createApplicationContext([],{
+    connection:"main",
+    http:{metadata:auth.metadata,features:{emailVerificationRequired:env.FEATURE_EMAIL_VERIFICATION==="true",viewsEnabled:["server-htmx","hybrid"].includes(env.FRONTEND_MODE??${JSON.stringify(layers.frontend)}),publicReadsEnabled:env.FEATURE_PUBLIC_READS==="true",etagEnabled:env.FEATURE_ETAG!=="false"},csrf:{token:csrfTokenOptionsFromEnvironment(env),allowDevelopmentHeaders:!production&&env.AUTH_DEV_HEADERS==="true",samlAcsUrl:env.SAML_ACS_URL??""},tenancy:${JSON.stringify(layers.tenancy)},production,allowTenantDevHeaders:!production&&env.TENANT_DEV_HEADERS==="true",signatureSecret:auth.config.signatureSecret,passwordConfirmation:auth.config.passwordConfirmation,
+      ...(production?{publicTenancy:{resolveTenantId:async(host:string)=>host===new URL(config.appUrl).hostname?1:null}}:{}),${layers.extras.scim ? "\n      scim:createScimAuthenticator({resolveToken:token=>resolveScimTenantFromToken(token,env),resolveTenant})," : ""}
+    },
+    onConstructed:owner=>{invoke=owner.invoke;options.onConstructed?.(owner.application);return undefined;},
+    providersFromScope:scope=>{auditExport=scope.resolve(STARTER_AUDIT_EXPORT_TOKEN);readyQueueServices=scope.resolve(STARTER_QUEUE_SERVICES_TOKEN);const coordinator=scope.resolve(outbox.token);const publish=coordinator.publish;publisher=Object.freeze({publish:(...args:Parameters<SqlOutbox["publish"]>)=>publish.call(coordinator,...args)});return [...createStarterProviders(env,auth,scope.resolve(STARTER_CACHE_TOKEN),scope.resolve(STARTER_QUEUE_TOKEN),scope.resolve(STARTER_QUEUE_SERVICES_TOKEN),scope.resolve(APPLICATION_EVENT_BUS_TOKEN),scope.resolve(STARTER_BILLING_OPTIONS_TOKEN)),...modules.flatMap(module=>module.providers??[]),assembly];},
+    definition:{config:{application:{url:config.appUrl,production}},services:[
+      ...(options.services??[]),...outbox.services,...createStarterServices(env,run),...createDatabaseReadinessBindings("main",env),...catalog.flatMap(declaration=>declaration.services),
+      ...createDatabaseBindings({default:"main",connections:{main:dbOptions},preparation:[outbox.token],repositories:[...repositoryDefinitions,failedJobRepository,...(options.persistence?.repositories??[])],models:[...modelDefinitions,...(options.persistence?.models??[])],repositoryEffects:[...catalog.flatMap(declaration=>declaration.repositoryEffects),...(options.persistence?.repositoryEffects??[])]}),
+    ],providers:[],transports:[...(options.transports??[]),...(worker?[worker.transport]:[]),...(outboxWorker?[outboxWorker.transport]:[]),...(mode==="http"?[{name:"starter.http",async setup(scope:import("@getstrata/core/contracts/application").ProviderScope){
+      if(!routes||!kernel)throw new Error("Route assembly did not finish before transport setup.");
+      server=await scope.acquire(webServerResource({port:options.server?.port??config.port,native:options.server?.native??(config.hostname?{hostname:config.hostname}:undefined),routes,publicDir:join(import.meta.dir,"../../public"),enter:(request,handler)=>kernel!.run(request,handler)}));
+    }}]:[]) ]},
+  });
+  const context=await handle.start();
+  try {
+    if(!routes)throw new Error("Routes were not assembled.");
+    if(!publisher)throw new Error("Outbox publisher was not assembled.");
+    return {application:handle.application,auditExport:auditExport!,invoke:handle.invoke,outbox:publisher,context,routes,config,queue:context.container.resolve("core.queue"),queueServices:selectedQueueServices(),...(server?{server}:{}),...(worker?{worker}:{}),...(outboxWorker?{outboxWorker}:{})};
+  }catch(error){await handle.application.stop({reason:"STARTUP_FAILED"});throw error;}
 }
-
-export { createAppContext };
+export function createApp(options:BootstrapOptions={}) {return bootstrapApp({migrate:false,...options});}
+/** HTTP acquisition is declared before startup, never added to an already ready application. */
+export function createAppServer(options:Omit<BootstrapOptions,"mode">={}) {return bootstrapApp({...options,mode:"http"});}
 `;
 }
 
@@ -351,30 +366,39 @@ export { listeners };
 }
 
 function renderScheduleTs(): string {
-  return `import { appSchedule } from "@getstrata/core/scheduler/schedule";
-
-export { appSchedule };
+  return `import { createAppSchedule } from "@getstrata/bootstrap/schedule";
+import type { BootstrappedApp } from "./createApp.ts";
+export function createSchedule(app:Pick<BootstrappedApp,"invoke"|"auditExport">,environment:Readonly<Record<string,string|undefined>>) {
+  return createAppSchedule({invoke:app.invoke,auditExport:app.auditExport,environment});
+}
 `;
 }
 
 function renderViewProvider(layers: StarterLayers): string {
   return `import { join } from "node:path";
 import { createViewProvider } from "@getstrata/bootstrap/providers/view";
+import { establishedAuthReader } from "@getstrata/core/auth/authReader";
 
-export default createViewProvider({${layers.extras.mfa && htmlAuthKit(layers.auth) && (layers.frontend === "api" || layers.frontend === "spa-react") ? "\n  enabled: true," : ""}
+export function createStarterViewProvider(env:Readonly<Record<string,string|undefined>>) {
+  ${layers.extras.oidc ? 'const oidcLogin = env.FEATURE_OAUTH === "true" && Boolean(env.OIDC_CLIENT_ID?.trim() && env.OIDC_CLIENT_SECRET?.trim());' : "void env;"}
+  return createViewProvider({${layers.extras.mfa && htmlAuthKit(layers.auth) && (layers.frontend === "api" || layers.frontend === "spa-react") ? "\n  enabled: true," : ""}
   directory: join(import.meta.dir, "../../../views"),
   data: {
-    userKey: "currentUser",${
+    userKey: "currentUser",
+    loadUser: async (_container, request) => {
+      const user = await establishedAuthReader.user(request);
+      return user ? { id: Number(user.id), name: user.name ?? "", email: user.email ?? "", role: user.role ?? "member" } : null;
+    },${
       layers.extras.oidc
         ? `
     extra: () => ({
-      oidcLogin: process.env.FEATURE_OAUTH === "true" &&
-        Boolean(process.env.OIDC_CLIENT_ID?.trim() && process.env.OIDC_CLIENT_SECRET?.trim()),
+      oidcLogin,
     }),`
         : ""
     }
   },
 });
+}
 `;
 }
 

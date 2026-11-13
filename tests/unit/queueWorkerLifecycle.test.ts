@@ -1,7 +1,5 @@
-import { afterAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { Job } from "@getstrata/core/queue";
-import { FailedJobRepository } from "@getstrata/core/queue/failedJobRepository";
-import { FailedJobService } from "@getstrata/core/queue/failedJobService";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 import {
   QUEUE_HIGH_KEY,
@@ -14,6 +12,16 @@ import {
   reclaimExpiredQueueReservations,
 } from "@getstrata/core/queue/redisQueue";
 import { RedisClient } from "bun";
+
+import { createQueuePersistenceFixture } from "../helpers/queuePersistence";
+
+let persistence: Awaited<ReturnType<typeof createQueuePersistenceFixture>>;
+beforeAll(async () => {
+  persistence = await createQueuePersistenceFixture();
+});
+afterAll(async () => {
+  expect((await persistence.application.stop()).successful).toBe(true);
+});
 
 afterAll(() => {
   mock.restore();
@@ -34,11 +42,7 @@ describe("QueueWorker lifecycle", () => {
   }
 
   test("requestStop exits the run loop", async () => {
-    const worker = new QueueWorker(
-      "redis://invalid",
-      new FailedJobService(new FailedJobRepository()),
-      1,
-    );
+    const worker = new QueueWorker("redis://invalid", persistence.services, 1);
     worker.requestStop();
 
     await worker.run();
@@ -71,7 +75,7 @@ describe("QueueWorker lifecycle", () => {
       }),
     );
 
-    const worker = new QueueWorker(redisUrl, new FailedJobService(new FailedJobRepository()), 1);
+    const worker = new QueueWorker(redisUrl, persistence.services, 1);
 
     await expect(worker.processNext()).resolves.toBe(true);
     expect(messages).toEqual(["from-redis"]);
@@ -82,7 +86,7 @@ describe("QueueWorker lifecycle", () => {
   test("processNext returns false when no jobs are available", async () => {
     await clearQueueKeys();
 
-    const worker = new QueueWorker(redisUrl, new FailedJobService(new FailedJobRepository()), 1);
+    const worker = new QueueWorker(redisUrl, persistence.services, 1);
 
     await expect(worker.processNext()).resolves.toBe(false);
   }, 10000);
@@ -113,7 +117,7 @@ describe("QueueWorker lifecycle", () => {
         JSON.stringify({ name: "test.redis.fail", payload: {}, attempts: 0 }),
       );
 
-      const worker = new QueueWorker(redisUrl, new FailedJobService(new FailedJobRepository()), 1);
+      const worker = new QueueWorker(redisUrl, persistence.services, 1);
 
       await expect(worker.processNext()).resolves.toBe(true);
       expect(errorLogs.some((entry) => String(entry).includes("[QueueWorker] Job failed:"))).toBe(
@@ -140,7 +144,7 @@ describe("QueueWorker lifecycle", () => {
         JSON.stringify({ name: "missing.job", payload: {}, attempts: 0 }),
       );
 
-      const worker = new QueueWorker(redisUrl, new FailedJobService(new FailedJobRepository()), 1);
+      const worker = new QueueWorker(redisUrl, persistence.services, 1);
 
       await expect(worker.processNext()).resolves.toBe(true);
       expect(await client.llen(queueInvalidKey(QUEUE_HIGH_KEY))).toBe(1);

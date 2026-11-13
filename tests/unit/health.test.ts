@@ -5,18 +5,35 @@ import { checkDatabase, createHealthRoutes } from "@getstrata/bootstrap/health";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
-import {
-  bindDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "@getstrata/core/database/boundConnection";
 import { restoreEnvVar } from "../helpers/restoreEnv";
-import { createMockDependencies } from "./testHelpers";
+import { createMockDependencies as createBaseDependencies } from "./testHelpers";
 
+let queryLog: string[] | undefined;
+let databaseFailure: Error | undefined;
+function createMockDependencies(
+  ...args: Parameters<typeof createBaseDependencies>
+): ReturnType<typeof createBaseDependencies> {
+  const actual = createBaseDependencies(...args);
+  const log = queryLog;
+  const failure = databaseFailure;
+  return {
+    ...actual,
+    invoke: (envelope, work) =>
+      actual.invoke(envelope, (ports) => {
+        const execute: typeof ports.database.execute = (statement) => {
+          log?.push(statement.text);
+          return failure ? Promise.reject(failure) : ports.database.execute(statement);
+        };
+        return work({ ...ports, database: Object.freeze({ ...ports.database, execute }) });
+      }),
+  };
+}
 const previousAppDebug = process.env.APP_DEBUG;
 
 describe("createHealthRoutes", () => {
   afterEach(() => {
-    resetBoundDatabaseConnection();
+    queryLog = undefined;
+    databaseFailure = undefined;
     restoreEnvVar("APP_DEBUG", previousAppDebug);
   });
 
@@ -33,28 +50,18 @@ describe("createHealthRoutes", () => {
     expect(await response.json()).toEqual({ status: "ok" });
   });
 
-  test("pings the bound database connection from checkDatabase", async () => {
+  test("pings the explicitly selected canonical database from checkDatabase", async () => {
     const queries: string[] = [];
-    bindDatabaseConnection({
-      async unsafe<T>(query: string) {
-        queries.push(query);
-        return [{ ok: 1 }] as T[];
-      },
-    });
+    queryLog = queries;
 
-    expect(await checkDatabase()).toBe(true);
+    expect(await checkDatabase(createMockDependencies(new ServiceContainer()).invoke)).toBe(true);
     expect(queries).toEqual(["SELECT 1"]);
   });
 
-  test("createHealthRoutes /ready uses the bound database client", async () => {
+  test("createHealthRoutes /ready uses its explicit canonical invocation", async () => {
     process.env.APP_DEBUG = "true";
     const queries: string[] = [];
-    bindDatabaseConnection({
-      async unsafe<T>(query: string) {
-        queries.push(query);
-        return [{ ok: 1 }] as T[];
-      },
-    });
+    queryLog = queries;
 
     const container = new ServiceContainer();
     const config = new ConfigStore();
@@ -84,12 +91,6 @@ describe("createHealthRoutes", () => {
   });
 
   test("pingOnHealth includes database checks on /health", async () => {
-    bindDatabaseConnection({
-      async unsafe<T>() {
-        return [{ ok: 1 }] as T[];
-      },
-    });
-
     const routes = createHealthRoutes(
       createMockDependencies(
         new ServiceContainer(),
@@ -107,11 +108,6 @@ describe("createHealthRoutes", () => {
   });
 
   test("/ready omits check names unless APP_DEBUG is true", async () => {
-    bindDatabaseConnection({
-      async unsafe<T>() {
-        return [{ ok: 1 }] as T[];
-      },
-    });
     process.env.APP_DEBUG = "false";
     const routes = createHealthRoutes(
       createMockDependencies(
@@ -127,11 +123,6 @@ describe("createHealthRoutes", () => {
 
   test("returns readiness details from /ready", async () => {
     process.env.APP_DEBUG = "true";
-    bindDatabaseConnection({
-      async unsafe<T>() {
-        return [{ ok: 1 }] as T[];
-      },
-    });
 
     const container = new ServiceContainer();
     const config = new ConfigStore();
@@ -164,7 +155,10 @@ describe("createHealthRoutes", () => {
 });
 
 describe("schema/container health probes", () => {
-  afterEach(() => resetBoundDatabaseConnection());
+  afterEach(() => {
+    queryLog = undefined;
+    databaseFailure = undefined;
+  });
   const dependencies = () => {
     const container = new ServiceContainer();
     const config = new ConfigStore();
@@ -176,11 +170,6 @@ describe("schema/container health probes", () => {
     );
   };
   test("text probe reports only readiness, ignores extra data and never caches", async () => {
-    bindDatabaseConnection({
-      async unsafe<T>() {
-        return [{ ok: 1 }] as T[];
-      },
-    });
     const routes = createHealthRoutes(dependencies(), {
       pingOnHealth: true,
       healthFormat: "text",
@@ -200,11 +189,6 @@ describe("schema/container health probes", () => {
     expect(rejected.headers.get("allow")).toBe("GET, HEAD");
   });
   test("missing schema and schema errors are sanitized as 503", async () => {
-    bindDatabaseConnection({
-      async unsafe<T>() {
-        return [{ ok: 1 }] as T[];
-      },
-    });
     for (const schemaCheck of [
       async () => false,
       async () => {
@@ -221,11 +205,6 @@ describe("schema/container health probes", () => {
     }
   });
   test("unavailable Redis cannot report a healthy text probe", async () => {
-    bindDatabaseConnection({
-      async unsafe<T>() {
-        return [{ ok: 1 }] as T[];
-      },
-    });
     const container = new ServiceContainer();
     const config = new ConfigStore();
     config.set(REDIS_URL_CONFIG_KEY, "redis://127.0.0.1:1");
@@ -243,11 +222,7 @@ describe("schema/container health probes", () => {
     expect(await response.text()).toBe("degraded");
   });
   test("database failure does not become a successful schema probe", async () => {
-    bindDatabaseConnection({
-      async unsafe() {
-        throw new Error("private database error");
-      },
-    });
+    databaseFailure = new Error("private database error");
     const response = await createHealthRoutes(dependencies(), {
       pingOnHealth: true,
       healthFormat: "text",

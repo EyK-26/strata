@@ -11,6 +11,17 @@ for (const subpath of CORE_SHARED_SUBPATHS) {
   const outputPath = join(packageDir, "dist/entries", `${subpath}.js`);
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, renderCoreSharedShim(subpath), "utf8");
+  if (["database/baseRepository", "database/model", "database/repositoryQuery"].includes(subpath)) {
+    const fallback =
+      subpath === "database/baseRepository"
+        ? 'export { BaseRepository as default } from "../../framework/public-api";\n'
+        : "";
+    await writeFile(
+      outputPath.replace(/\.js$/, ".d.ts"),
+      `export * from "../../framework/public-api";\n${fallback}`,
+      "utf8",
+    );
+  }
 }
 
 console.log(`Wrote ${CORE_SHARED_SUBPATHS.length} shared @getstrata/core subpath shims.`);

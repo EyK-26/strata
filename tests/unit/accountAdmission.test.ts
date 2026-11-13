@@ -16,13 +16,21 @@ import { type JwtPayload, signJwt } from "@getstrata/core/auth/jwt";
 import { JwtGuard } from "@getstrata/core/auth/jwtGuard";
 import { hashPassword } from "@getstrata/core/auth/password";
 import { completePasswordLogin } from "@getstrata/core/auth/passwordLogin";
-import { createSessionCookie, readSession } from "@getstrata/core/auth/sessionCookie";
+import {
+  createSessionCookie,
+  createSessionReader,
+  readSession,
+  sessionCookieName,
+} from "@getstrata/core/auth/sessionCookie";
 import { SessionGuard } from "@getstrata/core/auth/sessionGuard";
 import type {
   AuthUserDirectory,
   AuthUserRecord,
 } from "@getstrata/core/contracts/authUserDirectory";
-import { CORE_AUTH_USER_DIRECTORY_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import type { ScopedPolicy } from "@getstrata/core/contracts/persistence";
+import type { DatabaseSession } from "@getstrata/core/database/session";
+import { withBoundDatabase } from "../helpers/boundRepositoryHarness";
+import { withPolicyPersistence } from "../helpers/policyPersistence";
 
 const secret = "account-admission-fixture-secret-at-least-32-characters";
 const original = { ...process.env };
@@ -30,15 +38,23 @@ afterEach(() => {
   for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];
   Object.assign(process.env, original);
 });
-function container(directory: AuthUserDirectory) {
-  return {
-    has(key: string) {
-      return key === CORE_AUTH_USER_DIRECTORY_TOKEN;
+function sessionGuard(directory: AuthUserDirectory) {
+  return new SessionGuard(directory, {
+    read: createSessionReader({
+      cookieName: sessionCookieName(),
+      secret,
+      ttlSeconds: 60 * 60 * 24 * 30,
+    }),
+    abilities: (role) => (role === "admin" ? ["*"] : []),
+  });
+}
+function basic(directory: AuthUserDirectory) {
+  return new BasicAuthGuard({
+    directory,
+    persistRecovery: async () => {
+      throw new Error("No recovery proof may be consumed by these account admission fixtures.");
     },
-    resolve<T>() {
-      return directory as T;
-    },
-  };
+  });
 }
 function cookieRequest(header: string) {
   return new Request("http://localhost/account", {
@@ -97,7 +113,7 @@ test("JWT account status and version reject disabled and stale proofs even at an
 test("versioned signed sessions reject stale or missing versions while legacy sessions remain readable", async () => {
   process.env.SESSION_SECRET = secret;
   const record = { id: 1, role: "member", is_active: true, auth_version: 0 };
-  const guard = new SessionGuard(container(directoryFor(record)));
+  const guard = sessionGuard(directoryFor(record));
   const old = createSessionCookie(1, { authVersion: 0 });
   expect(readSession(cookieRequest(old))).toMatchObject({ userId: 1, authVersion: 0 });
   expect(await guard.resolve(cookieRequest(old))).toMatchObject({ id: 1 });
@@ -118,7 +134,7 @@ test("versioned signed sessions reject stale or missing versions while legacy se
   }
   for (const authVersion of [-1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])
     expect(() => createSessionCookie(1, { authVersion })).toThrow();
-  const legacy = new SessionGuard(container(directoryFor({ id: 1, role: "member" })));
+  const legacy = sessionGuard(directoryFor({ id: 1, role: "member" }));
   expect(await legacy.resolve(cookieRequest(createSessionCookie(1)))).toMatchObject({ id: 1 });
   expect(
     await legacy.resolve(cookieRequest(createSessionCookie(1, { remember: true }))),
@@ -139,7 +155,7 @@ test("disabled password and Basic paths deny before accepting MFA or consuming r
   const request = new Request("http://localhost/account", {
     headers: { authorization: `Basic ${btoa("fixture@example.test:Fixture!Password123")}` },
   });
-  expect(await new BasicAuthGuard(container(directoryFor(record))).resolve(request)).toBeNull();
+  expect(await basic(directoryFor(record)).resolve(request)).toBeNull();
   // Exercise verifyCredentials fallback as well as the stored-password path.
   const fallback = directoryFor({ ...record, password: null });
   delete fallback.findByEmail;
@@ -148,7 +164,7 @@ test("disabled password and Basic paths deny before accepting MFA or consuming r
     fallbackCalls++;
     return { id: 1, role: "member" };
   };
-  expect(await new BasicAuthGuard(container(fallback)).resolve(request)).toBeNull();
+  expect(await basic(fallback).resolve(request)).toBeNull();
   expect(fallbackCalls).toBe(1);
   expect(completePasswordLogin({ is_active: false, mfa_enabled: false })).toEqual({
     ok: false,
@@ -159,7 +175,7 @@ test("disabled password and Basic paths deny before accepting MFA or consuming r
 
 test("opaque and static guards reject explicitly inactive principals and AuthManager enforces custom guard results", async () => {
   const record = { id: 1, role: "member", is_active: false };
-  const opaque = new DatabaseTokenGuard(container(directoryFor(record)));
+  const opaque = new DatabaseTokenGuard(directoryFor(record));
   expect(await opaque.resolve(bearer("opaque-fixture"))).toBeNull();
   expect(
     new ApiTokenGuard({ token: "static-fixture", user: { id: 1, isActive: false } }).resolve(
@@ -193,25 +209,38 @@ test("database-cookie stores reject disabled default/custom loaders and refuse e
     },
   };
   const user: SessionUser = { id: 1, name: "Fixture", email: "fixture@example.test" };
-  const store = new CookieSessionStore(sql, secret),
-    request = cookieRequest(store.cookieHeader(user, "fixture-session"));
-  const guard = new CookieSessionGuard(store, () => ({ id: 1 }));
-  for (const disabled of [false, 0, "0", null, "false"]) {
-    active = disabled;
-    expect(await guard.resolve(request)).toBeNull();
-  }
-  for (const enabled of [true, 1, "1", undefined]) {
-    active = enabled;
-    expect(await guard.resolve(request)).toMatchObject({ id: 1 });
-  }
-  const custom = new CookieSessionStore(sql, secret, undefined, undefined, async () => ({
-    ...user,
-    is_active: false,
-  }));
-  expect(await new CookieSessionGuard(custom, () => ({ id: 1 })).resolve(request)).toBeNull();
-  await expect(store.create({ ...user, is_active: false })).rejects.toThrow();
-  await expect(store.create({ ...user, auth_version: -1 })).rejects.toThrow();
-  expect(writes).toBe(0);
+  await withPolicyPersistence(sql, async ({ database, policy }) => {
+    const store = new CookieSessionStore(database, policy, secret, {
+        production: false,
+        rls: false,
+      }),
+      request = cookieRequest(store.cookieHeader(user, "fixture-session"));
+    const guard = new CookieSessionGuard(store, () => ({ id: 1 }));
+    for (const disabled of [false, 0, "0", null, "false"]) {
+      active = disabled;
+      expect(await guard.resolve(request)).toBeNull();
+    }
+    for (const enabled of [true, 1, "1", undefined]) {
+      active = enabled;
+      expect(await guard.resolve(request)).toMatchObject({ id: 1 });
+    }
+    const custom = new CookieSessionStore(
+      database,
+      policy,
+      secret,
+      { production: false, rls: false },
+      undefined,
+      undefined,
+      async () => ({
+        ...user,
+        is_active: false,
+      }),
+    );
+    expect(await new CookieSessionGuard(custom, () => ({ id: 1 })).resolve(request)).toBeNull();
+    await expect(store.create({ ...user, is_active: false })).rejects.toThrow();
+    await expect(store.create({ ...user, auth_version: -1 })).rejects.toThrow();
+    expect(writes).toBe(0);
+  });
 });
 
 test("native HTTP resolution rechecks live status across cookie, opaque, JWT and Basic requests", async () => {
@@ -225,55 +254,79 @@ test("native HTTP resolution rechecks live status across cookie, opaque, JWT and
     is_active: true,
     auth_version: 0,
   };
-  const directory = directoryFor(record),
-    services = container(directory);
-  const store = new CookieSessionStore(
-    { unsafe: async () => [] },
-    secret,
-    undefined,
-    undefined,
-    async () => ({ id: 1, name: record.name, email: record.email, is_active: record.is_active }),
-  );
-  const auth = new CookieSessionAuthManager(store);
-  auth.registerGuard("api", new DatabaseTokenGuard(services));
-  auth.registerGuard("jwt", new JwtGuard({ secret, directory }));
-  auth.registerGuard("basic", new BasicAuthGuard(services));
-  const cookie =
-    store
-      .cookieHeader({ id: 1, name: record.name, email: record.email }, "fixture-session")
-      .split(";")[0] ?? "";
-  const headers: Record<string, string>[] = [
-    { cookie },
-    { authorization: "Bearer opaque-fixture" },
-    { authorization: `Bearer ${signJwt({ sub: 1, authVersion: 0 }, { secret })}` },
-    { authorization: `Basic ${btoa("fixture@example.test:Fixture!Password123")}` },
-  ];
-  const server = Bun.serve({
-    port: 0,
-    async fetch(request) {
-      return new Response(null, { status: (await auth.check(request)) ? 200 : 401 });
+  const directory = directoryFor(record);
+  await withBoundDatabase(
+    {
+      definition: {
+        default: "main",
+        connections: { main: { driver: "sqlite", filename: ":memory:" } },
+      },
+      connection: { unsafe: async () => [] },
     },
-  });
-  try {
-    const statuses = () =>
-      Promise.all(
-        headers.map(async (h) => {
-          const response = await fetch(`http://localhost:${server.port}`, { headers: h });
-          await response.text();
-          return response.status;
-        }),
-      );
-    expect(await statuses()).toEqual([200, 200, 200, 200]);
-    record.is_active = false;
-    record.auth_version++;
-    expect(await statuses()).toEqual([401, 401, 401, 401]);
-    record.is_active = true;
-    const response = await fetch(`http://localhost:${server.port}`, { headers: headers[2] });
-    expect(response.status).toBe(401);
-    await response.text();
-  } finally {
-    await server.stop(true);
-  }
+    async (database, invoke, policy) => {
+      const makeStore = (selected: DatabaseSession, scoped: ScopedPolicy) =>
+        new CookieSessionStore(
+          selected,
+          scoped,
+          secret,
+          { production: false, rls: false },
+          undefined,
+          undefined,
+          async () => ({
+            id: 1,
+            name: record.name,
+            email: record.email,
+            is_active: record.is_active,
+          }),
+        );
+      const store = makeStore(database, policy);
+      const cookie =
+        store
+          .cookieHeader({ id: 1, name: record.name, email: record.email }, "fixture-session")
+          .split(";")[0] ?? "";
+      const headers: Record<string, string>[] = [
+        { cookie },
+        { authorization: "Bearer opaque-fixture" },
+        { authorization: `Bearer ${signJwt({ sub: 1, authVersion: 0 }, { secret })}` },
+        { authorization: `Basic ${btoa("fixture@example.test:Fixture!Password123")}` },
+      ];
+      const server = Bun.serve({
+        port: 0,
+        async fetch(request) {
+          return invoke(
+            async (selected, scoped) => {
+              const auth = new CookieSessionAuthManager(makeStore(selected, scoped));
+              auth.registerGuard("api", new DatabaseTokenGuard(directory));
+              auth.registerGuard("jwt", new JwtGuard({ secret, directory }));
+              auth.registerGuard("basic", basic(directory));
+              return new Response(null, { status: (await auth.check(request)) ? 200 : 401 });
+            },
+            { kind: "request" },
+          );
+        },
+      });
+      try {
+        const statuses = () =>
+          Promise.all(
+            headers.map(async (h) => {
+              const response = await fetch(`http://localhost:${server.port}`, { headers: h });
+              await response.text();
+              return response.status;
+            }),
+          );
+        expect(await statuses()).toEqual([200, 200, 200, 200]);
+        record.is_active = false;
+        record.auth_version++;
+        expect(await statuses()).toEqual([401, 401, 401, 401]);
+        record.is_active = true;
+        const response = await fetch(`http://localhost:${server.port}`, { headers: headers[2] });
+        expect(response.status).toBe(401);
+        await response.text();
+      } finally {
+        await server.stop(true);
+      }
+    },
+  );
 });
 
 test("optional account state fails closed for malformed opt-in data and epochs", () => {
@@ -339,34 +392,54 @@ test("versioned session parsing rejects malformed fields, expires and preserves 
 test("malformed session cookie encoding is denied through native HTTP and shared session readers", async () => {
   process.env.SESSION_COOKIE_NAME = "malformed-fixture";
   process.env.SESSION_SECRET = secret;
-  const store = new CookieSessionStore(
+  const sql = {
+    unsafe: async () => {
+      throw new Error("Invalid cookies must not reach storage.");
+    },
+  };
+  await withBoundDatabase(
     {
-      unsafe: async () => {
-        throw new Error("Invalid cookies must not reach storage.");
+      definition: {
+        default: "main",
+        connections: { main: { driver: "sqlite", filename: ":memory:" } },
       },
+      connection: sql,
     },
-    secret,
-    "malformed-fixture",
-  );
-  const guard = new CookieSessionGuard(store);
-  const server = Bun.serve({
-    port: 0,
-    async fetch(request) {
-      return new Response(null, { status: (await guard.resolve(request)) ? 200 : 401 });
-    },
-  });
-  try {
-    for (const value of ["%", "%E0%A4", "%GG"]) {
-      const response = await fetch(`http://localhost:${server.port}`, {
-        headers: { cookie: `malformed-fixture=${value}` },
+    async (_database, invoke) => {
+      const server = Bun.serve({
+        port: 0,
+        async fetch(request) {
+          return invoke(
+            async (database, policy) => {
+              const store = new CookieSessionStore(
+                database,
+                policy,
+                secret,
+                { production: false, rls: false },
+                "malformed-fixture",
+              );
+              return new Response(null, {
+                status: (await new CookieSessionGuard(store).resolve(request)) ? 200 : 401,
+              });
+            },
+            { kind: "request" },
+          );
+        },
       });
-      expect(response.status).toBe(401);
-      await response.text();
-      expect(readSession(cookieRequest(`malformed-fixture=${value}`))).toBeNull();
-    }
-  } finally {
-    await server.stop(true);
-  }
+      try {
+        for (const value of ["%", "%E0%A4", "%GG"]) {
+          const response = await fetch(`http://localhost:${server.port}`, {
+            headers: { cookie: `malformed-fixture=${value}` },
+          });
+          expect(response.status).toBe(401);
+          await response.text();
+          expect(readSession(cookieRequest(`malformed-fixture=${value}`))).toBeNull();
+        }
+      } finally {
+        await server.stop(true);
+      }
+    },
+  );
 });
 
 test("database cookie epochs fence stale rows independently of transaction-start timestamps", async () => {
@@ -389,14 +462,19 @@ test("database cookie epochs fence stale rows independently of transaction-start
       ) as T[];
     },
   };
-  const store = new CookieSessionStore(sql, secret);
-  const request = cookieRequest(
-    store.cookieHeader(
-      { id: 1, name: "Fixture", email: "fixture@example.test" },
-      "fixture-session",
-    ),
-  );
-  expect(await store.read(request)).toMatchObject({ id: 1, auth_version: 3 });
-  sessionVersion = 2;
-  expect(await store.read(request)).toBeNull();
+  await withPolicyPersistence(sql, async ({ database, policy }) => {
+    const store = new CookieSessionStore(database, policy, secret, {
+      production: false,
+      rls: false,
+    });
+    const request = cookieRequest(
+      store.cookieHeader(
+        { id: 1, name: "Fixture", email: "fixture@example.test" },
+        "fixture-session",
+      ),
+    );
+    expect(await store.read(request)).toMatchObject({ id: 1, auth_version: 3 });
+    sessionVersion = 2;
+    expect(await store.read(request)).toBeNull();
+  });
 });

@@ -2,22 +2,54 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
-import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import {
+  currentAuthUser,
+  currentCredentialSource,
+  runWithAuthUser,
+} from "@getstrata/core/auth/authContext";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import {
   CORE_AUTH_TOKEN,
   CORE_PUBLIC_TENANCY_TOKEN,
   CORE_TENANT_RESOLVER_TOKEN,
 } from "@getstrata/core/contracts/serviceTokens";
+import { HttpError } from "@getstrata/core/errors/http";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { errorResponse } from "@getstrata/core/http/response";
 import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
+import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { currentTenant } from "@getstrata/core/tenant/tenantContext";
 import {
   createTenantMiddleware,
   normalizeTenantHostname,
+  type TenantMiddlewareOptions,
 } from "@getstrata/core/tenant/tenantMiddleware";
+import { guestGuardOptions } from "../helpers/devAuthHeaders";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 import { createMockDependencies } from "./testHelpers";
+
+/** Test composition supplies trusted metadata/config; the tested selector stays unchanged. */
+function fixtureTenantMiddleware(overrides: Partial<TenantMiddlewareOptions> = {}) {
+  const middleware = createTenantMiddleware({
+    auth: { user: currentAuthUser(), credentialSource: currentCredentialSource() },
+    config: {
+      enabled: process.env.TENANCY_DRIVER !== "none",
+      production: isProductionEnv(),
+      allowDevHeaders: process.env.TENANT_DEV_HEADERS === "true",
+    },
+    resolveTenant: async (id) => (id === 1 ? { id, slug: "default" } : null),
+    userTenantId: async () => 1,
+    ...overrides,
+  });
+  return async (request: Request, next: () => Promise<Response>) => {
+    try {
+      return await middleware(request, next);
+    } catch (error) {
+      if (!(error instanceof HttpError)) throw error;
+      return errorResponse(error);
+    }
+  };
+}
 
 describe("trusted public tenancy", () => {
   const names = [
@@ -41,7 +73,7 @@ describe("trusted public tenancy", () => {
   );
 
   const middleware = (proxies: readonly string[] = []) =>
-    createTenantMiddleware({
+    fixtureTenantMiddleware({
       publicTenancy: {
         trustedProxyAddresses: proxies,
         resolveTenantId: async (host) =>
@@ -99,7 +131,7 @@ describe("trusted public tenancy", () => {
   test("unknown hosts and absent production resolver fail before the handler", async () => {
     expect((await run(request("unknown.example", { "x-tenant-id": "7" }))).status).toBe(403);
     process.env.TENANT_DEV_HEADERS = "true";
-    const response = await createTenantMiddleware({
+    const response = await fixtureTenantMiddleware({
       resolveTenant: async (id) => ({ id, slug: "x" }),
     })(request(), async () => new Response("unsafe"));
     expect(response.status).toBe(403);
@@ -141,14 +173,28 @@ describe("trusted public tenancy", () => {
     process.env.FEATURE_PUBLIC_READS = "false";
     for (const trusted of [false, true]) {
       const container = new ServiceContainer();
-      container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
+      container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard(guestGuardOptions())));
       container.set(CORE_TENANT_RESOLVER_TOKEN, async (id) => ({ id, slug: `tenant-${id}` }));
       container.set(CORE_PUBLIC_TENANCY_TOKEN, {
         trustedProxyAddresses: trusted ? ["127.0.0.1", "::1"] : [],
         resolveTenantId: async (host) =>
           host === "catalog.example" ? 7 : host === "other.example" ? 8 : null,
       });
-      const kernel = createHttpKernel(createMockDependencies(container));
+      const kernel = createHttpKernel(
+        createMockDependencies(container, undefined, undefined, undefined, {
+          tenancy: "column",
+          production: true,
+          allowTenantDevHeaders: false,
+          publicTenancy: container.resolve(CORE_PUBLIC_TENANCY_TOKEN),
+          metadata: () => ({
+            authenticate: (request) =>
+              container.resolve<AuthManager>(CORE_AUTH_TOKEN).resolveWithSource(request),
+            memberships: async () => [],
+            userTenantId: async () => 1,
+            tenant: container.resolve(CORE_TENANT_RESOLVER_TOKEN),
+          }),
+        }),
+      );
       const handler = async () => Response.json({ tenant: currentTenant()?.id });
       const server = createWebServer({
         port: 0,
@@ -204,16 +250,16 @@ describe("trusted public tenancy", () => {
     }
   });
   test("a mapped identity must exist and resolver errors never select a default tenant", async () => {
-    const missing = createTenantMiddleware({
+    const missing = fixtureTenantMiddleware({
       publicTenancy: { resolveTenantId: async () => 7 },
       resolveTenant: async () => null,
     });
     expect((await missing(request(), async () => new Response("unsafe"))).status).toBe(403);
-    const invalid = createTenantMiddleware({ publicTenancy: { resolveTenantId: async () => -1 } });
+    const invalid = fixtureTenantMiddleware({ publicTenancy: { resolveTenantId: async () => -1 } });
     await expect(invalid(request(), async () => new Response("unsafe"))).rejects.toThrow(
       "invalid identity",
     );
-    const failure = createTenantMiddleware({
+    const failure = fixtureTenantMiddleware({
       publicTenancy: {
         resolveTenantId: async () => {
           throw new Error("directory unavailable");
@@ -226,15 +272,19 @@ describe("trusted public tenancy", () => {
   });
   test("public-read flags never enable development header selection", async () => {
     process.env.APP_ENV = "local";
-    const local = createTenantMiddleware({ resolveTenant: async (id) => ({ id, slug: "local" }) });
+    let local = fixtureTenantMiddleware({ resolveTenant: async (id) => ({ id, slug: "local" }) });
     const execute = () =>
       local(request("catalog.example", { "x-tenant-id": "8" }), async () =>
         Response.json({ tenant: currentTenant()?.id }),
       );
     expect(await (await execute()).json()).toEqual({ tenant: 1 });
     process.env.TENANT_DEV_HEADERS = "true";
+    expect(await (await execute()).json()).toEqual({ tenant: 1 });
+    local = fixtureTenantMiddleware({ resolveTenant: async (id) => ({ id, slug: "local" }) });
     expect(await (await execute()).json()).toEqual({ tenant: 8 });
     process.env.TENANT_DEV_HEADERS = "1";
+    expect(await (await execute()).json()).toEqual({ tenant: 8 });
+    local = fixtureTenantMiddleware({ resolveTenant: async (id) => ({ id, slug: "local" }) });
     expect(await (await execute()).json()).toEqual({ tenant: 1 });
   });
 });

@@ -3,19 +3,22 @@ import {
   hasVerifiedEmail,
   isEmailVerificationRequired,
 } from "@getstrata/core/auth/emailVerification";
-import type { AuthManager } from "@getstrata/core/auth/guard";
 import { createIntendedUrlCookieFromRequest } from "@getstrata/core/auth/intendedUrlCookie";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { errorResponse } from "@getstrata/core/http/response";
+import type { AuthReader } from "../auth/authReader";
 import { requestPrefersJson } from "./contentNegotiation";
 import type { Middleware } from "./middleware";
 
 const UNVERIFIED_MESSAGE = "Your email address is not verified.";
 const VERIFY_NOTICE_PATH = "/email/verify";
 
-function createRequireVerifiedMiddleware(auth?: AuthManager): Middleware {
+function createRequireVerifiedMiddleware(
+  auth?: AuthReader,
+  required = isEmailVerificationRequired(),
+): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
-    if (!isEmailVerificationRequired()) {
+    if (!required) {
       return await next();
     }
 

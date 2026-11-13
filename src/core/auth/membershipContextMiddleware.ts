@@ -1,10 +1,5 @@
-import { runWithMembershipContext } from "@getstrata/core/auth/membershipContext";
-import type { Middleware } from "@getstrata/core/http/middleware";
-
-function createMembershipContextMiddleware(): Middleware {
-  return async (_request: Request, next: () => Promise<Response>) => {
-    return await runWithMembershipContext(async () => await next());
-  };
+import type { Middleware } from "../http/middleware";
+import { type MembershipSnapshot, runWithMembershipSnapshot } from "./membershipContext";
+export function createMembershipContextMiddleware(snapshot: MembershipSnapshot): Middleware {
+  return async (_request, next) => await runWithMembershipSnapshot(snapshot, next);
 }
-
-export { createMembershipContextMiddleware };

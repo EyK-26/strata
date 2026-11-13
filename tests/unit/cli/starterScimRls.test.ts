@@ -4,12 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
 import { hashPassword } from "@getstrata/core/auth/password";
-import { BaseRepository } from "@getstrata/core/database/baseRepository";
-import { resetBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
-import { resetDefaultDatabasePoolForTests } from "@getstrata/core/database/defaultConnection";
-import { resetSqlDialect } from "@getstrata/core/database/dialect";
-import { defineTable } from "@getstrata/core/database/table";
-import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
+import type {
+  ExecutionPersistence,
+  ScopedPolicy,
+  SelectedSession,
+} from "@getstrata/core/contracts/persistence";
+import type { Model } from "@getstrata/core/database/model";
 import { SQL } from "bun";
 import {
   generateProject,
@@ -22,14 +22,44 @@ import {
 } from "../../../packages/strata-starter/src/parseArgs.ts";
 import { installGeneratedAppDependencies, repoRoot } from "./helpers";
 
+type FixtureUserRow = Record<string, unknown> & {
+  id: number;
+  name: string;
+  email: string;
+  password: string;
+};
+async function installObserverFixture(app: string): Promise<void> {
+  const path = join(app, "src/models/User.ts");
+  let source = await readFile(path, "utf8");
+  source =
+    'import {createServiceToken} from "@getstrata/core/contracts/token";\nimport {valueService} from "@getstrata/core/contracts/services";\nimport type {ModelObserver} from "@getstrata/core/database/definitions";\n' +
+    source;
+  source = source
+    .replace(
+      "const User = defineModel",
+      'const FixtureObserver=createServiceToken<ModelObserver<UserEntity>>("fixture.user.observer");\nexport function fixtureObserverService(observer:ModelObserver<UserEntity>){return valueService(FixtureObserver,observer); }\nconst User = defineModel',
+    )
+    .replace(
+      "  attributes: { fillable:",
+      "  observers:[FixtureObserver],\n  attributes: { fillable:",
+    );
+  if (!source.includes("observers:[FixtureObserver]"))
+    throw new Error("Generated observer fixture did not match the immutable User declaration.");
+  await writeFile(path, source);
+}
+async function fixturePort(): Promise<number> {
+  const probe = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response(null) });
+  const port = probe.port;
+  await probe.stop(true);
+  if (!port) throw new Error("Missing fixture port");
+  process.env.APP_URL = `http://127.0.0.1:${port}`;
+  return port;
+}
 const original = { ...process.env };
 afterEach(() => {
   process.chdir(repoRoot);
   for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];
   Object.assign(process.env, original);
-  resetSqlDialect();
-  resetBoundDatabaseConnection();
-  resetDefaultDatabasePoolForTests();
   resetDiscoverModulesForTests();
 });
 
@@ -60,6 +90,7 @@ test("generated SCIM mutation rejection and observer rollback preserve restricte
       templateRoot: resolveTemplateRoot(),
       overlayRoot: resolveOverlayRoot(),
     });
+    await installObserverFixture(app);
     const pkg = JSON.parse(await readFile(join(app, "package.json"), "utf8"));
     for (const part of ["core", "bootstrap", "cli"])
       pkg.dependencies[`@getstrata/${part}`] = `file:${join(repoRoot, `packages/strata-${part}`)}`;
@@ -89,40 +120,66 @@ test("generated SCIM mutation rejection and observer rollback preserve restricte
       SCIM_TENANT_TOKENS: "1:fixture-one,2:fixture-two",
     });
     resetDiscoverModulesForTests();
-    const { bootstrapApp, createAppServer } = await import(join(app, "src/bootstrap/createApp.ts"));
-    const { getSql, closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
-    closeApp = closeDatabase;
-    const { User } = await import(join(app, "src/models/User.ts"));
-    const boot = await bootstrapApp();
-    const server = createAppServer(boot.routes, 0, undefined, { hostname: "127.0.0.1" }),
-      origin = `http://127.0.0.1:${server.port}`;
-    process.env.APP_URL = origin;
-    try {
-      const [role] = await getSql().unsafe(
-        "SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user",
+    const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
+    const { User, fixtureObserverService } = await import(join(app, "src/models/User.ts"));
+    let rejectUpdate = false;
+    let observedUserId: number | undefined;
+    const port = await fixturePort();
+    const boot = await bootstrapApp({
+      mode: "http",
+      server: { port, native: { hostname: "127.0.0.1" } },
+      services: [
+        fixtureObserverService({
+          updated(model: { get(key: string): unknown }) {
+            if (rejectUpdate && model.get("id") === observedUserId)
+              throw new Error("injected SCIM observer failure");
+          },
+        }),
+      ],
+    });
+    closeApp = () => boot.context.dispose();
+    const selectedUsers = (database: SelectedSession) =>
+      database.model<FixtureUserRow, "id", Model<FixtureUserRow, "id">>(User);
+    const run = <T>(
+      work: (database: SelectedSession, policy: ScopedPolicy) => T | Promise<T>,
+    ): Promise<T> =>
+      boot.invoke(
+        { kind: "command", actor: { kind: "system", policy: "fixture.scim-admin" } },
+        ({ database, policy }: ExecutionPersistence) =>
+          policy.run(database, { kind: "bypass" }, (child) => work(child, policy)),
       );
-      expect(role.rolsuper).toBe(false);
-      expect(role.rolbypassrls).toBe(false);
-      const tenants = new BaseRepository(
-        defineTable<{ id: number; slug: string }, "id">({
-          name: "tenant",
-          primaryKey: "id",
-          columns: ["id", "slug"],
+    const server = boot.server;
+    if (!server) throw new Error("Expected owned HTTP server");
+    const origin = `http://127.0.0.1:${server.port}`;
+    try {
+      const [role] = await run((database) =>
+        database.execute<{ rolsuper: boolean; rolbypassrls: boolean }>({
+          text: "SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user",
+          params: [],
         }),
       );
+      if (!role) throw new Error("Missing restricted fixture role");
+      expect(role.rolsuper).toBe(false);
+      expect(role.rolbypassrls).toBe(false);
       const password = await hashPassword("Initial!Password123");
-      const { target, neighbor } = await runWithMigrationBypass(async () => {
-        await tenants.create({ slug: "first" });
-        await tenants.create({ slug: "second" });
+      const { target, neighbor } = await run(async (database) => {
+        await database.execute({
+          text: "INSERT INTO tenant (slug) VALUES ($1)",
+          params: ["first"],
+        });
+        await database.execute({
+          text: "INSERT INTO tenant (slug) VALUES ($1)",
+          params: ["second"],
+        });
         return {
-          target: await User.create({
+          target: await selectedUsers(database).create({
             name: "Original",
             email: "scim-target@example.test",
             password,
             is_admin: false,
             tenant_id: 2,
           }),
-          neighbor: await User.create({
+          neighbor: await selectedUsers(database).create({
             name: "Neighbor",
             email: "scim-neighbor@example.test",
             password,
@@ -132,13 +189,7 @@ test("generated SCIM mutation rejection and observer rollback preserve restricte
         };
       });
       const id = target.get("id");
-      let rejectUpdate = false;
-      User.observe({
-        updated(model: { get(key: string): unknown }) {
-          if (rejectUpdate && model.get("id") === id)
-            throw new Error("injected SCIM observer failure");
-        },
-      });
+      observedUserId = id;
       async function request(token: string, path: string, method = "GET", payload?: unknown) {
         const response = await fetch(`${origin}/scim/v2/${path}`, {
           method,
@@ -164,7 +215,9 @@ test("generated SCIM mutation rejection and observer rollback preserve restricte
         const result = await request("fixture-two", `Users/${id}`, "PATCH", body);
         expect(result.status).toBe(400);
         expect(result.body.status).toBe("400");
-        expect((await runWithMigrationBypass(() => User.find(id))).get("name")).toBe("Original");
+        expect((await run((database) => selectedUsers(database).findOrFail(id))).get("name")).toBe(
+          "Original",
+        );
       }
       for (const method of ["POST", "PUT"]) {
         expect(
@@ -192,7 +245,9 @@ test("generated SCIM mutation rejection and observer rollback preserve restricte
       } finally {
         rejectUpdate = false;
       }
-      expect((await runWithMigrationBypass(() => User.find(id))).get("name")).toBe("Original");
+      expect((await run((database) => selectedUsers(database).findOrFail(id))).get("name")).toBe(
+        "Original",
+      );
       const changed = await request(
         "fixture-two",
         `Users/${id}`,
@@ -206,13 +261,16 @@ test("generated SCIM mutation rejection and observer rollback preserve restricte
         expect((await request("fixture-two", `Users/${neighbor.get("id")}`)).status).toBe(404);
         expect((await request("fixture-two", `Users/${id}`)).status).toBe(200);
       }
-      await runWithMigrationBypass(async () => {
-        expect((await User.find(neighbor.get("id"))).get("name")).toBe("Neighbor");
-        expect(await User.where({ email: "inactive@example.test" }).count()).toBe(0);
-        expect((await User.find(id)).get("password")).toBe(password);
+      await run(async (database) => {
+        expect((await selectedUsers(database).findOrFail(neighbor.get("id"))).get("name")).toBe(
+          "Neighbor",
+        );
+        expect(
+          await selectedUsers(database).where({ email: "inactive@example.test" }).count(),
+        ).toBe(0);
+        expect((await selectedUsers(database).findOrFail(id)).get("password")).toBe(password);
       });
     } finally {
-      server.stop(true);
       await boot.context.dispose();
     }
   } finally {

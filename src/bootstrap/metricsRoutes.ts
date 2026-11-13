@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import {
   renderTransactionAcquisitionMetrics,
   type TransactionAcquisitionMetrics,
-} from "@getstrata/core/database/transaction";
+} from "@getstrata/core/database/acquisitionMetrics";
 import { type OutboxMetricsCollector, renderOutboxMetrics } from "@getstrata/core/events/outbox";
 import { prometheusRegistry } from "@getstrata/core/metrics/prometheus";
 import {
@@ -29,8 +29,11 @@ function tokensMatch(left: string, right: string): boolean {
   return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-function authorizeMetrics(request: Request): boolean {
-  const expected = process.env.METRICS_TOKEN?.trim();
+function authorizeMetrics(
+  request: Request,
+  policy: Readonly<{ token?: string; production: boolean }>,
+): boolean {
+  const expected = policy.token;
   const authorization = request.headers.get("authorization") ?? "";
   const presented = authorization.startsWith("Bearer ")
     ? authorization.slice("Bearer ".length)
@@ -40,7 +43,7 @@ function authorizeMetrics(request: Request): boolean {
     return presented.length > 0 && tokensMatch(presented, expected);
   }
 
-  if (isProductionEnv()) {
+  if (policy.production) {
     return false;
   }
 
@@ -48,6 +51,8 @@ function authorizeMetrics(request: Request): boolean {
 }
 
 interface MetricsRoutesOptions {
+  /** App configuration copied once when routes are assembled. */
+  readonly authorization?: Readonly<{ token?: string; production: boolean }>;
   /** Opt in to shared Redis queue observations; no database or failed-job scan. */
   queue?: RedisQueueSnapshotOptions & { redisUrl: string };
   /** Explicit platform outbox observation; caller owns collector shutdown. */
@@ -60,6 +65,13 @@ interface MetricsRoutesOptions {
   failedJobs?: Pick<FailedJobMetricsCollector, "collect">;
 }
 function createMetricsRoutes(options: MetricsRoutesOptions = {}) {
+  const authorization = Object.freeze({
+    token: (
+      options.authorization?.token ??
+      (options.authorization ? undefined : process.env.METRICS_TOKEN)
+    )?.trim(),
+    production: options.authorization?.production ?? isProductionEnv(),
+  });
   // One concurrent collection per route instance, including failed/timed-out scrapes.
   let collection: Promise<string> | undefined;
   const collect = (): Promise<string> => {
@@ -116,7 +128,7 @@ function createMetricsRoutes(options: MetricsRoutesOptions = {}) {
   };
   return {
     "/metrics": async (request: Request) => {
-      if (!authorizeMetrics(request)) {
+      if (!authorizeMetrics(request, authorization)) {
         return new Response("Not Found", { status: 404 });
       }
 

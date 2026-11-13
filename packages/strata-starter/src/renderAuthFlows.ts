@@ -7,14 +7,14 @@ import { authNeedsUsers, type StarterLayers } from "./types.ts";
 
 function renderPendingMfaTs(): string {
   return `import { createPendingMfaCookie, clearPendingMfaCookie, readPendingMfaCookie } from "@getstrata/core/auth/pendingMfaCookie";
-import { sessionSecret } from "./config.ts";
 
-export function pendingMfaSetCookie(userId: number, authVersion: number): string {
-  return createPendingMfaCookie(userId, authVersion, sessionSecret());
-}
-export const pendingMfaClearCookie = clearPendingMfaCookie;
-export function readPendingMfaChallenge(request: Request) {
-  return readPendingMfaCookie(request, sessionSecret());
+export function createPendingMfaHelpers(options: Readonly<{secret:string;production:boolean}>) {
+  const snapshot = Object.freeze({...options});
+  return Object.freeze({
+    setCookie: (userId: number, authVersion: number) => createPendingMfaCookie(userId, authVersion, snapshot.secret, snapshot.production),
+    clearCookie: () => clearPendingMfaCookie(snapshot.production),
+    read: (request: Request) => readPendingMfaCookie(request, snapshot.secret),
+  });
 }
 `;
 }

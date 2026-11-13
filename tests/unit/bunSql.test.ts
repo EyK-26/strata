@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
 import {
   getBoundDatabaseConnection,
   resetBoundDatabaseConnection,
@@ -9,6 +8,7 @@ import {
   getDefaultDatabasePool,
   registerDefaultDatabasePool,
 } from "@getstrata/core/database/defaultConnection";
+import type { SqlDatabaseConnection } from "../../src/core/database/connectionContracts";
 import { getDatabase } from "../../src/db/connection";
 
 describe("bun SQL helpers", () => {

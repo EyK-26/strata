@@ -111,7 +111,7 @@ function renderDockerfile(layers: StarterLayers): string {
     "FROM oven/bun:1.4.4 AS deps",
     "WORKDIR /app",
     "COPY package.json bun.lock ./",
-    "RUN bun install --frozen-lockfile --production",
+    "RUN --mount=type=secret,id=proxy_ca \\\n    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \\\n    bun install --frozen-lockfile --production",
     "",
   ];
   if (frontend) {
@@ -122,7 +122,7 @@ function renderDockerfile(layers: StarterLayers): string {
       "ARG SPA_PREFIX",
       "ENV SPA_PREFIX=$SPA_PREFIX",
       "COPY frontend/package.json frontend/bun.lock ./",
-      "RUN bun install --frozen-lockfile",
+      "RUN --mount=type=secret,id=proxy_ca \\\n    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \\\n    bun install --frozen-lockfile",
       "COPY frontend/ ./",
       "RUN bun run build",
       "",

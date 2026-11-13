@@ -3,276 +3,254 @@ import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
-import type { DatabaseConnection } from "@getstrata/core/database/baseRepository";
+import { valueService } from "@getstrata/core/contracts/services";
+import { createServiceToken } from "@getstrata/core/contracts/token";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import {
-  bindDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "@getstrata/core/database/boundConnection";
-import { repositoryConnection } from "@getstrata/core/database/repositoryConnection";
-import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
-import {
-  afterCommit,
-  hasActiveTransaction,
-  runInTransaction,
-} from "@getstrata/core/database/transaction";
-import { dispatchModelEvent, eventBus } from "@getstrata/core/events";
-import { withErrorHandling, withJsonErrorHandling } from "@getstrata/core/http/response";
+  type AfterCommitRepositoryListener,
+  defineRepository,
+} from "@getstrata/core/database/definitions";
+import type { DatabaseSession } from "@getstrata/core/database/session";
+import { type DatabaseInvocation, withBoundDatabase } from "../helpers/boundRepositoryHarness";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 import { createMockDependencies } from "./testHelpers";
 
-describe("transaction composition", () => {
-  let connection: ReturnType<typeof createSqliteConnection>;
-  let previousMode: string | undefined;
-
-  beforeEach(async () => {
-    previousMode = process.env.FRONTEND_MODE;
-    process.env.FRONTEND_MODE = "hybrid";
-    connection = createSqliteConnection(":memory:");
-    await connection.unsafe("CREATE TABLE effects (value INTEGER UNIQUE)");
-    bindDatabaseConnection({
-      unsafe: connection.unsafe.bind(connection),
-      async begin<T>(callback: (transaction: DatabaseConnection) => Promise<T>): Promise<T> {
-        await connection.unsafe("BEGIN");
-        try {
-          const result = await callback(connection);
-          await connection.unsafe("COMMIT");
-          return result;
-        } catch (error) {
-          await connection.unsafe("ROLLBACK");
-          throw error;
-        }
+const listener =
+  createServiceToken<AfterCommitRepositoryListener<{ value: number }>>("composition.created");
+const definition = defineRepository({
+  name: "Effects",
+  table: { name: "effects", primaryKey: "value", columns: ["value"] },
+  dependencies: [],
+  create: (binding) => new BaseRepository(binding),
+  effects: [{ action: "created", afterCommit: listener }],
+});
+const sql = (db: Pick<DatabaseSession, "execute">, text: string) =>
+  db.execute<{ value: number }>({ text, params: [] });
+async function fixture(
+  work: (database: DatabaseSession, invoke: DatabaseInvocation, seen: unknown[]) => Promise<void>,
+) {
+  const seen: unknown[] = [];
+  await withBoundDatabase(
+    {
+      definition: {
+        default: "main",
+        connections: { main: { driver: "sqlite", filename: ":memory:" } },
+        repositories: [definition],
       },
-    });
-  });
-
-  afterEach(() => {
-    resetBoundDatabaseConnection();
-    connection.close();
-    restoreEnvVar("FRONTEND_MODE", previousMode);
-  });
-
-  test("afterCommit executes outside a transaction and waits for async work", async () => {
-    let completed = false;
-    await afterCommit(async () => {
-      await Promise.resolve();
-      completed = true;
-    });
-    expect(completed).toBe(true);
-    await expect(
-      afterCommit(() => {
-        throw new Error("external failure");
-      }),
-    ).rejects.toThrow("external failure");
-  });
-
-  test("afterCommit waits for the outer commit and discards rolled-back savepoint callbacks", async () => {
-    const effects: string[] = [];
-    await runInTransaction(async () => {
-      await repositoryConnection.unsafe("INSERT INTO effects VALUES (1)");
-      await afterCommit(async () => {
-        expect(hasActiveTransaction()).toBe(false);
-        // A new transaction must be possible, rather than reusing a released handle.
-        await runInTransaction(async () =>
-          repositoryConnection.unsafe("INSERT INTO effects VALUES (2)"),
-        );
-        effects.push("outer");
-      });
-      await expect(
-        runInTransaction(async () => {
-          await afterCommit(() => {
-            effects.push("rolled back");
-          });
-          throw new Error("savepoint failure");
+      services: [
+        valueService(listener, (row) => {
+          seen.push(row.value);
         }),
-      ).rejects.toThrow("savepoint failure");
-      await runInTransaction(async () => {
-        await afterCommit(() => {
-          effects.push("nested");
+      ],
+    },
+    async (database, invoke) => {
+      await sql(database, "CREATE TABLE effects(value INTEGER UNIQUE)");
+      await work(database, invoke, seen);
+    },
+  );
+}
+
+let previousMode: string | undefined;
+beforeEach(() => {
+  previousMode = process.env.FRONTEND_MODE;
+  process.env.FRONTEND_MODE = "hybrid";
+});
+afterEach(() => restoreEnvVar("FRONTEND_MODE", previousMode));
+describe("transaction composition", () => {
+  test("afterCommit waits for the outer commit and discards rolled-back savepoint callbacks", async () =>
+    fixture(async (database) => {
+      const effects: string[] = [];
+      await database.transaction(async (outer) => {
+        await sql(outer, "INSERT INTO effects VALUES (1)");
+        outer.afterCommit(async () => {
+          await database.transaction((child) => sql(child, "INSERT INTO effects VALUES (2)"));
+          effects.push("outer");
         });
-      });
-      expect(effects).toEqual([]);
-    });
-    expect(effects).toEqual(["outer", "nested"]);
-    expect(await connection.unsafe("SELECT value FROM effects ORDER BY value")).toEqual([
-      { value: 1 },
-      { value: 2 },
-    ]);
-  });
-
-  test("afterCommit never executes on outer rollback or SQL failure", async () => {
-    let count = 0;
-    for (const mode of ["outer", "sql"]) {
-      await expect(
-        runInTransaction(async () => {
-          await runInTransaction(async () => {
-            await afterCommit(() => {
-              count++;
-            });
-          });
-          if (mode === "sql")
-            await repositoryConnection.unsafe("INSERT INTO missing_table VALUES (1)");
-          throw new Error(mode);
-        }),
-      ).rejects.toThrow();
-    }
-    expect(count).toBe(0);
-  });
-
-  test("afterCommit failure reports an error without reverting committed database effects", async () => {
-    await expect(
-      runInTransaction(async () => {
-        await repositoryConnection.unsafe("INSERT INTO effects VALUES (1)");
-        await afterCommit(() => {
-          throw new Error("SMTP unavailable");
-        });
-      }),
-    ).rejects.toThrow("SMTP unavailable");
-    expect(await connection.unsafe("SELECT value FROM effects")).toEqual([{ value: 1 }]);
-  });
-
-  test("implicit repository queries use the transaction rather than the pool", async () => {
-    await expect(
-      runInTransaction(async () => {
-        await repositoryConnection.unsafe("INSERT INTO effects VALUES (1)");
-        throw new Error("rollback");
-      }),
-    ).rejects.toThrow("rollback");
-    expect(await connection.unsafe("SELECT * FROM effects")).toEqual([]);
-  });
-
-  test("a caught nested failure rolls back its writes and events only", async () => {
-    const seen: unknown[] = [];
-    const unsubscribe = eventBus.listen("composition.created", (payload) => {
-      seen.push(payload);
-    });
-    try {
-      await runInTransaction(async () => {
-        await repositoryConnection.unsafe("INSERT INTO effects VALUES (1)");
         await expect(
-          runInTransaction(async () => {
-            await repositoryConnection.unsafe("INSERT INTO effects VALUES (2)");
-            await dispatchModelEvent("composition.created", 2);
+          outer.transaction(async (child) => {
+            child.afterCommit(() => {
+              effects.push("rolled back");
+            });
+            throw new Error("savepoint failure");
+          }),
+        ).rejects.toThrow("savepoint failure");
+        await outer.transaction(async (child) => {
+          child.afterCommit(() => {
+            effects.push("nested");
+          });
+        });
+        expect(effects).toEqual([]);
+      });
+      expect(effects).toEqual(["outer", "nested"]);
+      expect(await sql(database, "SELECT value FROM effects ORDER BY value")).toEqual([
+        { value: 1 },
+        { value: 2 },
+      ]);
+    }));
+  test("afterCommit never executes on outer rollback or SQL failure", async () =>
+    fixture(async (database) => {
+      let count = 0;
+      for (const mode of ["outer", "sql"])
+        await expect(
+          database.transaction(async (outer) => {
+            await outer.transaction(async (child) => {
+              child.afterCommit(() => {
+                count++;
+              });
+            });
+            if (mode === "sql") await sql(outer, "INSERT INTO missing_table VALUES (1)");
+            throw new Error(mode);
+          }),
+        ).rejects.toThrow();
+      expect(count).toBe(0);
+    }));
+  test("afterCommit failure reports an error without reverting committed database effects", async () =>
+    fixture(async (database) => {
+      await expect(
+        database.transaction(async (child) => {
+          await sql(child, "INSERT INTO effects VALUES (1)");
+          child.afterCommit(() => {
+            throw new Error("SMTP unavailable");
+          });
+        }),
+      ).rejects.toMatchObject({ code: "DATABASE_POST_COMMIT_FAILED", data: "committed" });
+      expect(await sql(database, "SELECT value FROM effects")).toEqual([{ value: 1 }]);
+    }));
+  test("explicit repository queries use the transaction rather than the pool", async () =>
+    fixture(async (database) => {
+      await expect(
+        database.transaction(async (child) => {
+          await child.repository(definition).create({ value: 1 });
+          throw new Error("rollback");
+        }),
+      ).rejects.toThrow("rollback");
+      expect(await sql(database, "SELECT * FROM effects")).toEqual([]);
+    }));
+  test("a caught nested failure rolls back its writes and events only", async () =>
+    fixture(async (database, _invoke, seen) => {
+      await database.transaction(async (outer) => {
+        await sql(outer, "INSERT INTO effects VALUES (1)");
+        await expect(
+          outer.transaction(async (child) => {
+            await child.repository(definition).create({ value: 2 });
             throw new Error("observer failed");
           }),
         ).rejects.toThrow("observer failed");
-        await runInTransaction(async () => {
-          await repositoryConnection.unsafe("INSERT INTO effects VALUES (3)");
-          await dispatchModelEvent("composition.created", 3);
-        });
+        await outer.transaction((child) => child.repository(definition).create({ value: 3 }));
         expect(seen).toEqual([]);
       });
-      expect(await connection.unsafe("SELECT value FROM effects ORDER BY value")).toEqual([
+      expect(await sql(database, "SELECT value FROM effects ORDER BY value")).toEqual([
         { value: 1 },
         { value: 3 },
       ]);
       expect(seen).toEqual([3]);
-    } finally {
-      unsubscribe();
-    }
-  });
-
-  test("outer rollback discards successful savepoint writes and events", async () => {
-    const seen: unknown[] = [];
-    const unsubscribe = eventBus.listen("composition.created", (payload) => {
-      seen.push(payload);
-    });
-    try {
+    }));
+  test("outer rollback discards successful savepoint writes and events", async () =>
+    fixture(async (database, _invoke, seen) => {
       await expect(
-        runInTransaction(async () => {
-          await runInTransaction(async () => {
-            await repositoryConnection.unsafe("INSERT INTO effects VALUES (1)");
-            await dispatchModelEvent("composition.created", 1);
-          });
+        database.transaction(async (outer) => {
+          await outer.transaction((child) => child.repository(definition).create({ value: 1 }));
           throw new Error("outer failure");
         }),
       ).rejects.toThrow("outer failure");
-      expect(await connection.unsafe("SELECT * FROM effects")).toEqual([]);
+      expect(await sql(database, "SELECT * FROM effects")).toEqual([]);
       expect(seen).toEqual([]);
-    } finally {
-      unsubscribe();
-    }
-  });
-
-  test("a nested SQL error leaves the outer transaction usable", async () => {
-    await runInTransaction(async () => {
-      await repositoryConnection.unsafe("INSERT INTO effects VALUES (1)");
-      await expect(
-        runInTransaction(async () => {
-          await repositoryConnection.unsafe("INSERT INTO effects VALUES (2)");
-          await repositoryConnection.unsafe("INSERT INTO effects VALUES (1)");
-        }),
-      ).rejects.toThrow();
-      await repositoryConnection.unsafe("INSERT INTO effects VALUES (3)");
-    });
-    expect(await connection.unsafe("SELECT value FROM effects ORDER BY value")).toEqual([
-      { value: 1 },
-      { value: 3 },
-    ]);
-  });
-
-  test("rejects concurrent sibling savepoints without corrupting the first", async () => {
-    await runInTransaction(async () => {
-      let unblock!: () => void;
-      const blocked = new Promise<void>((resolve) => {
-        unblock = resolve;
+    }));
+  test("a nested SQL error leaves the outer transaction usable", async () =>
+    fixture(async (database) => {
+      await database.transaction(async (outer) => {
+        await sql(outer, "INSERT INTO effects VALUES (1)");
+        await expect(
+          outer.transaction(async (child) => {
+            await sql(child, "INSERT INTO effects VALUES (2)");
+            await sql(child, "INSERT INTO effects VALUES (1)");
+          }),
+        ).rejects.toThrow();
+        await sql(outer, "INSERT INTO effects VALUES (3)");
       });
-      const first = runInTransaction(async () => {
-        await blocked;
-        await repositoryConnection.unsafe("INSERT INTO effects VALUES (1)");
-      });
-      try {
-        await expect(runInTransaction(async () => undefined)).rejects.toThrow(
-          "Concurrent nested transactions",
-        );
-      } finally {
-        unblock();
-        await first;
-      }
-    });
-    expect(await connection.unsafe("SELECT * FROM effects")).toEqual([{ value: 1 }]);
-  });
-
-  for (const format of ["json", "html"] as const) {
-    test(`real HTTP ${format} errors cannot commit a failed business transaction`, async () => {
-      const container = new ServiceContainer();
-      container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
-      const kernel = createHttpKernel(createMockDependencies(container));
-      const business = async () =>
-        runInTransaction(async () => {
-          await repositoryConnection.unsafe("INSERT INTO effects VALUES (1)");
-          throw new Error("observer failed after write");
+      expect(await sql(database, "SELECT value FROM effects ORDER BY value")).toEqual([
+        { value: 1 },
+        { value: 3 },
+      ]);
+    }));
+  test("rejects concurrent sibling savepoints without corrupting the first", async () =>
+    fixture(async (database) => {
+      await database.transaction(async (outer) => {
+        let unblock!: () => void;
+        const blocked = new Promise<void>((resolve) => {
+          unblock = resolve;
         });
-      const handler =
-        format === "json"
-          ? kernel.wrap("api", withJsonErrorHandling(business))
-          : kernel.wrap("web", withErrorHandling(business));
-      const server = Bun.serve({
-        port: 0,
-        hostname: "127.0.0.1",
-        fetch: (request) => runInTransaction(async () => handler(request)),
-      });
-      try {
-        const response = await fetch(`http://127.0.0.1:${server.port}/failure`, {
-          headers: { accept: format === "json" ? "application/json" : "text/html" },
+        const first = outer.transaction(async (child) => {
+          await blocked;
+          await sql(child, "INSERT INTO effects VALUES (1)");
         });
-        expect(response.status).toBe(500);
-        expect(response.headers.get("content-type")).toContain(
-          format === "json" ? "application/json" : "text/html",
+        try {
+          await expect(outer.transaction(async () => undefined)).rejects.toMatchObject({
+            code: "DATABASE_TRANSACTION_SCOPE",
+          });
+        } finally {
+          unblock();
+          await first;
+        }
+      });
+      expect(await sql(database, "SELECT * FROM effects")).toEqual([{ value: 1 }]);
+    }));
+  for (const format of ["json", "html"] as const)
+    test(`real HTTP ${format} errors cannot commit a failed business transaction`, async () =>
+      fixture(async (database, invoke) => {
+        const container = new ServiceContainer();
+        container.set(
+          CORE_AUTH_TOKEN,
+          new AuthManager(
+            new GuestGuard({
+              production: false,
+              allowDevHeaders: false,
+              abilities: { admin: [], member: [] },
+            }),
+          ),
         );
-        await response.text();
-        expect(await connection.unsafe("SELECT * FROM effects")).toEqual([]);
-      } finally {
-        await server.stop(true);
-      }
-    });
-  }
-
-  test("an intentionally returned 4xx does not imply rollback", async () => {
-    const response = await runInTransaction(async () => {
-      await repositoryConnection.unsafe("INSERT INTO effects VALUES (1)");
-      return new Response("intentional", { status: 409 });
-    });
-    expect(response.status).toBe(409);
-    expect(await connection.unsafe("SELECT * FROM effects")).toEqual([{ value: 1 }]);
-  });
+        const kernel = createHttpKernel(
+          createMockDependencies(container, undefined, undefined, (envelope, work) =>
+            invoke((database, policy) => work({ database, policy }), envelope),
+          ),
+        );
+        const business = async (
+          _request: Request,
+          ports: import("@getstrata/bootstrap/persistenceContracts").BusinessRequestPorts,
+        ) => {
+          return ports.database.transaction(async (child) => {
+            await sql(child, "INSERT INTO effects VALUES (1)");
+            throw new Error("observer failed after write");
+          });
+        };
+        const handler = format === "json" ? kernel.wrap("api", business) : kernel.wrapWeb(business);
+        const server = Bun.serve({
+          port: 0,
+          hostname: "127.0.0.1",
+          fetch: (request) => handler(request),
+        });
+        try {
+          const response = await fetch(`http://127.0.0.1:${server.port}/failure`, {
+            headers: { accept: format === "json" ? "application/json" : "text/html" },
+          });
+          expect(response.status).toBe(500);
+          expect(response.headers.get("content-type")).toContain(
+            format === "json" ? "application/json" : "text/html",
+          );
+          await response.text();
+          expect(await sql(database, "SELECT * FROM effects")).toEqual([]);
+        } finally {
+          await server.stop(true);
+          kernel.dispose();
+        }
+      }));
+  test("an intentionally returned 4xx does not imply rollback", async () =>
+    fixture(async (database) => {
+      const response = await database.transaction(async (child) => {
+        await sql(child, "INSERT INTO effects VALUES (1)");
+        return new Response("intentional", { status: 409 });
+      });
+      expect(response.status).toBe(409);
+      expect(await sql(database, "SELECT * FROM effects")).toEqual([{ value: 1 }]);
+    }));
 });

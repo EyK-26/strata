@@ -10,9 +10,9 @@ describe("createTestApp", () => {
     pinSeededIntegrationEnv();
   });
 
-  afterAll(() => {
+  afterAll(async () => {
     for (const app of apps) {
-      app.stop();
+      await app.stop();
     }
   });
 

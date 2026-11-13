@@ -12,11 +12,19 @@ describe("webViewSmoke", () => {
       return;
     }
 
-    const text = await fetchPageText({
-      url: "data:text/html,<html><body><h1>Strata smoke</h1></body></html>",
-      backend: "chrome",
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () =>
+        new Response("<html><body><h1>Strata smoke</h1></body></html>", {
+          headers: { "content-type": "text/html" },
+        }),
     });
-
-    expect(text).toContain("Strata smoke");
+    try {
+      const text = await fetchPageText({ url: new URL("/", server.url).href, backend: "chrome" });
+      expect(text).toContain("Strata smoke");
+    } finally {
+      await server.stop(true);
+    }
   }, 30_000);
 });

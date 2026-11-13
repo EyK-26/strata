@@ -1,6 +1,9 @@
 import { resolveUserId } from "@getstrata/core/auth/accessControl";
 import { currentAuthUser } from "@getstrata/core/auth/authContext";
-import { hasFreshPasswordConfirmation } from "@getstrata/core/auth/passwordConfirmCookie";
+import {
+  hasFreshPasswordConfirmation,
+  type PasswordConfirmReadOptions,
+} from "@getstrata/core/auth/passwordConfirmCookie";
 import { HttpError, UnauthorizedError } from "@getstrata/core/errors/http";
 import { errorResponse } from "@getstrata/core/http/response";
 import { requestPrefersJson } from "./contentNegotiation";
@@ -11,7 +14,7 @@ import { sanitizeInternalPath } from "./safeInternalPath";
 const PASSWORD_CONFIRM_MESSAGE = "Password confirmation required.";
 const PASSWORD_CONFIRM_PATH = "/confirm-password";
 
-function createRequirePasswordConfirmMiddleware(): Middleware {
+function createRequirePasswordConfirmMiddleware(options?: PasswordConfirmReadOptions): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
     const user = currentAuthUser();
     const json = currentRequestMeta().errorFormat === "json" || requestPrefersJson(request);
@@ -26,7 +29,7 @@ function createRequirePasswordConfirmMiddleware(): Middleware {
 
     const userId = resolveUserId(user);
 
-    if (hasFreshPasswordConfirmation(request, userId, user.authVersion)) {
+    if (hasFreshPasswordConfirmation(request, userId, user.authVersion, options)) {
       return await next();
     }
 

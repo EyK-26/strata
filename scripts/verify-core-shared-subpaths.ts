@@ -22,30 +22,15 @@ const sharedSubpathSet = new Set<string>(CORE_SHARED_SUBPATHS);
 /** Runtime names that must exist on the published JS entry even without a sibling checkout. */
 const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
   "auth/membershipContext": [
-    "configureMembershipLookup",
-    "resetMembershipLookupForTests",
-    "resolveMembershipLookup",
+    "loadMembershipSnapshot",
+    "runWithMembershipSnapshot",
     "runWithMembershipContext",
     "currentOrganizationIds",
   ],
   "metrics/prometheus": ["PrometheusRegistry", "prometheusRegistry", "HTTP_DURATION_BUCKETS_MS"],
-  "database/transaction": [
-    "afterCommit",
-    "hasActiveTransaction",
-    "runInTransaction",
-    "createTransactionAcquisitionMetrics",
-    "renderTransactionAcquisitionMetrics",
-  ],
   "queue/queueMetrics": ["createFailedJobMetricsCollector", "renderFailedJobMetrics"],
   "tracing/tracingMiddleware": ["createTracingRuntime", "renderTracingMetrics"],
-  "database/model": [
-    "Model",
-    "ModelQuery",
-    "defineModel",
-    "bootModels",
-    "registerModelRepository",
-    "registerModelClass",
-  ],
+  "database/model": ["Model", "ModelQuery", "defineModel", "defineRepository", "repositoryEffects"],
   "database/boundConnection": [
     "bindDatabaseConnection",
     "getBoundDatabaseConnection",
@@ -65,6 +50,8 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
   ],
   "events/outbox": [
     "SqlOutbox",
+    "createSqlOutboxBindings",
+    "createOutboxWorkerTransport",
     "createOutboxMigration",
     "createOutboxMetricsCollector",
     "renderOutboxMetrics",
@@ -215,6 +202,22 @@ for (const subpath of CORE_SHARED_SUBPATHS) {
 const barrelPath = join(ROOT, "packages/strata-core/dist/index.js");
 try {
   const barrel = await import(barrelPath);
+  for (const removed of [
+    "configureMembershipLookup",
+    "resetMembershipLookupForTests",
+    "resolveMembershipLookup",
+    "bootModels",
+    "registerModelRepository",
+    "registerModelClass",
+    "snapshotModelQuery",
+    "createBoundModel",
+    "getBindingPorts",
+  ]) {
+    assert(
+      !(removed in barrel),
+      `Removed global or private helper leaked from package: ${removed}`,
+    );
+  }
   // Legacy barrel compatibility belongs in the package verifier; application
   // consumers keep using granular imports as required by the import gate.
   const { ModelQuery } = await import(join(ENTRIES_DIR, "database/model.js"));

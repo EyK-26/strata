@@ -1,12 +1,10 @@
-import { resolveDatabaseDriver, Schema } from "../../framework/public-api.ts";
-import { asMigrationDatabase } from "./migrationDatabase.ts";
+import { Schema } from "../../framework/public-api.ts";
 import type { Migration } from "./types";
 
 const migration: Migration = {
   name: "0015_create_organization_members",
   async up(db) {
-    const migrationDb = asMigrationDatabase(db);
-    await Schema.run(migrationDb, resolveDatabaseDriver(), (schema) => {
+    await Schema.run(db, "pgsql", (schema) => {
       schema.create("organization_member", (table) => {
         table.id();
         table.foreignId("organization_id").constrained("organization").cascadeOnDelete();
@@ -19,8 +17,7 @@ const migration: Migration = {
     });
   },
   async down(db) {
-    const migrationDb = asMigrationDatabase(db);
-    await Schema.run(migrationDb, resolveDatabaseDriver(), (schema) => {
+    await Schema.run(db, "pgsql", (schema) => {
       schema.drop("organization_member");
     });
   },

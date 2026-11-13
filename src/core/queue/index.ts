@@ -5,6 +5,9 @@ type QueuePriority = "high" | "default" | "low";
 /** Logical identity is stable across automatic recovery and supported manual replay. */
 interface JobContext {
   /** One-based execution attempt supplied by the framework retry owner. */
+  readonly auditExport?: () => Promise<number>;
+  readonly cache?: import("../../types/services").CacheLike;
+  readonly database?: import("../database/session").DatabaseSession;
   readonly attempt?: number;
   readonly jobId: string;
   readonly signal: AbortSignal;

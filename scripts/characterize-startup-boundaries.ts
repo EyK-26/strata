@@ -1,8 +1,17 @@
 #!/usr/bin/env bun
 /** Opt-in published-consumer characterization, not the proposed M1 validator. */
 import assert from "node:assert/strict";
-import { mkdir, open, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
+import {
+  generateProject,
+  resolveOverlayRoot,
+  resolveTemplateRoot,
+} from "../packages/strata-starter/src/generate.ts";
+import {
+  layersFromFlags,
+  parseCreateStrataArgs,
+} from "../packages/strata-starter/src/parseArgs.ts";
 import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp.ts";
 import { installStartupProbe, STARTUP_PROBE_OPTIONS } from "../tests/helpers/startupProbe.ts";
 import { type ProbeCase, STARTUP_PROBE_MODES } from "./fixtures/m1-startup/types.ts";
@@ -14,6 +23,7 @@ const output: string = requestedOutput;
 const source = join(import.meta.dir, "fixtures/m1-startup");
 const casesPath =
   process.argv.find((v) => v.startsWith("--cases="))?.slice(8) ?? join(source, "cases.json");
+const sourceRuntime = process.argv.includes("--source");
 const cases: ProbeCase[] = JSON.parse(await readFile(casesPath, "utf8"));
 assert.ok(cases.length);
 for (const item of cases) {
@@ -31,26 +41,6 @@ assert.ok(
   Bun.semver.satisfies(Bun.version, ">=1.4.4"),
   "Use Bun >=1.4.4 without changing global Bun.",
 );
-const baselineTag = "v2.2.54";
-function blob(name: string) {
-  const result = Bun.spawnSync(
-    [
-      "git",
-      "--no-optional-locks",
-      "-c",
-      "core.fsmonitor=false",
-      "show",
-      `${baselineTag}:tests/fixtures/${name}`,
-    ],
-    { cwd: repo },
-  );
-  assert.equal(result.exitCode, 0, result.stderr.toString());
-  return result.stdout;
-}
-const originals = {
-  native: blob("nativeRouteConsumer.ts"),
-  collision: blob("routeCollisionConsumer.ts"),
-};
 const hash = (value: string | Uint8Array) =>
   new Bun.CryptoHasher("sha256").update(value).digest("hex");
 const inputs = Object.fromEntries(
@@ -79,7 +69,9 @@ await writeFile(
 );
 const oldTmp = process.env.TMPDIR;
 process.env.TMPDIR = scratch;
-let fixture: Awaited<ReturnType<typeof createGeneratedSecurityApp>> | undefined;
+let fixture:
+  | { app: string; runtimeUrl: string; migrationUrl: string; close(): Promise<void> }
+  | undefined;
 let active: ReturnType<typeof Bun.spawn> | undefined;
 const results: Record<string, unknown>[] = [];
 const baselines: Record<string, unknown>[] = [];
@@ -92,10 +84,8 @@ async function save(status: string) {
         status,
         runtime: Bun.version,
         revision: Bun.revision,
-        publishedVersion: "2.2.54",
-        baselineTag,
+        runtimeSource: sourceRuntime ? "source" : "installed-candidate",
         inputs,
-        originalSha256: { native: hash(originals.native), collision: hash(originals.collision) },
         baselines,
         executed: results.length,
         failed: results.filter((v) => v.exitCode !== 0).length,
@@ -132,10 +122,48 @@ function interrupt() {
 process.once("SIGTERM", interrupt);
 process.once("SIGINT", interrupt);
 try {
-  fixture = await createGeneratedSecurityApp("sqlite", STARTUP_PROBE_OPTIONS, {
-    publishedVersion: "2.2.54",
-    parentDirectory: scratch,
-  });
+  if (sourceRuntime) {
+    const root = await mkdtemp(join(scratch, "source-startup-"));
+    const app = join(root, "app");
+    generateProject({
+      projectName: "source-startup",
+      targetDir: app,
+      layers: layersFromFlags(
+        parseCreateStrataArgs([
+          "source-startup",
+          "--database=sqlite",
+          ...STARTUP_PROBE_OPTIONS,
+          "--yes",
+        ]),
+      ),
+      templateRoot: resolveTemplateRoot(),
+      overlayRoot: resolveOverlayRoot(),
+    });
+    // Explicit source-only resolution. No archive installation or package build.
+    await symlink(join(repo, "node_modules"), join(app, "node_modules"), "dir");
+    const config = await Bun.file(join(app, "tsconfig.json")).json();
+    const sourceConfig = await Bun.file(join(repo, "tsconfig.json")).json();
+    const paths: Record<string, string[]> = {};
+    for (const [name, values] of Object.entries(sourceConfig.compilerOptions.paths))
+      paths[name] = (values as string[]).map((value) => resolve(repo, value));
+    paths["@getstrata/core/database/migrations"] = [
+      join(repo, "src/core/database/migrations/runner.ts"),
+    ];
+    config.compilerOptions.lib = sourceConfig.compilerOptions.lib;
+    config.compilerOptions.paths = { ...config.compilerOptions.paths, ...paths };
+    await writeFile(join(app, "tsconfig.json"), JSON.stringify(config, null, 2));
+    const url = `sqlite://${join(root, "startup.sqlite")}`;
+    fixture = {
+      app,
+      runtimeUrl: url,
+      migrationUrl: url,
+      close: () => rm(root, { recursive: true, force: true }),
+    };
+  } else {
+    fixture = await createGeneratedSecurityApp("sqlite", STARTUP_PROBE_OPTIONS, {
+      parentDirectory: scratch,
+    });
+  }
   const env = {
     ...Object.fromEntries(
       Object.entries(process.env).filter(([k]) =>
@@ -154,27 +182,10 @@ try {
     APP_URL: "http://127.0.0.1:3000",
     AUTH_DEV_HEADERS: "true",
     OTEL_SDK_DISABLED: "true",
+    SESSION_SECRET: "m3b2-startup-probe-fixed-fixture-secret",
   };
-  for (const part of ["core", "bootstrap", "cli"])
-    assert.equal(
-      (await Bun.file(join(fixture.app, `node_modules/@getstrata/${part}/package.json`)).json())
-        .version,
-      "2.2.54",
-    );
   const target = join(fixture.app, "src/qualification");
   await mkdir(target);
-  for (const [name, body] of Object.entries(originals))
-    await writeFile(join(target, `original-${name}.ts`), body, { flag: "wx" });
-  for (const [name, args] of [
-    ["original-types", ["run", "check"]],
-    ["migrate", [join(fixture.app, "node_modules/@getstrata/cli/cli.ts"), "migrate"]],
-    ["original-native", [join(target, "original-native.ts")]],
-    ["original-collision", [join(target, "original-collision.ts")]],
-  ] as const) {
-    const exitCode = await run([...args], name, env);
-    baselines.push({ name, exitCode });
-    assert.equal(exitCode, 0, `Original ${name} failed; inspect retained log.`);
-  }
   await installStartupProbe(fixture.app);
   const typed = await run(["run", "check"], "probe-types", env);
   baselines.push({ name: "probe-types", exitCode: typed });
@@ -188,7 +199,7 @@ try {
     const observed = (await Bun.file(receipt).exists()) ? await Bun.file(receipt).json() : null;
     results.push({
       name: item.mode,
-      classification: item.classification,
+      classification: observed?.classification ?? item.classification,
       exitCode,
       receipt: observed,
     });
@@ -210,16 +221,7 @@ try {
   }
   try {
     const entries = await readdir(scratch, { withFileTypes: true });
-    for (const e of entries) {
-      assert.ok(
-        e.isDirectory() && !e.isSymbolicLink() && /^bunx-\d+-create-strata@2\.2\.54$/.test(e.name),
-      );
-      assert.equal(
-        (await Bun.file(join(scratch, e.name, "node_modules/create-strata/package.json")).json())
-          .version,
-        "2.2.54",
-      );
-    }
+    assert.equal(entries.length, 0, "Fixture cleanup must remove every directory it created");
     await rm(scratch, { recursive: true });
     await writeFile(
       join(output, "cleanup.json"),

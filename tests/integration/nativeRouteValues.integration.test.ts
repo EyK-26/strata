@@ -1,11 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
 import { buildWebModuleRoutes } from "@getstrata/bootstrap/buildWebModuleRoutes";
-import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
-import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { applyMiddlewareToRoutes } from "@getstrata/core/http/middleware";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
@@ -30,7 +28,6 @@ afterEach(() => {
 describe("native route values at the framework server boundary", () => {
   test("module builders preserve opaque native values instead of replacing SDK objects", () => {
     const dependencies = createMockDependencies(new ServiceContainer());
-    dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
     const file = Bun.file(new URL("../../index.html", import.meta.url));
     const directory = { dir: "./public" };
     const values = { "/file": file, "/directory": directory };
@@ -49,7 +46,6 @@ describe("native route values at the framework server boundary", () => {
 
   test("inert method-map fields cannot disable middleware around executable callbacks", async () => {
     const dependencies = createMockDependencies(new ServiceContainer());
-    dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
     const routes = buildModuleRoutes(dependencies, {
       modules: [
         {
@@ -93,7 +89,6 @@ describe("native route values at the framework server boundary", () => {
   test("static and mixed method values cannot bypass module middleware", async () => {
     const visits: string[] = [];
     const dependencies = createMockDependencies(new ServiceContainer());
-    dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
     const moduleRoutes = buildModuleRoutes(dependencies, {
       modules: [
         {
@@ -328,4 +323,106 @@ describe("native route values at the framework server boundary", () => {
       await server.stop(true);
     }
   });
+});
+
+test("public module route composition wraps actual native callbacks and static Responses without granting identity policy", async () => {
+  const { createHttpKernel } = await import("@getstrata/bootstrap/httpKernel");
+  const { runWithRequestMeta } = await import("@getstrata/core/http/requestMetaContext");
+  const events: string[] = [];
+  const phases: unknown[] = [];
+  const base = createMockDependencies(new ServiceContainer());
+  // Keep the generic invocation signature; record only its externally visible envelopes.
+  const invoke: typeof base.invoke = (envelope, work) => {
+    phases.push(envelope.metadata?.phase);
+    return base.invoke(envelope, work);
+  };
+  const kernel = createHttpKernel({ ...base, invoke });
+  await invoke({ kind: "command" }, (ports) =>
+    ports.database.execute({ text: "CREATE TABLE static_privilege_rows (id INTEGER)", params: [] }),
+  );
+  const middleware: import("@getstrata/core/http/middleware").Middleware[] = [
+    async (request, next) =>
+      runWithRequestMeta({ ...currentRequestMeta(), userAgent: "module-owned" }, async () => {
+        events.push("outer.before");
+        const response = await next();
+        expect(currentRequestMeta().userAgent).toBe("module-owned");
+        events.push("outer.after");
+        response.headers.set("x-module-outer", "applied");
+        expect(request.url).toContain("/composed");
+        return response;
+      }),
+    async (_request, next) => {
+      events.push("inner.before");
+      expect(currentRequestMeta().userAgent).toBe("module-owned");
+      const response = await next();
+      events.push("inner.after");
+      return response;
+    },
+  ];
+  const handler = async () => {
+    events.push("handler");
+    expect(currentRequestMeta().userAgent).toBe("module-owned");
+    return new Response("native middleware", { status: 201 });
+  };
+  const wrapped = {
+    ...kernel.wrapRouteMap({ "/composed": { GET: handler, inert: false } }, middleware),
+    ...kernel.wrapRouteMap({ "/static": new Response("static response", { status: 202 }) }, []),
+  };
+  expect((wrapped["/composed"] as { inert: unknown }).inert).toBe(false);
+  let policyAttempts = 0;
+  let privilegedSQL = 0;
+  const server = createWebServer({
+    port: 0,
+    native: { hostname: "127.0.0.1" },
+    routes: wrapped as import("@getstrata/bootstrap/contracts").AppRouteMap,
+    onRequest: async (request, _server, ports) => {
+      if (new URL(request.url).pathname !== "/static") return;
+      expect(ports).toBeDefined();
+      if (!ports) throw new Error("Expected original business ports");
+      policyAttempts++;
+      await expect(
+        (async () =>
+          ports.policy.run(ports.database, { kind: "bypass" }, async (child) => {
+            privilegedSQL++;
+            await child.execute({
+              text: "INSERT INTO static_privilege_rows VALUES (1)",
+              params: [],
+            });
+            return undefined;
+          }))(),
+      ).rejects.toThrow("Database policy is not allowed by this route declaration.");
+    },
+  });
+  try {
+    const before = currentRequestMeta().userAgent;
+    const response = await fetch(new URL("/composed", server.url));
+    expect(response.status).toBe(201);
+    expect(await response.text()).toBe("native middleware");
+    expect(response.headers.get("x-module-outer")).toBe("applied");
+    expect(events).toEqual([
+      "outer.before",
+      "inner.before",
+      "handler",
+      "inner.after",
+      "outer.after",
+    ]);
+    expect(currentRequestMeta().userAgent).toBe(before);
+    // A separate empty middleware declaration keeps the static transport contract
+    // observable without the /composed-only assertions above.
+    events.length = 0;
+    const staticResponse = await fetch(new URL("/static", server.url));
+    expect(staticResponse.status).toBe(202);
+    expect(await staticResponse.text()).toBe("static response");
+    expect(policyAttempts).toBe(1);
+    expect(privilegedSQL).toBe(0);
+    expect(phases.filter(Boolean)).toEqual(["metadata", "business", "metadata", "business"]);
+    expect(
+      await invoke({ kind: "command" }, (ports) =>
+        ports.database.execute({ text: "SELECT id FROM static_privilege_rows", params: [] }),
+      ),
+    ).toEqual([]);
+  } finally {
+    await server.stop(true);
+    kernel.dispose();
+  }
 });

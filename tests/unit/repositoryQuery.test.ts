@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineRepository } from "@getstrata/core/database/definitions";
 import { belongsTo, hasMany, hasManyThrough } from "@getstrata/core/database/relationships";
 import { defineTable } from "@getstrata/core/database/table";
+import type { DatabaseConnection } from "../../src/core/database/connectionContracts";
+import { withRepositories } from "../helpers/boundRepositoryHarness";
 
 type Squad = { id: number; label: string };
 type Member = { id: number; name: string; squad_id: number };
@@ -44,141 +47,163 @@ class FakeConnection implements DatabaseConnection {
   }
 }
 
-class SquadRepository extends BaseRepository<Squad, "id"> {
-  constructor(connection: DatabaseConnection) {
-    super(squadTable, connection);
-  }
-}
+class SquadRepository extends BaseRepository<Squad, "id"> {}
+const SquadRepositoryDefinition = defineRepository({
+  name: "SquadRepository",
+  table: squadTable,
+  dependencies: [],
+  create: (binding) => new SquadRepository(binding),
+});
 
-class MemberRepository extends BaseRepository<Member, "id"> {
-  constructor(connection: DatabaseConnection) {
-    super(memberTable, connection);
-  }
-}
+class MemberRepository extends BaseRepository<Member, "id"> {}
+const MemberRepositoryDefinition = defineRepository({
+  name: "MemberRepository",
+  table: memberTable,
+  dependencies: [],
+  create: (binding) => new MemberRepository(binding),
+});
 
 describe("RepositoryQuery", () => {
   test("withHasMany attaches related rows by foreign key", async () => {
     const connection = new FakeConnection();
-    const squads = new SquadRepository(connection);
-    const members = new MemberRepository(connection);
 
-    connection.queue([{ id: 1, label: "Alpha" }]);
-    connection.queue([
-      { id: 10, name: "Ripley", squad_id: 1 },
-      { id: 11, name: "Hicks", squad_id: 1 },
-    ]);
+    await withRepositories(
+      connection,
+      [SquadRepositoryDefinition, MemberRepositoryDefinition] as const,
+      async ([squads, members]) => {
+        connection.queue([{ id: 1, label: "Alpha" }]);
+        connection.queue([
+          { id: 10, name: "Ripley", squad_id: 1 },
+          { id: 11, name: "Hicks", squad_id: 1 },
+        ]);
 
-    const rows = await squads
-      .query()
-      .orderBy({ id: "asc" })
-      .withHasMany("members", squadHasMembers, members)
-      .get();
+        const rows = await squads
+          .query()
+          .orderBy({ id: "asc" })
+          .withHasMany("members", squadHasMembers, members)
+          .get();
 
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.members).toEqual([
-      { id: 10, name: "Ripley", squad_id: 1 },
-      { id: 11, name: "Hicks", squad_id: 1 },
-    ]);
-    expect(connection.calls).toHaveLength(2);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.members).toEqual([
+          { id: 10, name: "Ripley", squad_id: 1 },
+          { id: 11, name: "Hicks", squad_id: 1 },
+        ]);
+        expect(connection.calls).toHaveLength(2);
+      },
+    );
   });
 
   test("withBelongsTo attaches parent rows", async () => {
     const connection = new FakeConnection();
-    const squads = new SquadRepository(connection);
-    const members = new MemberRepository(connection);
 
-    connection.queue([{ id: 10, name: "Ripley", squad_id: 1 }]);
-    connection.queue([{ id: 1, label: "Alpha" }]);
+    await withRepositories(
+      connection,
+      [SquadRepositoryDefinition, MemberRepositoryDefinition] as const,
+      async ([squads, members]) => {
+        connection.queue([{ id: 10, name: "Ripley", squad_id: 1 }]);
+        connection.queue([{ id: 1, label: "Alpha" }]);
 
-    const rows = await members.query().withBelongsTo("squad", memberBelongsToSquad, squads).get();
+        const rows = await members
+          .query()
+          .withBelongsTo("squad", memberBelongsToSquad, squads)
+          .get();
 
-    expect(rows[0]?.squad).toEqual({ id: 1, label: "Alpha" });
+        expect(rows[0]?.squad).toEqual({ id: 1, label: "Alpha" });
+      },
+    );
   });
 
   test("supports where, limit, and first", async () => {
     const connection = new FakeConnection();
-    const squads = new SquadRepository(connection);
 
-    connection.queue([{ id: 2, label: "Bravo" }]);
+    await withRepositories(connection, [SquadRepositoryDefinition] as const, async ([squads]) => {
+      connection.queue([{ id: 2, label: "Bravo" }]);
 
-    const row = await squads.query().where({ id: 2 }).limit(1).first();
+      const row = await squads.query().where({ id: 2 }).limit(1).first();
 
-    expect(row?.label).toBe("Bravo");
-    expect(connection.calls[0]?.query).toContain("LIMIT 1");
+      expect(row?.label).toBe("Bravo");
+      expect(connection.calls[0]?.query).toContain("LIMIT 1");
+    });
   });
 
   test("returns empty arrays without extra queries when no parents match", async () => {
     const connection = new FakeConnection();
-    const squads = new SquadRepository(connection);
-    const members = new MemberRepository(connection);
 
-    connection.queue([]);
+    await withRepositories(
+      connection,
+      [SquadRepositoryDefinition, MemberRepositoryDefinition] as const,
+      async ([squads, members]) => {
+        connection.queue([]);
 
-    const rows = await squads.query().withHasMany("members", squadHasMembers, members).get();
+        const rows = await squads.query().withHasMany("members", squadHasMembers, members).get();
 
-    expect(rows).toEqual([]);
-    expect(connection.calls).toHaveLength(1);
+        expect(rows).toEqual([]);
+        expect(connection.calls).toHaveLength(1);
+      },
+    );
   });
 
   test("supports orWhere, offset, joins, groupBy, having, and paginate", async () => {
     const connection = new FakeConnection();
-    const squads = new SquadRepository(connection);
 
-    connection.queue([{ count: 1 }]);
-    connection.queue([{ id: 1, label: "Alpha" }]);
+    await withRepositories(connection, [SquadRepositoryDefinition] as const, async ([squads]) => {
+      connection.queue([{ count: 1 }]);
+      connection.queue([{ id: 1, label: "Alpha" }]);
 
-    const page = await squads
-      .query()
-      .where({ id: 1 })
-      .orWhere({ label: "Alpha" })
-      .orWhere((builder) => builder.where({ id: 2 }))
-      .orWhere((builder) => {
-        builder.where({ id: 3 });
-      })
-      .offset(5)
-      .join("member.squad_id", "squad.id")
-      .leftJoin("member.squad_id", "squad.id")
-      .leftJoin("member.squad_id", "squad.id")
-      .groupBy(["id"])
-      .having({ id: 1 })
-      .paginate({ page: 1, perPage: 10 });
+      const page = await squads
+        .query()
+        .where({ id: 1 })
+        .orWhere({ label: "Alpha" })
+        .orWhere((builder) => builder.where({ id: 2 }))
+        .orWhere((builder) => {
+          builder.where({ id: 3 });
+        })
+        .offset(5)
+        .join("member.squad_id", "squad.id")
+        .leftJoin("member.squad_id", "squad.id")
+        .leftJoin("member.squad_id", "squad.id")
+        .groupBy(["id"])
+        .having({ id: 1 })
+        .paginate({ page: 1, perPage: 10 });
 
-    expect(page.data).toHaveLength(1);
-    expect(connection.calls.length).toBeGreaterThanOrEqual(2);
+      expect(page.data).toHaveLength(1);
+      expect(connection.calls.length).toBeGreaterThanOrEqual(2);
+    });
   });
 
   test("whereNull, whereNotNull, whereIn, and whereExists compile SQL filters", async () => {
     const connection = new FakeConnection();
-    const squads = new SquadRepository(connection);
 
-    connection.queue([]);
-    await squads.query().whereNull("label").get();
-    expect(connection.calls.at(-1)?.query).toContain("IS NULL");
+    await withRepositories(connection, [SquadRepositoryDefinition] as const, async ([squads]) => {
+      connection.queue([]);
+      await squads.query().whereNull("label").get();
+      expect(connection.calls.at(-1)?.query).toContain("IS NULL");
 
-    connection.queue([]);
-    await squads.query().whereNotNull("label").get();
-    expect(connection.calls.at(-1)?.query).toContain("IS NOT NULL");
+      connection.queue([]);
+      await squads.query().whereNotNull("label").get();
+      expect(connection.calls.at(-1)?.query).toContain("IS NOT NULL");
 
-    connection.queue([]);
-    await squads.query().whereIn("id", [1, 2]).get();
-    expect(connection.calls.at(-1)?.query).toContain("IN");
+      connection.queue([]);
+      await squads.query().whereIn("id", [1, 2]).get();
+      expect(connection.calls.at(-1)?.query).toContain("IN");
 
-    connection.queue([]);
-    await squads
-      .query()
-      .whereExists("SELECT 1 FROM member WHERE member.squad_id = squad.id", [])
-      .get();
-    expect(connection.calls.at(-1)?.query).toContain("EXISTS");
+      connection.queue([]);
+      await squads
+        .query()
+        .whereExists("SELECT 1 FROM member WHERE member.squad_id = squad.id", [])
+        .get();
+      expect(connection.calls.at(-1)?.query).toContain("EXISTS");
 
-    connection.queue([]);
-    await squads
-      .query()
-      .whereNotExists(
-        "SELECT 1 FROM member WHERE member.squad_id = squad.id AND member.id = $1",
-        [9],
-      )
-      .get();
-    expect(connection.calls.at(-1)?.query).toContain("NOT EXISTS");
+      connection.queue([]);
+      await squads
+        .query()
+        .whereNotExists(
+          "SELECT 1 FROM member WHERE member.squad_id = squad.id AND member.id = $1",
+          [9],
+        )
+        .get();
+      expect(connection.calls.at(-1)?.query).toContain("NOT EXISTS");
+    });
   });
 
   test("withHasManyThrough attaches far rows through an intermediate table", async () => {
@@ -210,40 +235,49 @@ describe("RepositoryQuery", () => {
       secondKey: "position_id",
     });
     const connection = new FakeConnection();
-    class DepartmentRepository extends BaseRepository<Department, "id"> {
-      constructor() {
-        super(departmentTable, connection);
-      }
-    }
-    class ApplicationRepository extends BaseRepository<Application, "id"> {
-      constructor() {
-        super(applicationTable, connection);
-      }
-    }
-    const departments = new DepartmentRepository();
-    const applications = new ApplicationRepository();
+    class DepartmentRepository extends BaseRepository<Department, "id"> {}
+    const DepartmentRepositoryDefinition = defineRepository({
+      name: "DepartmentRepository",
+      table: departmentTable,
+      dependencies: [],
+      create: (binding) => new DepartmentRepository(binding),
+    });
+    class ApplicationRepository extends BaseRepository<Application, "id"> {}
+    const ApplicationRepositoryDefinition = defineRepository({
+      name: "ApplicationRepository",
+      table: applicationTable,
+      dependencies: [],
+      create: (binding) => new ApplicationRepository(binding),
+    });
 
-    connection.queue([{ id: 1, name: "Engineering" }]);
-    connection.queue([{ id: 10, position_id: 4, title: "A", __through_parent_id: 1 }]);
+    await withRepositories(
+      connection,
+      [DepartmentRepositoryDefinition, ApplicationRepositoryDefinition] as const,
+      async ([departments, applications]) => {
+        connection.queue([{ id: 1, name: "Engineering" }]);
+        connection.queue([{ id: 10, position_id: 4, title: "A", __through_parent_id: 1 }]);
 
-    const rows = await departments
-      .query()
-      .withHasManyThrough("applications", relation, applications)
-      .get();
+        const rows = await departments
+          .query()
+          .withHasManyThrough("applications", relation, applications)
+          .get();
 
-    expect(rows[0]?.applications).toEqual([{ id: 10, position_id: 4, title: "A" }]);
+        expect(rows[0]?.applications).toEqual([{ id: 10, position_id: 4, title: "A" }]);
+      },
+    );
   });
 
   test("withTrashed and onlyTrashed pass soft-delete options to findAll", async () => {
     const connection = new FakeConnection();
-    const squads = new SquadRepository(connection);
 
-    connection.queue([]);
-    await squads.query().withTrashed().get();
-    expect(connection.calls.at(-1)?.query).not.toContain("deleted_at");
+    await withRepositories(connection, [SquadRepositoryDefinition] as const, async ([squads]) => {
+      connection.queue([]);
+      await squads.query().withTrashed().get();
+      expect(connection.calls.at(-1)?.query).not.toContain("deleted_at");
 
-    connection.queue([]);
-    await squads.query().onlyTrashed().get();
-    expect(connection.calls.at(-1)?.query).not.toContain("deleted_at");
+      connection.queue([]);
+      await squads.query().onlyTrashed().get();
+      expect(connection.calls.at(-1)?.query).not.toContain("deleted_at");
+    });
   });
 });

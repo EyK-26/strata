@@ -4,7 +4,11 @@ import { currentAuthUser, currentCredentialSource } from "@getstrata/core/auth/a
 import { ApiTokenGuard, AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
 import { composeMiddleware } from "@getstrata/core/http/middleware";
-import { enableDevAuthHeaders, restoreDevAuthHeaders } from "../helpers/devAuthHeaders";
+import {
+  enableDevAuthHeaders,
+  guestGuardOptions,
+  restoreDevAuthHeaders,
+} from "../helpers/devAuthHeaders";
 
 describe("GuestGuard", () => {
   let previousHeaders: string | undefined;
@@ -15,7 +19,7 @@ describe("GuestGuard", () => {
     restoreDevAuthHeaders(previousHeaders);
   });
   test("resolves users from development auth headers", async () => {
-    const auth = new AuthManager(new GuestGuard());
+    const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
     const user = await auth.resolve(
       new Request("http://example.test/organizations", {
         headers: {

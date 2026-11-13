@@ -20,7 +20,6 @@ describe("@getstrata/core/database barrel", () => {
       "Factory",
       "Schema",
       "createDatabaseConnection",
-      "runInTransaction",
       "useSqlDialect",
       "currentSqlDialect",
       "defineTable",
@@ -38,4 +37,15 @@ describe("@getstrata/core/database barrel", () => {
       expect(typeof exported.get(name)).toBe("function");
     }
   });
+});
+
+test("database barrel excludes ambient transaction owners", () => {
+  for (const name of [
+    "runInTransaction",
+    "isActiveTransactionConnection",
+    "hasActiveTransaction",
+    "requestTransactionRollback",
+    "afterCommit",
+  ])
+    expect(name in databaseBarrel).toBe(false);
 });

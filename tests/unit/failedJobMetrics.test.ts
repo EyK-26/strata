@@ -1,51 +1,47 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import {
-  bindDatabaseConnection,
-  getBoundDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "@getstrata/core/database/boundConnection";
-import type { UnsafeQueryable } from "@getstrata/core/database/connection";
-import { resetSqlDialect, useSqlDialect } from "@getstrata/core/database/dialect";
+import { beforeEach, expect, test } from "bun:test";
+import { dialectFor } from "@getstrata/core/database/sqlDialects";
+import type { FailedJobObservation } from "@getstrata/core/queue/failedJobMetrics";
 import {
   createFailedJobMetricsCollector,
   renderFailedJobMetrics,
 } from "@getstrata/core/queue/queueMetrics";
 import { runWithDatabaseConnection } from "../../src/core/database/connectionContext";
 
-let previous: ReturnType<typeof getBoundDatabaseConnection>;
 let schema: unknown[];
 let records: unknown[];
 let calls: { query: string; params: readonly unknown[] }[];
+let observeReadOnly: FailedJobObservation;
 beforeEach(() => {
-  previous = getBoundDatabaseConnection();
-  useSqlDialect("pgsql");
   schema = [{ supported: true }];
   records = [];
   calls = [];
-  const unsafe = async <T>(query: string, params: readonly unknown[] = []): Promise<T[]> => {
-    calls.push({ query, params });
-    return (
-      query.includes("FROM pg_class") ? schema : query.includes('FROM "failed_job"') ? records : []
-    ) as T[];
+  observeReadOnly = async (_timeoutMs, work) => {
+    calls.push({ query: "SET TRANSACTION READ ONLY", params: [] });
+    return work(
+      {
+        dialect: dialectFor("pgsql"),
+        execute: async <T>({
+          text,
+          params,
+        }: import("@getstrata/core/database/driverPorts").SqlStatement) => {
+          calls.push({ query: text, params });
+          return (
+            text.includes("FROM pg_class")
+              ? schema
+              : text.includes('FROM "failed_job"')
+                ? records
+                : []
+          ) as T[];
+        },
+      },
+      () => 1000,
+    );
   };
-  const reserved = {
-    unsafe,
-    release() {},
-    async begin<T>(run: (tx: UnsafeQueryable) => Promise<T>) {
-      return run({ unsafe });
-    },
-  };
-  bindDatabaseConnection({ ...reserved, reserve: async () => reserved });
-});
-afterEach(() => {
-  if (previous) bindDatabaseConnection(previous);
-  else resetBoundDatabaseConnection();
-  resetSqlDialect();
 });
 
 test("failed-job sample uses the ORM projection, primary-key ordering and only a fixed bounded limit", async () => {
   records = [{ id: 1 }, { id: 2 }, { id: 3 }];
-  const collector = createFailedJobMetricsCollector({ sampleLimit: 2 });
+  const collector = createFailedJobMetricsCollector({ observeReadOnly, sampleLimit: 2 });
   try {
     expect(await collector.collect()).toEqual({ sampleLimit: 2, count: 2, capped: true });
     const query = calls.find((call) => call.query.includes('FROM "failed_job"'));
@@ -69,33 +65,34 @@ test("malformed schema or projection responses fail instead of emitting an empty
     [{ supported: true }, { supported: true }],
   ]) {
     schema = unsupported;
-    const collector = createFailedJobMetricsCollector();
+    const collector = createFailedJobMetricsCollector({ observeReadOnly });
     await expect(collector.collect()).rejects.toThrow("standard global table");
     await collector.close();
   }
   schema = [{ supported: true }];
   for (const invalid of [[{}], [{ id: null }], [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }]]) {
     records = invalid;
-    const collector = createFailedJobMetricsCollector({ sampleLimit: 2 });
+    const collector = createFailedJobMetricsCollector({ observeReadOnly, sampleLimit: 2 });
     await expect(collector.collect()).rejects.toThrow("Invalid failed-job metrics response");
     await collector.close();
   }
 });
 
-test("invalid limits/deadlines and unsupported dialects fail explicitly", async () => {
+test("invalid limits/deadlines and missing explicit observation runners fail explicitly", async () => {
   for (const sampleLimit of [0, 1001, 0.5, NaN])
-    expect(() => createFailedJobMetricsCollector({ sampleLimit })).toThrow();
+    expect(() => createFailedJobMetricsCollector({ observeReadOnly, sampleLimit })).toThrow();
   for (const timeoutMs of [0, 5001, 0.5, NaN])
-    expect(() => createFailedJobMetricsCollector({ timeoutMs })).toThrow();
-  useSqlDialect("sqlite");
-  const collector = createFailedJobMetricsCollector();
-  await expect(collector.collect()).rejects.toThrow("Postgres");
+    expect(() => createFailedJobMetricsCollector({ observeReadOnly, timeoutMs })).toThrow();
+  expect(() => createFailedJobMetricsCollector({ observeReadOnly: undefined } as never)).toThrow(
+    "explicit read-only",
+  );
+  const collector = createFailedJobMetricsCollector({ observeReadOnly });
   await collector.close();
   await expect(collector.collect()).rejects.toThrow("closed");
 });
 
 test("failed-job rendering validates capped-count semantics and emits a fixed vocabulary", async () => {
-  const collector = createFailedJobMetricsCollector();
+  const collector = createFailedJobMetricsCollector({ observeReadOnly });
   const snapshot = await collector.collect();
   expect(renderFailedJobMetrics(snapshot)).toContain("strata_queue_failed_jobs_sample 0\n");
   for (const invalid of [
@@ -113,20 +110,19 @@ test("failed-job rendering validates capped-count semantics and emits a fixed vo
   await collector.close();
 });
 
-test("collectors reject an ambient raw connection even without a framework transaction scope", async () => {
-  const collector = createFailedJobMetricsCollector();
+test("explicit observation never selects an ambient raw connection", async () => {
+  const collector = createFailedJobMetricsCollector({ observeReadOnly });
   try {
-    await expect(
-      runWithDatabaseConnection(
-        {
-          async unsafe() {
-            return [];
-          },
+    const snapshot = await runWithDatabaseConnection(
+      {
+        async unsafe() {
+          return [];
         },
-        () => collector.collect(),
-      ),
-    ).rejects.toThrow("independent transaction");
-    expect(calls).toEqual([]);
+      },
+      () => collector.collect(),
+    );
+    expect(snapshot).toEqual({ sampleLimit: 500, count: 0, capped: false });
+    expect(calls.some((call) => call.query.includes("FROM pg_class"))).toBe(true);
   } finally {
     await collector.close();
   }
@@ -138,21 +134,24 @@ test("close drains late rollback/release after a response deadline and does not 
     unblock = resolve;
   });
   let released = false;
-  const unsafe = async <T>(query: string): Promise<T[]> => {
-    if (query.includes("set_config")) await blocked;
-    return [];
-  };
-  const reserved = {
-    unsafe,
-    release() {
+  observeReadOnly = async (_timeout, work) => {
+    try {
+      await blocked;
+      return await work(
+        {
+          dialect: dialectFor("pgsql"),
+          execute: async <T>({
+            text,
+          }: import("@getstrata/core/database/driverPorts").SqlStatement) =>
+            (text.includes("FROM pg_class") ? [{ supported: true }] : []) as T[],
+        },
+        () => 1000,
+      );
+    } finally {
       released = true;
-    },
-    async begin<T>(run: (tx: UnsafeQueryable) => Promise<T>) {
-      return run({ unsafe });
-    },
+    }
   };
-  bindDatabaseConnection({ ...reserved, reserve: async () => reserved });
-  const collector = createFailedJobMetricsCollector({ timeoutMs: 20 });
+  const collector = createFailedJobMetricsCollector({ observeReadOnly, timeoutMs: 20 });
   await expect(collector.collect()).rejects.toThrow("timed out");
   await expect(collector.collect()).rejects.toThrow("still settling");
   let drained = false;

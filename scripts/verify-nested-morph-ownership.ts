@@ -18,36 +18,14 @@ const source = await readFile(
   join(import.meta.dir, "../tests/unit/database/nestedMorphOwnership.test.ts"),
   "utf8",
 );
-let consumer = source;
-if (engine !== "sqlite") {
-  const before =
-    '  const database = createSqliteConnection(":memory:");\n  useSqlDialect("sqlite");';
-  assert.ok(consumer.includes(before));
-  consumer = consumer
-    .replace(
-      'import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";',
-      'import { createNativeFixture } from "./nativeFixture.ts";',
-    )
-    .replace(
-      before,
-      "  const { database, runSchema, dialect } = await createNativeFixture();\n  useSqlDialect(dialect);",
-    )
-    .replace('await Schema.run(connection, "sqlite",', "await runSchema(")
-    .replace(
-      "  const connection: DatabaseConnection = {",
-      "  const connection: DatabaseConnection = {\n    begin: database.begin?.bind(database),",
-    )
-    .replaceAll("f.database.close();", "await f.database.close();");
-  const marker = "  class ArticleOwner";
-  assert.ok(consumer.indexOf(marker) > 0 && source.indexOf(marker) > 0);
-  assert.equal(
-    consumer
-      .slice(consumer.indexOf(marker))
-      .replaceAll("await f.database.close();", "f.database.close();"),
-    source.slice(source.indexOf(marker)),
-    "Every model declaration, test and assertion must remain byte-identical.",
-  );
-}
+const originalHarness = '"../../helpers/nestedMorphHarness"';
+assert.ok(source.includes(originalHarness));
+const consumer = source.replace(originalHarness, '"./nativeFixture.ts"');
+assert.equal(
+  consumer.replace('"./nativeFixture.ts"', originalHarness),
+  source,
+  "Only the fixture-owner import changes; every declaration/test/assertion remains byte-identical.",
+);
 await writeFile(join(output, "consumer.test.ts"), consumer);
 const fixture = await createGeneratedSecurityApp(
   engine,

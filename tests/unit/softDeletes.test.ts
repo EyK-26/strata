@@ -1,9 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
+import { valueService } from "@getstrata/core/contracts/services";
+import { createServiceToken } from "@getstrata/core/contracts/token";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import type { AfterCommitRepositoryListener } from "@getstrata/core/database/definitions";
+import { defineRepository } from "@getstrata/core/database/definitions";
 import { buildSelectQuery } from "@getstrata/core/database/query";
 import { dialectFor } from "@getstrata/core/database/sqlDialects";
 import { defineTable } from "@getstrata/core/database/table";
-import { eventBus } from "@getstrata/core/events";
+import type { DatabaseConnection } from "../../src/core/database/connectionContracts";
+import { withRepositories } from "../helpers/boundRepositoryHarness";
 
 type SoftRecord = {
   id: number;
@@ -33,11 +38,13 @@ class FakeConnection implements DatabaseConnection {
   }
 }
 
-class SoftRepository extends BaseRepository<SoftRecord, "id"> {
-  constructor(connection: DatabaseConnection) {
-    super(softTable, connection);
-  }
-}
+class SoftRepository extends BaseRepository<SoftRecord, "id"> {}
+const SoftRepositoryDefinition = defineRepository({
+  name: "SoftRepository",
+  table: softTable,
+  dependencies: [],
+  create: (binding) => new SoftRepository(binding),
+});
 
 describe("soft delete query scoping", () => {
   test("excludes trashed rows by default", () => {
@@ -62,85 +69,104 @@ describe("soft delete query scoping", () => {
 describe("soft delete repository", () => {
   test("soft deletes by setting deleted_at instead of removing the row", async () => {
     const connection = new FakeConnection();
-    const repository = new SoftRepository(connection);
-    const deletedAt = new Date("2026-01-01T00:00:00.000Z");
 
-    connection.queue([
-      {
-        id: 1,
-        name: "Alpha",
-        deleted_at: deletedAt,
+    await withRepositories(
+      connection,
+      [SoftRepositoryDefinition] as const,
+      async ([repository]) => {
+        const deletedAt = new Date("2026-01-01T00:00:00.000Z");
+
+        connection.queue([
+          {
+            id: 1,
+            name: "Alpha",
+            deleted_at: deletedAt,
+          },
+        ]);
+
+        const result = await repository.deleteById(1);
+
+        expect(result).toBe(true);
+        expect(connection.calls[0]?.query).toContain("UPDATE");
+        expect(connection.calls[0]?.query).toContain('"deleted_at"');
+        expect(connection.calls[0]?.params[1]).toBe(1);
       },
-    ]);
-
-    const result = await repository.deleteById(1);
-
-    expect(result).toBe(true);
-    expect(connection.calls[0]?.query).toContain("UPDATE");
-    expect(connection.calls[0]?.query).toContain('"deleted_at"');
-    expect(connection.calls[0]?.params[1]).toBe(1);
+    );
   });
 
   test("restores a soft deleted row", async () => {
     const connection = new FakeConnection();
-    const repository = new SoftRepository(connection);
 
-    connection.queue([
-      {
-        id: 1,
-        name: "Alpha",
-        deleted_at: null,
+    await withRepositories(
+      connection,
+      [SoftRepositoryDefinition] as const,
+      async ([repository]) => {
+        connection.queue([
+          {
+            id: 1,
+            name: "Alpha",
+            deleted_at: null,
+          },
+        ]);
+
+        const record = await repository.restoreById(1);
+
+        expect(record?.deleted_at).toBeNull();
+        expect(connection.calls[0]?.query).toContain('"deleted_at" = $1');
+        expect(connection.calls[0]?.params).toEqual([null, 1]);
       },
-    ]);
-
-    const record = await repository.restoreById(1);
-
-    expect(record?.deleted_at).toBeNull();
-    expect(connection.calls[0]?.query).toContain('"deleted_at" = $1');
-    expect(connection.calls[0]?.params).toEqual([null, 1]);
+    );
   });
 
   test("force deletes a row permanently", async () => {
     const connection = new FakeConnection();
-    const repository = new SoftRepository(connection);
 
-    connection.queue([{ deleted_id: 1 }]);
+    await withRepositories(
+      connection,
+      [SoftRepositoryDefinition] as const,
+      async ([repository]) => {
+        connection.queue([{ deleted_id: 1 }]);
 
-    expect(await repository.forceDeleteById(1)).toBe(true);
-    expect(connection.calls[0]?.query).toContain("DELETE FROM");
+        expect(await repository.forceDeleteById(1)).toBe(true);
+        expect(connection.calls[0]?.query).toContain("DELETE FROM");
+      },
+    );
   });
 
   test("dispatches model events for repository writes", async () => {
     const connection = new FakeConnection();
-    const repository = new SoftRepository(connection);
     const events: string[] = [];
-
-    const unsubscribe = eventBus.listen("soft_item.created", () => {
-      events.push("created");
+    const listener = createServiceToken<AfterCommitRepositoryListener<SoftRecord>>("created");
+    const definition = defineRepository({
+      name: "SoftEvents",
+      table: softTable,
+      dependencies: [],
+      create: (binding) => new SoftRepository(binding),
+      effects: [{ action: "created", afterCommit: listener }],
     });
-
-    connection.queue([
-      {
-        id: 1,
-        name: "Alpha",
-        deleted_at: null,
+    await withRepositories(
+      connection,
+      [definition] as const,
+      async ([repository]) => {
+        connection.queue([{ id: 1, name: "Alpha", deleted_at: null }]);
+        await repository.create({ id: 1, name: "Alpha", deleted_at: null });
+        expect(events).toEqual(["created"]);
       },
-    ]);
-
-    await repository.create({
-      id: 1,
-      name: "Alpha",
-      deleted_at: null,
-    });
-
-    unsubscribe();
-    expect(events).toEqual(["created"]);
+      "pgsql",
+      [
+        valueService(listener, () => {
+          events.push("created");
+        }),
+      ],
+    );
   });
 });
 
 test("missing soft-delete and restore targets do not emit an entity", async () => {
   const connection = new FakeConnection();
-  const repository = new SoftRepository(connection);
-  expect(await repository.softDeleteById(404)).toBe(false);
-  expect(await repository.restoreById(404)).toBeNull();
+
+  await withRepositories(connection, [SoftRepositoryDefinition] as const, async ([repository]) => {
+    expect(await repository.softDeleteById(404)).toBe(false);
+    expect(await repository.restoreById(404)).toBeNull();
+  });
 });

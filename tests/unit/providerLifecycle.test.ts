@@ -1,8 +1,25 @@
 import { describe, expect, test } from "bun:test";
-import { appContext, collectProviders, createAppContext } from "@getstrata/bootstrap/context";
+import {
+  collectProviders,
+  createApplicationContext,
+  createAppContext as createOwnedContext,
+} from "@getstrata/bootstrap/context";
 import type { ServiceProvider } from "@getstrata/bootstrap/contracts";
 import { CORE_HTTP_CLEANUP_TOKEN } from "@getstrata/core/contracts/serviceTokens";
-import { resolveApplicationConfig } from "@getstrata/core/runtime/applicationRegistry";
+import { createDatabaseBindings } from "@getstrata/core/database/bindings";
+
+const contextOptions = () => ({
+  connection: "main",
+  definition: {
+    providers: [],
+    services: createDatabaseBindings({
+      default: "main",
+      connections: { main: { driver: "sqlite", filename: ":memory:" } },
+    }),
+  },
+});
+const createAppContext = (providers: readonly ServiceProvider[]) =>
+  createOwnedContext(providers, contextOptions());
 
 const base = () =>
   collectProviders([]).filter((provider) =>
@@ -63,23 +80,20 @@ describe("awaited provider lifecycle", () => {
         order.push("module.boot");
       },
     };
-    const pending = createAppContext([...base(), starter, module]);
+    const owner = createApplicationContext([...base(), starter, module], contextOptions());
+    const pending = owner.start();
     await started;
     expect(order).toEqual(["starter.register"]);
-    let published = false;
-    try {
-      published = resolveApplicationConfig().get("lifecycle.ready") === true;
-    } catch {
-      /* no previously booted context */
-    }
-    expect(published).toBe(false);
+    expect(owner.application.state.phase).toBe("starting");
+    expect(owner.application.state.boot).toBe("pending");
     release();
     const context = await pending;
     expect(order).toEqual(["starter.register", "module.register", "starter.boot", "module.boot"]);
-    expect(appContext.container).toBe(context.container);
+    expect(context.container.resolve("late.binding")).toBe("ready");
+    expect(owner.application.state.phase).toBe("ready");
     await context.dispose();
-    expect(() => appContext.container).toThrow("Await createAppContext()");
-    expect(() => resolveApplicationConfig()).toThrow("not been bootstrapped");
+    expect(owner.application.state.phase).toBe("stopped");
+    await expect(context.invoke({ kind: "command" }, () => undefined)).rejects.toBeDefined();
   });
 
   test("failed async registration cleans partial acquisitions in reverse order and does not boot", async () => {
@@ -160,19 +174,28 @@ describe("awaited provider lifecycle", () => {
     const results = await Promise.allSettled([context.dispose(), context.dispose()]);
     expect(results.every((result) => result.status === "rejected")).toBe(true);
     expect(order).toEqual(["second.close", "first.close"]);
+    const startupError = new Error("startup failed");
     const failure: ServiceProvider = {
       ...provider,
       async boot() {
-        throw new Error("startup failed");
+        throw startupError;
       },
     };
-    try {
-      await createAppContext([...base(), failure]);
-      throw new Error("expected rejection");
-    } catch (error) {
-      expect(error).toBeInstanceOf(AggregateError);
-      expect((error as AggregateError).cause).toEqual(new Error("startup failed"));
-    }
+    const owner = createApplicationContext([...base(), failure], contextOptions());
+    await expect(owner.start()).rejects.toBeInstanceOf(AggregateError);
+    await expect(owner.start()).rejects.toMatchObject({ cause: startupError });
+    const completion = await owner.application.completion;
+    expect(
+      completion.snapshot.errors.some(
+        (item) => item.kind === "startup" && item.error === startupError,
+      ),
+    ).toBe(true);
+    const cleanup = completion.snapshot.errors.find((item) => item.kind === "cleanup");
+    const cleanupError = cleanup?.error;
+    expect(cleanupError).toBeInstanceOf(AggregateError);
+    if (!(cleanupError instanceof AggregateError))
+      throw new Error("Expected aggregate cleanup failure.");
+    expect(cleanupError.errors[0]).toEqual(new Error("cleanup failed"));
   });
 
   test("dependency validation failure unwinds resources and older context disposal cannot clear a newer one", async () => {
@@ -193,7 +216,8 @@ describe("awaited provider lifecycle", () => {
     const first = await createAppContext(base());
     const second = await createAppContext(base());
     await first.dispose();
-    expect(resolveApplicationConfig()).toBe(second.config);
+    expect(second.application.state.phase).toBe("ready");
+    expect(await second.invoke({ kind: "command" }, () => "second-owned")).toBe("second-owned");
     await second.dispose();
   });
 });
@@ -219,14 +243,18 @@ test("HTTP startup rejects a delayed provider before socket admission and cleans
   const script = `
     import App from ${JSON.stringify(join(repo, "src/bootstrap/app.ts"))};
     import { configureModulesDirectory } from ${JSON.stringify(join(repo, "src/bootstrap/discoverModules.ts"))};
-    import { closeDatabase } from ${JSON.stringify(join(repo, "src/db/connection/index.ts"))};
+    import { ensureModulesLoaded, discoverModules } from ${JSON.stringify(join(repo, "src/bootstrap/discoverModules.ts"))};
+    import { collectProviders } from ${JSON.stringify(join(repo, "src/bootstrap/context.ts"))};
+    import { createDatabaseBindings } from ${JSON.stringify(join(repo, "src/core/database/bindings.ts"))};
     configureModulesDirectory(${JSON.stringify(root)});
     globalThis.acquired = 0; globalThis.closed = 0;
     let bound = 0;
     Bun.serve = () => { bound++; throw new Error("unexpected socket admission"); };
+    await ensureModulesLoaded();
+    const app=new App({port:0,providers:collectProviders(discoverModules()),connection:"main",definition:{providers:[],services:createDatabaseBindings({default:"main",connections:{main:{driver:"sqlite",filename:":memory:"}}})}});
     let failure;
-    try { await new App().serve(); } catch (error) { failure = error.message; }
-    await closeDatabase();
+    try { await app.serve(); } catch (error) { failure = error.message; }
+    await app.shutdown();
     console.log(JSON.stringify({ bound, acquired: globalThis.acquired, closed: globalThis.closed, failure }));
   `;
   try {
@@ -237,6 +265,9 @@ test("HTTP startup rejects a delayed provider before socket admission and cleans
       env: {
         ...Bun.env,
         APP_ENV: "local",
+        DATABASE_URL: "sqlite://:memory:",
+        DB_CONNECTION: "sqlite",
+        FRONTEND_MODE: "api",
         CACHE_DRIVER: "array",
         QUEUE_DRIVER: "sync",
         SCHEDULER_DRIVER: "disabled",
@@ -322,7 +353,12 @@ test("failed provider drain leaves infrastructure open instead of closing beneat
       },
     },
   ]);
-  await expect(context.dispose()).rejects.toThrow("Provider drain failed");
+  await expect(context.dispose()).rejects.toThrow("Application shutdown is incomplete.");
+  expect(
+    context.application.state.errors.some(
+      (item) => item.kind === "cleanup" && item.phase === "drain",
+    ),
+  ).toBe(true);
   expect(closed).toBe(false);
 });
 
@@ -340,18 +376,19 @@ test("direct disposal preserves application services until admitted work and tel
         config.set("drain.active", "available");
         onCleanup(async () => {
           await gate;
-          reads.push(resolveApplicationConfig().get<string>("drain.active"));
+          reads.push(config.get<string>("drain.active"));
         }, "drain");
         onCleanup(() => {
-          reads.push(resolveApplicationConfig().get<string>("drain.active"));
+          reads.push(config.get<string>("drain.active"));
         }, "flush");
       },
     },
   ]);
   const disposal = context.dispose();
-  expect(resolveApplicationConfig().get<string>("drain.active")).toBe("available");
+  expect(context.config.get<string>("drain.active")).toBe("available");
   release();
   await disposal;
   expect(reads).toEqual(["available", "available"]);
-  expect(() => resolveApplicationConfig()).toThrow("not been bootstrapped");
+  expect(context.application.state.phase).toBe("stopped");
+  await expect(context.invoke({ kind: "command" }, () => undefined)).rejects.toBeDefined();
 });

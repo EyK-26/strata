@@ -1,6 +1,6 @@
 import { RedisClient } from "bun";
-import { createFailedJobService } from "./createAppQueue";
 import { queueConfig, resolveRedisQueueTransport } from "./queueConfig";
+import type { QueueServices } from "./queueServices";
 import { queueInvalidKey, queueProcessingKey } from "./redisQueue";
 import { defaultQueueKeys } from "./redisQueueKeys";
 import {
@@ -51,9 +51,10 @@ async function readRedisQueueDepth(redisUrl: string): Promise<QueueDepthMetrics>
   };
 }
 
-async function collectQueueMetrics(): Promise<QueueMetricsSnapshot> {
+async function collectQueueMetrics(
+  failedJobs: Pick<QueueServices, "listRecent">,
+): Promise<QueueMetricsSnapshot> {
   const driver = queueConfig.driver;
-  const failedJobs = createFailedJobService();
   const failedCount = (await failedJobs.listRecent(1000)).length;
 
   if (driver !== "redis") {

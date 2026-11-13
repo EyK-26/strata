@@ -1,4 +1,3 @@
-import { eventBus } from "@getstrata/core/events";
 import {
   resolveApplicationAuth,
   resolveApplicationCache,
@@ -28,11 +27,7 @@ function queue() {
 }
 
 function events() {
-  try {
-    return resolveApplicationEventBus();
-  } catch {
-    return eventBus;
-  }
+  return resolveApplicationEventBus();
 }
 
 function config<T>(key: string): T | undefined {

@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { registerDefaultJobs } from "@getstrata/bootstrap/queue/defaultJobs";
 import { Job } from "@getstrata/core/queue";
-import { createFailedJobService } from "@getstrata/core/queue/createAppQueue";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 import { type QueueJobEnvelope, runQueueJob } from "@getstrata/core/queue/jobRunner";
 import { QUEUE_LIST_KEY, RedisQueue } from "@getstrata/core/queue/redisQueue";
 import { RedisClient } from "bun";
+import { withQueuePersistence } from "../helpers/queuePersistence";
 
 interface EchoPayload {
   message: string;
@@ -30,18 +30,18 @@ describe("Redis queue integration", () => {
     jobRegistry.track("test.echo.integration", echoJob);
     const queue = new RedisQueue(redisUrl);
     const client = new RedisClient(redisUrl);
-    const failedJobs = createFailedJobService();
+    await withQueuePersistence(async ({ services: failedJobs }) => {
+      await client.del(QUEUE_LIST_KEY);
+      await queue.dispatch(echoJob, { message: "redis-integration" });
 
-    await client.del(QUEUE_LIST_KEY);
-    await queue.dispatch(echoJob, { message: "redis-integration" });
+      const popped = await client.brpop(QUEUE_LIST_KEY, 2);
+      expect(popped).not.toBeNull();
 
-    const popped = await client.brpop(QUEUE_LIST_KEY, 2);
-    expect(popped).not.toBeNull();
+      const [, rawPayload] = popped as [string, string];
+      const envelope = JSON.parse(rawPayload) as QueueJobEnvelope;
+      await runQueueJob(envelope, failedJobs);
 
-    const [, rawPayload] = popped as [string, string];
-    const envelope = JSON.parse(rawPayload) as QueueJobEnvelope;
-    await runQueueJob(envelope, failedJobs);
-
-    expect(messages).toEqual(["redis-integration"]);
+      expect(messages).toEqual(["redis-integration"]);
+    });
   });
 });

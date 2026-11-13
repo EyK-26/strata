@@ -4,9 +4,14 @@ import { createHash } from "node:crypto";
 import type { InitializedAppContext } from "@getstrata/bootstrap/context";
 import { createCacheStore } from "@getstrata/core/cache/createCacheStore";
 import { CacheRepository } from "@getstrata/core/cache/repository";
+import type { Application, TransportDefinition } from "@getstrata/core/contracts/application";
 import { Job } from "@getstrata/core/queue";
-import { createFailedJobService } from "@getstrata/core/queue/createAppQueue";
+import type { QueueServices } from "@getstrata/core/queue/createAppQueue";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import {
+  createQueueWorkerTransport,
+  type QueueWorkerTransport,
+} from "@getstrata/core/queue/queueWorkerTransport";
 import {
   QUEUE_LIST_KEY,
   QueueWorker,
@@ -28,11 +33,16 @@ const scope = process.env.APP_KEY_PREFIX;
 assert.ok(url, "Use the explicit dedicated Redis fixture URL.");
 assert.ok(scope && /^strata-protocol-[0-9a-f-]{36}$/.test(scope), "Use a fresh owned namespace.");
 const application: {
-  createApp(options: { migrate: false }): Promise<{ context: InitializedAppContext }>;
+  createApp(options: {
+    migrate: false;
+    mode: "command";
+    transports: readonly TransportDefinition[];
+  }): Promise<{
+    context: InitializedAppContext;
+    application: Application;
+    queueServices: QueueServices;
+  }>;
 } = await import(new URL("../bootstrap/createApp.ts", import.meta.url).href);
-const database: { closeDatabase(): Promise<void> } = await import(
-  new URL("../bootstrap/database.ts", import.meta.url).href
-);
 const observer = new RedisClient(url);
 const taskId = "public-protocol";
 // Ownership receipt for cleanup only; every lease operation uses the public store.
@@ -43,11 +53,13 @@ const ownedPatterns = [`${scope}:*`, `scheduler:{${taskHash}}:*`];
 const marker = `qualification-unrelated-${crypto.randomUUID()}`;
 let scopeOwned = false;
 let markerOwned = false;
-let app: { context: InitializedAppContext } | undefined;
+let app:
+  | { context: InitializedAppContext; application: Application; queueServices: QueueServices }
+  | undefined;
 let list: RedisQueue | undefined;
 let streams: RedisStreamsQueue | undefined;
-let listWorker: QueueWorker | undefined;
-let streamWorker: RedisStreamsWorker | undefined;
+let listWorker: QueueWorkerTransport | undefined;
+let streamWorker: QueueWorkerTransport | undefined;
 let cacheA: CacheRepository | undefined;
 let cacheB: CacheRepository | undefined;
 let leases: RedisSchedulerLeaseStore | undefined;
@@ -71,7 +83,35 @@ try {
   );
   markerOwned = true;
   await observer.set(marker, "preserve");
-  app = await application.createApp({ migrate: false });
+  const selected = () => {
+    if (!app) throw Error("Application queue services not ready");
+    return app.queueServices;
+  };
+  const services: QueueServices = {
+    recordFailure: (input) => selected().recordFailure(input),
+    listRecent: (limit) => selected().listRecent(limit),
+    retry: (...args) => selected().retry(...args),
+    delete: (id) => selected().delete(id),
+    flush: () => selected().flush(),
+    runAttempt: (...args) => selected().runAttempt(...args),
+  };
+  listWorker = createQueueWorkerTransport({
+    name: "qualification.list-worker",
+    redisUrl: url,
+    queueServices: services,
+    createWorker: (redis, services) => new QueueWorker(redis, services),
+  });
+  streamWorker = createQueueWorkerTransport({
+    name: "qualification.stream-worker",
+    redisUrl: url,
+    queueServices: services,
+    createWorker: (redis, services) => new RedisStreamsWorker(redis, services),
+  });
+  app = await application.createApp({
+    migrate: false,
+    mode: "command",
+    transports: [listWorker.transport, streamWorker.transport],
+  });
   assert.equal(appKeyPrefix(), scope);
   const effects: string[] = [];
   class ProtocolJob extends Job<{ kind: string }> {
@@ -83,9 +123,7 @@ try {
   const jobName = `qualification.protocol.${crypto.randomUUID()}`;
   jobRegistry.register(jobName, () => job);
   jobRegistry.track(jobName, job);
-  const failedJobs = createFailedJobService();
   list = new RedisQueue(url);
-  listWorker = new QueueWorker(url, failedJobs);
   const queueKey = queueKeyForPriority(job.priority);
   assert.equal(queueKey, QUEUE_LIST_KEY);
   assert.ok(queueKey.startsWith(`${scope}:`));
@@ -105,7 +143,6 @@ try {
   assert.equal(await observer.llen(queueProcessingKey(queueKey)), 0);
 
   streams = new RedisStreamsQueue(url);
-  streamWorker = new RedisStreamsWorker(url, failedJobs);
   const jobId = await streams.enqueue(
     job,
     { kind: "streams" },
@@ -168,15 +205,15 @@ try {
   failure = error;
 } finally {
   const cleanups: Array<() => unknown | Promise<unknown>> = [
-    () => listWorker?.close(),
-    () => streamWorker?.close(),
     () => list?.close(),
     () => streams?.close(),
     () => cacheA?.close(),
     () => cacheB?.close(),
     () => leases?.close(),
-    () => app?.context.dispose(),
-    () => database.closeDatabase(),
+    async () => {
+      const result = await app?.application.stop();
+      if (result) assert.ok(result.successful, "Application cleanup must be confirmed");
+    },
     async () => {
       if (!scopeOwned) return;
       const keys = await ownedKeys();

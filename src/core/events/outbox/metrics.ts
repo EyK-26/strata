@@ -1,7 +1,14 @@
-import { currentSqlDialect } from "../../database/dialect";
-import { createReadOnlyCollector } from "../../database/readOnlyCollector";
-import { repositoryConnection as db } from "../../database/repositoryConnection";
-import { runWithMigrationBypass } from "../../tenant/databaseTenantContext";
+import type {
+  ReadOnlyObservation,
+  ReadOnlyObservationExecutor,
+} from "../../database/ownedReadOnlyObservation";
+
+function observationSql(database: ReadOnlyObservationExecutor) {
+  return {
+    unsafe: <R>(text: string, params: readonly unknown[] = []) =>
+      database.execute<R>({ text, params }),
+  };
+}
 
 type OutboxMetricState =
   | "pending_due"
@@ -20,6 +27,7 @@ interface OutboxMetricsSnapshot {
   }[];
 }
 interface OutboxMetricsOptions {
+  observeReadOnly: ReadOnlyObservation;
   timeoutMs?: number;
   sampleLimit?: number;
 }
@@ -80,8 +88,13 @@ ${specifications
   )
   .join("\nUNION ALL\n")}`;
 
-async function readIndexedSnapshot(sampleLimit: number, remaining: () => number) {
-  const mysql = currentSqlDialect().driver === "mysql";
+async function readIndexedSnapshot(
+  database: ReadOnlyObservationExecutor,
+  sampleLimit: number,
+  remaining: () => number,
+) {
+  const db = observationSql(database);
+  const mysql = database.dialect.driver === "mysql";
   if (mysql) await db.unsafe("SELECT event_id FROM strata_outbox_delivery LIMIT 0");
   const schema = await db.unsafe<{ valid: number }>(
     mysql
@@ -148,50 +161,82 @@ async function readIndexedSnapshot(sampleLimit: number, remaining: () => number)
   return rows;
 }
 
-/** Explicit platform observation, using the same transaction-local RLS bypass as coordination.
- * Postgres uses scoped bypass; official SQLite/MySQL adapters use isolated read-only snapshots.
- */
-function createOutboxMetricsCollector(options: OutboxMetricsOptions = {}): OutboxMetricsCollector {
+/** Explicit app-owned platform observation; the configured runner owns native policy and snapshot lifetime. */
+function createOutboxMetricsCollector(options: OutboxMetricsOptions): OutboxMetricsCollector {
+  if (typeof options.observeReadOnly !== "function")
+    throw new TypeError("Outbox metrics require an explicit read-only observation runner.");
   const timeoutMs = options.timeoutMs ?? 1000;
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 5000)
+    throw new TypeError("Outbox metrics timeout must be between 1 and 5000 milliseconds.");
   const sampleLimit = options.sampleLimit ?? 500;
   if (!Number.isSafeInteger(sampleLimit) || sampleLimit < 1 || sampleLimit > 1000)
     throw new TypeError("Outbox metrics sample limit must be between 1 and 1000.");
-  return createReadOnlyCollector("Outbox metrics", timeoutMs, async (remaining) => {
-    const read = async () => {
-      remaining();
-      const rows =
-        currentSqlDialect().driver !== "pgsql"
-          ? await readIndexedSnapshot(sampleLimit, remaining)
-          : await db.unsafe<{
-              state: string;
-              count: number | string;
-              lateness_ms: number | string | null;
-            }>(snapshotQuery, [sampleLimit + 1]);
-      remaining();
-      if (rows.length !== specifications.length)
-        throw new Error("Invalid outbox metrics response.");
-      const states = specifications.map((spec) => {
-        const row = rows.find((value) => value.state === spec.state);
-        const count = Number(row?.count);
-        const lateness = row?.lateness_ms == null ? null : Number(row.lateness_ms);
-        if (
-          !Number.isSafeInteger(count) ||
-          count < 0 ||
-          count > sampleLimit + 1 ||
-          (spec.age && (lateness === null || !Number.isFinite(lateness) || lateness < 0))
-        )
-          throw new Error("Invalid outbox metrics values.");
-        return {
-          state: spec.state,
-          count: Math.min(count, sampleLimit),
-          capped: count > sampleLimit,
-          actionableLatenessSeconds: lateness === null ? null : lateness / 1000,
-        };
+  let active: Promise<OutboxMetricsSnapshot> | undefined;
+  let closed = false;
+  return {
+    async collect() {
+      if (closed) throw new Error("Outbox metrics collector is closed.");
+      if (active) throw new Error("Outbox metrics collection is still settling.");
+      const work = options.observeReadOnly(timeoutMs, async (database, remaining) => {
+        const db = observationSql(database);
+        remaining();
+        const rows =
+          database.dialect.driver !== "pgsql"
+            ? await readIndexedSnapshot(database, sampleLimit, remaining)
+            : await db.unsafe<{
+                state: string;
+                count: number | string;
+                lateness_ms: number | string | null;
+              }>(snapshotQuery, [sampleLimit + 1]);
+        remaining();
+        if (rows.length !== specifications.length)
+          throw new Error("Invalid outbox metrics response.");
+        const states = specifications.map((spec) => {
+          const row = rows.find((value) => value.state === spec.state);
+          const count = Number(row?.count);
+          const lateness = row?.lateness_ms == null ? null : Number(row.lateness_ms);
+          if (
+            !Number.isSafeInteger(count) ||
+            count < 0 ||
+            count > sampleLimit + 1 ||
+            (spec.age && (lateness === null || !Number.isFinite(lateness) || lateness < 0))
+          )
+            throw new Error("Invalid outbox metrics values.");
+          return {
+            state: spec.state,
+            count: Math.min(count, sampleLimit),
+            capped: count > sampleLimit,
+            actionableLatenessSeconds: lateness === null ? null : lateness / 1000,
+          };
+        });
+        return { sampleLimit, states };
       });
-      return { sampleLimit, states };
-    };
-    return currentSqlDialect().driver === "pgsql" ? runWithMigrationBypass(read) : read();
-  });
+      active = work;
+      void work
+        .finally(() => {
+          if (active === work) active = undefined;
+        })
+        .catch(() => {});
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        return await Promise.race([
+          work,
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(
+              () => reject(new Error("Outbox metrics collection timed out.")),
+              timeoutMs,
+            );
+          }),
+        ]);
+      } finally {
+        if (timer !== undefined) clearTimeout(timer);
+      }
+    },
+    async close() {
+      closed = true;
+      await active?.catch(() => {});
+    },
+  };
 }
 
 function renderOutboxMetrics(snapshot: OutboxMetricsSnapshot): string {

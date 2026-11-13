@@ -6,7 +6,10 @@ import { isViewsEnabled } from "../runtime/frontendMode";
 import { requestPrefersJson } from "./contentNegotiation";
 import type { Middleware } from "./middleware";
 
-function createRequireAbilityMiddleware(abilityChecker: AbilityChecker) {
+function createRequireAbilityMiddleware(
+  abilityChecker: AbilityChecker,
+  viewsEnabled = isViewsEnabled(),
+) {
   return (ability: string): Middleware => {
     return async (request: Request, next: () => Promise<Response>) => {
       const user = currentAuthUser();
@@ -15,7 +18,7 @@ function createRequireAbilityMiddleware(abilityChecker: AbilityChecker) {
         abilityChecker.requireAbility(user, ability);
       } catch (error) {
         if (error instanceof ForbiddenError) {
-          if (isViewsEnabled() && !requestPrefersJson(request)) {
+          if (viewsEnabled && !requestPrefersJson(request)) {
             throw error;
           }
 

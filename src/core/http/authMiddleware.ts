@@ -4,9 +4,9 @@ import {
   type CredentialSource,
   runWithAuthContext,
 } from "@getstrata/core/auth/authContext";
-import type { AuthManager } from "@getstrata/core/auth/guard";
+import type { AuthReader } from "../auth/authReader";
 
-function createAuthMiddleware(auth: AuthManager) {
+function createAuthMiddleware(auth: AuthReader) {
   return async (request: Request, next: () => Promise<Response>) => {
     const resolved =
       typeof auth.resolveWithSource === "function"

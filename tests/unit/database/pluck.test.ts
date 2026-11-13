@@ -1,13 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import assert from "node:assert/strict";
-import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
-import { Model, registerModelRepository } from "@getstrata/core/database/model";
+import { service } from "@getstrata/core/contracts/services";
+import { createServiceToken } from "@getstrata/core/contracts/token";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineRepository } from "@getstrata/core/database/definitions";
+import { defineModel, Model } from "@getstrata/core/database/model";
 import { quoteIdentifier } from "@getstrata/core/database/query";
 import { hasMany } from "@getstrata/core/database/relationships";
 import { projectPluck, uniqueColumnSelect } from "@getstrata/core/database/repositoryQuery";
+import type { DatabaseSession } from "@getstrata/core/database/session";
 import { dialectFor } from "@getstrata/core/database/sqlDialects";
 import { defineTable } from "@getstrata/core/database/table";
 import { errorResponse } from "@getstrata/core/http/response";
+import type { SqlFixture as DatabaseConnection } from "../../helpers/boundRepositoryHarness";
+import { withBoundDatabase, withRepositories } from "../../helpers/boundRepositoryHarness";
 
 type Squad = { id: number; label: string | null; active: boolean };
 type Member = { id: number; name: string; squad_id: number | null };
@@ -95,23 +101,29 @@ class FakeConnection implements DatabaseConnection {
   }
 }
 
-class SquadRepository extends BaseRepository<Squad, "id"> {
-  constructor(connection: DatabaseConnection) {
-    super(squadTable, connection);
-  }
-}
+class SquadRepository extends BaseRepository<Squad, "id"> {}
+const squadRepository = defineRepository({
+  name: "Squad.repo",
+  table: squadTable,
+  dependencies: [] as const,
+  create: (binding) => new SquadRepository(binding),
+});
 
-class MemberRepository extends BaseRepository<Member, "id"> {
-  constructor(connection: DatabaseConnection) {
-    super(memberTable, connection);
-  }
-}
+class MemberRepository extends BaseRepository<Member, "id"> {}
+const memberRepository = defineRepository({
+  name: "Member.repo",
+  table: memberTable,
+  dependencies: [] as const,
+  create: (binding) => new MemberRepository(binding),
+});
 
-class SoftSquadRepository extends BaseRepository<SoftSquad, "id"> {
-  constructor(connection: DatabaseConnection) {
-    super(softSquadTable, connection);
-  }
-}
+class SoftSquadRepository extends BaseRepository<SoftSquad, "id"> {}
+const softSquadRepository = defineRepository({
+  name: "SoftSquad.repo",
+  table: softSquadTable,
+  dependencies: [] as const,
+  create: (binding) => new SoftSquadRepository(binding),
+});
 
 const squadHasMembers = hasMany<Squad, Member, "id", "squad_id">({
   name: "members",
@@ -170,152 +182,159 @@ describe("uniqueColumnSelect", () => {
 describe("RepositoryQuery pluck and value", () => {
   test("selects only the plucked column and skips eager loads", async () => {
     const connection = new FakeConnection();
-    const squads = new SquadRepository(connection);
-    const members = new MemberRepository(connection);
+    await withRepositories(
+      connection,
+      [squadRepository, memberRepository] as const,
+      async ([squads, members]) => {
+        connection.queue([{ label: "Alpha" }, { label: "Bravo" }]);
 
-    connection.queue([{ label: "Alpha" }, { label: "Bravo" }]);
+        const labels = await squads
+          .query()
+          .orderBy({ id: "asc" })
+          .withHasMany("members", squadHasMembers, members)
+          .pluck("label");
 
-    const labels = await squads
-      .query()
-      .orderBy({ id: "asc" })
-      .withHasMany("members", squadHasMembers, members)
-      .pluck("label");
-
-    expect(labels).toEqual(["Alpha", "Bravo"]);
-    expect(connection.calls).toHaveLength(1);
-    expect(connection.calls[0]?.query).toContain('SELECT "squad"."label" AS "label" FROM "squad"');
-    expect(connection.calls[0]?.query).not.toContain('"squad"."active"');
-    expect(connection.calls[0]?.query).not.toContain('"squad"."label",');
+        expect(labels).toEqual(["Alpha", "Bravo"]);
+        expect(connection.calls).toHaveLength(1);
+        expect(connection.calls[0]?.query).toContain(
+          'SELECT "squad"."label" AS "label" FROM "squad"',
+        );
+        expect(connection.calls[0]?.query).not.toContain('"squad"."active"');
+        expect(connection.calls[0]?.query).not.toContain('"squad"."label",');
+      },
+    );
   });
 
   test("keyed pluck returns a Map, dedupes the same column, and last duplicate key wins", async () => {
     const connection = new FakeConnection();
-    const squads = new SquadRepository(connection);
+    await withRepositories(connection, [squadRepository] as const, async ([squads]) => {
+      connection.queue([
+        { label: "Alpha", id: 1 },
+        { label: "Bravo", id: 1 },
+      ]);
+      const keyed = await squads.query().pluck("label", "id");
+      expect([...keyed.entries()]).toEqual([[1, "Bravo"]]);
 
-    connection.queue([
-      { label: "Alpha", id: 1 },
-      { label: "Bravo", id: 1 },
-    ]);
-    const keyed = await squads.query().pluck("label", "id");
-    expect([...keyed.entries()]).toEqual([[1, "Bravo"]]);
-
-    connection.queue([{ id: 4 }]);
-    const sameColumn = await squads.query().pluck("id", "id");
-    expect(sameColumn.get(4)).toBe(4);
-    expect(connection.calls.at(-1)?.query).toContain('SELECT "squad"."id" AS "id" FROM "squad"');
-    expect((connection.calls.at(-1)?.query.match(/"squad"\."id"/g) ?? []).length).toBe(1);
+      connection.queue([{ id: 4 }]);
+      const sameColumn = await squads.query().pluck("id", "id");
+      expect(sameColumn.get(4)).toBe(4);
+      expect(connection.calls.at(-1)?.query).toContain('SELECT "squad"."id" AS "id" FROM "squad"');
+      expect((connection.calls.at(-1)?.query.match(/"squad"\."id"/g) ?? []).length).toBe(1);
+    });
   });
 
   test("applies where, limit, offset, and does not mutate a later get()", async () => {
     const connection = new FakeConnection();
-    const squads = new SquadRepository(connection);
-    const query = squads
-      .query()
-      .where({ active: true })
-      .orderBy({ label: "asc" })
-      .offset(1)
-      .limit(2);
+    await withRepositories(connection, [squadRepository] as const, async ([squads]) => {
+      const query = squads
+        .query()
+        .where({ active: true })
+        .orderBy({ label: "asc" })
+        .offset(1)
+        .limit(2);
 
-    connection.queue([{ label: "Bravo" }]);
-    expect(await query.pluck("label")).toEqual(["Bravo"]);
-    expect(connection.calls[0]?.query).toContain("LIMIT 2");
-    expect(connection.calls[0]?.query).toContain("OFFSET 1");
-    expect(connection.calls[0]?.query).toContain('"active"');
+      connection.queue([{ label: "Bravo" }]);
+      expect(await query.pluck("label")).toEqual(["Bravo"]);
+      expect(connection.calls[0]?.query).toContain("LIMIT 2");
+      expect(connection.calls[0]?.query).toContain("OFFSET 1");
+      expect(connection.calls[0]?.query).toContain('"active"');
 
-    connection.queue([{ id: 2, label: "Bravo", active: true }]);
-    const rows = await query.get();
-    expect(rows[0]).toEqual({ id: 2, label: "Bravo", active: true });
-    expect(connection.calls[1]?.query).toContain('"squad"."id"');
-    expect(connection.calls[1]?.query).toContain('"squad"."label"');
-    expect(connection.calls[1]?.query).toContain('"squad"."active"');
+      connection.queue([{ id: 2, label: "Bravo", active: true }]);
+      const rows = await query.get();
+      expect(rows[0]).toEqual({ id: 2, label: "Bravo", active: true });
+      expect(connection.calls[1]?.query).toContain('"squad"."id"');
+      expect(connection.calls[1]?.query).toContain('"squad"."label"');
+      expect(connection.calls[1]?.query).toContain('"squad"."active"');
+    });
   });
 
   test("value reads one column from the first row without mutating limit for later get()", async () => {
     const connection = new FakeConnection();
-    const squads = new SquadRepository(connection);
-    const query = squads.query().orderBy({ id: "asc" });
+    await withRepositories(connection, [squadRepository] as const, async ([squads]) => {
+      const query = squads.query().orderBy({ id: "asc" });
 
-    connection.queue([{ label: "Alpha" }]);
-    expect(await query.value("label")).toBe("Alpha");
-    expect(connection.calls[0]?.query).toContain("LIMIT 1");
-    expect(connection.calls[0]?.query).toContain('SELECT "squad"."label" AS "label"');
+      connection.queue([{ label: "Alpha" }]);
+      expect(await query.value("label")).toBe("Alpha");
+      expect(connection.calls[0]?.query).toContain("LIMIT 1");
+      expect(connection.calls[0]?.query).toContain('SELECT "squad"."label" AS "label"');
 
-    connection.queue([
-      { id: 1, label: "Alpha", active: true },
-      { id: 2, label: "Bravo", active: true },
-    ]);
-    expect(await query.get()).toHaveLength(2);
-    expect(connection.calls[1]?.query).not.toContain("LIMIT 1");
+      connection.queue([
+        { id: 1, label: "Alpha", active: true },
+        { id: 2, label: "Bravo", active: true },
+      ]);
+      expect(await query.get()).toHaveLength(2);
+      expect(connection.calls[1]?.query).not.toContain("LIMIT 1");
+    });
   });
 
   test("value keeps 0, false, and empty string, and returns null when missing or SQL-null", async () => {
     const connection = new FakeConnection();
-    const squads = new SquadRepository(connection);
+    await withRepositories(connection, [squadRepository] as const, async ([squads]) => {
+      connection.queue([]);
+      expect(await squads.query().value("label")).toBeNull();
 
-    connection.queue([]);
-    expect(await squads.query().value("label")).toBeNull();
+      connection.queue([{ label: null }]);
+      expect(await squads.query().value("label")).toBeNull();
 
-    connection.queue([{ label: null }]);
-    expect(await squads.query().value("label")).toBeNull();
+      connection.queue([{ active: false }]);
+      expect(await squads.query().value("active")).toBe(false);
 
-    connection.queue([{ active: false }]);
-    expect(await squads.query().value("active")).toBe(false);
+      connection.queue([{ id: 0 }]);
+      expect(await squads.query().value("id")).toBe(0);
 
-    connection.queue([{ id: 0 }]);
-    expect(await squads.query().value("id")).toBe(0);
-
-    connection.queue([{ label: "" }]);
-    expect(await squads.query().value("label")).toBe("");
+      connection.queue([{ label: "" }]);
+      expect(await squads.query().value("label")).toBe("");
+    });
   });
 
   test("empty pluck results, joins, and invalid identifiers", async () => {
     const connection = new FakeConnection();
-    const squads = new SquadRepository(connection);
+    await withRepositories(connection, [squadRepository] as const, async ([squads]) => {
+      connection.queue([]);
+      expect(await squads.query().pluck("label")).toEqual([]);
+      expect((await squads.query().pluck("label", "id")).size).toBe(0);
 
-    connection.queue([]);
-    expect(await squads.query().pluck("label")).toEqual([]);
-    expect((await squads.query().pluck("label", "id")).size).toBe(0);
+      connection.queue([]);
+      await squads.query().join("member.squad_id", "squad.id").pluck("label");
+      expect(connection.calls.at(-1)?.query).toContain("INNER JOIN");
+      expect(connection.calls.at(-1)?.query).toContain('SELECT "squad"."label" AS "label"');
 
-    connection.queue([]);
-    await squads.query().join("member.squad_id", "squad.id").pluck("label");
-    expect(connection.calls.at(-1)?.query).toContain("INNER JOIN");
-    expect(connection.calls.at(-1)?.query).toContain('SELECT "squad"."label" AS "label"');
-
-    expect(() => quoteIdentifier(dialectFor("pgsql"), "label;drop")).toThrow(
-      "Invalid SQL identifier",
-    );
-    const callsBeforeInvalidIdentifier = connection.calls.length;
-    let identifierFailure: Error | undefined;
-    await assert.rejects(squads.query().pluck("label;drop" as never), (error: unknown) => {
-      assert.ok(error instanceof Error);
-      assert.equal(error.constructor, Error);
-      assert.equal(error.message, "Invalid SQL identifier: label;drop");
-      assert.equal("status" in error, false);
-      identifierFailure = error;
-      return true;
+      expect(() => quoteIdentifier(dialectFor("pgsql"), "label;drop")).toThrow(
+        "Invalid SQL identifier",
+      );
+      const callsBeforeInvalidIdentifier = connection.calls.length;
+      let identifierFailure: Error | undefined;
+      await assert.rejects(squads.query().pluck("label;drop" as never), (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.constructor, Error);
+        assert.equal(error.message, "Invalid SQL identifier: label;drop");
+        assert.equal("status" in error, false);
+        identifierFailure = error;
+        return true;
+      });
+      assert.equal(connection.calls.length, callsBeforeInvalidIdentifier);
+      assert.ok(identifierFailure);
+      const response = errorResponse(identifierFailure);
+      assert.equal(response.status, 500);
+      assert.deepEqual(await response.json(), { error: "Internal server error." });
     });
-    assert.equal(connection.calls.length, callsBeforeInvalidIdentifier);
-    assert.ok(identifierFailure);
-    const response = errorResponse(identifierFailure);
-    assert.equal(response.status, 500);
-    assert.deepEqual(await response.json(), { error: "Internal server error." });
   });
 
   test("soft-delete scope applies unless withTrashed, and onlyTrashed inverts it", async () => {
     const connection = new FakeConnection();
-    const squads = new SoftSquadRepository(connection);
+    await withRepositories(connection, [softSquadRepository] as const, async ([squads]) => {
+      connection.queue([]);
+      await squads.query().pluck("label");
+      expect(connection.calls.at(-1)?.query).toContain('"deleted_at" IS NULL');
 
-    connection.queue([]);
-    await squads.query().pluck("label");
-    expect(connection.calls.at(-1)?.query).toContain('"deleted_at" IS NULL');
+      connection.queue([]);
+      await squads.query().withTrashed().pluck("label");
+      expect(connection.calls.at(-1)?.query).not.toContain("deleted_at");
 
-    connection.queue([]);
-    await squads.query().withTrashed().pluck("label");
-    expect(connection.calls.at(-1)?.query).not.toContain("deleted_at");
-
-    connection.queue([]);
-    await squads.query().onlyTrashed().value("label");
-    expect(connection.calls.at(-1)?.query).toContain('"deleted_at" IS NOT NULL');
+      connection.queue([]);
+      await squads.query().onlyTrashed().value("label");
+      expect(connection.calls.at(-1)?.query).toContain('"deleted_at" IS NOT NULL');
+    });
   });
 });
 
@@ -324,387 +343,448 @@ describe("ModelQuery pluck, value, and count", () => {
     const connection = new FakeConnection();
     const retrieved: number[] = [];
 
-    class ArticleModel extends Model<Article, "id"> {
-      static override $timestamps = false;
-      static override $fillable = ["title", "meta", "published", "views", "secret"] as const;
-      static override $casts = {
-        meta: "json",
-        published: "bool",
-        views: "integer",
-        created_at: "datetime",
-        secret: "hashed",
-      } as const;
-
-      static override boot(): void {
-        ArticleModel.addGlobalScope("publishedOnly", (query) => query.where({ published: true }));
-      }
-
-      protected override primaryKey(): "id" {
-        return "id";
-      }
-    }
-
-    registerModelRepository(
-      ArticleModel,
-      new (class extends BaseRepository<Article, "id"> {
-        constructor() {
-          super(articleTable, connection);
-        }
-      })(),
-    );
-
-    ArticleModel.observe({
-      retrieved: () => {
-        retrieved.push(1);
-      },
+    class ArticleClass extends Model<Article, "id"> {}
+    const articleRepository = defineRepository({
+      name: "Article.repo",
+      table: articleTable,
+      dependencies: [] as const,
+      create: (binding) => new BaseRepository(binding),
     });
-
-    connection.queue([
-      {
-        title: "Live",
-        meta: '{"tags":["a"]}',
-        published: "1",
-        views: "4",
-        created_at: "2026-01-01T00:00:00.000Z",
-        secret: "hash",
-        id: "9",
+    const observerToken =
+      createServiceToken<
+        import("@getstrata/core/database/definitions").ModelObserver<ArticleClass>
+      >("article.observer");
+    const articleDefinition = defineModel({
+      name: "ArticleModel",
+      repository: articleRepository,
+      dependencies: [] as const,
+      attributes: {
+        timestamps: false,
+        fillable: ["title", "meta", "published", "views", "secret"],
+        casts: {
+          meta: "json",
+          published: "bool",
+          views: "integer",
+          created_at: "datetime",
+          secret: "hashed",
+        },
       },
-    ]);
-    expect(await ArticleModel.query().pluck("title")).toEqual(["Live"]);
-    expect(retrieved).toEqual([]);
-    expect(connection.calls[0]?.query).toContain('"published"');
-
-    connection.queue([
+      scopes: [(query) => query.where({ published: true })],
+      observers: [observerToken],
+      construct: (state, binding) => new ArticleClass(state, binding),
+    });
+    await withBoundDatabase(
       {
-        title: "Live",
-        meta: '{"tags":["a"]}',
-        published: "true",
-        views: "",
-        created_at: "2026-01-01T00:00:00.000Z",
-        secret: "hash",
-        id: 9,
+        definition: {
+          default: "test",
+          connections: { test: { driver: "sqlite", filename: ":memory:" } },
+          repositories: [articleRepository],
+          models: [articleDefinition],
+        },
+        connection,
+        services: [
+          service(observerToken, {
+            lifetime: "application",
+            dependencies: [] as const,
+            create: () => ({
+              retrieved: () => {
+                retrieved.push(1);
+              },
+            }),
+          }),
+        ],
       },
-    ]);
-    const keyed = await ArticleModel.pluck("meta", "id");
-    expect(keyed.get(9)).toEqual({ tags: ["a"] });
+      async (database) => {
+        const ArticleModel = database.model(articleDefinition);
+        connection.queue([
+          {
+            title: "Live",
+            meta: '{"tags":["a"]}',
+            published: "1",
+            views: "4",
+            created_at: "2026-01-01T00:00:00.000Z",
+            secret: "hash",
+            id: "9",
+          },
+        ]);
+        expect(await ArticleModel.query().pluck("title")).toEqual(["Live"]);
+        expect(retrieved).toEqual([]);
+        expect(connection.calls[0]?.query).toContain('"published"');
 
-    connection.queue([{ published: "0" }]);
-    expect(await ArticleModel.query().value("published")).toBe(false);
+        connection.queue([
+          {
+            title: "Live",
+            meta: '{"tags":["a"]}',
+            published: "true",
+            views: "",
+            created_at: "2026-01-01T00:00:00.000Z",
+            secret: "hash",
+            id: 9,
+          },
+        ]);
+        const keyed = await ArticleModel.pluck("meta", "id");
+        expect(keyed.get(9)).toEqual({ tags: ["a"] });
 
-    connection.queue([{ views: "" }]);
-    expect(await ArticleModel.value("views")).toBeNull();
+        connection.queue([{ published: "0" }]);
+        expect(await ArticleModel.query().value("published")).toBe(false);
 
-    connection.queue([{ created_at: "2026-01-01T00:00:00.000Z" }]);
-    expect(await ArticleModel.query().value("created_at")).toEqual(
-      new Date("2026-01-01T00:00:00.000Z"),
+        connection.queue([{ views: "" }]);
+        expect(await ArticleModel.value("views")).toBeNull();
+
+        connection.queue([{ created_at: "2026-01-01T00:00:00.000Z" }]);
+        expect(await ArticleModel.query().value("created_at")).toEqual(
+          new Date("2026-01-01T00:00:00.000Z"),
+        );
+
+        connection.queue([{ secret: "hash" }]);
+        expect(await ArticleModel.query().value("secret")).toBe("hash");
+
+        connection.queue([{ count: 3 }]);
+        expect(await ArticleModel.count()).toBe(3);
+        expect(connection.calls.at(-1)?.query).toContain("COUNT(*)");
+        expect(connection.calls.at(-1)?.query).toContain('"published"');
+
+        connection.queue([
+          {
+            id: 1,
+            title: "Live",
+            meta: null,
+            published: true,
+            views: 1,
+            created_at: new Date("2026-01-01T00:00:00.000Z"),
+            secret: "hash",
+          },
+        ]);
+        await ArticleModel.query().get();
+        expect(retrieved).toEqual([1]);
+      },
     );
-
-    connection.queue([{ secret: "hash" }]);
-    expect(await ArticleModel.query().value("secret")).toBe("hash");
-
-    connection.queue([{ count: 3 }]);
-    expect(await ArticleModel.count()).toBe(3);
-    expect(connection.calls.at(-1)?.query).toContain("COUNT(*)");
-    expect(connection.calls.at(-1)?.query).toContain('"published"');
-
-    connection.queue([
-      {
-        id: 1,
-        title: "Live",
-        meta: null,
-        published: true,
-        views: 1,
-        created_at: new Date("2026-01-01T00:00:00.000Z"),
-        secret: "hash",
-      },
-    ]);
-    await ArticleModel.query().get();
-    expect(retrieved).toEqual([1]);
   });
 });
 
 describe("relation query pluck and value", () => {
-  function createGraph(connection: FakeConnection) {
-    class TagModel extends Model<Tag, "id"> {
-      static override $timestamps = false;
-      static override $fillable = ["name"] as const;
-      protected override primaryKey(): "id" {
-        return "id";
-      }
+  class TagClass extends Model<Tag, "id"> {}
+  class MemberClass extends Model<Member, "id"> {
+    squad() {
+      return this.belongsTo(squadDefinition);
     }
-
-    class MemberModel extends Model<Member, "id"> {
-      static override $timestamps = false;
-      static override $fillable = ["name", "squad_id"] as const;
-      protected override primaryKey(): "id" {
-        return "id";
-      }
-
-      squad() {
-        return this.belongsTo(SquadModel);
-      }
-
-      tags() {
-        return this.belongsToMany(TagModel, "user_tag", "user_id", "tag_id");
-      }
+    tags() {
+      return this.belongsToMany(tagDefinition, "user_tag", "user_id", "tag_id");
     }
-
-    class SquadModel extends Model<Squad, "id"> {
-      static override $timestamps = false;
-      static override $fillable = ["label", "active"] as const;
-      protected override primaryKey(): "id" {
-        return "id";
-      }
-
-      members() {
-        return this.hasMany(MemberModel);
-      }
-
-      captain() {
-        return this.hasOne(MemberModel);
-      }
+  }
+  class SquadClass extends Model<Squad, "id"> {
+    members() {
+      return this.hasMany(memberDefinition);
     }
-
-    class ApplicationModel extends Model<Application, "id"> {
-      static override $timestamps = false;
-      static override $fillable = ["title", "position_id"] as const;
-      protected override primaryKey(): "id" {
-        return "id";
-      }
+    captain() {
+      return this.hasOne(memberDefinition);
     }
-
-    class DepartmentModel extends Model<Department, "id"> {
-      static override $timestamps = false;
-      static override $fillable = ["name"] as const;
-      protected override primaryKey(): "id" {
-        return "id";
-      }
-
-      applications() {
-        return this.hasManyThrough(ApplicationModel, SquadModel);
-      }
+  }
+  class ApplicationClass extends Model<Application, "id"> {}
+  class DepartmentClass extends Model<Department, "id"> {
+    applications() {
+      return this.hasManyThrough(applicationDefinition, squadDefinition);
     }
-
-    class ImageModel extends Model<Image, "id"> {
-      static override $timestamps = false;
-      static override $fillable = ["imageable_type", "imageable_id", "url"] as const;
-      protected override primaryKey(): "id" {
-        return "id";
-      }
-
-      imageable() {
-        return this.morphTo({ squads: SquadModel }, "imageable");
-      }
+  }
+  class ImageClass extends Model<Image, "id"> {
+    imageable() {
+      return this.morphTo({ squads: squadDefinition }, "imageable");
     }
-
-    class PicturedSquad extends SquadModel {
-      static override $morphClass = "squads";
-      images() {
-        return this.morphMany(ImageModel, "imageable");
-      }
-      avatar() {
-        return this.morphOne(ImageModel, "imageable");
-      }
+  }
+  class PicturedClass extends SquadClass {
+    images() {
+      return this.morphMany(imageDefinition, "imageable");
     }
-
-    registerModelRepository(
-      TagModel,
-      new (class extends BaseRepository<Tag, "id"> {
-        constructor() {
-          super(tagTable, connection);
-        }
-      })(),
-    );
-    registerModelRepository(MemberModel, new MemberRepository(connection));
-    registerModelRepository(SquadModel, new SquadRepository(connection));
-    registerModelRepository(
-      ApplicationModel,
-      new (class extends BaseRepository<Application, "id"> {
-        constructor() {
-          super(applicationTable, connection);
-        }
-      })(),
-    );
-    registerModelRepository(
-      DepartmentModel,
-      new (class extends BaseRepository<Department, "id"> {
-        constructor() {
-          super(departmentTable, connection);
-        }
-      })(),
-    );
-    registerModelRepository(
-      ImageModel,
-      new (class extends BaseRepository<Image, "id"> {
-        constructor() {
-          super(imageTable, connection);
-        }
-      })(),
-    );
-    registerModelRepository(PicturedSquad, SquadModel.repository());
-
+    avatar() {
+      return this.morphOne(imageDefinition, "imageable");
+    }
+  }
+  const tagRepo = defineRepository({
+    name: "Tag.repo",
+    table: tagTable,
+    dependencies: [] as const,
+    create: (binding) => new BaseRepository(binding),
+  });
+  const tagDefinition = defineModel({
+    name: "TagModel",
+    repository: tagRepo,
+    dependencies: [] as const,
+    attributes: { timestamps: false, fillable: ["name"] },
+    construct: (state, binding) => new TagClass(state, binding),
+  });
+  const memberRepo = defineRepository({
+    name: "Member.repo",
+    table: memberTable,
+    dependencies: [] as const,
+    create: (binding) => new BaseRepository(binding),
+  });
+  const memberDefinition = defineModel({
+    name: "MemberModel",
+    repository: memberRepo,
+    dependencies: [] as const,
+    attributes: { timestamps: false, fillable: ["name", "squad_id"] },
+    construct: (state, binding) => new MemberClass(state, binding),
+  });
+  const squadRepo = defineRepository({
+    name: "Squad.repo",
+    table: squadTable,
+    dependencies: [] as const,
+    create: (binding) => new BaseRepository(binding),
+  });
+  const squadDefinition = defineModel({
+    name: "SquadModel",
+    repository: squadRepo,
+    dependencies: [] as const,
+    attributes: { timestamps: false, fillable: ["label", "active"] },
+    construct: (state, binding) => new SquadClass(state, binding),
+  });
+  const applicationRepo = defineRepository({
+    name: "Application.repo",
+    table: applicationTable,
+    dependencies: [] as const,
+    create: (binding) => new BaseRepository(binding),
+  });
+  const applicationDefinition = defineModel({
+    name: "ApplicationModel",
+    repository: applicationRepo,
+    dependencies: [] as const,
+    attributes: { timestamps: false, fillable: ["title", "position_id"] },
+    construct: (state, binding) => new ApplicationClass(state, binding),
+  });
+  const departmentRepo = defineRepository({
+    name: "Department.repo",
+    table: departmentTable,
+    dependencies: [] as const,
+    create: (binding) => new BaseRepository(binding),
+  });
+  const departmentDefinition = defineModel({
+    name: "DepartmentModel",
+    repository: departmentRepo,
+    dependencies: [] as const,
+    attributes: { timestamps: false, fillable: ["name"] },
+    construct: (state, binding) => new DepartmentClass(state, binding),
+  });
+  const imageRepo = defineRepository({
+    name: "Image.repo",
+    table: imageTable,
+    dependencies: [] as const,
+    create: (binding) => new BaseRepository(binding),
+  });
+  const imageDefinition = defineModel({
+    name: "ImageModel",
+    repository: imageRepo,
+    dependencies: [] as const,
+    attributes: { timestamps: false, fillable: ["imageable_type", "imageable_id", "url"] },
+    construct: (state, binding) => new ImageClass(state, binding),
+  });
+  const picturedRepo = defineRepository({
+    name: "Pictured.repo",
+    table: squadTable,
+    dependencies: [] as const,
+    create: (binding) => new BaseRepository(binding),
+  });
+  const picturedDefinition = defineModel({
+    name: "squads",
+    repository: picturedRepo,
+    dependencies: [] as const,
+    attributes: { timestamps: false, fillable: ["label", "active"] },
+    construct: (state, binding) => new PicturedClass(state, binding),
+  });
+  function bindGraph(database: DatabaseSession) {
     return {
-      ApplicationModel,
-      DepartmentModel,
-      ImageModel,
-      MemberModel,
-      PicturedSquad,
-      SquadModel,
-      TagModel,
+      TagModel: database.model(tagDefinition),
+      MemberModel: database.model(memberDefinition),
+      SquadModel: database.model(squadDefinition),
+      ApplicationModel: database.model(applicationDefinition),
+      DepartmentModel: database.model(departmentDefinition),
+      ImageModel: database.model(imageDefinition),
+      PicturedSquad: database.model(picturedDefinition),
     };
+  }
+  async function withGraph<T>(
+    connection: FakeConnection,
+    work: (graph: ReturnType<typeof bindGraph>) => T | Promise<T>,
+  ) {
+    return withBoundDatabase(
+      {
+        definition: {
+          default: "test",
+          connections: { test: { driver: "sqlite", filename: ":memory:" } },
+          repositories: [
+            tagRepo,
+            memberRepo,
+            squadRepo,
+            applicationRepo,
+            departmentRepo,
+            imageRepo,
+            picturedRepo,
+          ],
+          models: [
+            tagDefinition,
+            memberDefinition,
+            squadDefinition,
+            applicationDefinition,
+            departmentDefinition,
+            imageDefinition,
+            picturedDefinition,
+          ],
+        },
+        connection,
+      },
+      (database) => work(bindGraph(database)),
+    );
   }
 
   test("hasMany and hasOne pluck a related column and value", async () => {
     const connection = new FakeConnection();
-    const { SquadModel } = createGraph(connection);
-    const squad = new SquadModel({ id: 1, label: "Alpha", active: true }, SquadModel.repository());
+    await withGraph(connection, async ({ SquadModel }) => {
+      const squad = SquadModel.hydrate({ id: 1, label: "Alpha", active: true });
 
-    connection.queue([{ name: "Ripley" }, { name: "Hicks" }]);
-    expect(await squad.members().orderBy({ name: "ASC" }).pluck("name")).toEqual([
-      "Ripley",
-      "Hicks",
-    ]);
-    expect(connection.calls.at(-1)?.query).toContain('SELECT "member"."name" AS "name"');
-    expect(connection.calls.at(-1)?.query).toContain('"squad_id"');
+      connection.queue([{ name: "Ripley" }, { name: "Hicks" }]);
+      expect(await squad.members().orderBy({ name: "ASC" }).pluck("name")).toEqual([
+        "Ripley",
+        "Hicks",
+      ]);
+      expect(connection.calls.at(-1)?.query).toContain('SELECT "member"."name" AS "name"');
+      expect(connection.calls.at(-1)?.query).toContain('"squad_id"');
 
-    connection.queue([{ name: "Ripley", id: 10 }]);
-    expect([...(await squad.members().pluck("name", "id")).entries()]).toEqual([[10, "Ripley"]]);
+      connection.queue([{ name: "Ripley", id: 10 }]);
+      expect([...(await squad.members().pluck("name", "id")).entries()]).toEqual([[10, "Ripley"]]);
 
-    connection.queue([{ name: "Ripley" }]);
-    expect(await squad.members().value("name")).toBe("Ripley");
+      connection.queue([{ name: "Ripley" }]);
+      expect(await squad.members().value("name")).toBe("Ripley");
 
-    connection.queue([{ name: "Ripley" }]);
-    expect(await squad.captain().pluck("name")).toEqual(["Ripley"]);
-    expect(connection.calls.at(-1)?.query).toContain("LIMIT 1");
+      connection.queue([{ name: "Ripley" }]);
+      expect(await squad.captain().pluck("name")).toEqual(["Ripley"]);
+      expect(connection.calls.at(-1)?.query).toContain("LIMIT 1");
 
-    connection.queue([{ name: "Ripley" }]);
-    expect(await squad.captain().value("name")).toBe("Ripley");
+      connection.queue([{ name: "Ripley" }]);
+      expect(await squad.captain().value("name")).toBe("Ripley");
+    });
   });
 
   test("belongsTo pluck/value skip the query when the foreign key is missing", async () => {
     const connection = new FakeConnection();
-    const { MemberModel } = createGraph(connection);
-    const orphan = new MemberModel(
-      { id: 1, name: "Newt", squad_id: null },
-      MemberModel.repository(),
-    );
-    expect(await orphan.squad().pluck("label")).toEqual([]);
-    expect((await orphan.squad().pluck("label", "id")).size).toBe(0);
-    expect(await orphan.squad().value("label")).toBeNull();
-    expect(connection.calls).toHaveLength(0);
+    await withGraph(connection, async ({ MemberModel }) => {
+      const orphan = MemberModel.hydrate({ id: 1, name: "Newt", squad_id: null });
+      expect(await orphan.squad().pluck("label")).toEqual([]);
+      expect((await orphan.squad().pluck("label", "id")).size).toBe(0);
+      expect(await orphan.squad().value("label")).toBeNull();
+      expect(connection.calls).toHaveLength(0);
 
-    const member = new MemberModel(
-      { id: 2, name: "Ripley", squad_id: 1 },
-      MemberModel.repository(),
-    );
-    connection.queue([{ label: "Alpha" }]);
-    expect(
-      await member.squad().where({ active: true }).orderBy({ label: "ASC" }).pluck("label"),
-    ).toEqual(["Alpha"]);
-    connection.queue([{ label: "Alpha" }]);
-    expect(await member.squad().value("label")).toBe("Alpha");
+      const member = MemberModel.hydrate({ id: 2, name: "Ripley", squad_id: 1 });
+      connection.queue([{ label: "Alpha" }]);
+      expect(
+        await member.squad().where({ active: true }).orderBy({ label: "ASC" }).pluck("label"),
+      ).toEqual(["Alpha"]);
+      connection.queue([{ label: "Alpha" }]);
+      expect(await member.squad().value("label")).toBe("Alpha");
+    });
   });
 
   test("belongsToMany pluck uses pivot ids and returns empty without a related query", async () => {
     const connection = new FakeConnection();
-    const { MemberModel } = createGraph(connection);
-    const member = new MemberModel({ id: 1, name: "Ada", squad_id: 1 }, MemberModel.repository());
+    await withGraph(connection, async ({ MemberModel }) => {
+      const member = MemberModel.hydrate({ id: 1, name: "Ada", squad_id: 1 });
 
-    connection.queue([]);
-    expect(await member.tags().pluck("name")).toEqual([]);
-    expect(connection.calls).toHaveLength(1);
+      connection.queue([]);
+      expect(await member.tags().pluck("name")).toEqual([]);
+      expect(connection.calls).toHaveLength(1);
 
-    connection.queue([]);
-    expect(await member.tags().value("name")).toBeNull();
+      connection.queue([]);
+      expect(await member.tags().value("name")).toBeNull();
 
-    connection.queue([
-      { user_id: 1, tag_id: 10 } as UserTag,
-      { user_id: 1, tag_id: 20 } as UserTag,
-    ]);
-    connection.queue([{ name: "bun" }, { name: "strata" }]);
-    expect(await member.tags().where({}).orderBy({ name: "ASC" }).pluck("name")).toEqual([
-      "bun",
-      "strata",
-    ]);
-    expect(connection.calls.at(-1)?.query).toContain('SELECT "tags"."name" AS "name"');
+      connection.queue([
+        { user_id: 1, tag_id: 10 } as UserTag,
+        { user_id: 1, tag_id: 20 } as UserTag,
+      ]);
+      connection.queue([{ name: "bun" }, { name: "strata" }]);
+      expect(await member.tags().where({}).orderBy({ name: "ASC" }).pluck("name")).toEqual([
+        "bun",
+        "strata",
+      ]);
+      expect(connection.calls.at(-1)?.query).toContain('SELECT "tags"."name" AS "name"');
 
-    connection.queue([{ user_id: 1, tag_id: 10 } as UserTag]);
-    connection.queue([{ name: "bun", id: 10 }]);
-    expect((await member.tags().pluck("name", "id")).get(10)).toBe("bun");
+      connection.queue([{ user_id: 1, tag_id: 10 } as UserTag]);
+      connection.queue([{ name: "bun", id: 10 }]);
+      expect((await member.tags().pluck("name", "id")).get(10)).toBe("bun");
 
-    connection.queue([{ user_id: 1, tag_id: 10 } as UserTag]);
-    connection.queue([{ name: "bun" }]);
-    expect(await member.tags().value("name")).toBe("bun");
+      connection.queue([{ user_id: 1, tag_id: 10 } as UserTag]);
+      connection.queue([{ name: "bun" }]);
+      expect(await member.tags().value("name")).toBe("bun");
+    });
   });
 
   test("morphMany, morphOne, and morphTo pluck related columns", async () => {
     const connection = new FakeConnection();
-    const { ImageModel, PicturedSquad } = createGraph(connection);
-    const squad = new PicturedSquad(
-      { id: 4, label: "Alpha", active: true },
-      PicturedSquad.repository(),
-    );
+    await withGraph(connection, async ({ ImageModel, PicturedSquad }) => {
+      const squad = PicturedSquad.hydrate({ id: 4, label: "Alpha", active: true });
 
-    connection.queue([{ url: "/a.png" }]);
-    expect(await squad.images().pluck("url")).toEqual(["/a.png"]);
-    expect(connection.calls.at(-1)?.query).toContain("imageable_type");
+      connection.queue([{ url: "/a.png" }]);
+      expect(await squad.images().pluck("url")).toEqual(["/a.png"]);
+      expect(connection.calls.at(-1)?.query).toContain("imageable_type");
 
-    connection.queue([{ url: "/a.png", id: 1 }]);
-    expect((await squad.images().pluck("url", "id")).get(1)).toBe("/a.png");
+      connection.queue([{ url: "/a.png", id: 1 }]);
+      expect((await squad.images().pluck("url", "id")).get(1)).toBe("/a.png");
 
-    connection.queue([{ url: "/a.png" }]);
-    expect(await squad.images().value("url")).toBe("/a.png");
+      connection.queue([{ url: "/a.png" }]);
+      expect(await squad.images().value("url")).toBe("/a.png");
 
-    connection.queue([{ url: "/b.png" }]);
-    expect(await squad.avatar().pluck("url")).toEqual(["/b.png"]);
-    connection.queue([{ url: "/b.png" }]);
-    expect(await squad.avatar().value("url")).toBe("/b.png");
+      connection.queue([{ url: "/b.png" }]);
+      expect(await squad.avatar().pluck("url")).toEqual(["/b.png"]);
+      connection.queue([{ url: "/b.png" }]);
+      expect(await squad.avatar().value("url")).toBe("/b.png");
 
-    const image = new ImageModel(
-      { id: 3, imageable_type: "squads", imageable_id: 4, url: "/c.png" },
-      ImageModel.repository(),
-    );
-    connection.queue([{ label: "Alpha" }]);
-    expect(await image.imageable().pluck("label")).toEqual(["Alpha"]);
-    connection.queue([{ label: "Alpha" }]);
-    expect(await image.imageable().value("label")).toBe("Alpha");
+      const image = ImageModel.hydrate({
+        id: 3,
+        imageable_type: "squads",
+        imageable_id: 4,
+        url: "/c.png",
+      });
+      connection.queue([{ label: "Alpha" }]);
+      expect(await image.imageable().pluck("label")).toEqual(["Alpha"]);
+      connection.queue([{ label: "Alpha" }]);
+      expect(await image.imageable().value("label")).toBe("Alpha");
 
-    const missingType = new ImageModel(
-      { id: 4, imageable_type: "unknown", imageable_id: 4, url: "/d.png" },
-      ImageModel.repository(),
-    );
-    expect(await missingType.imageable().pluck("label")).toEqual([]);
-    expect(await missingType.imageable().value("label")).toBeNull();
+      const missingType = ImageModel.hydrate({
+        id: 4,
+        imageable_type: "unknown",
+        imageable_id: 4,
+        url: "/d.png",
+      });
+      expect(await missingType.imageable().pluck("label")).toEqual([]);
+      expect(await missingType.imageable().value("label")).toBeNull();
 
-    const missingId = new ImageModel(
-      { id: 5, imageable_type: "squads", imageable_id: null, url: "/e.png" },
-      ImageModel.repository(),
-    );
-    expect(await missingId.imageable().pluck("label", "id")).toEqual(new Map());
-    expect(await missingId.imageable().value("label")).toBeNull();
+      const missingId = ImageModel.hydrate({
+        id: 5,
+        imageable_type: "squads",
+        imageable_id: null,
+        url: "/e.png",
+      });
+      expect(await missingId.imageable().pluck("label", "id")).toEqual(new Map());
+      expect(await missingId.imageable().value("label")).toBeNull();
+    });
   });
 
   test("hasManyThrough plucks far columns without hydrating models", async () => {
     const connection = new FakeConnection();
-    const { DepartmentModel } = createGraph(connection);
-    const department = new DepartmentModel(
-      { id: 1, name: "Engineering" },
-      DepartmentModel.repository(),
-    );
+    await withGraph(connection, async ({ DepartmentModel }) => {
+      const department = DepartmentModel.hydrate({ id: 1, name: "Engineering" });
 
-    connection.queue([
-      { id: 10, title: "A", position_id: 4, __through_parent_id: 1 },
-      { id: 11, title: "B", position_id: 5, __through_parent_id: 1 },
-    ]);
-    expect(await department.applications().pluck("title")).toEqual(["A", "B"]);
+      connection.queue([
+        { id: 10, title: "A", position_id: 4, __through_parent_id: 1 },
+        { id: 11, title: "B", position_id: 5, __through_parent_id: 1 },
+      ]);
+      expect(await department.applications().pluck("title")).toEqual(["A", "B"]);
 
-    connection.queue([{ id: 10, title: "A", position_id: 4, __through_parent_id: 1 }]);
-    expect((await department.applications().pluck("title", "id")).get(10)).toBe("A");
+      connection.queue([{ id: 10, title: "A", position_id: 4, __through_parent_id: 1 }]);
+      expect((await department.applications().pluck("title", "id")).get(10)).toBe("A");
 
-    connection.queue([{ id: 10, title: "A", position_id: 4, __through_parent_id: 1 }]);
-    expect(await department.applications().value("title")).toBe("A");
+      connection.queue([{ id: 10, title: "A", position_id: 4, __through_parent_id: 1 }]);
+      expect(await department.applications().value("title")).toBe("A");
 
-    connection.queue([]);
-    expect(await department.applications().value("title")).toBeNull();
+      connection.queue([]);
+      expect(await department.applications().value("title")).toBeNull();
+    });
   });
 });

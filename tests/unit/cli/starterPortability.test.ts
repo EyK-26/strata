@@ -142,8 +142,9 @@ describe("MySQL portability", () => {
       "--yes",
     ]);
     const mysqlAuth = await readFile(join(mysqlApp, "src/modules/auth/index.ts"), "utf8");
-    expect(mysqlAuth).toContain("expires_at: sqlTimestamp(expiresAt)");
-    expect(mysqlAuth).toContain("email_verified_at: sqlTimestamp()");
+    expect(mysqlAuth).toContain("expires_at: authTimestamp(ports, expiresAt)");
+    expect(mysqlAuth).toContain("email_verified_at: authTimestamp(ports)");
+    expect(mysqlAuth).toContain("return ports.database.dialect.timestampValue(value)");
 
     const pgApp = generateFromArgs(root, [
       "pgtime",
@@ -154,21 +155,22 @@ describe("MySQL portability", () => {
       "--yes",
     ]);
     const pgAuth = await readFile(join(pgApp, "src/modules/auth/index.ts"), "utf8");
-    expect(pgAuth).toContain("expires_at: sqlTimestamp(expiresAt)");
-    expect(pgAuth).toContain("email_verified_at: sqlTimestamp()");
+    expect(pgAuth).toContain("expires_at: authTimestamp(ports, expiresAt)");
+    expect(pgAuth).toContain("email_verified_at: authTimestamp(ports)");
     expect(pgAuth).not.toContain('.slice(0, 19).replace("T", " ")');
   });
 
-  test("migrate and fresh export close() so pooled drivers release the process", async () => {
+  test("migrate and fresh use a finally-owned migration connection", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["myclose", "--database=mysql", "--yes"]);
-
-    const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
-    expect(migrate).toContain("export async function close()");
-    expect(migrate).toContain("closeDatabase()");
-
-    const fresh = await readFile(join(app, "src/db/fresh.ts"), "utf8");
-    expect(fresh).toContain("export async function close()");
+    const runtime = await readFile(join(app, "src/db/migrationRuntime.ts"), "utf8");
+    expect(runtime).toContain("export async function withMigrationDatabase<T>");
+    expect(runtime).toMatch(/finally\s*\{\s*await connection\.close\?\.\(\)/);
+    for (const file of ["migrate", "fresh"]) {
+      const source = await readFile(join(app, `src/db/${file}.ts`), "utf8");
+      expect(source).toContain("await withMigrationDatabase(async (db)");
+      expect(source).not.toContain("closeDatabase");
+    }
   });
 });
 
@@ -491,8 +493,8 @@ describe("generated API docs", () => {
       expect(readme.includes("HTML auth kit")).toBe(!json);
       expect(readme.includes("JSON cookie account flows")).toBe(json);
       if (json) {
-        expect(source).toContain("withMiddleware(createRequirePasswordConfirmMiddleware())");
-        expect(source).toContain("const recoveryCodes = await enrollMfa(user, secret)");
+        expect(source).toContain("kernel.wrapVerified(kernel.wrapPasswordConfirm(");
+        expect(source).toContain("const recoveryCodes = await enrollMfa(_ports, user, secret)");
         expect(readme).toContain("opening the URL with GET does not consume a token");
       }
     });
@@ -532,8 +534,8 @@ describe("production defaults", () => {
     const app = generateFromArgs(root, ["prod", "--yes"]);
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
 
-    expect(createApp).toContain("const isProduction = isProductionEnv()");
-    expect(createApp).toContain("migrate: runMigrate = !isProduction");
+    expect(createApp).toContain("const production=isProductionEnv(env)");
+    expect(createApp).toContain("const runMigrate=options.migrate??!production");
   });
 
   test("HTML apps explain the FEATURE_PUBLIC_READS default they ship", async () => {
@@ -722,9 +724,9 @@ test("header apps register the complete published AuthManager and GuestGuard", a
     "--yes",
   ]);
   const source = await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8");
-  expect(source).toContain("new AuthManager(guard)");
-  expect(source).toContain("new GuestGuard()");
-  expect(source).toContain("envFlagEnabled(process.env.AUTH_DEV_HEADERS)");
+  expect(source).toContain("new AuthManager(new GuestGuard(snapshot))");
+  expect(source).toContain("container.set(CORE_AUTH_TOKEN, establishedAuthReader)");
+  expect(source).toContain("const env = Object.freeze({...options.environment})");
   expect(source).not.toContain("class StarterAuthManager");
   expect(existsSync(join(app, "src/modules/auth/index.ts"))).toBe(false);
 });

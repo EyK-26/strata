@@ -1,6 +1,5 @@
-export { dispatchModelEvent, runWithDeferredModelEvents } from "./deferredModelEvents";
-export type { EventListener } from "./eventBus";
-export { EventBus, eventBus, readSharedEventBus } from "./eventBus";
+export type { EventListener } from "./eventBusClass";
+export { EventBus } from "./eventBusClass";
 
 function modelEventName(tableName: string, action: string): string {
   return `${tableName}.${action}`;

@@ -6,14 +6,15 @@ const seeder: Seeder = {
   async run(db) {
     const title = `Welcome to ${appDisplayName()}`;
 
-    await db`
+    await db.unsafe(
+      `
       INSERT INTO notification (user_id, tenant_id, type, title, body, data, read_at, created_at)
       VALUES
         (
           1,
           1,
           'welcome',
-          ${title},
+          $1,
           'Your admin inbox is live. Mark this read from the bell.',
           '{}'::jsonb,
           NULL,
@@ -23,13 +24,15 @@ const seeder: Seeder = {
           2,
           1,
           'welcome',
-          ${title},
+          $2,
           'You can follow tasks and comments from this inbox.',
           '{}'::jsonb,
           NULL,
           NOW()
         )
-    `;
+    `,
+      [title, title],
+    );
   },
 };
 

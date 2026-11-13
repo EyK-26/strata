@@ -44,28 +44,29 @@ async function makeModelCommand(...args: string[]): Promise<void> {
   if (keyType !== "number" && keyType !== "string")
     throw new Error("--key-type must be number or string; UUID model keys use string.");
   const fillable = keyType === "string" ? JSON.stringify(key) : "";
-  const content = `import { defineModel } from "@getstrata/core/database/model";
+  const content = `import { Model } from "@getstrata/core/database/model";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineModel, defineRepository } from "@getstrata/core/database/definitions";
 import { defineTable } from "@getstrata/core/database/table";
 
-interface ${className}Record {
-  ${key}: ${keyType};
-}
-
+interface ${className}Record { ${key}: ${keyType}; }
 const table = defineTable<${className}Record, "${key}">({
-  name: "${table}",
-  primaryKey: "${key}",
-  columns: ["${key}"],
+  name: "${table}", primaryKey: "${key}", columns: ["${key}"],
 });
-
-class ${className} extends defineModel(table) {
-  // Add writable fields to the record, table columns and this explicit allowlist.
-  static override $fillable = [${fillable}] as const;
-  // Enable only after adding the corresponding timestamp columns to your schema.
-  static override $timestamps = false;
-}
-
+const repository = defineRepository({
+  name: "${className}.repository", table, dependencies: [] as const,
+  create: binding => new BaseRepository(binding),
+});
+class ${className} extends Model<${className}Record, "${key}"> {}
+const ${className}Definition = defineModel({
+  name: "${className}", repository, dependencies: [] as const,
+  attributes: { fillable: [${fillable}], timestamps: false },
+  construct: (state, binding) => new ${className}(state, binding),
+});
+// Register this definition in createDatabaseBindings({ models: [...] }).
+// Use selectedSession.model(${className}Definition) inside an application invocation.
 export type { ${className}Record };
-export { ${className} };
+export { ${className}, ${className}Definition, repository as ${className}Repository };
 `;
   const path = await writeScaffoldFile(
     ["src", "models", ...classParts.slice(0, -1), `${classParts.at(-1)}.ts`],
@@ -73,9 +74,7 @@ export { ${className} };
     "Model",
   );
   console.log(`Created model: ${path}`);
-  console.log(
-    "src/models discovery supplies its default repository; no custom repository is required.",
-  );
+  console.log("Register the exported definition in the application database bindings.");
   console.log(
     `Next: strata make:migration create_${table}; define schema explicitly before strata migrate.`,
   );

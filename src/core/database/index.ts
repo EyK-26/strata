@@ -1,5 +1,38 @@
+export type {
+  AfterCommitRepositoryContext,
+  AfterCommitRepositoryListener,
+  BoundModel,
+  ModelBinding,
+  ModelDefinition,
+  ModelObserver,
+  ModelState,
+  RepositoryBinding,
+  RepositoryDefinition,
+  RepositoryEffectsDeclaration,
+  RepositoryHooks,
+  TransactionalRepositoryListener,
+  TypedRepositoryEffect,
+} from "@getstrata/core/database/definitions";
+export {
+  defineModel,
+  defineRepository,
+  repositoryEffects,
+} from "@getstrata/core/database/definitions";
 export { mapDatabaseError, withDatabaseErrorHandling } from "@getstrata/core/database/errors";
-export { default as BaseRepository } from "./baseRepository.ts";
+export {
+  BaseRepository,
+  BelongsToManyRelationQuery,
+  BelongsToRelationQuery,
+  HasManyRelationQuery,
+  HasManyThroughRelationQuery,
+  HasOneRelationQuery,
+  Model,
+  ModelQuery,
+  MorphManyRelationQuery,
+  MorphOneRelationQuery,
+  MorphToRelationQuery,
+  RepositoryQuery,
+} from "#strata-orm-runtime";
 export { createDatabaseConnection } from "./connection.ts";
 export type { ActiveDatabaseHandle } from "./connectionContext.ts";
 export {
@@ -18,27 +51,13 @@ export {
 } from "./dialect.ts";
 export { Factory } from "./factory.ts";
 export { foreignKeyFromTable, pivotTableName, singularize } from "./inflection.ts";
-export type { CastType, GlobalScopeFn, ModelConstructor } from "./model.ts";
+export type { CastType } from "./model.ts";
 export {
   applyCasts,
-  BelongsToManyRelationQuery,
-  BelongsToRelationQuery,
-  bootModels,
-  defineModel,
   dehydrateValue,
   filterMassAssignable,
-  HasManyRelationQuery,
-  HasManyThroughRelationQuery,
-  HasOneRelationQuery,
   hydrateValue,
-  Model,
-  ModelQuery,
-  MorphManyRelationQuery,
-  MorphOneRelationQuery,
-  MorphToRelationQuery,
-  registerModelClass,
-  registerModelRepository,
-} from "./model.ts";
+} from "./modelAttributes.ts";
 export type { MysqlConnection, MysqlExecutable, MysqlPool } from "./mysqlConnection.ts";
 export {
   createMysqlConnection,
@@ -104,7 +123,6 @@ export {
   morphOne,
   morphTo,
 } from "./relationships.ts";
-export { RepositoryQuery } from "./repositoryQuery.ts";
 export type {
   BlueprintAction,
   BlueprintCallback,
@@ -135,7 +153,6 @@ export {
 export { createSqliteConnection } from "./sqliteConnection.ts";
 export type { TableDefinition } from "./table.ts";
 export { defineTable } from "./table.ts";
-export { isActiveTransactionConnection, runInTransaction } from "./transaction.ts";
 export type {
   DatabaseComparable,
   DatabaseScalar,

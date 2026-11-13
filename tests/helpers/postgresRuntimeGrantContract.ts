@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import type { DatabaseConnection } from "@getstrata/core/database/baseRepository";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineModel, defineRepository } from "@getstrata/core/database/definitions";
 import { runWithSqlDialect } from "@getstrata/core/database/dialect";
-import { migrateDatabase } from "@getstrata/core/database/migrations";
 import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
-import { defineModel, registerModelRepository } from "@getstrata/core/database/model";
+import { Model } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 import {
   ensurePostgresAppRole,
@@ -11,12 +11,16 @@ import {
   grantPostgresAppRolePrivileges,
 } from "@getstrata/core/tenant/enableTenantRls";
 import { SQL } from "bun";
+import { migrateDatabase } from "../../src/core/database/migrations/runner";
+import { createNativePersistenceApplication } from "./nativePersistenceApplication";
 
 function sqlState(error: unknown): string {
   if (!(error instanceof Error)) throw error;
-  const state = Reflect.get(error, "errno");
-  if (typeof state !== "string") throw error;
-  return state;
+  for (let current: unknown = error; current instanceof Error; current = current.cause) {
+    const state = Reflect.get(current, "errno");
+    if (typeof state === "string") return state;
+  }
+  throw error;
 }
 
 /** Every database/role is freshly created by this contract and removed in finally. */
@@ -191,30 +195,39 @@ export async function observePostgresRuntimeGrants(
       { relrowsecurity: boolean; relforcerowsecurity: boolean }[]
     >("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='notes'::regclass");
     assert.ok(policy);
-    const crud = await runtime.begin(async (tx) => {
-      await tx.unsafe("SELECT set_config('app.tenant_id','1',true)");
-      interface NoteRecord {
-        id: number;
-        tenant_id: number;
-        body: string;
-      }
-      class Note extends defineModel(
-        defineTable<NoteRecord>({
-          name: "notes",
-          primaryKey: "id",
-          columns: ["id", "tenant_id", "body"],
-        }),
-      ) {
-        static override $fillable = ["tenant_id", "body"] as const;
-        static override $timestamps = false;
-      }
-      const db: DatabaseConnection = {
-        async unsafe<T>(query: string, params: readonly unknown[] = []) {
-          return tx.unsafe<T[]>(query, [...params]);
-        },
-      };
-      registerModelRepository(Note, Note.repository().withConnection(db));
-      return runWithSqlDialect("pgsql", async () => {
+    interface NoteRecord {
+      id: number;
+      tenant_id: number;
+      body: string;
+    }
+    class NoteEntity extends Model<NoteRecord, "id"> {}
+    const noteRepository = defineRepository({
+      name: "RuntimeNotes",
+      table: defineTable<NoteRecord, "id">({
+        name: "notes",
+        primaryKey: "id",
+        columns: ["id", "tenant_id", "body"],
+      }),
+      dependencies: [],
+      create: (binding) => new BaseRepository(binding),
+    });
+    const noteDefinition = defineModel({
+      name: "RuntimeNote",
+      repository: noteRepository,
+      dependencies: [],
+      attributes: { fillable: ["tenant_id", "body"], timestamps: false },
+      construct: (state, binding) => new NoteEntity(state, binding),
+    });
+    const persistence = await createNativePersistenceApplication({
+      default: "main",
+      connections: { main: { driver: "pgsql", url: target.href, max: 1 } },
+      repositories: [noteRepository],
+      models: [noteDefinition],
+    });
+    let crud: boolean;
+    try {
+      crud = await persistence.tenant(1, async (tx) => {
+        const Note = tx.model(noteDefinition);
         assert.equal(await Note.find(2), null);
         const note = await Note.create({ tenant_id: 1, body: "Příliš žluťoučký" });
         assert.equal((await Note.find(note.toObject().id))?.toObject().body, "Příliš žluťoučký");
@@ -222,22 +235,29 @@ export async function observePostgresRuntimeGrants(
         assert.equal((await Note.find(note.toObject().id))?.toObject().body, "updated");
         await note.delete();
         assert.equal(await Note.find(note.toObject().id), null);
-        const [count] = await tx.unsafe<{ count: number }[]>(
-          "SELECT count(*)::int AS count FROM notes",
-        );
+        const [count] = await tx.execute<{ count: number }>({
+          text: "SELECT count(*)::int AS count FROM notes",
+          params: [],
+        });
         assert.equal(count?.count, 1);
         let crossTenant = "";
         try {
-          await tx.savepoint(async (sp) => {
-            await sp.unsafe("INSERT INTO notes(tenant_id,body) VALUES (2,'denied')");
-          });
+          await tx.transaction((child) =>
+            child.execute({
+              text: "INSERT INTO notes(tenant_id,body) VALUES (2,'denied')",
+              params: [],
+            }),
+          );
         } catch (error) {
           crossTenant = sqlState(error);
         }
         assert.equal(crossTenant, "42501");
         return true;
       });
-    });
+    } finally {
+      await persistence.close();
+    }
+
     async function truncateProbe(table: string): Promise<{
       denial: string | null;
       otherBefore: number;

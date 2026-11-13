@@ -1,10 +1,13 @@
 import { expect, test } from "bun:test";
-import { createAppContext } from "@getstrata/bootstrap/context";
+import { createAppContext as createOwnedContext } from "@getstrata/bootstrap/context";
 import type { ServiceProvider } from "@getstrata/bootstrap/contracts";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { LocalStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
+
+const createAppContext = (providers: readonly ServiceProvider[]) =>
+  createOwnedContext(providers, { connection: "main", definition: { providers: [] } });
 
 const inMemoryDependencies: ServiceProvider = {
   name: "phase-test.dependencies",

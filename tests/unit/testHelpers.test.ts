@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createMockCache, createMockDependencies, mockFetch } from "./testHelpers";
 
 describe("testHelpers", () => {
@@ -47,7 +48,7 @@ describe("testHelpers", () => {
   });
 
   test("createMockDependencies wraps container, cache, and storage", () => {
-    const container = { resolve: () => "service" } as never;
+    const container = new ServiceContainer();
     const cache = createMockCache({ size: async () => 3 });
     const dependencies = createMockDependencies(container, cache);
 

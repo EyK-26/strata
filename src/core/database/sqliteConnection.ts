@@ -34,7 +34,7 @@ function createSqliteConnection(filename: string): SqliteConnection {
     },
     async begin<T>(callback: (transaction: ActiveDatabaseHandle) => Promise<T>): Promise<T> {
       if (transactions.has(getActiveDatabaseConnection(connection)))
-        throw new Error("Use runInTransaction for nested SQLite transactions.");
+        throw new Error("Use the active transaction handle for nested SQLite work.");
       const outcome = await pool.checkout();
       if (!outcome.ok) throw outcome.error;
       return legacyNativeTransaction(outcome.value, callback, transactions);

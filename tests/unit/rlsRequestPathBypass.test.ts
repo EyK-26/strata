@@ -1,216 +1,315 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { readdir, readFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-
+import { createScanner, SyntaxKind } from "typescript/unstable/ast";
+import {
+  generateProject,
+  resolveOverlayRoot,
+  resolveTemplateRoot,
+} from "../../packages/strata-starter/src/generate.ts";
+import {
+  layersFromFlags,
+  parseCreateStrataArgs,
+} from "../../packages/strata-starter/src/parseArgs.ts";
+import profiles from "../fixtures/scaffolds/starter-rendering-canonical.sha256.json";
 import { createGeneratedSourceApps } from "../helpers/generatedSourceApps";
 
 const generated = createGeneratedSourceApps();
-afterAll(generated.close);
-
+const integrationsRoot = await mkdtemp(join(tmpdir(), "strata-rls-fence-"));
+const integrations = join(integrationsRoot, "app");
+const integrationProfile = profiles.find(
+  (profile) => profile.name === "postgres-hybrid-combined-rls",
+);
+if (!integrationProfile) throw new Error("Missing existing integration source profile");
+generateProject({
+  projectName: "rls-fence",
+  targetDir: integrations,
+  layers: layersFromFlags(parseCreateStrataArgs(integrationProfile.args)),
+  templateRoot: resolveTemplateRoot(),
+  overlayRoot: resolveOverlayRoot(),
+});
+afterAll(async () => {
+  generated.close();
+  await rm(integrationsRoot, { recursive: true, force: true });
+});
 const repoRoot = join(import.meta.dir, "../..");
 
 async function listTsFiles(directory: string): Promise<string[]> {
-  const entries = await readdir(directory, { withFileTypes: true });
   const files: string[] = [];
-  for (const entry of entries) {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await listTsFiles(path)));
-      continue;
-    }
-    if (entry.name.endsWith(".ts")) {
-      files.push(path);
-    }
+    if (entry.isDirectory()) files.push(...(await listTsFiles(path)));
+    else if (entry.name.endsWith(".ts")) files.push(path);
   }
   return files;
 }
 
-const unboundedNeedle = "runWithMigrationBypass(";
+/** Lexical fence, not a dataflow proof. Includes indirect policy objects, ignores
+ * comments/string examples, and scans emitted request code rather than render templates. */
+function unboundedPolicies(source: string): number[] {
+  const scanner = createScanner(true, undefined, source);
+  const tokens: Array<{ text: string; position: number; kind: SyntaxKind }> = [];
+  const templates: number[] = [];
+  let scanned = 0;
+  for (;;) {
+    if (++scanned > source.length + 1) throw new Error("Source scanner did not terminate");
+    let kind = scanner.scan();
+    if (kind === SyntaxKind.EndOfFile) break;
+    if (kind === SyntaxKind.SlashToken || kind === SyntaxKind.SlashEqualsToken) {
+      const previous = tokens.at(-1)?.kind;
+      const expressionEnd: readonly SyntaxKind[] = [
+        SyntaxKind.Identifier,
+        SyntaxKind.NumericLiteral,
+        SyntaxKind.StringLiteral,
+        SyntaxKind.NoSubstitutionTemplateLiteral,
+        SyntaxKind.TemplateTail,
+        SyntaxKind.CloseParenToken,
+        SyntaxKind.CloseBracketToken,
+        SyntaxKind.PlusPlusToken,
+        SyntaxKind.MinusMinusToken,
+      ];
+      if (previous === undefined || !expressionEnd.includes(previous))
+        kind = scanner.reScanSlashToken();
+    }
+    if (kind === SyntaxKind.TemplateHead) templates.push(0);
+    else if (kind === SyntaxKind.OpenBraceToken && templates.length)
+      templates[templates.length - 1] = (templates.at(-1) ?? 0) + 1;
+    else if (kind === SyntaxKind.CloseBraceToken && templates.length) {
+      if (templates.at(-1) === 0) {
+        kind = scanner.reScanTemplateToken(false);
+        if (kind === SyntaxKind.TemplateTail) templates.pop();
+      } else templates[templates.length - 1] = (templates.at(-1) ?? 1) - 1;
+    }
+    tokens.push({
+      text:
+        kind === SyntaxKind.StringLiteral || kind === SyntaxKind.Identifier
+          ? scanner.getTokenValue()
+          : scanner.getTokenText(),
+      position: scanner.getTokenStart(),
+      kind,
+    });
+  }
+  const positions: number[] = [];
+  for (const [index, token] of tokens.entries()) {
+    const fieldEnd =
+      tokens[index + 1]?.text === "]" && tokens[index - 1]?.text === "[" ? index + 2 : index + 1;
+    if (
+      ["kind", "postgresPolicy"].includes(token.text) &&
+      tokens[fieldEnd]?.text === ":" &&
+      tokens[fieldEnd + 1]?.kind === SyntaxKind.StringLiteral &&
+      tokens[fieldEnd + 1]?.text === "bypass"
+    )
+      positions.push(token.position);
+    if (
+      token.text === "runWithMigrationBypass" &&
+      tokens[index + 1]?.text === "(" &&
+      tokens[index - 1]?.text !== "function"
+    )
+      positions.push(token.position);
+  }
+  return positions;
+}
 
-const allowedUnbounded = new Set([
-  // CLI-only bootstrap administration; generated placement and HTTP isolation asserted below.
-  join(repoRoot, "packages/strata-starter/src/renderInitialAdmin.ts"),
-  join(generated.rls, "src/db/migrate.ts"),
-  join(repoRoot, "src/db/migrations/runner.ts"),
-  join(repoRoot, "src/db/seeders/runner.ts"),
-  // Worker-only SQL snapshots/acknowledgements; HTTP effects remain outside this owner.
-  join(repoRoot, "src/core/audit/exportStore.ts"),
-  // Worker-only coordination; publication is fenced to the business transaction below.
-  join(repoRoot, "src/core/events/outbox/index.ts"),
-  // Explicit authenticated platform observation: capped, read-only, deadline-bound.
-  join(repoRoot, "src/core/events/outbox/metrics.ts"),
-]);
-
-const requestPathRoots = [
-  join(generated.rls, "src/modules"),
-  join(generated.rls, "src/bootstrap"),
-  join(generated.team, "src/modules"),
-  join(generated.team, "src/bootstrap"),
-  join(repoRoot, "src/bootstrap"),
-  join(repoRoot, "src/core"),
-  join(repoRoot, "packages/strata-starter/src"),
-];
-
-const requiredRequestPathFiles = [
-  join(generated.rls, "src/bootstrap/authDirectory.ts"),
-  join(generated.team, "src/bootstrap/authDirectory.ts"),
-  join(repoRoot, "src/bootstrap/web/session.ts"),
-  join(repoRoot, "src/bootstrap/routeMetadata.ts"),
-  join(repoRoot, "src/bootstrap/moduleRouteMiddleware.ts"),
-  join(repoRoot, "src/core/tenant/tenantMiddleware.ts"),
-  join(repoRoot, "packages/strata-starter/src/renderAuth.ts"),
-  join(repoRoot, "packages/strata-starter/src/renderAuthFlows.ts"),
-  join(repoRoot, "packages/strata-starter/src/auth/renderingContext.ts"),
-  join(repoRoot, "packages/strata-starter/src/auth/renderImports.ts"),
-  join(repoRoot, "packages/strata-starter/src/auth/renderWorkflows.ts"),
-  join(repoRoot, "packages/strata-starter/src/auth/renderApiRoutes.ts"),
-  join(repoRoot, "packages/strata-starter/src/auth/renderBrowserRoutes.ts"),
-  join(repoRoot, "packages/strata-starter/src/renderScim.ts"),
-  join(repoRoot, "packages/strata-starter/src/renderRuntime.ts"),
-  join(repoRoot, "packages/strata-starter/src/renderEnvironment.ts"),
-  join(repoRoot, "packages/strata-starter/src/renderProjectMetadata.ts"),
-  join(repoRoot, "packages/strata-starter/src/renderDocumentation.ts"),
-  join(repoRoot, "packages/strata-starter/src/renderDatabase.ts"),
-  join(repoRoot, "packages/strata-starter/src/renderMigrations.ts"),
-  join(repoRoot, "packages/strata-starter/src/renderModels.ts"),
-  join(repoRoot, "packages/strata-starter/src/renderBootstrap.ts"),
-  join(repoRoot, "packages/strata-starter/src/renderCli.ts"),
-];
+// Exact positive inventory, including the policy implementation/type contract.
+// A new occurrence even in an allowed file fails; these are specific trusted owners.
+const allowed: Readonly<Record<string, number>> = {
+  "src/core/contracts/persistence.ts": 1,
+  "src/core/tenant/scopedDatabasePolicy.ts": 1,
+  "src/core/tenant/databaseTenantContext.ts": 1,
+  "src/core/database/ownedReadOnlyObservation.ts": 1,
+  "src/core/events/outbox/index.ts": 2,
+  "src/bootstrap/providers/queue.ts": 1,
+  "src/cli/commands/scheduleRun.ts": 1,
+  "generated.rls/src/bootstrap/createApp.ts": 1,
+  "generated.rls/src/bootstrap/providers/index.ts": 1,
+  "generated.rls/src/cli/initialAdmin.ts": 1,
+  "generated.rls/src/db/migrate.ts": 1,
+  "generated.team/src/bootstrap/createApp.ts": 1,
+  "generated.team/src/bootstrap/providers/index.ts": 1,
+  "generated.integrations/src/bootstrap/createApp.ts": 1,
+  "generated.integrations/src/bootstrap/providers/index.ts": 1,
+  "generated.integrations/src/cli/initialAdmin.ts": 1,
+  "generated.integrations/src/db/migrate.ts": 1,
+};
+function unexpected(inventory: Readonly<Record<string, number>>) {
+  return Object.entries(inventory).filter(([file, count]) => count !== (allowed[file] ?? 0));
+}
+async function sourceInventory() {
+  const sources = new Map<string, string>();
+  for (const [prefix, root] of [
+    ["src/core", join(repoRoot, "src/core")],
+    ["src/bootstrap", join(repoRoot, "src/bootstrap")],
+    ["src/cli", join(repoRoot, "src/cli")],
+    ["generated.rls/src", join(generated.rls, "src")],
+    ["generated.team/src", join(generated.team, "src")],
+    ["generated.integrations/src", join(integrations, "src")],
+  ] as const) {
+    const files = await listTsFiles(root);
+    expect(files.length, root).toBeGreaterThan(0);
+    for (const file of files)
+      sources.set(`${prefix}/${file.slice(root.length + 1)}`, await readFile(file, "utf8"));
+  }
+  return sources;
+}
 
 describe("request-path RLS bypass fence", () => {
-  test("request-path callers do not call unbounded runWithMigrationBypass(", async () => {
-    const files: string[] = [];
-    for (const root of requestPathRoots) {
-      const scanned = await listTsFiles(root);
-      expect(scanned.length, root).toBeGreaterThan(0);
-      files.push(...scanned);
+  test("all current explicit bypass declarations have their exact trusted owner inventory", async () => {
+    const sources = await sourceInventory();
+    for (const profile of ["rls", "team", "integrations"]) {
+      for (const file of [
+        "src/modules/auth/index.ts",
+        "src/bootstrap/authDirectory.ts",
+        "src/bootstrap/createApp.ts",
+      ])
+        expect(sources.has(`generated.${profile}/${file}`), file).toBe(true);
+      if (profile !== "team")
+        expect(sources.has(`generated.${profile}/src/modules/scim/index.ts`)).toBe(true);
+      if (profile === "integrations")
+        expect(sources.has("generated.integrations/src/modules/billing/index.ts")).toBe(true);
     }
-
-    for (const file of requiredRequestPathFiles) {
-      expect(files, file).toContain(file);
+    const inventory: Record<string, number> = {};
+    for (const [file, text] of sources) {
+      let count: number;
+      try {
+        count = unboundedPolicies(text).length;
+      } catch (error) {
+        throw new Error(`Cannot scan ${file}`, { cause: error });
+      }
+      if (count) inventory[file] = count;
     }
-
-    const offenders: string[] = [];
-    for (const file of files) {
-      if (allowedUnbounded.has(file)) {
-        continue;
-      }
-      if (file === join(repoRoot, "packages/strata-starter/src/renderMigrations.ts")) {
-        continue;
-      }
-      if (file === join(repoRoot, "packages/strata-starter/src/renderIntegrations.ts")) {
-        continue;
-      }
-      const text = await readFile(file, "utf8");
-      if (text.includes(unboundedNeedle)) {
-        offenders.push(file);
-      }
-    }
-    expect(offenders).toEqual([]);
+    expect(unexpected(inventory)).toEqual([]);
+    expect(inventory).toEqual(allowed); // Nonvacuous: required administrative/worker positives cannot disappear.
   });
 
-  test("initial-admin global bypass is confined to the explicit operator command", async () => {
-    const renderer = await readFile(
-      join(repoRoot, "packages/strata-starter/src/renderInitialAdmin.ts"),
-      "utf8",
-    );
-    expect([...renderer.matchAll(/runWithMigrationBypass\(/g)]).toHaveLength(1);
-    expect(renderer).toContain("export async function initialAdminCommand");
-    expect(renderer).toContain("await assertRlsLiveDatabaseRole()");
-    expect(renderer).toContain("runInTransaction(async db");
-    const generation = await readFile(
-      join(repoRoot, "packages/strata-starter/src/generate.ts"),
-      "utf8",
-    );
-    expect(generation).toContain(
-      'writeText(join(src, "cli/initialAdmin.ts"), initialAdminCommand)',
-    );
-    for (const directory of [
-      join(generated.rls, "src/modules"),
-      join(generated.team, "src/modules"),
-      join(repoRoot, "src/bootstrap"),
+  test("an injected current request-path bypass is rejected, including an indirect object", async () => {
+    const request = await readFile(join(generated.rls, "src/modules/auth/index.ts"), "utf8");
+    expect(unboundedPolicies(request)).toHaveLength(0);
+    for (const injection of [
+      'ports.policy.run(ports.database, { kind: "bypass" }, business);',
+      "const elevated = { 'kind': 'bypass' } as const; ports.policy.run(ports.database, elevated, business);",
+      "runWithMigrationBypass(ports.database, ports.policy, business);",
+      `const before = \`tenant-\${scope.id}\`; ports.policy.run(ports.database, { ["kind"]: "bypass" }, business);`,
     ]) {
-      for (const file of await listTsFiles(directory)) {
-        const text = await readFile(file, "utf8");
-        expect(text, file).not.toContain("initialAdminCommand");
-        expect(text, file).not.toContain("cli/initialAdmin");
+      const count = unboundedPolicies(`${request}\n${injection}`).length;
+      expect(count).toBe(1);
+      expect(unexpected({ "generated.rls/src/modules/auth/index.ts": count })).toEqual([
+        ["generated.rls/src/modules/auth/index.ts", 1],
+      ]);
+    }
+    // An allowed composition file cannot hide an added HTTP bypass either.
+    const composition = await readFile(join(generated.rls, "src/bootstrap/createApp.ts"), "utf8");
+    expect(unboundedPolicies(composition)).toHaveLength(1);
+    const injectedComposition = `${composition}\nconst unauthorizedHttp = ports => ports.policy.run(ports.database,{kind:"bypass"},handler);`;
+    expect(
+      unexpected({
+        "generated.rls/src/bootstrap/createApp.ts": unboundedPolicies(injectedComposition).length,
+      }),
+    ).toHaveLength(1);
+    expect(
+      unboundedPolicies(
+        '// policy.run(db, {kind:"bypass"}, work);\nconst example = \'{kind:"bypass"}\';',
+      ),
+    ).toHaveLength(0);
+  });
+
+  test("initial-admin privilege stays in the operator command with live role checks and cleanup", async () => {
+    const command = await readFile(join(generated.rls, "src/cli/initialAdmin.ts"), "utf8");
+    expect(unboundedPolicies(command)).toHaveLength(1);
+    expect(command).toContain('policy: "cli.initial-admin"');
+    expect(command).toContain("await assertRlsLiveDatabaseRole(");
+    expect(command.indexOf("await assertRlsLiveDatabaseRole(")).toBeLessThan(
+      command.indexOf('ports.policy.run(ports.database, {kind:"bypass"}, provision)'),
+    );
+    expect(command).toContain("const provision = async (db: TransactionSession)");
+    expect(command).toMatch(/finally\s*\{\s*await app.context.dispose\(\)/);
+    for (const app of [generated.rls, generated.team]) {
+      for (const directory of ["src/modules", "src/bootstrap"]) {
+        for (const file of await listTsFiles(join(app, directory))) {
+          const source = await readFile(file, "utf8");
+          expect(source, file).not.toContain("initialAdminCommand");
+          expect(source, file).not.toContain("cli/initialAdmin");
+        }
       }
     }
   });
 
-  test("outbox publication never bypasses RLS and coordination rejects an active business transaction", async () => {
-    const text = await readFile(join(repoRoot, "src/core/events/outbox/index.ts"), "utf8");
-    const publish = text.slice(
-      text.indexOf("  async publish("),
-      text.indexOf("  private async claim("),
-    );
-    expect(publish).not.toContain(unboundedNeedle);
+  test("outbox publication is owned by the supplied transaction, and coordination rejects an active business transaction", async () => {
+    const source = await readFile(join(repoRoot, "src/core/events/outbox/index.ts"), "utf8");
+    const start = source.indexOf("  publish(");
+    const end = source.indexOf("  private async persist(", start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const publish = source.slice(start, end);
+    expect(unboundedPolicies(publish)).toHaveLength(0);
     expect(publish).not.toContain("privileged(");
-    expect(publish).toContain("hasActiveTransaction()");
-    const coordination = text.slice(
-      text.indexOf("async function privileged"),
-      text.indexOf("class SqlOutbox"),
+    expect(publish).toContain("assertOwnedSession(this.owner, db, true)");
+    expect(publish).toContain("Outbox publication tenant must match its immutable execution.");
+    expect(publish).toContain("return db.transaction(");
+    const process = source.slice(
+      source.indexOf("  private processOwned("),
+      source.indexOf("  private processOwned(") + 900,
     );
-    expect(coordination).toContain("if (hasActiveTransaction())");
-    expect(coordination.indexOf("if (hasActiveTransaction())")).toBeLessThan(
-      coordination.indexOf(unboundedNeedle),
+    expect(process).toContain("assertNoOwnedTransaction(this.owner)");
+    expect(process.indexOf("assertNoOwnedTransaction(this.owner)")).toBeLessThan(
+      process.indexOf("this.owner.invoke("),
     );
+    const privileged = source.slice(
+      source.indexOf("  private async privileged"),
+      source.indexOf("  private async privileged") + 1100,
+    );
+    expect(unboundedPolicies(privileged)).toHaveLength(1);
+    expect(privileged).toContain(`policy: \`outbox.\${phase}\``);
+    expect(privileged).toContain("assertOwnedSession(this.owner, ports.database)");
   });
 
-  test("generated runtime unbounded bypass sits in migrate/seed, not request handlers", async () => {
-    const file = join(repoRoot, "packages/strata-starter/src/renderMigrations.ts");
-    const text = await readFile(file, "utf8");
-    const matches = [...text.matchAll(/runWithMigrationBypass\(/g)];
-    expect(matches).toHaveLength(1);
+  test("generated seed bypass is development-only and owns its application", async () => {
+    const seed = await readFile(join(generated.rls, "src/db/migrate.ts"), "utf8");
+    expect(unboundedPolicies(seed)).toHaveLength(1);
+    expect(seed).toContain('if (isProductionEnv()) throw new Error("Demo seeding is disabled');
+    expect(seed).toContain('policy.run(database, {kind:"bypass"}, writeSeed)');
+    expect(seed).toContain('policy:"starter-demo-seed"');
+    expect(seed).toMatch(/finally\s*\{\s*await application.stop\(\)/);
+  });
 
-    const migrateStart = text.indexOf("function renderMigrateTs");
-    const migrateEnd = text.indexOf("function dropTables");
-    expect(migrateStart).toBeGreaterThan(-1);
-    expect(migrateEnd).toBeGreaterThan(migrateStart);
-    const migrateSlice = text.slice(migrateStart, migrateEnd);
-    expect(migrateSlice).toContain(unboundedNeedle);
-    expect(migrateSlice).toContain("export async function seed()");
-    expect(migrateSlice).toContain(`\${seedOpen}`);
-
-    const bootstrap = await readFile(
-      join(repoRoot, "packages/strata-starter/src/renderBootstrap.ts"),
+  test("worker audit composition owns bypass, while webhook jobs use their established queue database", async () => {
+    const bootstrap = await readFile(join(generated.rls, "src/bootstrap/createApp.ts"), "utf8");
+    const providers = await readFile(
+      join(generated.rls, "src/bootstrap/providers/index.ts"),
       "utf8",
     );
-    expect(bootstrap).not.toContain(unboundedNeedle);
-    const createAppStart = bootstrap.indexOf("function renderCreateAppTs");
-    const createAppEnd = bootstrap.indexOf("function renderRoutesTs");
-    expect(createAppStart).toBeGreaterThan(-1);
-    expect(createAppEnd).toBeGreaterThan(createAppStart);
-    expect(bootstrap.slice(createAppStart, createAppEnd)).not.toContain(unboundedNeedle);
-  });
-
-  test("generated webhook job bypass is the delivery insert, not the billing route", async () => {
-    const file = join(repoRoot, "packages/strata-starter/src/renderIntegrations.ts");
-    const text = await readFile(file, "utf8");
-    const jobStart = text.indexOf("function renderDispatchOutboundWebhookJob");
-    const jobEnd = text.indexOf("function renderNoteCreatedWebhookListener");
-    const billingStart = text.indexOf("function renderBillingModule");
-    expect(jobStart).toBeGreaterThan(-1);
-    expect(jobEnd).toBeGreaterThan(jobStart);
-    expect(billingStart).toBeGreaterThan(jobEnd);
-    expect(text.slice(jobStart, jobEnd)).toContain(unboundedNeedle);
-    expect(text.slice(billingStart)).not.toContain(unboundedNeedle);
+    expect(unboundedPolicies(providers)).toHaveLength(1);
+    expect(providers).toContain('policy:"audit.export"');
+    expect(providers).toContain('policy.run(database,{kind:"bypass"},work)');
+    expect(bootstrap).toContain(
+      'createOwnedReadOnlyObservation(handle.application,"main",dbOptions,{postgresPolicy:"bypass"})',
+    );
+    const job = await readFile(
+      join(integrations, "src/jobs/dispatchOutboundWebhookJob.ts"),
+      "utf8",
+    );
+    expect(unboundedPolicies(job)).toHaveLength(0);
+    expect(job).toContain("Webhook delivery requires an owned queue invocation.");
+    expect(job).toContain("await context.database.execute({");
+    expect(
+      unboundedPolicies(await readFile(join(integrations, "src/modules/billing/index.ts"), "utf8")),
+    ).toHaveLength(0);
   });
 });
 
-test("outbox metrics bypass is confined to bounded read-only platform observation", async () => {
+test("outbox metrics bypass is confined to owned, bounded read-only platform observation", async () => {
   const collector = await readFile(join(repoRoot, "src/core/events/outbox/metrics.ts"), "utf8");
-  expect([...collector.matchAll(/runWithMigrationBypass\(/g)]).toHaveLength(1);
-  const lifecycle = await readFile(
-    join(repoRoot, "src/core/database/readOnlyCollector.ts"),
+  const owner = await readFile(
+    join(repoRoot, "src/core/database/ownedReadOnlyObservation.ts"),
     "utf8",
   );
-  expect(collector).toContain("createReadOnlyCollector(");
-  expect(lifecycle).toContain("hasActiveTransaction()");
-  expect(lifecycle).toContain("SET TRANSACTION READ ONLY");
-  expect(lifecycle).toContain("statement_timeout");
-  expect(lifecycle).toContain("acquisitionSignal: acquisition.signal");
-  expect(lifecycle).not.toContain("runWithMigrationBypass(");
+  expect(unboundedPolicies(collector)).toHaveLength(0);
+  expect(unboundedPolicies(owner)).toHaveLength(1);
+  expect(collector).toContain("options.observeReadOnly(timeoutMs");
+  expect(owner).toContain("assertNoOwnedTransaction(");
+  expect(owner).toContain("SET TRANSACTION READ ONLY");
+  expect(owner).toContain("statement_timeout");
+  expect(owner).toContain("acquisitionSignal: scope.context.signal");
   expect(collector).toContain("LIMIT $1");
   expect(collector).not.toContain("SELECT payload");
   const routes = await readFile(join(repoRoot, "src/bootstrap/metricsRoutes.ts"), "utf8");
@@ -222,13 +321,16 @@ test("outbox metrics bypass is confined to bounded read-only platform observatio
   );
 });
 
-test("failed-job observation uses a bounded ID projection without an RLS bypass", async () => {
+test("failed-job observation projects bounded IDs without an RLS bypass", async () => {
   const collector = await readFile(join(repoRoot, "src/core/queue/failedJobMetrics.ts"), "utf8");
-  expect(collector).toContain("createReadOnlyCollector(");
-  expect(collector).toContain('.project(["id"], sampleLimit + 1)');
+  expect(collector).toContain("options.observeReadOnly(timeoutMs");
+  expect(collector).toContain(
+    'select: [{ kind: "column", table: failedJobTable.name, column: "id" }]',
+  );
+  expect(collector).toContain("limit: sampleLimit + 1");
   expect(collector).toContain("NOT c.relrowsecurity");
   expect(collector).toContain("i.indisprimary");
-  expect(collector).not.toContain(unboundedNeedle);
+  expect(unboundedPolicies(collector)).toHaveLength(0);
   expect(collector).not.toContain("listRecent(");
-  expect(collector).not.toContain('project(["payload"');
+  expect(collector).not.toContain('column: "payload"');
 });

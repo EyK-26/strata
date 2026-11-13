@@ -19,6 +19,7 @@ import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { createStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
 import { createTenantMiddleware } from "@getstrata/core/tenant/tenantMiddleware";
+import { createMockDependencies } from "../unit/testHelpers";
 
 // Retain the opt-out transport characterization and every original security control.
 // The explicit target-policy cases must reach validation without the app adapter.
@@ -124,6 +125,11 @@ async function fixture(
   let publicOrigin = "";
   const selectTenant = options.trustedTenantProxy
     ? createTenantMiddleware({
+        auth: { user: null, credentialSource: null },
+        config: { enabled: true, production: true, allowDevHeaders: false },
+        userTenantId: async () => {
+          throw new Error("Guest fixture must not look up account membership");
+        },
         publicTenancy: {
           trustedProxyAddresses: ["127.0.0.1"],
           resolveTenantId: async (hostname) => (hostname === "127.0.0.1" ? 1 : null),
@@ -186,7 +192,9 @@ async function fixture(
       return selectTenant ? await selectTenant(request, protect) : await protect();
     } catch (error) {
       if (error instanceof Error && "status" in error && error.status === 403)
-        return new Response(error.message, { status: 403 });
+        return options.trustedTenantProxy
+          ? Response.json({ error: error.message }, { status: 403 })
+          : new Response(error.message, { status: 403 });
       throw error;
     }
   };
@@ -232,11 +240,13 @@ async function fixture(
     container.set(CORE_AUTH_TOKEN, new AuthManager({ resolve: () => null }));
     container.set(CORE_CONFIG_TOKEN, config);
     config.set(CSRF_TARGET_ORIGIN_CONFIG_KEY, publicOrigin);
-    kernel = createHttpKernel({
-      container,
-      cache: new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
-      storage: new StorageManager(createStorageDriver()),
-    });
+    kernel = createHttpKernel(
+      createMockDependencies(
+        container,
+        new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
+        new StorageManager(createStorageDriver()),
+      ),
+    );
     const ownedKernel = kernel;
     csrf = async (request, next) => await ownedKernel.wrapWeb(async () => next())(request);
   } else if (options.targetOrigin) csrf = createCsrfMiddleware({ targetOrigin: publicOrigin });
@@ -493,7 +503,11 @@ test("the app adapter does not authenticate the proxy: direct matching-host tran
 
 test("a real browser sends Secure cookies and HTTPS Origin through the TLS-offload edge", async () => {
   const { chromium } = await import("playwright");
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ?? "/usr/bin/chromium",
+    args: ["--no-sandbox"],
+  });
   try {
     for (const boundary of ["default", "adapter", "target", "kernel"] as const) {
       const f = await fixture({

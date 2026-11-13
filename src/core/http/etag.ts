@@ -112,8 +112,16 @@ function notModifiedResponse(etag: string): Response {
   });
 }
 
-function applyConditionalGet(request: Request, response: Response, etag: string): Response {
-  if (!isEtagEnabled()) {
+function applyConditionalGet(
+  request: Request,
+  response: Response,
+  etag: string,
+  policy?: Readonly<{ etagEnabled: boolean }>,
+): Response {
+  const enabled = policy === undefined ? isEtagEnabled() : policy.etagEnabled;
+  if (typeof enabled !== "boolean")
+    throw new TypeError("Conditional GET requires a boolean ETag policy.");
+  if (!enabled) {
     return response;
   }
 

@@ -1,11 +1,11 @@
-import type FailedJobService from "./failedJobService";
 import { AsyncQueue, type Job } from "./index";
 import { jobRegistry } from "./jobRegistry";
 import { runQueueJob } from "./jobRunner";
+import type { QueueServices } from "./queueServices";
 
 class ResilientQueue extends AsyncQueue {
   constructor(
-    private readonly failedJobs: FailedJobService,
+    private readonly failedJobs: QueueServices,
     private readonly asyncDispatch = false,
   ) {
     super();

@@ -1,19 +1,23 @@
 /** Compiled inside a real generated app against its installed public packages. */
-import type { AppDependencies, CachedJson } from "@getstrata/core/contracts/di";
+import type { BusinessRequestPorts } from "@getstrata/bootstrap/contracts";
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
+import type { AppDependencies, CachedJson } from "@getstrata/core/contracts/di";
 import type { RouteRequest } from "@getstrata/core/http/route";
+import type { RouteModelBindingPorts } from "@getstrata/core/http/securedRouteModelBinding";
 import TargetController from "./controller";
 import { createTargetRoutes } from "./routes";
 
 export function generatedHandlerContracts(
   dependencies: AppDependencies,
+  database: BusinessRequestPorts["database"],
   cachedJson: CachedJson,
+  binding: RouteModelBindingPorts,
   kernel: HttpKernel,
   plain: Request,
   item: RouteRequest<{ id: string }>,
   other: RouteRequest<{ slug: string }>,
 ): void {
-  const controller = new TargetController(dependencies, cachedJson);
+  const controller = new TargetController(database, cachedJson, binding);
   controller.index();
   controller.index(plain);
   controller.store(plain);

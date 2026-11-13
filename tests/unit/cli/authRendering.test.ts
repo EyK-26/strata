@@ -7,40 +7,16 @@ import {
   parseCreateStrataArgs,
 } from "../../../packages/strata-starter/src/parseArgs.ts";
 import * as auth from "../../../packages/strata-starter/src/renderAuth.ts";
-import * as flows from "../../../packages/strata-starter/src/renderAuthFlows.ts";
-import currentModules from "../../fixtures/scaffolds/auth-password-operation-current.sha256.json";
-import baselines from "../../fixtures/scaffolds/auth-rendering.sha256.json";
-import { passwordLoginArtifactRoundTrip } from "../../helpers/authLoginArtifactDelta.ts";
-import { starterCombinationArtifactRoundTrip } from "../../helpers/starterCombinationArtifactDelta.ts";
+import historical from "../../fixtures/scaffolds/auth-rendering.sha256.json";
+import baselines from "../../fixtures/scaffolds/auth-rendering-canonical.sha256.json";
 
-const currentModuleHashes: Readonly<Record<string, string | null>> = currentModules;
-
-// Historical 2.2.48 whole-artifact hashes stay unchanged. The separately declared
-// emitted password-operation refactor has exact literal substitution counts and
-// a byte-for-byte forward/reverse roundtrip, plus strict CURRENT module hashes.
-// No whitespace or regex normalization; installed auth journeys remain the
-// runtime authority for SMTP, MFA, replay, contention and credential revocation.
+// Hash the complete emitted artifact, without rewrites or normalization. Historical
+// snapshots remain as an inventory and migration record, not an old-API requirement.
 for (const { name, args, hashes } of baselines) {
-  test(`auth rendering preserves the pre-extraction artifacts: ${name}`, () => {
+  test(`auth rendering matches canonical full artifacts: ${name}`, () => {
     const layers = layersFromFlags(parseCreateStrataArgs(args));
-    const current = auth.renderAuthModule(layers);
-    const correction = starterCombinationArtifactRoundTrip(
-      "auth",
-      name,
-      "src/modules/auth/index.ts",
-      current,
-    );
-    expect(correction.roundTrip).toBe(current);
-    const module = correction.previous;
-    const { legacy, roundTrip } = passwordLoginArtifactRoundTrip(module, layers);
-    expect(roundTrip).toBe(module);
-    const currentHash = currentModuleHashes[name];
-    if (currentHash === undefined) throw new Error(`Missing current artifact hash: ${name}`);
-    expect(module === null ? null : createHash("sha256").update(module).digest("hex")).toBe(
-      currentHash,
-    );
     const artifacts = {
-      module: legacy,
+      module: auth.renderAuthModule(layers),
       directory: auth.renderAuthDirectory(layers),
       provider: auth.renderAuthProvider(layers),
       pendingMfa: auth.renderPendingMfaTs(),
@@ -56,14 +32,11 @@ for (const { name, args, hashes } of baselines) {
   });
 }
 
-test("legacy auth imports retain the same flow function identities", () => {
-  expect(auth.renderAuthModule).toBe(flows.renderAuthModule);
-  expect(auth.renderPendingMfaTs).toBe(flows.renderPendingMfaTs);
-  expect(auth.renderSiteModule).toBe(flows.renderSiteModule);
-});
-
-test("current password-operation artifact inventory retains every historical profile", () => {
-  expect(Object.keys(currentModules).sort()).toEqual(baselines.map(({ name }) => name).sort());
+test("canonical auth artifact inventory retains the 64 existing profiles", () => {
+  expect(baselines).toHaveLength(64);
+  expect(baselines.map(({ name, args }) => ({ name, args }))).toEqual(
+    historical.map(({ name, args }) => ({ name, args })),
+  );
 });
 
 function renderedSignup() {
@@ -86,7 +59,7 @@ test("generated signup imports the neutral unique classifier and preserves domai
     'import { isUniqueConstraintError } from "@getstrata/core/database/errors";',
   );
   expect(source).toContain(
-    "if (!isUniqueConstraintError(error) || !(await starterAuthDirectory.findByEmail(email))) throw error;",
+    "if (!isUniqueConstraintError(error) || !(await createStarterAuthDirectory(ports).findByEmail(email))) throw error;",
   );
   expect(source).not.toContain("if (!(error instanceof ConflictError)");
   const profile = baselines.find(
@@ -105,34 +78,77 @@ async function invokeRenderedSignup(failure: unknown, accountExists: boolean) {
   if (start < 0 || end < 0) throw new Error("Missing generated registration function boundaries");
   const javascript = new Bun.Transpiler({ loader: "ts" }).transformSync(source.slice(start, end));
   let readbacks = 0;
+  const userDefinition = Symbol("User definition");
+  let inTransaction = false;
+  const transactionPorts = {
+    database: {
+      model(definition: unknown) {
+        expect(definition).toBe(userDefinition);
+        expect(inTransaction).toBe(true);
+        return {
+          create: async () => {
+            throw failure;
+          },
+        };
+      },
+    },
+  };
+  const ports = {
+    database: {
+      model() {
+        throw new Error("Registration writes must use the selected child transaction");
+      },
+    },
+  };
   const createRegistration = new Function(
     "runAuthWrite",
-    "runInTransaction",
+    "runAuthTransaction",
     "User",
-    "starterAuthDirectory",
+    "createStarterAuthDirectory",
     "isUniqueConstraintError",
     `${javascript}\nreturn createRegistration;`,
   )(
-    (_identifier: unknown, work: () => Promise<unknown>) => work(),
-    (work: () => Promise<unknown>) => work(),
-    {
-      create: async () => {
-        throw failure;
-      },
+    (selected: object, identifier: string, work: (ports: object) => Promise<unknown>) => {
+      expect(selected).toBe(ports);
+      expect(identifier).toBe("account@example.test");
+      return work(selected);
     },
-    {
-      findByEmail: async () => {
-        readbacks++;
-        return accountExists ? { id: 1 } : null;
-      },
+    async (selected: object, work: (ports: object) => Promise<unknown>) => {
+      expect(selected).toBe(ports);
+      inTransaction = true;
+      try {
+        return await work(transactionPorts);
+      } finally {
+        inTransaction = false;
+      }
+    },
+    userDefinition,
+    (selected: object) => {
+      expect(selected).toBe(ports);
+      return {
+        findByEmail: async (email: string) => {
+          expect(email).toBe("account@example.test");
+          expect(inTransaction).toBe(false);
+          readbacks++;
+          return accountExists ? { id: 1 } : null;
+        },
+      };
     },
     isUniqueConstraintError,
-  ) as (credentials: { name: string; email: string; password: string }) => Promise<unknown>;
-  const outcome = await createRegistration({
-    name: "Account",
-    email: "account@example.test",
-    password: "password",
-  }).then(
+  ) as (
+    ports: object,
+    services: object,
+    credentials: { name: string; email: string; password: string },
+  ) => Promise<unknown>;
+  const outcome = await createRegistration(
+    ports,
+    {},
+    {
+      name: "Account",
+      email: "account@example.test",
+      password: "password",
+    },
+  ).then(
     (value) => ({ ok: true as const, value }),
     (error) => ({ ok: false as const, error }),
   );

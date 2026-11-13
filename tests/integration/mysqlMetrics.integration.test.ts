@@ -1,18 +1,17 @@
 import { expect, test } from "bun:test";
 import { createMetricsRuntime } from "@getstrata/bootstrap/metricsRoutes";
 import {
-  bindDatabaseConnection,
-  getBoundDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "@getstrata/core/database/boundConnection";
-import { resetSqlDialect, useSqlDialect } from "@getstrata/core/database/dialect";
-import {
   createMysqlConnection,
   createMysqlConnectionFromPool,
 } from "@getstrata/core/database/mysqlConnection";
+import {
+  createOwnedReadOnlyObservation,
+  type ReadOnlyObservation,
+} from "@getstrata/core/database/ownedReadOnlyObservation";
 import { Schema } from "@getstrata/core/database/schema";
 import { createOutboxMigration } from "@getstrata/core/events/outbox";
 import { createConnection } from "mysql2/promise";
+import { createNativePersistenceApplication } from "../helpers/nativePersistenceApplication";
 
 const adminUrl = process.env.MYSQL_OBSERVABILITY_ADMIN_URL;
 const mysqlTest = adminUrl ? test : test.skip;
@@ -21,6 +20,7 @@ async function fixture(
     writer: ReturnType<typeof createMysqlConnection>,
     reader: ReturnType<typeof createMysqlConnection>,
     url: string,
+    observeReadOnly: ReadOnlyObservation,
   ) => Promise<void>,
 ) {
   if (!adminUrl) throw new Error("Missing qualification admin URL");
@@ -29,7 +29,7 @@ async function fixture(
   const database = `obs_${suffix}`;
   const user = `obs_${suffix}`;
   const password = crypto.randomUUID().replaceAll("-", "");
-  const previous = getBoundDatabaseConnection();
+  let native: Awaited<ReturnType<typeof createNativePersistenceApplication>> | undefined;
   let writer: ReturnType<typeof createMysqlConnection> | undefined;
   let reader: ReturnType<typeof createMysqlConnection> | undefined;
   try {
@@ -44,8 +44,6 @@ async function fixture(
     readUrl.password = password;
     writer = createMysqlConnection(writeUrl.toString());
     reader = createMysqlConnection(readUrl.toString());
-    useSqlDialect("mysql");
-    bindDatabaseConnection(writer);
     await Schema.run(writer, "mysql", (schema) => {
       schema.create("failed_job", (table) => {
         table.id();
@@ -58,14 +56,21 @@ async function fixture(
     await writer.unsafe(
       "INSERT INTO strata_outbox_event VALUES ('fixture','private-event',1,NULL,'private-payload',1,'fixture')",
     );
-    bindDatabaseConnection(reader);
-    await run(writer, reader, readUrl.toString());
+    const configured = { driver: "mysql" as const, url: readUrl.toString() };
+    native = await createNativePersistenceApplication({
+      default: "test",
+      connections: { test: configured },
+    });
+    await run(
+      writer,
+      reader,
+      readUrl.toString(),
+      createOwnedReadOnlyObservation(native.application, "test", configured),
+    );
   } finally {
     await reader?.close();
     await writer?.close();
-    if (previous) bindDatabaseConnection(previous);
-    else resetBoundDatabaseConnection();
-    resetSqlDialect();
+    await native?.close();
     await admin.query(`DROP USER IF EXISTS '${user}'@'%'`);
     await admin.query(`DROP DATABASE IF EXISTS ${database}`);
     await admin.end();
@@ -147,7 +152,7 @@ mysqlTest(
 mysqlTest(
   "MySQL bounded indexed recovery observations exclude completed history across three processes",
   async () => {
-    await fixture(async (writer, _reader, url) => {
+    await fixture(async (writer, _reader, url, observeReadOnly) => {
       // Representative history, inserted in bounded batches using parameters.
       for (let start = 0; start < 20000; start += 500) {
         await writer.unsafe(
@@ -179,8 +184,8 @@ mysqlTest(
         );
       }
       const runtime = createMetricsRuntime({
-        failedJobs: { sampleLimit: 2 },
-        outbox: { sampleLimit: 2 },
+        failedJobs: { observeReadOnly, sampleLimit: 2 },
+        outbox: { observeReadOnly, sampleLimit: 2 },
       });
       try {
         expect(await runtime.options.failedJobs?.collect()).toEqual({
@@ -212,7 +217,7 @@ mysqlTest(
           "standard global table",
         );
         await writer.unsafe("ALTER TABLE failed_job ENGINE=InnoDB");
-        const program = `import {createMysqlConnection} from '@getstrata/core/database/mysqlConnection';import {bindDatabaseConnection} from '@getstrata/core/database/boundConnection';import {useSqlDialect} from '@getstrata/core/database/dialect';import {createMetricsRuntime} from '@getstrata/bootstrap/metricsRoutes';const db=createMysqlConnection(process.env.OBS_URL);bindDatabaseConnection(db);useSqlDialect('mysql');const runtime=createMetricsRuntime({failedJobs:{sampleLimit:2},outbox:{sampleLimit:2}});try{console.log(JSON.stringify({failed:await runtime.options.failedJobs.collect(),states:(await runtime.options.outbox.collect()).states.map(r=>[r.state,r.count,r.capped])}));}finally{await runtime.close();await db.close();}`;
+        const program = `import{createApplication}from '@getstrata/core/runtime/application';import{createDatabaseBindings}from '@getstrata/core/database/bindings';import{createOwnedReadOnlyObservation}from '@getstrata/core/database/ownedReadOnlyObservation';import{createMetricsRuntime}from '@getstrata/bootstrap/metricsRoutes';const options={driver:'mysql',url:process.env.OBS_URL};const app=createApplication({providers:[],services:createDatabaseBindings({default:'main',connections:{main:options}})});await app.start();const observeReadOnly=createOwnedReadOnlyObservation(app,'main',options);const runtime=createMetricsRuntime({failedJobs:{sampleLimit:2,observeReadOnly},outbox:{sampleLimit:2,observeReadOnly}});try{console.log(JSON.stringify({failed:await runtime.options.failedJobs.collect(),states:(await runtime.options.outbox.collect()).states.map(r=>[r.state,r.count,r.capped])}));}finally{await runtime.close();const result=await app.stop();if(!result.successful)throw Error('Application cleanup not confirmed');}`;
         const results = await Promise.all(
           Array.from({ length: 3 }, async () => {
             const child = Bun.spawn([process.execPath, "--no-env-file", "-e", program], {

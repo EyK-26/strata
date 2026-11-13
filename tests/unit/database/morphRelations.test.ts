@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineRepository } from "@getstrata/core/database/definitions";
 import {
   indexMorphManyRelation,
   indexMorphOneRelation,
@@ -9,6 +10,8 @@ import {
   morphTo,
 } from "@getstrata/core/database/relationships";
 import { defineTable } from "@getstrata/core/database/table";
+import type { DatabaseConnection } from "../../../src/core/database/connectionContracts";
+import { withRepositories } from "../../helpers/boundRepositoryHarness";
 
 type Thread = { id: number; title: string };
 type Episode = { id: number; title: string };
@@ -26,11 +29,13 @@ const reactionTable = defineTable<Reaction, "id">({
   columns: ["id", "user_id", "reactable_type", "reactable_id", "kind"],
 });
 
-class ReactionRepository extends BaseRepository<Reaction, "id"> {
-  constructor(connection: DatabaseConnection) {
-    super(reactionTable, connection);
-  }
-}
+class ReactionRepository extends BaseRepository<Reaction, "id"> {}
+const ReactionRepositoryDefinition = defineRepository({
+  name: "ReactionRepository",
+  table: reactionTable,
+  dependencies: [],
+  create: (binding) => new ReactionRepository(binding),
+});
 
 const threadHasReactions = morphMany<Thread, Reaction, "id", "reactable_type", "reactable_id">({
   name: "reactions",
@@ -143,64 +148,79 @@ describe("morph relation indexing", () => {
 describe("morph relation eager loading", () => {
   test("loadMorphManyForParents filters by morph type", async () => {
     const connection = new FakeConnection();
-    const reactions = new ReactionRepository(connection);
 
-    connection.queue([
-      { id: 10, user_id: 1, reactable_type: "forum_thread", reactable_id: 1, kind: "like" },
-      { id: 11, user_id: 2, reactable_type: "forum_thread", reactable_id: 1, kind: "like" },
-    ]);
+    await withRepositories(
+      connection,
+      [ReactionRepositoryDefinition] as const,
+      async ([reactions]) => {
+        connection.queue([
+          { id: 10, user_id: 1, reactable_type: "forum_thread", reactable_id: 1, kind: "like" },
+          { id: 11, user_id: 2, reactable_type: "forum_thread", reactable_id: 1, kind: "like" },
+        ]);
 
-    const grouped = await reactions.loadMorphManyForParents(
-      [{ id: 1, title: "Thread" }],
-      threadHasReactions,
+        const grouped = await reactions.loadMorphManyForParents(
+          [{ id: 1, title: "Thread" }],
+          threadHasReactions,
+        );
+
+        expect(grouped.get(1)).toHaveLength(2);
+        expect(connection.calls[0]?.params).toContain("forum_thread");
+      },
     );
-
-    expect(grouped.get(1)).toHaveLength(2);
-    expect(connection.calls[0]?.params).toContain("forum_thread");
   });
 
   test("loadMorphManyForParents returns empty groups for no parents", async () => {
     const connection = new FakeConnection();
-    const reactions = new ReactionRepository(connection);
 
-    const grouped = await reactions.loadMorphManyForParents([], threadHasReactions);
+    await withRepositories(
+      connection,
+      [ReactionRepositoryDefinition] as const,
+      async ([reactions]) => {
+        const grouped = await reactions.loadMorphManyForParents([], threadHasReactions);
 
-    expect(grouped.size).toBe(0);
-    expect(connection.calls).toHaveLength(0);
+        expect(grouped.size).toBe(0);
+        expect(connection.calls).toHaveLength(0);
+      },
+    );
   });
 
   test("loadMorphOneForParents returns the first matching child", async () => {
     const connection = new FakeConnection();
-    const reactions = new ReactionRepository(connection);
-    const relation = morphOne<Thread, Reaction, "id", "reactable_type", "reactable_id">({
-      name: "featured_reaction",
-      localKey: "id",
-      morphTypeKey: "reactable_type",
-      morphIdKey: "reactable_id",
-      morphType: "forum_thread",
-    });
 
-    connection.queue([
-      { id: 10, user_id: 1, reactable_type: "forum_thread", reactable_id: 1, kind: "like" },
-      { id: 11, user_id: 2, reactable_type: "forum_thread", reactable_id: 1, kind: "like" },
-      { id: 12, user_id: 3, reactable_type: "forum_thread", reactable_id: 2, kind: "like" },
-    ]);
+    await withRepositories(
+      connection,
+      [ReactionRepositoryDefinition] as const,
+      async ([reactions]) => {
+        const relation = morphOne<Thread, Reaction, "id", "reactable_type", "reactable_id">({
+          name: "featured_reaction",
+          localKey: "id",
+          morphTypeKey: "reactable_type",
+          morphIdKey: "reactable_id",
+          morphType: "forum_thread",
+        });
 
-    const grouped = await reactions.loadMorphOneForParents(
-      [
-        { id: 1, title: "Thread" },
-        { id: 2, title: "Other" },
-      ],
-      relation,
+        connection.queue([
+          { id: 10, user_id: 1, reactable_type: "forum_thread", reactable_id: 1, kind: "like" },
+          { id: 11, user_id: 2, reactable_type: "forum_thread", reactable_id: 1, kind: "like" },
+          { id: 12, user_id: 3, reactable_type: "forum_thread", reactable_id: 2, kind: "like" },
+        ]);
+
+        const grouped = await reactions.loadMorphOneForParents(
+          [
+            { id: 1, title: "Thread" },
+            { id: 2, title: "Other" },
+          ],
+          relation,
+        );
+
+        expect(grouped.get(1)?.id).toBe(10);
+        expect(grouped.get(2)?.id).toBe(12);
+      },
     );
-
-    expect(grouped.get(1)?.id).toBe(10);
-    expect(grouped.get(2)?.id).toBe(12);
   });
 
   test("withMorphMany attaches reactions on parent query", async () => {
     const connection = new FakeConnection();
-    const reactions = new ReactionRepository(connection);
 
     const threadTable = defineTable<Thread, "id">({
       name: "forum_threads",
@@ -208,30 +228,36 @@ describe("morph relation eager loading", () => {
       columns: ["id", "title"],
     });
 
-    class ThreadRepository extends BaseRepository<Thread, "id"> {
-      constructor(conn: DatabaseConnection) {
-        super(threadTable, conn);
-      }
-    }
+    class ThreadRepository extends BaseRepository<Thread, "id"> {}
+    const ThreadRepositoryDefinition = defineRepository({
+      name: "ThreadRepository",
+      table: threadTable,
+      dependencies: [],
+      create: (binding) => new ThreadRepository(binding),
+    });
 
-    const threads = new ThreadRepository(connection);
+    await withRepositories(
+      connection,
+      [ReactionRepositoryDefinition, ThreadRepositoryDefinition] as const,
+      async ([reactions, threads]) => {
+        connection.queue([{ id: 1, title: "Thread" }]);
+        connection.queue([
+          { id: 10, user_id: 1, reactable_type: "forum_thread", reactable_id: 1, kind: "like" },
+        ]);
 
-    connection.queue([{ id: 1, title: "Thread" }]);
-    connection.queue([
-      { id: 10, user_id: 1, reactable_type: "forum_thread", reactable_id: 1, kind: "like" },
-    ]);
+        const rows = await threads
+          .query()
+          .withMorphMany("reactions", threadHasReactions, reactions)
+          .get();
 
-    const rows = await threads
-      .query()
-      .withMorphMany("reactions", threadHasReactions, reactions)
-      .get();
-
-    expect(rows[0]?.reactions).toHaveLength(1);
+        expect(rows[0]?.reactions).toHaveLength(1);
+      },
+    );
   });
 
   test("withMorphOne attaches the first reaction on parent query", async () => {
     const connection = new FakeConnection();
-    const reactions = new ReactionRepository(connection);
+
     const relation = morphOne<Thread, Reaction, "id", "reactable_type", "reactable_id">({
       name: "featured_reaction",
       localKey: "id",
@@ -246,34 +272,42 @@ describe("morph relation eager loading", () => {
       columns: ["id", "title"],
     });
 
-    class ThreadRepository extends BaseRepository<Thread, "id"> {
-      constructor(conn: DatabaseConnection) {
-        super(threadTable, conn);
-      }
-    }
-
-    const threads = new ThreadRepository(connection);
-
-    connection.queue([{ id: 1, title: "Thread" }]);
-    connection.queue([
-      { id: 10, user_id: 1, reactable_type: "forum_thread", reactable_id: 1, kind: "like" },
-      { id: 11, user_id: 2, reactable_type: "forum_thread", reactable_id: 1, kind: "like" },
-    ]);
-
-    const rows = await threads.query().withMorphOne("featured_reaction", relation, reactions).get();
-
-    expect(rows[0]?.featured_reaction).toEqual({
-      id: 10,
-      user_id: 1,
-      reactable_type: "forum_thread",
-      reactable_id: 1,
-      kind: "like",
+    class ThreadRepository extends BaseRepository<Thread, "id"> {}
+    const ThreadRepositoryDefinition = defineRepository({
+      name: "ThreadRepository",
+      table: threadTable,
+      dependencies: [],
+      create: (binding) => new ThreadRepository(binding),
     });
+
+    await withRepositories(
+      connection,
+      [ReactionRepositoryDefinition, ThreadRepositoryDefinition] as const,
+      async ([reactions, threads]) => {
+        connection.queue([{ id: 1, title: "Thread" }]);
+        connection.queue([
+          { id: 10, user_id: 1, reactable_type: "forum_thread", reactable_id: 1, kind: "like" },
+          { id: 11, user_id: 2, reactable_type: "forum_thread", reactable_id: 1, kind: "like" },
+        ]);
+
+        const rows = await threads
+          .query()
+          .withMorphOne("featured_reaction", relation, reactions)
+          .get();
+
+        expect(rows[0]?.featured_reaction).toEqual({
+          id: 10,
+          user_id: 1,
+          reactable_type: "forum_thread",
+          reactable_id: 1,
+          kind: "like",
+        });
+      },
+    );
   });
 
   test("withMorphTo attaches polymorphic parent", async () => {
     const connection = new FakeConnection();
-    const reactions = new ReactionRepository(connection);
 
     const threadTable = defineTable<Thread, "id">({
       name: "forum_threads",
@@ -287,39 +321,50 @@ describe("morph relation eager loading", () => {
       columns: ["id", "title"],
     });
 
-    class ThreadRepository extends BaseRepository<Thread, "id"> {
-      constructor(conn: DatabaseConnection) {
-        super(threadTable, conn);
-      }
-    }
+    class ThreadRepository extends BaseRepository<Thread, "id"> {}
+    const ThreadRepositoryDefinition = defineRepository({
+      name: "ThreadRepository",
+      table: threadTable,
+      dependencies: [],
+      create: (binding) => new ThreadRepository(binding),
+    });
 
-    class EpisodeRepository extends BaseRepository<Episode, "id"> {
-      constructor(conn: DatabaseConnection) {
-        super(episodeTable, conn);
-      }
-    }
+    class EpisodeRepository extends BaseRepository<Episode, "id"> {}
+    const EpisodeRepositoryDefinition = defineRepository({
+      name: "EpisodeRepository",
+      table: episodeTable,
+      dependencies: [],
+      create: (binding) => new EpisodeRepository(binding),
+    });
 
-    const threads = new ThreadRepository(connection);
-    const episodes = new EpisodeRepository(connection);
+    await withRepositories(
+      connection,
+      [
+        ReactionRepositoryDefinition,
+        ThreadRepositoryDefinition,
+        EpisodeRepositoryDefinition,
+      ] as const,
+      async ([reactions, threads, episodes]) => {
+        connection.queue([
+          { id: 10, user_id: 1, reactable_type: "forum_thread", reactable_id: 1, kind: "like" },
+        ]);
+        connection.queue([{ id: 1, title: "Thread" }]);
 
-    connection.queue([
-      { id: 10, user_id: 1, reactable_type: "forum_thread", reactable_id: 1, kind: "like" },
-    ]);
-    connection.queue([{ id: 1, title: "Thread" }]);
+        const rows = await reactions
+          .query()
+          .withMorphTo(
+            "reactable",
+            reactionMorphTo,
+            new Map<string, BaseRepository<Thread | Episode, "id">>([
+              ["forum_thread", threads],
+              ["learn_episode", episodes],
+            ]),
+          )
+          .get();
 
-    const rows = await reactions
-      .query()
-      .withMorphTo(
-        "reactable",
-        reactionMorphTo,
-        new Map<string, BaseRepository<Thread | Episode, "id">>([
-          ["forum_thread", threads],
-          ["learn_episode", episodes],
-        ]),
-      )
-      .get();
-
-    expect(rows[0]?.reactable).toEqual({ id: 1, title: "Thread" });
+        expect(rows[0]?.reactable).toEqual({ id: 1, title: "Thread" });
+      },
+    );
   });
 });
 
@@ -339,17 +384,23 @@ test("orphaned and unknown morph rows cannot attach to supplied parents", async 
     indexMorphToRelation([unknown], new Map<string, Map<number, Thread>>(), reactionMorphTo),
   ).toEqual(new Map());
   let calls = 0;
-  const repository = new ReactionRepository({
+  const connection = {
     async unsafe<T>() {
       calls++;
       return [] as T[];
     },
-  });
-  expect(await repository.loadMorphToForChildren([], reactionMorphTo, new Map())).toEqual(
-    new Map(),
+  };
+  await withRepositories(
+    connection,
+    [ReactionRepositoryDefinition] as const,
+    async ([repository]) => {
+      expect(await repository.loadMorphToForChildren([], reactionMorphTo, new Map())).toEqual(
+        new Map(),
+      );
+      expect(
+        await repository.loadMorphToForChildren([unknown], reactionMorphTo, new Map()),
+      ).toEqual(new Map());
+      expect(calls).toBe(0);
+    },
   );
-  expect(await repository.loadMorphToForChildren([unknown], reactionMorphTo, new Map())).toEqual(
-    new Map(),
-  );
-  expect(calls).toBe(0);
 });

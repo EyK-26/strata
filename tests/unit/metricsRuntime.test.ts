@@ -1,6 +1,12 @@
+import type { FailedJobObservation } from "@getstrata/core/queue/failedJobMetrics";
+
+const observeReadOnly: FailedJobObservation = async () => {
+  throw Error("Lazy collector must not perform I/O.");
+};
+
 import { expect, test } from "bun:test";
 import { createMetricsRoutes, createMetricsRuntime } from "@getstrata/bootstrap/metricsRoutes";
-import { createTransactionAcquisitionMetrics } from "@getstrata/core/database/transaction";
+import { createTransactionAcquisitionMetrics } from "@getstrata/core/database/acquisitionMetrics";
 import { getTracingRuntime } from "@getstrata/core/tracing/tracingMiddleware";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -21,8 +27,8 @@ test("metrics runtime owns only lazy SQL collectors and borrows tracing/acquisit
     const acquisition = createTransactionAcquisitionMetrics();
     const queue = { redisUrl: "redis://127.0.0.1:1", transport: "streams" as const, timeoutMs: 1 };
     const runtime = createMetricsRuntime({
-      outbox: {},
-      failedJobs: {},
+      outbox: { observeReadOnly },
+      failedJobs: { observeReadOnly },
       queue,
       tracing,
       transactionAcquisition: acquisition,
@@ -53,6 +59,11 @@ test("metrics runtime owns only lazy SQL collectors and borrows tracing/acquisit
 });
 
 test("invalid SQL options fail before I/O", () => {
-  expect(() => createMetricsRuntime({ outbox: { sampleLimit: 0 } })).toThrow();
-  expect(() => createMetricsRuntime({ outbox: {}, failedJobs: { timeoutMs: 0 } })).toThrow();
+  expect(() => createMetricsRuntime({ outbox: { sampleLimit: 0, observeReadOnly } })).toThrow();
+  expect(() =>
+    createMetricsRuntime({
+      outbox: { observeReadOnly },
+      failedJobs: { observeReadOnly, timeoutMs: 0 },
+    }),
+  ).toThrow();
 });

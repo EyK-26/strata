@@ -1,6 +1,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { get as httpGet } from "node:http";
 import { generateOneTimeToken } from "@getstrata/core/auth/oneTimeToken";
+import type { Application } from "@getstrata/core/contracts/application";
+import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
 import { protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import { absoluteTemporarySignedUrl } from "@getstrata/core/http/signedUrl";
 import { generateTotp, generateTotpSecret } from "@getstrata/core/security/totp";
@@ -38,11 +40,87 @@ const previousEnv = { ...process.env };
 let origin = "";
 let inspectHealth: (() => Promise<unknown>) | undefined;
 let verifyAddressOwnership: (() => Promise<void>) | undefined;
-let stop: (() => Promise<void>) | null = null;
-let sql: {
-  unsafe: (query: string, params?: readonly unknown[]) => Promise<unknown[]>;
-  close?: () => Promise<void>;
+type SecurityApp = {
+  application: Application;
+  invoke: PersistenceInvocation;
+  server: import("bun").Server<unknown>;
+  routes: Record<string, unknown>;
 };
+let mainApp: SecurityApp;
+let fixtureUncertain = false;
+const owners = new Set<Application>();
+let sql: Bun.SQL;
+const commandEnvelope = {
+  kind: "command",
+  actor: { kind: "system", policy: "fixture.generated-security" },
+} as const;
+async function runtimeQuery<Row>(
+  text: string,
+  params: readonly unknown[] = [],
+): Promise<readonly Row[]> {
+  return mainApp.invoke(commandEnvelope, ({ database }) => database.execute<Row>({ text, params }));
+}
+async function startOwned(
+  overrides: Record<string, string | undefined> = {},
+  port = 0,
+): Promise<SecurityApp> {
+  const previous = { ...process.env };
+  try {
+    for (const [key, value] of Object.entries(overrides)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    const { createAppServer } = await import(`${appRoot}/src/bootstrap/createApp.ts`);
+    const app = await createAppServer({
+      migrate: false,
+      server: { port, native: { hostname: "127.0.0.1" } },
+      onConstructed: (owner: Application) => {
+        owners.add(owner);
+      },
+    });
+    expect(app.server).toBeDefined();
+    return app;
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
+    Object.assign(process.env, previous);
+  }
+}
+async function stopOwner(owner: Application) {
+  const result = await owner.stop();
+  expect(result.successful).toBe(true);
+  owners.delete(owner);
+}
+async function withOwner(
+  overrides: Record<string, string | undefined>,
+  work: (app: SecurityApp) => Promise<void>,
+  port = 0,
+) {
+  const failures: unknown[] = [];
+  const initialOwners = new Set(owners);
+  try {
+    const app = await startOwned(overrides, port);
+    await work(app);
+  } catch (error) {
+    failures.push(error);
+  }
+  for (const owner of [...owners])
+    if (!initialOwners.has(owner)) {
+      try {
+        await stopOwner(owner);
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1)
+    throw new AggregateError(failures, "Configured security app and cleanup failed");
+}
+async function reserveAddress() {
+  const reservation = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() });
+  const result = { port: reservation.port, origin: reservation.url.origin };
+  await reservation.stop(true);
+  return result;
+}
 
 function idpShapedHeaders(): Record<string, string> {
   return {
@@ -81,24 +159,14 @@ beforeAll(async () => {
   process.env.APP_ENV_METRICS = "local";
   process.env.METRICS_TOKEN = "";
 
-  const { bootstrapApp, createAppServer } = await import(`${appRoot}/src/bootstrap/createApp.ts`);
-  const database = await import(`${appRoot}/src/bootstrap/database.ts`);
-  stop = async () => {
-    await database.closeDatabase();
-  };
   const migrations = await import(`${appRoot}/src/db/migrate.ts`);
   await migrations.migrate();
   await migrations.seed();
-  const { routes, context } = await bootstrapApp({ migrate: false });
-  const server = createAppServer(routes, 0, undefined, { hostname: "127.0.0.1" });
-  stop = async () => {
-    await server.stop(true);
-    try {
-      await context.dispose();
-    } finally {
-      await database.closeDatabase();
-    }
-  };
+  const migrationUrl = process.env.MIGRATION_DATABASE_URL?.trim();
+  if (!migrationUrl) throw new Error("MIGRATION_DATABASE_URL is required for fixture setup");
+  sql = new Bun.SQL(migrationUrl);
+  mainApp = await startOwned();
+  const server = mainApp.server;
   expect(server.hostname).toBe("127.0.0.1");
   origin = server.url.origin;
   verifyAddressOwnership = async () => {
@@ -107,33 +175,65 @@ beforeAll(async () => {
       port: 0,
       fetch: () => new Response("other-service", { status: 401 }),
     });
-    let unexpected: ReturnType<typeof createAppServer> | undefined;
-    let owned: ReturnType<typeof createAppServer> | undefined;
+    const failures: unknown[] = [];
+    const initialOwners = new Set(owners);
     try {
-      // A matching numeric port is insufficient: the generated helper must forward
-      // the exact bind address and fail rather than listen on another interface.
-      expect(() => {
-        unexpected = createAppServer(routes, other.port, undefined, { hostname: "127.0.0.1" });
-      }).toThrow();
-      owned = createAppServer(routes, 0, undefined, { hostname: "127.0.0.1" });
-      expect(owned.hostname).toBe("127.0.0.1");
-      expect(owned.port).not.toBe(other.port);
-      const health = await fetch(new URL("/health", owned.url), { redirect: "manual" });
-      expect(health.status).toBe(200);
-      expect(await health.text()).toBe("ok");
-      const unrelated = await fetch(other.url);
-      expect(unrelated.status).toBe(401);
-      expect(await unrelated.text()).toBe("other-service");
-    } finally {
-      await owned?.stop(true);
-      await unexpected?.stop(true);
-      await other.stop(true);
+      let rejected = false;
+      try {
+        await startOwned({}, other.port);
+      } catch (error) {
+        rejected = true;
+        const seen = new Set<unknown>();
+        const occupied = (value: unknown): boolean => {
+          if (!value || typeof value !== "object" || seen.has(value)) return false;
+          seen.add(value);
+          const row = value as {
+            code?: unknown;
+            message?: unknown;
+            cause?: unknown;
+            errors?: readonly unknown[];
+          };
+          return (
+            row.code === "EADDRINUSE" ||
+            /EADDRINUSE|address already in use|port.*in use/i.test(String(row.message ?? "")) ||
+            occupied(row.cause) ||
+            (Array.isArray(row.errors) && row.errors.some(occupied))
+          );
+        };
+        expect(occupied(error)).toBe(true);
+      }
+      expect(rejected).toBe(true);
+      await withOwner({}, async (owned) => {
+        expect(owned.server.hostname).toBe("127.0.0.1");
+        expect(owned.server.port).not.toBe(other.port);
+        const health = await fetch(new URL("/health", owned.server.url), { redirect: "manual" });
+        expect(health.status).toBe(200);
+        expect(await health.text()).toBe("ok");
+        const unrelated = await fetch(other.url);
+        expect(unrelated.status).toBe(401);
+        expect(await unrelated.text()).toBe("other-service");
+      });
+    } catch (error) {
+      failures.push(error);
     }
+    for (const owner of [...owners])
+      if (!initialOwners.has(owner)) {
+        try {
+          await stopOwner(owner);
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+    try {
+      await other.stop(true);
+    } catch (error) {
+      failures.push(error);
+    }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1)
+      throw new AggregateError(failures, "Binding control and cleanup failed");
   };
   inspectHealth = async () => {
-    const health = routes["/health"];
-    const direct =
-      typeof health === "function" ? await health(new Request(`${origin}/health`)) : null;
     const wire = await new Promise((resolve) => {
       const request = httpGet(
         `${origin}/health`,
@@ -148,41 +248,46 @@ beforeAll(async () => {
       );
       request.on("error", (error) => resolve({ error: error.message }));
     });
-    return { origin, serverUrl: server.url.href, directStatus: direct?.status, wire };
-  };
-  const migrationUrl = process.env.MIGRATION_DATABASE_URL?.trim();
-  if (!migrationUrl) {
-    throw new Error("MIGRATION_DATABASE_URL is required so fixture SQL can run as the superuser");
-  }
-  sql = new Bun.SQL(migrationUrl);
-  stop = async () => {
-    await server.stop(true);
-    try {
-      await context.dispose();
-    } finally {
-      try {
-        await sql.close?.();
-      } finally {
-        await database.closeDatabase();
-      }
-    }
+    return { origin, serverUrl: server.url.href, wire };
   };
 }, 150000);
 
 afterAll(async () => {
-  try {
-    await stop?.();
-  } finally {
-    process.chdir(previousCwd);
+  const failures: unknown[] = [];
+  let ownersClosed = !fixtureUncertain;
+  for (const owner of [...owners]) {
     try {
-      await fixture?.close();
-    } finally {
-      for (const key of Object.keys(process.env)) {
-        if (!(key in previousEnv)) delete process.env[key];
-      }
-      Object.assign(process.env, previousEnv);
+      await stopOwner(owner);
+    } catch (error) {
+      failures.push(error);
+      ownersClosed = false;
     }
   }
+  try {
+    await sql?.close();
+  } catch (error) {
+    failures.push(error);
+    ownersClosed = false;
+  }
+  try {
+    process.chdir(previousCwd);
+  } catch (error) {
+    failures.push(error);
+  }
+  if (ownersClosed) {
+    try {
+      await fixture?.close();
+    } catch (error) {
+      failures.push(error);
+    }
+  } else
+    failures.push(
+      new Error("Application or SQL termination unconfirmed; security fixture retained"),
+    );
+  for (const key of Object.keys(process.env)) if (!(key in previousEnv)) delete process.env[key];
+  Object.assign(process.env, previousEnv);
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) throw new AggregateError(failures, "Security fixture cleanup failed");
 });
 
 describe("Generated application security", () => {
@@ -215,8 +320,7 @@ describe("Generated application security", () => {
   });
 
   test("HiroApp request traffic uses the NOBYPASSRLS APP_DATABASE_URL role", async () => {
-    const { getSql } = await import(`${appRoot}/src/bootstrap/database.ts`);
-    const rows = (await getSql().unsafe(
+    const rows = (await runtimeQuery(
       `SELECT current_user AS rolname, r.rolsuper, r.rolbypassrls
        FROM pg_roles r WHERE r.rolname = current_user`,
     )) as Array<{ rolname: string; rolsuper: boolean; rolbypassrls: boolean }>;
@@ -259,8 +363,7 @@ describe("Generated application security", () => {
       restoreEnv("TENANCY_DRIVER", previousDriver);
       restoreEnv("APP_ENV", previousAppEnv);
     }
-    const { getSql } = await import(`${appRoot}/src/bootstrap/database.ts`);
-    const rows = (await getSql().unsafe("SELECT current_user AS rolname")) as Array<{
+    const rows = (await runtimeQuery("SELECT current_user AS rolname")) as Array<{
       rolname: string;
     }>;
     expect(rows[0]?.rolname).toBe("strata_app");
@@ -272,9 +375,19 @@ describe("Generated application security", () => {
     const { assertRlsLiveDatabaseRole } = await import(
       fixture.resolve("@getstrata/bootstrap/secretsGuard")
     );
-    await expect(assertRlsLiveDatabaseRole()).resolves.toBeUndefined();
-    const { getSql } = await import(`${appRoot}/src/bootstrap/database.ts`);
-    const rows = (await getSql().unsafe(
+    await expect(
+      assertRlsLiveDatabaseRole({ ...process.env }, async () => {
+        const rows = await runtimeQuery<{
+          rolname: string;
+          rolsuper: boolean;
+          rolbypassrls: boolean;
+        }>(
+          "SELECT current_user AS rolname, r.rolsuper, r.rolbypassrls FROM pg_roles r WHERE r.rolname=current_user",
+        );
+        return rows[0] ?? null;
+      }),
+    ).resolves.toBeUndefined();
+    const rows = (await runtimeQuery(
       `SELECT current_user AS rolname, r.rolsuper, r.rolbypassrls
        FROM pg_roles r WHERE r.rolname = current_user`,
     )) as Array<{ rolname: string; rolsuper: boolean; rolbypassrls: boolean }>;
@@ -780,173 +893,292 @@ describe("Generated application security", () => {
     ])) as Array<{
       id: number;
     }>;
-    const otherId = tenants[0]?.id ?? 2;
-    process.env.SCIM_TENANT_TOKENS = `1:hiroapp-scim-tenant-1,${otherId}:hiroapp-scim-tenant-2`;
+    const otherId = tenants[0]?.id;
+    if (!otherId) throw new Error("SCIM fixture tenant allocation returned no identifier");
+    expect(otherId).toBeGreaterThan(1);
     await sql.unsafe(
       "INSERT INTO users (name, email, password, is_admin, tenant_id) VALUES ($1, $2, $3, false, $4) ON CONFLICT (email) DO UPDATE SET tenant_id = $4",
       ["Other", "other-tenant@example.test", "x", otherId],
     );
 
-    const list = await fetch(`${origin}/scim/v2/Users`, {
-      headers: { authorization: "Bearer hiroapp-scim-tenant-1" },
-    });
-    expect(list.status).toBe(200);
-    const body = (await list.json()) as { Resources: Array<{ userName: string }> };
-    expect(body.Resources.some((row) => row.userName === "other-tenant@example.test")).toBe(false);
+    await withOwner(
+      { SCIM_TENANT_TOKENS: `1:hiroapp-scim-tenant-1,${otherId}:hiroapp-scim-tenant-2` },
+      async (app) => {
+        const origin = app.server.url.origin;
+        const list = await fetch(`${origin}/scim/v2/Users`, {
+          headers: { authorization: "Bearer hiroapp-scim-tenant-1" },
+        });
+        expect(list.status).toBe(200);
+        const body = (await list.json()) as { Resources: Array<{ userName: string }> };
+        expect(body.Resources.some((row) => row.userName === "other-tenant@example.test")).toBe(
+          false,
+        );
 
-    const reverse = await fetch(`${origin}/scim/v2/Users`, {
-      headers: { authorization: "Bearer hiroapp-scim-tenant-2" },
-    });
-    expect(reverse.status).toBe(200);
-    const reverseBody = (await reverse.json()) as { Resources: Array<{ userName: string }> };
-    expect(reverseBody.Resources.some((row) => row.userName === "demo@example.com")).toBe(false);
-    expect(reverseBody.Resources.some((row) => row.userName === "other-tenant@example.test")).toBe(
-      true,
+        const reverse = await fetch(`${origin}/scim/v2/Users`, {
+          headers: { authorization: "Bearer hiroapp-scim-tenant-2" },
+        });
+        expect(reverse.status).toBe(200);
+        const reverseBody = (await reverse.json()) as { Resources: Array<{ userName: string }> };
+        expect(reverseBody.Resources.some((row) => row.userName === "demo@example.com")).toBe(
+          false,
+        );
+        expect(
+          reverseBody.Resources.some((row) => row.userName === "other-tenant@example.test"),
+        ).toBe(true);
+      },
     );
   });
 
   test("metrics are hidden in staging without a token", async () => {
-    const previous = process.env.APP_ENV;
-    const previousToken = process.env.METRICS_TOKEN;
-    process.env.APP_ENV = "staging";
-    delete process.env.METRICS_TOKEN;
+    const role = `strata_staging_${crypto.randomUUID().replaceAll("-", "")}`;
+    const password = crypto.randomUUID().replaceAll("-", "");
+    const stagingUrl = new URL(fixture.runtimeUrl);
+    stagingUrl.username = role;
+    stagingUrl.password = password;
+    const database = decodeURIComponent(stagingUrl.pathname.slice(1));
+    if (!database || !/^[A-Za-z0-9_]+$/.test(database))
+      throw new Error("Unsafe staging fixture database name");
+    const initialOwners = new Set(owners);
+    const failures: unknown[] = [];
+    let roleAttempted = false;
+    let roleCreated = false;
+    let credentialProbe: Bun.SQL | undefined;
+    let probeClosed = true;
     try {
-      expect((await fetch(`${origin}/metrics`)).status).toBe(404);
-    } finally {
-      process.env.APP_ENV = previous;
-      restoreEnv("METRICS_TOKEN", previousToken);
+      expect(
+        await sql.unsafe("SELECT rolname FROM pg_roles WHERE rolname=$1", [role]),
+      ).toHaveLength(0);
+      roleAttempted = true;
+      await sql.unsafe(
+        `CREATE ROLE ${role} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`,
+      );
+      roleCreated = true;
+      await sql.unsafe(`GRANT CONNECT ON DATABASE ${database} TO ${role}`);
+      await sql.unsafe(`GRANT USAGE ON SCHEMA public TO ${role}`);
+      credentialProbe = new Bun.SQL(stagingUrl.toString());
+      probeClosed = false;
+      const rows = await credentialProbe.unsafe(
+        "SELECT current_user AS rolname, r.rolsuper, r.rolbypassrls FROM pg_roles r WHERE r.rolname=current_user",
+      );
+      expect(rows).toEqual([{ rolname: role, rolsuper: false, rolbypassrls: false }]);
+      await withOwner(
+        {
+          APP_ENV: "staging",
+          DATABASE_URL: stagingUrl.toString(),
+          APP_DATABASE_URL: stagingUrl.toString(),
+          APP_URL: "https://security.example.test",
+          METRICS_TOKEN: undefined,
+          API_TOKEN_DEFAULT_EXPIRY_DAYS: "30",
+          ADMIN_API_TOKEN: undefined,
+          MEMBER_API_TOKEN: undefined,
+          STRIPE_WEBHOOK_SECRET: undefined,
+          SESSION_SECRET: "a7bd4c015b82484ba27e06788fe79bd3451a",
+          TOKEN_HASH_PEPPER: "security-owned-pepper-7a29c",
+          JWT_SECRET: "a7bd4c015b82484ba27e06788fe79bd3451b",
+          OAUTH_STATE_SECRET: "a7bd4c015b82484ba27e06788fe79bd3451c",
+          SCIM_BEARER_TOKEN: "security-owned-scim-7a29c",
+        },
+        async (app) => {
+          const actual = await app.invoke(commandEnvelope, ({ database }) =>
+            database.execute<{ rolname: string; rolsuper: boolean; rolbypassrls: boolean }>({
+              text: "SELECT current_user AS rolname, r.rolsuper, r.rolbypassrls FROM pg_roles r WHERE r.rolname=current_user",
+              params: [],
+            }),
+          );
+          expect(actual).toEqual([{ rolname: role, rolsuper: false, rolbypassrls: false }]);
+          expect((await fetch(new URL("/metrics", app.server.url))).status).toBe(404);
+        },
+      );
+    } catch (error) {
+      failures.push(error);
     }
+    const applicationClosed = [...owners].every((owner) => initialOwners.has(owner));
+    if (applicationClosed && credentialProbe) {
+      try {
+        await credentialProbe.close();
+        probeClosed = true;
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (roleAttempted && applicationClosed && probeClosed) {
+      try {
+        const present = await sql.unsafe("SELECT rolname FROM pg_roles WHERE rolname=$1", [role]);
+        if (present.length) {
+          if (!roleCreated)
+            throw new Error(`Staging role creation outcome uncertain; retained: ${role}`);
+          await sql.unsafe(`DROP OWNED BY ${role}`);
+          await sql.unsafe(`DROP ROLE ${role}`);
+        }
+        expect(
+          await sql.unsafe("SELECT rolname FROM pg_roles WHERE rolname=$1", [role]),
+        ).toHaveLength(0);
+      } catch (error) {
+        fixtureUncertain = true;
+        failures.push(error);
+      }
+    }
+    if (!applicationClosed || !probeClosed) {
+      fixtureUncertain = true;
+      failures.push(
+        new Error(
+          `Staging app/client termination unconfirmed; owned role and fixture retained: ${role}`,
+        ),
+      );
+    }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1)
+      throw new AggregateError(failures, "Staging metrics case and owned cleanup failed");
   });
 
   test("registration flag returns 404 and static traversal is 404", async () => {
-    process.env.FEATURE_REGISTRATION = "false";
-    expect((await fetch(`${origin}/register`)).status).toBe(404);
-    process.env.FEATURE_REGISTRATION = "true";
+    await withOwner({ FEATURE_REGISTRATION: "false" }, async (app) => {
+      expect((await fetch(new URL("/register", app.server.url))).status).toBe(404);
+    });
     expect((await fetch(`${origin}/assets/../../package.json`)).status).toBe(404);
   });
 
   test("IdP-shaped ACS POST without app cookies rejects unsigned, wrong audience, and wrong issuer", async () => {
+    const address = await reserveAddress();
+    const origin = address.origin;
     const fixture = await createSignedSamlResponse({
       audience: "https://hiroapp.test/saml/metadata",
       destination: `${origin}/auth/saml/acs`,
     });
-    process.env.FEATURE_SAML = "true";
-    process.env.SAML_IDP_SSO_URL = "https://idp.example.test/sso";
-    process.env.SAML_IDP_CERT = fixture.cert;
-    process.env.SAML_SP_ENTITY_ID = "https://hiroapp.test/saml/metadata";
-    process.env.SAML_ACS_URL = `${origin}/auth/saml/acs`;
-    process.env.SAML_IDP_ISSUER = "https://idp.example.test/metadata";
+    await withOwner(
+      {
+        FEATURE_SAML: "true",
+        SAML_IDP_SSO_URL: "https://idp.example.test/sso",
+        SAML_IDP_CERT: fixture.cert,
+        SAML_SP_ENTITY_ID: "https://hiroapp.test/saml/metadata",
+        SAML_ACS_URL: `${origin}/auth/saml/acs`,
+        SAML_IDP_ISSUER: "https://idp.example.test/metadata",
+        APP_URL: origin,
+      },
+      async () => {
+        const failures: unknown[] = [];
+        try {
+          const start = await fetch(`${origin}/auth/saml`, { redirect: "manual" });
+          expect(start.status).toBe(302);
+          const relayState =
+            new URL(start.headers.get("location") ?? "").searchParams.get("RelayState") ?? "";
+          expect(relayState.length).toBeGreaterThan(0);
 
-    try {
-      const start = await fetch(`${origin}/auth/saml`, { redirect: "manual" });
-      expect(start.status).toBe(302);
-      const relayState =
-        new URL(start.headers.get("location") ?? "").searchParams.get("RelayState") ?? "";
-      expect(relayState.length).toBeGreaterThan(0);
+          const unsigned = await createSignedSamlResponse({
+            audience: "https://hiroapp.test/saml/metadata",
+            destination: `${origin}/auth/saml/acs`,
+            signed: false,
+          });
+          const unsignedRes = await fetch(`${origin}/auth/saml/acs`, {
+            method: "POST",
+            headers: idpShapedHeaders(),
+            body: new URLSearchParams({
+              SAMLResponse: unsigned.responseB64,
+              RelayState: relayState,
+            }),
+          });
+          expect(unsignedRes.status).toBeGreaterThanOrEqual(400);
 
-      const unsigned = await createSignedSamlResponse({
-        audience: "https://hiroapp.test/saml/metadata",
-        destination: `${origin}/auth/saml/acs`,
-        signed: false,
-      });
-      const unsignedRes = await fetch(`${origin}/auth/saml/acs`, {
-        method: "POST",
-        headers: idpShapedHeaders(),
-        body: new URLSearchParams({ SAMLResponse: unsigned.responseB64, RelayState: relayState }),
-      });
-      expect(unsignedRes.status).toBeGreaterThanOrEqual(400);
+          const wrongAud = await createSignedSamlResponse({
+            audience: "https://other.test/metadata",
+            destination: `${origin}/auth/saml/acs`,
+            cert: fixture.cert,
+            privateKey: fixture.privateKey,
+          });
+          const wrong = await fetch(`${origin}/auth/saml/acs`, {
+            method: "POST",
+            headers: idpShapedHeaders(),
+            body: new URLSearchParams({
+              SAMLResponse: wrongAud.responseB64,
+              RelayState: relayState,
+            }),
+          });
+          expect(wrong.status).toBeGreaterThanOrEqual(400);
 
-      const wrongAud = await createSignedSamlResponse({
-        audience: "https://other.test/metadata",
-        destination: `${origin}/auth/saml/acs`,
-        cert: fixture.cert,
-        privateKey: fixture.privateKey,
-      });
-      const wrong = await fetch(`${origin}/auth/saml/acs`, {
-        method: "POST",
-        headers: idpShapedHeaders(),
-        body: new URLSearchParams({ SAMLResponse: wrongAud.responseB64, RelayState: relayState }),
-      });
-      expect(wrong.status).toBeGreaterThanOrEqual(400);
+          const evilIssuer = await createSignedSamlResponse({
+            audience: "https://hiroapp.test/saml/metadata",
+            destination: `${origin}/auth/saml/acs`,
+            issuer: "https://evil.example/idp",
+            cert: fixture.cert,
+            privateKey: fixture.privateKey,
+          });
+          const evil = await fetch(`${origin}/auth/saml/acs`, {
+            method: "POST",
+            headers: idpShapedHeaders(),
+            body: new URLSearchParams({
+              SAMLResponse: evilIssuer.responseB64,
+              RelayState: relayState,
+            }),
+          });
+          expect(evil.status).toBeGreaterThanOrEqual(400);
 
-      const evilIssuer = await createSignedSamlResponse({
-        audience: "https://hiroapp.test/saml/metadata",
-        destination: `${origin}/auth/saml/acs`,
-        issuer: "https://evil.example/idp",
-        cert: fixture.cert,
-        privateKey: fixture.privateKey,
-      });
-      const evil = await fetch(`${origin}/auth/saml/acs`, {
-        method: "POST",
-        headers: idpShapedHeaders(),
-        body: new URLSearchParams({
-          SAMLResponse: evilIssuer.responseB64,
-          RelayState: relayState,
-        }),
-      });
-      expect(evil.status).toBeGreaterThanOrEqual(400);
+          const cookielessFixture = await createSignedSamlResponse({
+            audience: "https://hiroapp.test/saml/metadata",
+            destination: `${origin}/auth/saml/acs`,
+            cert: fixture.cert,
+            privateKey: fixture.privateKey,
+          });
+          const cookielessStart = await fetch(`${origin}/auth/saml`, { redirect: "manual" });
+          const cookielessRelay =
+            new URL(cookielessStart.headers.get("location") ?? "").searchParams.get("RelayState") ??
+            "";
+          const cookieless = await fetch(`${origin}/auth/saml/acs`, {
+            method: "POST",
+            headers: idpShapedHeaders(),
+            body: new URLSearchParams({
+              SAMLResponse: cookielessFixture.responseB64,
+              RelayState: cookielessRelay,
+            }),
+            redirect: "manual",
+          });
+          expect(cookieless.status).toBe(302);
+          expect(cookieless.headers.get("location")).toBe("/");
 
-      const cookielessFixture = await createSignedSamlResponse({
-        audience: "https://hiroapp.test/saml/metadata",
-        destination: `${origin}/auth/saml/acs`,
-        cert: fixture.cert,
-        privateKey: fixture.privateKey,
-      });
-      const cookielessStart = await fetch(`${origin}/auth/saml`, { redirect: "manual" });
-      const cookielessRelay =
-        new URL(cookielessStart.headers.get("location") ?? "").searchParams.get("RelayState") ?? "";
-      const cookieless = await fetch(`${origin}/auth/saml/acs`, {
-        method: "POST",
-        headers: idpShapedHeaders(),
-        body: new URLSearchParams({
-          SAMLResponse: cookielessFixture.responseB64,
-          RelayState: cookielessRelay,
-        }),
-        redirect: "manual",
-      });
-      expect(cookieless.status).toBe(302);
-      expect(cookieless.headers.get("location")).toBe("/");
-
-      const secret = generateTotpSecret();
-      await sql.unsafe("UPDATE users SET mfa_enabled = true, mfa_secret = $1 WHERE email = $2", [
-        protectMfaSecret(secret),
-        "demo@example.com",
-      ]);
-      const mfaStart = await fetch(`${origin}/auth/saml`, { redirect: "manual" });
-      const mfaRelay =
-        new URL(mfaStart.headers.get("location") ?? "").searchParams.get("RelayState") ?? "";
-      const mfaFixture = await createSignedSamlResponse({
-        audience: "https://hiroapp.test/saml/metadata",
-        destination: `${origin}/auth/saml/acs`,
-        email: "demo@example.com",
-        cert: fixture.cert,
-        privateKey: fixture.privateKey,
-      });
-      const mfaAcs = await fetch(`${origin}/auth/saml/acs`, {
-        method: "POST",
-        headers: idpShapedHeaders(),
-        body: new URLSearchParams({
-          SAMLResponse: mfaFixture.responseB64,
-          RelayState: mfaRelay,
-        }),
-        redirect: "manual",
-      });
-      expect(mfaAcs.status).toBe(302);
-      expect(mfaAcs.headers.get("location")).toBe("/login/mfa");
-      expect(
-        mfaAcs.headers.getSetCookie().some((item) => item.startsWith("strata_mfa_pending=")),
-      ).toBe(true);
-    } finally {
-      await sql.unsafe("UPDATE users SET mfa_enabled = false, mfa_secret = NULL WHERE email = $1", [
-        "demo@example.com",
-      ]);
-      process.env.FEATURE_SAML = "false";
-      delete process.env.SAML_IDP_SSO_URL;
-      delete process.env.SAML_IDP_CERT;
-      delete process.env.SAML_SP_ENTITY_ID;
-      delete process.env.SAML_ACS_URL;
-      delete process.env.SAML_IDP_ISSUER;
-    }
+          const secret = generateTotpSecret();
+          await sql.unsafe(
+            "UPDATE users SET mfa_enabled = true, mfa_secret = $1 WHERE email = $2",
+            [protectMfaSecret(secret), "demo@example.com"],
+          );
+          const mfaStart = await fetch(`${origin}/auth/saml`, { redirect: "manual" });
+          const mfaRelay =
+            new URL(mfaStart.headers.get("location") ?? "").searchParams.get("RelayState") ?? "";
+          const mfaFixture = await createSignedSamlResponse({
+            audience: "https://hiroapp.test/saml/metadata",
+            destination: `${origin}/auth/saml/acs`,
+            email: "demo@example.com",
+            cert: fixture.cert,
+            privateKey: fixture.privateKey,
+          });
+          const mfaAcs = await fetch(`${origin}/auth/saml/acs`, {
+            method: "POST",
+            headers: idpShapedHeaders(),
+            body: new URLSearchParams({
+              SAMLResponse: mfaFixture.responseB64,
+              RelayState: mfaRelay,
+            }),
+            redirect: "manual",
+          });
+          expect(mfaAcs.status).toBe(302);
+          expect(mfaAcs.headers.get("location")).toBe("/login/mfa");
+          expect(
+            mfaAcs.headers.getSetCookie().some((item) => item.startsWith("strata_mfa_pending=")),
+          ).toBe(true);
+        } catch (error) {
+          failures.push(error);
+        }
+        try {
+          await sql.unsafe(
+            "UPDATE users SET mfa_enabled = false, mfa_secret = NULL WHERE email = $1",
+            ["demo@example.com"],
+          );
+        } catch (error) {
+          failures.push(error);
+        }
+        if (failures.length === 1) throw failures[0];
+        if (failures.length > 1) throw new AggregateError(failures, "SAML case and cleanup failed");
+      },
+      address.port,
+    );
   });
 
   test("JWT mint requires CSRF", async () => {
@@ -1021,21 +1253,18 @@ describe("Generated application security", () => {
   });
 
   test("identifier bypass cannot SELECT every user", async () => {
-    const { runWithMigrationBypassForIdentifier } = await import(
-      fixture.resolve("@getstrata/core/tenant/databaseTenantContext")
-    );
-    const { getSql } = await import(`${appRoot}/src/bootstrap/database.ts`);
-    const appSql = getSql();
-
-    const leaked = (await runWithMigrationBypassForIdentifier("x", async () => {
-      return await appSql.unsafe("SELECT email FROM users");
-    })) as Array<{ email: string }>;
+    const identify = (identifier: string, text: string, params: readonly unknown[] = []) =>
+      mainApp.invoke(commandEnvelope, ({ database, policy }) =>
+        policy.run(database, { kind: "identifier", identifier }, (child) =>
+          child.execute<{ email: string }>({ text, params }),
+        ),
+      );
+    const leaked = await identify("x", "SELECT email FROM users");
     expect(leaked.some((row) => row.email === "demo@example.com")).toBe(false);
     expect(leaked.some((row) => row.email === "rls-other@example.test")).toBe(false);
-
-    const pinned = (await runWithMigrationBypassForIdentifier("demo@example.com", async () => {
-      return await appSql.unsafe("SELECT email FROM users WHERE email = $1", ["demo@example.com"]);
-    })) as Array<{ email: string }>;
+    const pinned = await identify("demo@example.com", "SELECT email FROM users WHERE email=$1", [
+      "demo@example.com",
+    ]);
     expect(pinned).toEqual([{ email: "demo@example.com" }]);
 
     const loginPage = await fetch(`${origin}/login`);
@@ -1061,22 +1290,18 @@ describe("Generated application security", () => {
   });
 
   test("unbounded bypass SET LOCAL does not leak onto the next pool checkout", async () => {
-    const { runWithMigrationBypass } = await import(
-      fixture.resolve("@getstrata/core/tenant/databaseTenantContext")
+    const inside = await mainApp.invoke(commandEnvelope, ({ database, policy }) =>
+      policy.run(database, { kind: "bypass" }, (child) =>
+        child.execute<{ bypass: string | null }>({
+          text: "SELECT current_setting('app.bypass_rls',true) AS bypass",
+          params: [],
+        }),
+      ),
     );
-    const { getSql } = await import(`${appRoot}/src/bootstrap/database.ts`);
-    const appSql = getSql();
-
-    const inside = await runWithMigrationBypass(async () => {
-      return (await appSql.unsafe(
-        "SELECT current_setting('app.bypass_rls', true) AS bypass",
-      )) as Array<{ bypass: string | null }>;
-    });
     expect(inside[0]?.bypass).toBe("true");
-
-    const after = (await appSql.unsafe(
-      "SELECT current_setting('app.bypass_rls', true) AS bypass",
-    )) as Array<{ bypass: string | null }>;
+    const after = await runtimeQuery<{ bypass: string | null }>(
+      "SELECT current_setting('app.bypass_rls',true) AS bypass",
+    );
     expect(after[0]?.bypass).not.toBe("true");
 
     const loginPage = await fetch(`${origin}/login`);
@@ -1101,7 +1326,7 @@ describe("Generated application security", () => {
   });
 
   test("FORCE RLS hides other-tenant users, sessions, and api_tokens from a NOBYPASSRLS login role", async () => {
-    const role = "strata_app_e2e";
+    const role = `strata_e2e_${crypto.randomUUID().replaceAll("-", "")}`;
     const password = "strata-app-e2e-secret";
     const databases = (await sql.unsafe("SELECT current_database() AS name")) as Array<{
       name: string;
@@ -1111,150 +1336,191 @@ describe("Generated application security", () => {
       throw new Error(`Refusing GRANT CONNECT on unsafe database name: ${database}`);
     }
 
-    await sql.unsafe(`
-      DO $$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${role}') THEN
-          CREATE ROLE ${role} LOGIN PASSWORD '${password}'
-            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
-        ELSE
-          ALTER ROLE ${role} WITH LOGIN PASSWORD '${password}'
-            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
-        END IF;
-      END $$;
-    `);
-    await sql.unsafe(`GRANT CONNECT ON DATABASE ${database} TO ${role}`);
-    await sql.unsafe("GRANT USAGE ON SCHEMA public TO strata_app_e2e");
-    await sql.unsafe("GRANT SELECT ON notes, users, sessions, api_tokens TO strata_app_e2e");
-
-    const attrs = (await sql.unsafe(
-      "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = $1",
-      [role],
-    )) as Array<{ rolsuper: boolean; rolbypassrls: boolean }>;
-    expect(attrs[0]?.rolsuper).toBe(false);
-    expect(attrs[0]?.rolbypassrls).toBe(false);
-
-    await sql.unsafe("INSERT INTO tenant (slug) VALUES ($1) ON CONFLICT (slug) DO NOTHING", [
-      "rls-probe",
-    ]);
-    const tenants = (await sql.unsafe("SELECT id FROM tenant WHERE slug = $1", [
-      "rls-probe",
-    ])) as Array<{ id: number }>;
-    const otherTenantId = tenants[0]?.id;
-    await sql.unsafe("INSERT INTO notes (body, tenant_id) VALUES ($1, $2)", [
-      "other-tenant-note",
-      otherTenantId,
-    ]);
-    const demo = (await sql.unsafe("SELECT id, password FROM users WHERE email = $1", [
-      "demo@example.com",
-    ])) as Array<{ id: number; password: string }>;
-    await sql.unsafe(
-      "INSERT INTO users (name, email, password, is_admin, tenant_id, email_verified_at) VALUES ($1, $2, $3, false, $4, $5) ON CONFLICT (email) DO UPDATE SET tenant_id = $4, password = $3",
-      [
-        "RLS Probe Other",
-        "rls-other@example.test",
-        demo[0]?.password,
-        otherTenantId,
-        new Date().toISOString(),
-      ],
-    );
-    const otherUsers = (await sql.unsafe("SELECT id FROM users WHERE email = $1", [
-      "rls-other@example.test",
-    ])) as Array<{ id: number }>;
-    const otherUserId = otherUsers[0]?.id;
-    const sameUserId = demo[0]?.id;
-    expect(otherUserId).toBeTruthy();
-    expect(sameUserId).toBeTruthy();
-    await sql.unsafe(
-      "INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET user_id = $2",
-      ["rls-other-session", otherUserId, new Date(Date.now() + 3600_000).toISOString()],
-    );
-    await sql.unsafe(
-      "INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET user_id = $2",
-      ["rls-same-session", sameUserId, new Date(Date.now() + 3600_000).toISOString()],
-    );
-    await sql.unsafe(
-      "INSERT INTO api_tokens (user_id, name, token_hash) VALUES ($1, $2, $3) ON CONFLICT (token_hash) DO UPDATE SET user_id = $1",
-      [otherUserId, "rls-other-token", "rls-other-token-hash"],
-    );
-    await sql.unsafe(
-      "INSERT INTO api_tokens (user_id, name, token_hash) VALUES ($1, $2, $3) ON CONFLICT (token_hash) DO UPDATE SET user_id = $1",
-      [sameUserId, "rls-same-token", "rls-same-token-hash"],
-    );
-
-    const asSuperuserNotes = (await sql.unsafe("SELECT body FROM notes WHERE body = $1", [
-      "other-tenant-note",
-    ])) as Array<{ body: string }>;
-    expect(asSuperuserNotes.some((row) => row.body === "other-tenant-note")).toBe(true);
-    const asSuperuserUsers = (await sql.unsafe("SELECT email FROM users WHERE email = $1", [
-      "rls-other@example.test",
-    ])) as Array<{ email: string }>;
-    expect(asSuperuserUsers).toHaveLength(1);
-    const asSuperuserSessions = (await sql.unsafe("SELECT id FROM sessions WHERE id = $1", [
-      "rls-other-session",
-    ])) as Array<{ id: string }>;
-    expect(asSuperuserSessions).toHaveLength(1);
-    const asSuperuserTokens = (await sql.unsafe(
-      "SELECT name FROM api_tokens WHERE token_hash = $1",
-      ["rls-other-token-hash"],
-    )) as Array<{ name: string }>;
-    expect(asSuperuserTokens).toHaveLength(1);
-
-    const appUrl = process.env.APP_DATABASE_URL?.trim();
-    if (!appUrl) {
-      throw new Error("APP_DATABASE_URL is required for the RLS login probe");
-    }
-    const probeUrl = new URL(appUrl);
-    probeUrl.username = role;
-    probeUrl.password = password;
-    const appSql = new Bun.SQL(probeUrl.toString());
+    const failures: unknown[] = [];
+    let roleAttempted = false;
+    let roleCreated = false;
+    let probe: Bun.SQL | undefined;
+    let probeClosed = true;
     try {
-      await appSql.unsafe("SELECT set_config('app.tenant_id', $1, false)", ["1"]);
-      await appSql.unsafe("SELECT set_config('app.bypass_rls', $1, false)", ["false"]);
       expect(
-        (await appSql.unsafe("SELECT body FROM notes WHERE body = $1", [
-          "other-tenant-note",
-        ])) as unknown[],
+        await sql.unsafe("SELECT rolname FROM pg_roles WHERE rolname=$1", [role]),
       ).toHaveLength(0);
-      expect(
-        (await appSql.unsafe("SELECT body FROM notes WHERE body = $1", [
-          "Welcome to Strata!",
-        ])) as Array<{ body: string }>,
-      ).toEqual(expect.arrayContaining([{ body: "Welcome to Strata!" }]));
-      expect(
-        (await appSql.unsafe("SELECT email FROM users WHERE email = $1", [
+      roleAttempted = true;
+      await sql.unsafe(
+        `CREATE ROLE ${role} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`,
+      );
+      roleCreated = true;
+      await sql.unsafe(`GRANT CONNECT ON DATABASE ${database} TO ${role}`);
+      await sql.unsafe(`GRANT USAGE ON SCHEMA public TO ${role}`);
+      await sql.unsafe(`GRANT SELECT ON notes, users, sessions, api_tokens TO ${role}`);
+
+      const attrs = (await sql.unsafe(
+        "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = $1",
+        [role],
+      )) as Array<{ rolsuper: boolean; rolbypassrls: boolean }>;
+      expect(attrs[0]?.rolsuper).toBe(false);
+      expect(attrs[0]?.rolbypassrls).toBe(false);
+
+      await sql.unsafe("INSERT INTO tenant (slug) VALUES ($1) ON CONFLICT (slug) DO NOTHING", [
+        "rls-probe",
+      ]);
+      const tenants = (await sql.unsafe("SELECT id FROM tenant WHERE slug = $1", [
+        "rls-probe",
+      ])) as Array<{ id: number }>;
+      const otherTenantId = tenants[0]?.id;
+      await sql.unsafe("INSERT INTO notes (body, tenant_id) VALUES ($1, $2)", [
+        "other-tenant-note",
+        otherTenantId,
+      ]);
+      const demo = (await sql.unsafe("SELECT id, password FROM users WHERE email = $1", [
+        "demo@example.com",
+      ])) as Array<{ id: number; password: string }>;
+      await sql.unsafe(
+        "INSERT INTO users (name, email, password, is_admin, tenant_id, email_verified_at) VALUES ($1, $2, $3, false, $4, $5) ON CONFLICT (email) DO UPDATE SET tenant_id = $4, password = $3",
+        [
+          "RLS Probe Other",
           "rls-other@example.test",
-        ])) as unknown[],
-      ).toHaveLength(0);
-      expect(
-        (await appSql.unsafe("SELECT email FROM users WHERE email = $1", [
-          "demo@example.com",
-        ])) as Array<{ email: string }>,
-      ).toEqual(expect.arrayContaining([{ email: "demo@example.com" }]));
-      expect(
-        (await appSql.unsafe("SELECT id FROM sessions WHERE id = $1", [
-          "rls-other-session",
-        ])) as unknown[],
-      ).toHaveLength(0);
-      expect(
-        (await appSql.unsafe("SELECT id FROM sessions WHERE id = $1", [
-          "rls-same-session",
-        ])) as Array<{
-          id: string;
-        }>,
-      ).toEqual([{ id: "rls-same-session" }]);
-      expect(
-        (await appSql.unsafe("SELECT name FROM api_tokens WHERE token_hash = $1", [
-          "rls-other-token-hash",
-        ])) as unknown[],
-      ).toHaveLength(0);
-      expect(
-        (await appSql.unsafe("SELECT name FROM api_tokens WHERE token_hash = $1", [
-          "rls-same-token-hash",
-        ])) as Array<{ name: string }>,
-      ).toEqual([{ name: "rls-same-token" }]);
-    } finally {
-      await appSql.close();
+          demo[0]?.password,
+          otherTenantId,
+          new Date().toISOString(),
+        ],
+      );
+      const otherUsers = (await sql.unsafe("SELECT id FROM users WHERE email = $1", [
+        "rls-other@example.test",
+      ])) as Array<{ id: number }>;
+      const otherUserId = otherUsers[0]?.id;
+      const sameUserId = demo[0]?.id;
+      expect(otherUserId).toBeTruthy();
+      expect(sameUserId).toBeTruthy();
+      await sql.unsafe(
+        "INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET user_id = $2",
+        ["rls-other-session", otherUserId, new Date(Date.now() + 3600_000).toISOString()],
+      );
+      await sql.unsafe(
+        "INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET user_id = $2",
+        ["rls-same-session", sameUserId, new Date(Date.now() + 3600_000).toISOString()],
+      );
+      await sql.unsafe(
+        "INSERT INTO api_tokens (user_id, name, token_hash) VALUES ($1, $2, $3) ON CONFLICT (token_hash) DO UPDATE SET user_id = $1",
+        [otherUserId, "rls-other-token", "rls-other-token-hash"],
+      );
+      await sql.unsafe(
+        "INSERT INTO api_tokens (user_id, name, token_hash) VALUES ($1, $2, $3) ON CONFLICT (token_hash) DO UPDATE SET user_id = $1",
+        [sameUserId, "rls-same-token", "rls-same-token-hash"],
+      );
+
+      const asSuperuserNotes = (await sql.unsafe("SELECT body FROM notes WHERE body = $1", [
+        "other-tenant-note",
+      ])) as Array<{ body: string }>;
+      expect(asSuperuserNotes.some((row) => row.body === "other-tenant-note")).toBe(true);
+      const asSuperuserUsers = (await sql.unsafe("SELECT email FROM users WHERE email = $1", [
+        "rls-other@example.test",
+      ])) as Array<{ email: string }>;
+      expect(asSuperuserUsers).toHaveLength(1);
+      const asSuperuserSessions = (await sql.unsafe("SELECT id FROM sessions WHERE id = $1", [
+        "rls-other-session",
+      ])) as Array<{ id: string }>;
+      expect(asSuperuserSessions).toHaveLength(1);
+      const asSuperuserTokens = (await sql.unsafe(
+        "SELECT name FROM api_tokens WHERE token_hash = $1",
+        ["rls-other-token-hash"],
+      )) as Array<{ name: string }>;
+      expect(asSuperuserTokens).toHaveLength(1);
+
+      const appUrl = process.env.APP_DATABASE_URL?.trim();
+      if (!appUrl) {
+        throw new Error("APP_DATABASE_URL is required for the RLS login probe");
+      }
+      const probeUrl = new URL(appUrl);
+      probeUrl.username = role;
+      probeUrl.password = password;
+      probe = new Bun.SQL(probeUrl.toString());
+      probeClosed = false;
+      await probe.begin(async (appSql) => {
+        await appSql.unsafe("SELECT set_config('app.tenant_id', $1, false)", ["1"]);
+        await appSql.unsafe("SELECT set_config('app.bypass_rls', $1, false)", ["false"]);
+        expect(
+          (await appSql.unsafe("SELECT body FROM notes WHERE body = $1", [
+            "other-tenant-note",
+          ])) as unknown[],
+        ).toHaveLength(0);
+        expect(
+          (await appSql.unsafe("SELECT body FROM notes WHERE body = $1", [
+            "Welcome to Strata!",
+          ])) as Array<{ body: string }>,
+        ).toEqual(expect.arrayContaining([{ body: "Welcome to Strata!" }]));
+        expect(
+          (await appSql.unsafe("SELECT email FROM users WHERE email = $1", [
+            "rls-other@example.test",
+          ])) as unknown[],
+        ).toHaveLength(0);
+        expect(
+          (await appSql.unsafe("SELECT email FROM users WHERE email = $1", [
+            "demo@example.com",
+          ])) as Array<{ email: string }>,
+        ).toEqual(expect.arrayContaining([{ email: "demo@example.com" }]));
+        expect(
+          (await appSql.unsafe("SELECT id FROM sessions WHERE id = $1", [
+            "rls-other-session",
+          ])) as unknown[],
+        ).toHaveLength(0);
+        expect(
+          (await appSql.unsafe("SELECT id FROM sessions WHERE id = $1", [
+            "rls-same-session",
+          ])) as Array<{
+            id: string;
+          }>,
+        ).toEqual([{ id: "rls-same-session" }]);
+        expect(
+          (await appSql.unsafe("SELECT name FROM api_tokens WHERE token_hash = $1", [
+            "rls-other-token-hash",
+          ])) as unknown[],
+        ).toHaveLength(0);
+        expect(
+          (await appSql.unsafe("SELECT name FROM api_tokens WHERE token_hash = $1", [
+            "rls-same-token-hash",
+          ])) as Array<{ name: string }>,
+        ).toEqual([{ name: "rls-same-token" }]);
+      });
+    } catch (error) {
+      failures.push(error);
     }
+    if (probe) {
+      try {
+        await probe.close();
+        probeClosed = true;
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (roleAttempted && probeClosed) {
+      try {
+        const present = await sql.unsafe("SELECT rolname FROM pg_roles WHERE rolname=$1", [role]);
+        if (present.length) {
+          if (!roleCreated) {
+            fixtureUncertain = true;
+            throw new Error(
+              `Role creation outcome uncertain; unique attempted role retained: ${role}`,
+            );
+          }
+          await sql.unsafe(`DROP OWNED BY ${role}`);
+          await sql.unsafe(`DROP ROLE ${role}`);
+        }
+        expect(
+          await sql.unsafe("SELECT rolname FROM pg_roles WHERE rolname=$1", [role]),
+        ).toHaveLength(0);
+      } catch (error) {
+        fixtureUncertain = true;
+        failures.push(error);
+      }
+    }
+    if (!probeClosed) {
+      fixtureUncertain = true;
+      failures.push(new Error(`Probe SQL termination unconfirmed; owned role retained: ${role}`));
+    }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1)
+      throw new AggregateError(failures, "FORCE RLS probe and cleanup failed");
   });
 });
 

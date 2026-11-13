@@ -3,29 +3,37 @@ import { isAccountActive, matchesAuthVersion } from "@getstrata/core/auth/accoun
 import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { type AuthGuard, AuthManager } from "@getstrata/core/auth/guard";
 import { isSessionInvalidated } from "@getstrata/core/auth/sessionCookie";
-import { getBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
-import {
-  getActiveDatabaseConnection,
-  hasActiveDatabaseConnection,
-} from "@getstrata/core/database/connectionContext";
-import {
-  getDefaultDatabasePool,
-  getDefaultDatabaseQuery,
-} from "@getstrata/core/database/defaultConnection";
-import { currentSqlDialect, sqlTimestamp } from "@getstrata/core/database/dialect";
+import type { ScopedPolicy } from "@getstrata/core/contracts/persistence";
+import type { DatabaseSession, TransactionSession } from "@getstrata/core/database/session";
 import { UnauthorizedError } from "@getstrata/core/errors/http";
 import { readRequestCookie } from "@getstrata/core/http/cookies";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
-import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { timingSafeCompareString } from "@getstrata/core/security/timingSafeCompare";
-import { runWithMigrationBypassForIdentifier } from "@getstrata/core/tenant/databaseTenantContext";
 
-function sqlPlaceholder(index: number): string {
-  return currentSqlDialect().placeholder(index);
+type Selected = DatabaseSession | TransactionSession;
+function sqlPlaceholder(sql: Selected, index: number): string {
+  return sql.dialect.placeholder(index);
 }
-
-function sqlNow(): string {
-  return currentSqlDialect().nowExpression();
+function sqlNow(sql: Selected): string {
+  return sql.dialect.nowExpression();
+}
+function executeSql<Row>(
+  sql: Selected,
+  text: string,
+  params: readonly unknown[] = [],
+): Promise<readonly Row[]> {
+  return sql.execute<Row>({ text, params });
+}
+function identifier<T>(
+  sql: Selected,
+  policy: ScopedPolicy,
+  productionRls: boolean,
+  id: string | number,
+  work: (child: Selected) => T | Promise<T>,
+): Promise<T> {
+  return productionRls
+    ? policy.run(sql, { kind: "identifier", identifier: id }, work)
+    : Promise.resolve(work(sql));
 }
 
 export interface SessionUser {
@@ -58,13 +66,12 @@ interface SessionRow {
   last_active_at?: Date | string | null;
 }
 
-type SqlClient = {
-  unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
-};
-
-type SqlSource = SqlClient | (() => SqlClient);
-
-export type LoadSessionUser = (sql: SqlClient, sessionId: string) => Promise<SessionUser | null>;
+export type LoadSessionUser = (
+  sql: Selected,
+  policy: ScopedPolicy,
+  rls: boolean,
+  sessionId: string,
+) => Promise<SessionUser | null>;
 
 export interface SessionCreateMeta {
   userAgent?: string | null;
@@ -78,35 +85,6 @@ export interface BrowserSessionRecord {
   ip_address: string | null;
   last_active_at: Date | string | null;
   expires_at: Date | string;
-}
-
-function isSqlClient(value: SqlSource): value is SqlClient {
-  return typeof (value as SqlClient).unsafe === "function";
-}
-
-function resolveSql(source: SqlSource): SqlClient {
-  const client = isSqlClient(source) ? source : source();
-  if (!hasActiveDatabaseConnection()) {
-    return client;
-  }
-  try {
-    if (client === getDefaultDatabasePool() || client === getDefaultDatabaseQuery()) {
-      return getActiveDatabaseConnection(client);
-    }
-  } catch {
-    return client;
-  }
-  return client;
-}
-
-function defaultSessionSql(): SqlClient {
-  const bound = getBoundDatabaseConnection();
-
-  if (bound) {
-    return bound;
-  }
-
-  return getDefaultDatabasePool();
 }
 
 export type MapSessionUser = (user: SessionUser) => AuthUser;
@@ -148,14 +126,17 @@ function mapSessionUserRow(row: SessionRow): SessionUser {
 }
 
 async function defaultLoadSessionUser(
-  sql: SqlClient,
+  sql: Selected,
+  policy: ScopedPolicy,
+  rls: boolean,
   sessionId: string,
 ): Promise<SessionUser | null> {
-  const sessionRows = await runWithMigrationBypassForIdentifier(sessionId, async () => {
-    return (await sql.unsafe(
+  const sessionRows = await identifier(sql, policy, rls, sessionId, async (sql) => {
+    return (await executeSql(
+      sql,
       `SELECT *, created_at AS session_created_at
      FROM sessions
-     WHERE id = ${sqlPlaceholder(1)} AND expires_at > ${sqlNow()}`,
+     WHERE id = ${sqlPlaceholder(sql, 1)} AND expires_at > ${sqlNow(sql)}`,
       [sessionId],
     )) as SessionRow[];
   });
@@ -168,10 +149,12 @@ async function defaultLoadSessionUser(
     return null;
   }
 
-  return await runWithMigrationBypassForIdentifier(userId, async () => {
-    const rows = (await sql.unsafe(`SELECT * FROM users WHERE id = ${sqlPlaceholder(1)}`, [
-      userId,
-    ])) as SessionRow[];
+  return await identifier(sql, policy, rls, userId, async (sql) => {
+    const rows = (await executeSql(
+      sql,
+      `SELECT * FROM users WHERE id = ${sqlPlaceholder(sql, 1)}`,
+      [userId],
+    )) as SessionRow[];
 
     const row = rows[0];
     if (!row) return null;
@@ -208,8 +191,10 @@ function redirectWithCookie(location: string, setCookie: string, status: number)
 
 export class CookieSessionStore {
   constructor(
-    private readonly sqlSource: SqlSource,
+    private readonly selected: Selected,
+    private readonly policy: ScopedPolicy,
     private readonly secret: string,
+    private readonly config: { production: boolean; rls: boolean },
     private readonly cookieName = "strata_session",
     private readonly maxAgeSeconds = 60 * 60 * 24 * 14,
     private readonly loadSessionUser: LoadSessionUser = defaultLoadSessionUser,
@@ -240,15 +225,11 @@ export class CookieSessionStore {
   }
 
   private withSecureFlag(header: string): string {
-    if (!isProductionEnv()) {
+    if (!this.config.production) {
       return header;
     }
 
     return header.includes("Secure") ? header : `${header}; Secure`;
-  }
-
-  private sql(): SqlClient {
-    return resolveSql(this.sqlSource);
   }
 
   async create(user: SessionUser, meta: SessionCreateMeta = {}): Promise<string> {
@@ -256,14 +237,15 @@ export class CookieSessionStore {
       throw new UnauthorizedError();
     const id = randomBytes(32).toString("hex");
     const expires = new Date(Date.now() + this.maxAgeSeconds * 1000);
-    await runWithMigrationBypassForIdentifier(user.id, async () => {
-      await this.sql().unsafe(
+    await identifier(this.selected, this.policy, this.config.rls, user.id, async (sql) => {
+      await executeSql(
+        sql,
         `INSERT INTO sessions (id, user_id, expires_at, user_agent, ip_address, last_active_at, created_at${user.auth_version !== undefined ? ", auth_version" : ""})
-       VALUES (${sqlPlaceholder(1)}, ${sqlPlaceholder(2)}, ${sqlPlaceholder(3)}, ${sqlPlaceholder(4)}, ${sqlPlaceholder(5)}, ${sqlNow()}, ${sqlNow()}${user.auth_version !== undefined ? `, ${sqlPlaceholder(6)}` : ""})`,
+       VALUES (${sqlPlaceholder(sql, 1)}, ${sqlPlaceholder(sql, 2)}, ${sqlPlaceholder(sql, 3)}, ${sqlPlaceholder(sql, 4)}, ${sqlPlaceholder(sql, 5)}, ${sqlNow(sql)}, ${sqlNow(sql)}${user.auth_version !== undefined ? `, ${sqlPlaceholder(sql, 6)}` : ""})`,
         [
           id,
           user.id,
-          sqlTimestamp(expires),
+          sql.dialect.timestampValue(expires),
           meta.userAgent ?? null,
           meta.ipAddress ?? null,
           ...(user.auth_version !== undefined ? [user.auth_version] : []),
@@ -274,32 +256,36 @@ export class CookieSessionStore {
   }
 
   async destroy(sessionId: string): Promise<void> {
-    await runWithMigrationBypassForIdentifier(sessionId, async () => {
-      await this.sql().unsafe(`DELETE FROM sessions WHERE id = ${sqlPlaceholder(1)}`, [sessionId]);
+    await identifier(this.selected, this.policy, this.config.rls, sessionId, async (sql) => {
+      await executeSql(sql, `DELETE FROM sessions WHERE id = ${sqlPlaceholder(sql, 1)}`, [
+        sessionId,
+      ]);
     });
   }
 
   async destroyAllSessions(userId: number): Promise<void> {
-    await runWithMigrationBypassForIdentifier(userId, async () => {
-      await this.sql().unsafe(`DELETE FROM sessions WHERE user_id = ${sqlPlaceholder(1)}`, [
+    await identifier(this.selected, this.policy, this.config.rls, userId, async (sql) => {
+      await executeSql(sql, `DELETE FROM sessions WHERE user_id = ${sqlPlaceholder(sql, 1)}`, [
         userId,
       ]);
     });
   }
 
   async destroyOtherSessions(userId: number, keepSessionId: string): Promise<void> {
-    await runWithMigrationBypassForIdentifier(userId, async () => {
-      await this.sql().unsafe(
-        `DELETE FROM sessions WHERE user_id = ${sqlPlaceholder(1)} AND id <> ${sqlPlaceholder(2)}`,
+    await identifier(this.selected, this.policy, this.config.rls, userId, async (sql) => {
+      await executeSql(
+        sql,
+        `DELETE FROM sessions WHERE user_id = ${sqlPlaceholder(sql, 1)} AND id <> ${sqlPlaceholder(sql, 2)}`,
         [userId, keepSessionId],
       );
     });
   }
 
-  async listForUser(userId: number): Promise<BrowserSessionRecord[]> {
-    const dialect = currentSqlDialect();
-    return await runWithMigrationBypassForIdentifier(userId, () =>
-      this.sql().unsafe<BrowserSessionRecord>(
+  async listForUser(userId: number): Promise<readonly BrowserSessionRecord[]> {
+    const dialect = this.selected.dialect;
+    return await identifier(this.selected, this.policy, this.config.rls, userId, (sql) =>
+      executeSql<BrowserSessionRecord>(
+        sql,
         `SELECT id, user_id, user_agent, ip_address, last_active_at, expires_at
        FROM sessions
        WHERE user_id = ${dialect.placeholder(1)} AND expires_at > ${dialect.nowExpression()}
@@ -310,9 +296,10 @@ export class CookieSessionStore {
   }
 
   async touch(sessionId: string): Promise<void> {
-    await runWithMigrationBypassForIdentifier(sessionId, async () => {
-      await this.sql().unsafe(
-        `UPDATE sessions SET last_active_at = ${sqlNow()} WHERE id = ${sqlPlaceholder(1)}`,
+    await identifier(this.selected, this.policy, this.config.rls, sessionId, async (sql) => {
+      await executeSql(
+        sql,
+        `UPDATE sessions SET last_active_at = ${sqlNow(sql)} WHERE id = ${sqlPlaceholder(sql, 1)}`,
         [sessionId],
       );
     });
@@ -322,7 +309,7 @@ export class CookieSessionStore {
     const sessionId = this.sessionIdFromRequest(request);
     if (!sessionId) return null;
 
-    const user = await this.loadSessionUser(this.sql(), sessionId);
+    const user = await this.loadSessionUser(this.selected, this.policy, this.config.rls, sessionId);
     return user && isAccountActive(user) ? user : null;
   }
 
@@ -397,29 +384,29 @@ export class CookieSessionAuthManager extends AuthManager {
 }
 
 export interface CreateCookieSessionAuthManagerOptions {
-  store?: CookieSessionStore;
-  sql?: SqlSource;
-  secret?: string;
+  selected: Selected;
+  policy: ScopedPolicy;
+  secret: string;
+  production: boolean;
+  rls: boolean;
   cookieName?: string;
   maxAgeSeconds?: number;
   mapUser?: MapSessionUser;
   loadSessionUser?: LoadSessionUser;
 }
-
-function createCookieSessionAuthManager(
-  options: CreateCookieSessionAuthManagerOptions = {},
+export function createCookieSessionAuthManager(
+  options: CreateCookieSessionAuthManagerOptions,
 ): CookieSessionAuthManager {
-  const store =
-    options.store ??
-    new CookieSessionStore(
-      options.sql ?? defaultSessionSql,
-      options.secret ?? process.env.SESSION_SECRET?.trim() ?? "",
-      options.cookieName,
-      options.maxAgeSeconds,
-      options.loadSessionUser,
-    );
-
+  if (!options.secret) throw new TypeError("An explicit session secret is required.");
+  const store = new CookieSessionStore(
+    options.selected,
+    options.policy,
+    options.secret,
+    { production: options.production, rls: options.rls },
+    options.cookieName,
+    options.maxAgeSeconds,
+    options.loadSessionUser,
+  );
   return new CookieSessionAuthManager(store, options.mapUser ?? defaultMapSessionUser);
 }
-
-export { createCookieSessionAuthManager, defaultMapSessionUser, defaultSessionSql };
+export { defaultMapSessionUser };

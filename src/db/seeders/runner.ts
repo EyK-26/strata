@@ -1,20 +1,16 @@
-import { runSeedersFromDirectory } from "../../core/database/seeders/runner.ts";
-import { runWithMigrationBypass } from "../../core/tenant/databaseTenantContext.ts";
-import db from "../connection/index.ts";
+import { runSeedersFromDirectory } from "../../core/database/seeders/runner";
+import type { SeederDatabase } from "../../core/database/seeders/types";
+import { type FixtureSchemaOptions, withFixtureSchema } from "../fixtureSchemaOwner";
 
-async function seedDatabase(): Promise<void> {
-  const count = await runWithMigrationBypass(async () =>
-    runSeedersFromDirectory(import.meta.dir, db, {
-      onSeeder: (name) => console.log(`Seeding ${name}...`),
-    }),
-  );
-
-  if (count === 0) {
-    console.log("No seeders registered.");
-    return;
-  }
-
-  console.log(`Ran ${count} seeder(s).`);
+/** Compose fresh+seed on the same selected executor; no nested command owner. */
+export function seedSelectedDatabase(database: SeederDatabase): Promise<number> {
+  return runSeedersFromDirectory(import.meta.dir, database, {
+    onSeeder: (name) => console.log(`Seeding ${name}...`),
+  });
+}
+async function seedDatabase(options: FixtureSchemaOptions = {}): Promise<void> {
+  const count = await withFixtureSchema(seedSelectedDatabase, options);
+  console.log(count ? `Ran ${count} seeder(s).` : "No seeders registered.");
 }
 
 export { seedDatabase };

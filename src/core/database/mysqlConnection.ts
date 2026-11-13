@@ -48,7 +48,7 @@ function createMysqlAdapter(
     },
     async begin<T>(callback: (transaction: ActiveDatabaseHandle) => Promise<T>): Promise<T> {
       if (transactions.has(getActiveDatabaseConnection(connection))) {
-        throw new Error("Use runInTransaction for nested MySQL transactions.");
+        throw new Error("Use the active transaction handle for nested MySQL work.");
       }
       const pool = await getPool();
       if (!pool.getConnection)

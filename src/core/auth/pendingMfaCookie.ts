@@ -13,10 +13,15 @@ function signature(payload: string, secret: string): string {
   if (!secret.trim()) throw new Error("A pending MFA secret is required.");
   return createHmac("sha256", secret).update(`pending-mfa:${payload}`).digest("hex");
 }
-function header(value: string, ttl: number): string {
-  return `${COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttl}${isProductionEnv() ? "; Secure" : ""}`;
+function header(value: string, ttl: number, production: boolean): string {
+  return `${COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttl}${production ? "; Secure" : ""}`;
 }
-function createPendingMfaCookie(userId: number, authVersion: number, secret: string): string {
+function createPendingMfaCookie(
+  userId: number,
+  authVersion: number,
+  secret: string,
+  production = isProductionEnv(),
+): string {
   if (
     !Number.isSafeInteger(userId) ||
     userId <= 0 ||
@@ -25,7 +30,7 @@ function createPendingMfaCookie(userId: number, authVersion: number, secret: str
   )
     throw new Error("Invalid pending MFA account identity or version.");
   const payload = `v1.${userId}.${authVersion}.${Date.now()}`;
-  return header(`${payload}.${signature(payload, secret)}`, TTL);
+  return header(`${payload}.${signature(payload, secret)}`, TTL, production);
 }
 function readPendingMfaCookie(request: Request, secret: string): PendingMfaChallenge | null {
   const value = readRequestCookie(request, COOKIE);
@@ -44,8 +49,8 @@ function readPendingMfaCookie(request: Request, secret: string): PendingMfaChall
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
   return { userId, authVersion };
 }
-function clearPendingMfaCookie(): string {
-  return header("", 0);
+function clearPendingMfaCookie(production = isProductionEnv()): string {
+  return header("", 0, production);
 }
 
 export type { PendingMfaChallenge };

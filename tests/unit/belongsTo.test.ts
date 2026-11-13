@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineRepository, type RepositoryBinding } from "@getstrata/core/database/definitions";
 import { hasMany, indexBelongsToRelation } from "@getstrata/core/database/relationships";
 import { defineTable } from "@getstrata/core/database/table";
+import type { DatabaseConnection } from "../../src/core/database/connectionContracts";
+import { withRepositories } from "../helpers/boundRepositoryHarness";
 
 type Squad = {
   id: number;
@@ -48,62 +51,76 @@ class FakeConnection implements DatabaseConnection {
   }
 }
 
-class SquadRepository extends BaseRepository<Squad, "id"> {
-  constructor(connection: DatabaseConnection) {
-    super(squadTable, connection);
-  }
-}
+class SquadRepository extends BaseRepository<Squad, "id"> {}
+const SquadRepositoryDefinition = defineRepository({
+  name: "SquadRepository",
+  table: squadTable,
+  dependencies: [],
+  create: (binding) => new SquadRepository(binding),
+});
 
 class CrewRepository extends BaseRepository<CrewMember, "id"> {
-  constructor(connection: DatabaseConnection) {
-    super(crewTable, connection);
+  constructor(private readonly binding: RepositoryBinding<CrewMember, "id">) {
+    super(binding);
   }
 
-  async attachSquads(
-    members: readonly CrewMember[],
-  ): Promise<Array<CrewMember & { squad?: Squad }>> {
-    const squadsById = await this.loadBelongsToForParents(
-      members,
-      {
-        type: "belongsTo",
-        name: "squad",
-        foreignKey: "squad_id",
-        ownerKey: "id",
-      },
-      new SquadRepository(this.connection),
-    );
+  attachSquads(members: readonly CrewMember[]): Promise<Array<CrewMember & { squad?: Squad }>> {
+    return this.binding.run(async () => {
+      const squadsById = await this.loadBelongsToForParents(
+        members,
+        {
+          type: "belongsTo",
+          name: "squad",
+          foreignKey: "squad_id",
+          ownerKey: "id",
+        },
+        this.binding.session.repository(SquadRepositoryDefinition),
+      );
 
-    return members.map((member) => ({
-      ...member,
-      squad: squadsById.get(member.squad_id),
-    }));
+      return members.map((member) => ({
+        ...member,
+        squad: squadsById.get(member.squad_id),
+      }));
+    });
   }
 
   async loadBySquads(squads: readonly Squad[]) {
     return await this.loadHasManyForParents(squads, squadHasManyCrewMembers);
   }
 }
+const CrewRepositoryDefinition = defineRepository({
+  name: "CrewRepository",
+  table: crewTable,
+  dependencies: [],
+  create: (binding) => new CrewRepository(binding),
+});
 
 describe("belongsTo eager loading", () => {
   test("loads parent records for child rows", async () => {
     const connection = new FakeConnection();
-    const crewRepository = new CrewRepository(connection);
-    const members: CrewMember[] = [
-      { id: 1, name: "Ripley", squad_id: 10 },
-      { id: 2, name: "Hicks", squad_id: 10 },
-      { id: 3, name: "Bishop", squad_id: 20 },
-    ];
 
-    connection.queue([
-      { id: 10, label: "Alpha" },
-      { id: 20, label: "Beta" },
-    ]);
+    await withRepositories(
+      connection,
+      [CrewRepositoryDefinition, SquadRepositoryDefinition] as const,
+      async ([crewRepository]) => {
+        const members: CrewMember[] = [
+          { id: 1, name: "Ripley", squad_id: 10 },
+          { id: 2, name: "Hicks", squad_id: 10 },
+          { id: 3, name: "Bishop", squad_id: 20 },
+        ];
 
-    const withSquads = await crewRepository.attachSquads(members);
+        connection.queue([
+          { id: 10, label: "Alpha" },
+          { id: 20, label: "Beta" },
+        ]);
 
-    expect(withSquads[0]?.squad).toEqual({ id: 10, label: "Alpha" });
-    expect(withSquads[2]?.squad).toEqual({ id: 20, label: "Beta" });
-    expect(connection.calls[0]?.params).toEqual([10, 20]);
+        const withSquads = await crewRepository.attachSquads(members);
+
+        expect(withSquads[0]?.squad).toEqual({ id: 10, label: "Alpha" });
+        expect(withSquads[2]?.squad).toEqual({ id: 20, label: "Beta" });
+        expect(connection.calls[0]?.params).toEqual([10, 20]);
+      },
+    );
   });
 
   test("indexes belongsTo relations by foreign key", () => {
@@ -138,31 +155,43 @@ describe("belongsTo eager loading", () => {
 describe("hasMany eager loading", () => {
   test("preserves empty parent groups", async () => {
     const connection = new FakeConnection();
-    const crewRepository = new CrewRepository(connection);
-    const squads: Squad[] = [
-      { id: 10, label: "Alpha" },
-      { id: 20, label: "Beta" },
-    ];
 
-    connection.queue([]);
+    await withRepositories(
+      connection,
+      [CrewRepositoryDefinition, SquadRepositoryDefinition] as const,
+      async ([crewRepository]) => {
+        const squads: Squad[] = [
+          { id: 10, label: "Alpha" },
+          { id: 20, label: "Beta" },
+        ];
 
-    const grouped = await crewRepository.loadBySquads(squads);
+        connection.queue([]);
 
-    expect(grouped.get(10)).toEqual([]);
-    expect(grouped.get(20)).toEqual([]);
+        const grouped = await crewRepository.loadBySquads(squads);
+
+        expect(grouped.get(10)).toEqual([]);
+        expect(grouped.get(20)).toEqual([]);
+      },
+    );
   });
 
   test("matches int4 parent keys to int8 child foreign keys", async () => {
     const connection = new FakeConnection();
-    const crewRepository = new CrewRepository(connection);
-    const squads: Squad[] = [{ id: 10, label: "Alpha" }];
 
-    connection.queue([{ id: 1, name: "Ripley", squad_id: 10n }]);
+    await withRepositories(
+      connection,
+      [CrewRepositoryDefinition, SquadRepositoryDefinition] as const,
+      async ([crewRepository]) => {
+        const squads: Squad[] = [{ id: 10, label: "Alpha" }];
 
-    const grouped = await crewRepository.loadBySquads(squads);
+        connection.queue([{ id: 1, name: "Ripley", squad_id: 10n }]);
 
-    expect(grouped.get(10)).toEqual([
-      { id: 1, name: "Ripley", squad_id: 10n as unknown as number },
-    ]);
+        const grouped = await crewRepository.loadBySquads(squads);
+
+        expect(grouped.get(10)).toEqual([
+          { id: 1, name: "Ripley", squad_id: 10n as unknown as number },
+        ]);
+      },
+    );
   });
 });

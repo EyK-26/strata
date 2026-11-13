@@ -17,6 +17,8 @@ export function routeHandlerContracts(
   kernel: HttpKernel,
   request: ItemRequest,
   plain: Request,
+  server: Bun.Server<{ session: string }>,
+  ports: import("@getstrata/bootstrap/contracts").BusinessRequestPorts,
 ): void {
   kernel.wrapLogin(withJsonErrorHandling(async (req) => new Response(req.url)));
   kernel.wrap(
@@ -89,4 +91,25 @@ export function routeHandlerContracts(
   // Plain Request handlers remain supported.
   const legacy: RouteHandler = kernel.wrapWeb((req: Request) => new Response(req.url));
   legacy(plain);
+  const native = kernel.wrapWeb((req: Request, selected) => {
+    const samePorts: typeof ports = selected;
+    void samePorts;
+    return new Response(req.url);
+  });
+  native(plain, server);
+  native(plain, ports);
+  const bunHandler: (
+    request: Request,
+    server: Bun.Server<{ session: string }>,
+  ) => Response | Promise<Response> = native;
+  void bunHandler;
+  const nativeOptions = {
+    fetch: native,
+    routes: { "/items": native },
+  } satisfies Parameters<typeof Bun.serve<{ session: string }>>[0];
+  void nativeOptions;
+  // @ts-expect-error Native compatibility must not admit arbitrary second arguments.
+  native(plain, { database: ports.database });
+  // @ts-expect-error Native compatibility must preserve required route parameters.
+  kernel.wrapWeb(handler)(plain, server);
 }

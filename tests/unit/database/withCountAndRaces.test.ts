@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import assert from "node:assert/strict";
-import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
-import { runWithSqlDialect } from "@getstrata/core/database/dialect";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { type BoundModel, defineRepository } from "@getstrata/core/database/definitions";
 import { PersistenceError } from "@getstrata/core/database/errors";
-import { Model, registerModelRepository } from "@getstrata/core/database/model";
+import { defineModel, Model } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 import { ConflictError } from "@getstrata/core/errors/http";
+import type { SqlFixture as DatabaseConnection } from "../../helpers/boundRepositoryHarness";
+import { withBoundDatabase } from "../../helpers/boundRepositoryHarness";
 
 type Squad = { id: number; label: string };
 type Member = { id: number; name: string; squad_id: number };
@@ -44,157 +46,171 @@ class FakeConnection implements DatabaseConnection {
   }
 }
 
-function createGraph(connection: FakeConnection) {
-  class MemberModel extends Model<Member, "id"> {
-    static override $timestamps = false;
-    static override $fillable = ["name", "squad_id"] as const;
-    protected override primaryKey(): "id" {
-      return "id";
-    }
+class MemberModelClass extends Model<Member, "id"> {}
+class SquadModelClass extends Model<Squad, "id"> {
+  members() {
+    return this.hasMany(memberDefinition);
   }
-
-  class SquadModel extends Model<Squad, "id"> {
-    static override $timestamps = false;
-    static override $fillable = ["label"] as const;
-    protected override primaryKey(): "id" {
-      return "id";
-    }
-
-    members() {
-      return this.hasMany(MemberModel);
-    }
-  }
-
-  registerModelRepository(
-    MemberModel,
-    new (class extends BaseRepository<Member, "id"> {
-      constructor() {
-        super(memberTable, connection);
-      }
-    })(),
+}
+const members = defineRepository({
+  name: "members",
+  table: memberTable,
+  dependencies: [] as const,
+  create: (binding) => new BaseRepository(binding),
+});
+const squads = defineRepository({
+  name: "squads",
+  table: squadTable,
+  dependencies: [] as const,
+  create: (binding) => new BaseRepository(binding),
+});
+const memberDefinition = defineModel({
+  name: "MemberModel",
+  repository: members,
+  dependencies: [] as const,
+  attributes: { timestamps: false, fillable: ["name", "squad_id"] },
+  construct: (state, binding) => new MemberModelClass(state, binding),
+});
+const squadDefinition = defineModel({
+  name: "SquadModel",
+  repository: squads,
+  dependencies: [] as const,
+  attributes: { timestamps: false, fillable: ["label"] },
+  construct: (state, binding) => new SquadModelClass(state, binding),
+});
+async function withGraph<T>(
+  connection: FakeConnection,
+  work: (graph: {
+    SquadModel: BoundModel<Squad, "id", SquadModelClass>;
+    MemberModel: BoundModel<Member, "id", MemberModelClass>;
+    SquadClass: typeof SquadModelClass;
+  }) => T | Promise<T>,
+) {
+  return withBoundDatabase(
+    {
+      definition: {
+        default: "test",
+        connections: { test: { driver: "sqlite", filename: ":memory:" } },
+        repositories: [members, squads],
+        models: [memberDefinition, squadDefinition],
+      },
+      connection,
+    },
+    (database) =>
+      work({
+        SquadModel: database.model(squadDefinition),
+        MemberModel: database.model(memberDefinition),
+        SquadClass: SquadModelClass,
+      }),
   );
-
-  registerModelRepository(
-    SquadModel,
-    new (class extends BaseRepository<Squad, "id"> {
-      constructor() {
-        super(squadTable, connection);
-      }
-    })(),
-  );
-
-  return { SquadModel, MemberModel };
 }
 
 describe("withCount", () => {
   test("adds an aliased count subquery correlated to the parent", async () => {
     const connection = new FakeConnection();
-    const { SquadModel } = createGraph(connection);
-    connection.queue([{ id: 1, label: "alpha", members_count: 3 }]);
+    await withGraph(connection, async ({ SquadModel }) => {
+      connection.queue([{ id: 1, label: "alpha", members_count: 3 }]);
 
-    await runWithSqlDialect("pgsql", async () => SquadModel.query().withCount("members").get());
+      await (async () => SquadModel.query().withCount("members").get())();
 
-    const sql = connection.calls[0]?.query ?? "";
-    expect(sql).toContain("SELECT COUNT(*)");
-    expect(sql).toContain('AS "members_count"');
-    expect(sql).toContain('"members"."squad_id" = "squads"."id"');
+      const sql = connection.calls[0]?.query ?? "";
+      expect(sql).toContain("SELECT COUNT(*)");
+      expect(sql).toContain('AS "members_count"');
+      expect(sql).toContain('"members"."squad_id" = "squads"."id"');
+    });
   });
 
   test("keeps the base columns alongside the count", async () => {
     const connection = new FakeConnection();
-    const { SquadModel } = createGraph(connection);
-    connection.queue([{ id: 1, label: "alpha", members_count: 3 }]);
+    await withGraph(connection, async ({ SquadModel }) => {
+      connection.queue([{ id: 1, label: "alpha", members_count: 3 }]);
 
-    await runWithSqlDialect("pgsql", async () => SquadModel.query().withCount("members").get());
+      await (async () => SquadModel.query().withCount("members").get())();
 
-    const sql = connection.calls[0]?.query ?? "";
-    expect(sql).toContain('"squads"."id"');
-    expect(sql).toContain('"squads"."label"');
+      const sql = connection.calls[0]?.query ?? "";
+      expect(sql).toContain('"squads"."id"');
+      expect(sql).toContain('"squads"."label"');
+    });
   });
 
   test("accepts a custom alias", async () => {
     const connection = new FakeConnection();
-    const { SquadModel } = createGraph(connection);
-    connection.queue([{ id: 1, label: "alpha", total: 3 }]);
+    await withGraph(connection, async ({ SquadModel }) => {
+      connection.queue([{ id: 1, label: "alpha", total: 3 }]);
 
-    await runWithSqlDialect("pgsql", async () =>
-      SquadModel.query().withCount("members", "total").get(),
-    );
+      await (async () => SquadModel.query().withCount("members", "total").get())();
 
-    expect(connection.calls[0]?.query).toContain('AS "total"');
+      expect(connection.calls[0]?.query).toContain('AS "total"');
+    });
   });
 
   test("the count is readable on the hydrated model", async () => {
     const connection = new FakeConnection();
-    const { SquadModel } = createGraph(connection);
-    connection.queue([{ id: 1, label: "alpha", members_count: 3 }]);
+    await withGraph(connection, async ({ SquadModel }) => {
+      connection.queue([{ id: 1, label: "alpha", members_count: 3 }]);
 
-    const [squad] = await runWithSqlDialect("pgsql", async () =>
-      SquadModel.query().withCount("members").get(),
-    );
+      const [squad] = await (async () => SquadModel.query().withCount("members").get())();
 
-    expect(squad?.toObject().members_count).toBe(3);
+      expect(squad?.toObject().members_count).toBe(3);
+    });
   });
 
   test("count aliases preserve driver values during hydration", async () => {
     const connection = new FakeConnection();
-    const { SquadModel } = createGraph(connection);
-    connection.queue([{ id: 1, label: "alpha", members_count: "3", total: 4n }]);
+    await withGraph(connection, async ({ SquadModel, SquadClass }) => {
+      connection.queue([{ id: 1, label: "alpha", members_count: "3", total: 4n }]);
 
-    const squad = await runWithSqlDialect("pgsql", async () =>
-      SquadModel.query().withCount("members").withCount("members", "total").first(),
-    );
+      const squad = await (async () =>
+        SquadModel.query().withCount("members").withCount("members", "total").first())();
 
-    expect(squad?.toObject().members_count).toBe("3");
-    expect(squad?.get("total")).toBe(4n);
-    expect(squad).toBeInstanceOf(SquadModel);
+      expect(squad?.toObject().members_count).toBe("3");
+      expect(squad?.get("total")).toBe(4n);
+      expect(squad).toBeInstanceOf(SquadClass);
+    });
   });
 
   test("combines with a where clause without breaking parameter order", async () => {
     const connection = new FakeConnection();
-    const { SquadModel } = createGraph(connection);
-    connection.queue([]);
+    await withGraph(connection, async ({ SquadModel }) => {
+      connection.queue([]);
 
-    await runWithSqlDialect("pgsql", async () =>
-      SquadModel.query().withCount("members").where({ label: "alpha" }).get(),
-    );
+      await (async () => SquadModel.query().withCount("members").where({ label: "alpha" }).get())();
 
-    expect(connection.calls[0]?.params).toEqual(["alpha"]);
+      expect(connection.calls[0]?.params).toEqual(["alpha"]);
+    });
   });
 
-  test("an unknown relation name throws", () => {
+  test("an unknown relation name throws", async () => {
     const connection = new FakeConnection();
-    const { SquadModel } = createGraph(connection);
-
-    expect(() => SquadModel.query().withCount("nope")).toThrow(/no relation method/);
+    await withGraph(connection, async ({ SquadModel }) => {
+      expect(() => SquadModel.query().withCount("nope")).toThrow(/no relation method/);
+    });
   });
 });
 
 describe("firstOrCreate races", () => {
   test("returns the existing row without inserting", async () => {
     const connection = new FakeConnection();
-    const { SquadModel } = createGraph(connection);
-    connection.queue([{ id: 1, label: "alpha" }]);
+    await withGraph(connection, async ({ SquadModel }) => {
+      connection.queue([{ id: 1, label: "alpha" }]);
 
-    const squad = await runWithSqlDialect("pgsql", async () =>
-      SquadModel.firstOrCreate({ label: "alpha" }),
-    );
+      const squad = await (async () => SquadModel.firstOrCreate({ label: "alpha" }))();
 
-    expect(squad.toObject().id).toBe(1);
-    expect(connection.calls.every((call) => !call.query.startsWith("INSERT"))).toBe(true);
+      expect(squad.toObject().id).toBe(1);
+      expect(connection.calls.every((call) => !call.query.startsWith("INSERT"))).toBe(true);
+    });
   });
 
   test("inserts when nothing exists yet", async () => {
     const connection = new FakeConnection();
-    const { SquadModel } = createGraph(connection);
-    connection.queue([]);
-    connection.queue([{ id: 2, label: "beta" }]);
+    await withGraph(connection, async ({ SquadModel }) => {
+      connection.queue([]);
+      connection.queue([{ id: 2, label: "beta" }]);
 
-    const squad = await runWithSqlDialect("pgsql", async () =>
-      SquadModel.firstOrCreate({ label: "beta" }),
-    );
+      const squad = await (async () => SquadModel.firstOrCreate({ label: "beta" }))();
 
-    expect(squad.toObject().id).toBe(2);
+      expect(squad.toObject().id).toBe(2);
+    });
   });
 
   test("a concurrent unique insert is recovered by re-reading neutral and native duplicate failures", async () => {
@@ -203,39 +219,38 @@ describe("firstOrCreate races", () => {
       Object.assign(new Error("native duplicate key"), { code: "23505" }),
     ]) {
       const connection = new FakeConnection();
-      const { SquadModel } = createGraph(connection);
-      connection.queue([]);
-      connection.failNextInsertWith = duplicate;
-      connection.queue([{ id: 3, label: "gamma" }]);
+      await withGraph(connection, async ({ SquadModel }) => {
+        connection.queue([]);
+        connection.failNextInsertWith = duplicate;
+        connection.queue([{ id: 3, label: "gamma" }]);
 
-      const squad = await runWithSqlDialect("pgsql", async () =>
-        SquadModel.firstOrCreate({ label: "gamma" }),
-      );
+        const squad = await (async () => SquadModel.firstOrCreate({ label: "gamma" }))();
 
-      expect(squad.toObject()).toEqual({ id: 3, label: "gamma" });
-      expect(connection.calls).toHaveLength(3);
-      expect(connection.calls.filter((call) => call.query.startsWith("INSERT"))).toHaveLength(1);
-      expect(connection.calls.filter((call) => call.query.startsWith("SELECT"))).toHaveLength(2);
-      expect(connection.calls[0]?.params).toEqual(["gamma"]);
-      expect(connection.calls[2]?.params).toEqual(["gamma"]);
+        expect(squad.toObject()).toEqual({ id: 3, label: "gamma" });
+        expect(connection.calls).toHaveLength(3);
+        expect(connection.calls.filter((call) => call.query.startsWith("INSERT"))).toHaveLength(1);
+        expect(connection.calls.filter((call) => call.query.startsWith("SELECT"))).toHaveLength(2);
+        expect(connection.calls[0]?.params).toEqual(["gamma"]);
+        expect(connection.calls[2]?.params).toEqual(["gamma"]);
+      });
     }
   });
 
   test("a unique violation with no winning row preserves the original neutral error", async () => {
     const connection = new FakeConnection();
-    const { SquadModel } = createGraph(connection);
-    const duplicate = new PersistenceError("DATABASE_UNIQUE_CONSTRAINT");
-    connection.queue([]);
-    connection.failNextInsertWith = duplicate;
-    connection.queue([]);
+    await withGraph(connection, async ({ SquadModel }) => {
+      const duplicate = new PersistenceError("DATABASE_UNIQUE_CONSTRAINT");
+      connection.queue([]);
+      connection.failNextInsertWith = duplicate;
+      connection.queue([]);
 
-    await assert.rejects(
-      async () =>
-        await runWithSqlDialect("pgsql", async () => SquadModel.firstOrCreate({ label: "delta" })),
-      (error: unknown) => error === duplicate,
-    );
-    expect(connection.calls).toHaveLength(3);
-    expect(connection.calls.filter((call) => call.query.startsWith("INSERT"))).toHaveLength(1);
+      await assert.rejects(
+        async () => await (async () => SquadModel.firstOrCreate({ label: "delta" }))(),
+        (error: unknown) => error === duplicate,
+      );
+      expect(connection.calls).toHaveLength(3);
+      expect(connection.calls.filter((call) => call.query.startsWith("INSERT"))).toHaveLength(1);
+    });
   });
 
   test("domain conflicts and non-unique persistence failures propagate without a race reread", async () => {
@@ -244,38 +259,44 @@ describe("firstOrCreate races", () => {
       new PersistenceError("DATABASE_CHECK_CONSTRAINT"),
     ]) {
       const connection = new FakeConnection();
-      const { SquadModel } = createGraph(connection);
-      connection.queue([]);
-      connection.failNextInsertWith = failure;
-      // A row available to a mistaken reread must not hide the unrelated failure.
-      connection.queue([{ id: 4, label: "unrelated" }]);
-      await assert.rejects(
-        async () =>
-          await runWithSqlDialect("pgsql", async () =>
-            SquadModel.firstOrCreate({ label: "unrelated" }),
-          ),
-        (error: unknown) => error === failure,
-      );
-      expect(connection.calls).toHaveLength(2);
-      expect(connection.calls.filter((call) => call.query.startsWith("INSERT"))).toHaveLength(1);
-      expect(connection.calls.filter((call) => call.query.startsWith("SELECT"))).toHaveLength(1);
+      await withGraph(connection, async ({ SquadModel }) => {
+        connection.queue([]);
+        connection.failNextInsertWith = failure;
+        // A row available to a mistaken reread must not hide the unrelated failure.
+        connection.queue([{ id: 4, label: "unrelated" }]);
+        await assert.rejects(
+          async () => await (async () => SquadModel.firstOrCreate({ label: "unrelated" }))(),
+          (error: unknown) =>
+            failure instanceof PersistenceError
+              ? error === failure
+              : error instanceof PersistenceError &&
+                error.code === "DATABASE_OPERATION_FAILED" &&
+                error.cause === failure,
+        );
+        expect(connection.calls).toHaveLength(2);
+        expect(connection.calls.filter((call) => call.query.startsWith("INSERT"))).toHaveLength(1);
+        expect(connection.calls.filter((call) => call.query.startsWith("SELECT"))).toHaveLength(1);
+      });
     }
   });
 
   test("a non-conflict error is not swallowed or mistaken for a race", async () => {
     const connection = new FakeConnection();
-    const { SquadModel } = createGraph(connection);
-    const failure = new Error("connection reset");
-    connection.queue([]);
-    connection.failNextInsertWith = failure;
+    await withGraph(connection, async ({ SquadModel }) => {
+      const failure = new Error("connection reset");
+      connection.queue([]);
+      connection.failNextInsertWith = failure;
 
-    await assert.rejects(
-      async () =>
-        await runWithSqlDialect("pgsql", async () =>
-          SquadModel.firstOrCreate({ label: "epsilon" }),
-        ),
-      (error: unknown) => error === failure,
-    );
-    expect(connection.calls).toHaveLength(2);
+      await assert.rejects(
+        async () => await (async () => SquadModel.firstOrCreate({ label: "epsilon" }))(),
+        (error: unknown) =>
+          failure instanceof PersistenceError
+            ? error === failure
+            : error instanceof PersistenceError &&
+              error.code === "DATABASE_OPERATION_FAILED" &&
+              error.cause === failure,
+      );
+      expect(connection.calls).toHaveLength(2);
+    });
   });
 });

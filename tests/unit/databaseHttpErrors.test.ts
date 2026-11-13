@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { PersistenceError } from "@getstrata/core/database/errors";
 import {
   BadRequestError,
   ConflictError,
@@ -217,4 +218,42 @@ test("ambiguous foreign-key failures never claim every failure is a missing pare
     expect(mapped.message).not.toContain("order_items");
     expect(mapped.message).not.toContain("products");
   }
+});
+
+test("direct terminal constraints retain safe transport status without rewriting unknown durability", () => {
+  const native = { code: "23505", detail: "private record value" };
+  const failure = new PersistenceError("DATABASE_TRANSACTION_UNKNOWN", {
+    cause: native,
+    data: "unknown",
+  });
+  const mapped = mapDatabaseHttpError(failure);
+  expect(mapped.status).toBe(409);
+  expect(mapped.message).not.toContain("private");
+  expect(failure.data).toBe("unknown");
+  expect(failure.cause).toBe(native);
+  expect(
+    mapDatabaseHttpError(new PersistenceError("DATABASE_TRANSACTION_UNKNOWN", { data: "unknown" }))
+      .status,
+  ).toBe(500);
+  expect(
+    mapDatabaseHttpError(
+      new PersistenceError("DATABASE_TRANSACTION_UNKNOWN", {
+        data: "unknown",
+        cause: new AggregateError([native], "cleanup"),
+      }),
+    ).status,
+  ).toBe(500);
+  expect(
+    mapDatabaseHttpError(
+      new PersistenceError("DATABASE_TRANSACTION_FAILED", {
+        data: "unknown",
+        cause: new Error("wrapper", { cause: native }),
+      }),
+    ).status,
+  ).toBe(500);
+  expect(
+    mapDatabaseHttpError(
+      new PersistenceError("DATABASE_TRANSACTION_FAILED", { data: "committed", cause: native }),
+    ).status,
+  ).toBe(500);
 });

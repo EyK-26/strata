@@ -23,6 +23,11 @@ import { dialectFor } from "@getstrata/core/database/sqlDialects";
 import { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
 import { TransactionRuntime } from "@getstrata/core/database/transactionSession";
 import { createApplication } from "@getstrata/core/runtime/application";
+import {
+  createBoundRegistryFactory,
+  prepareRegistry,
+  snapshotRegistry,
+} from "../../src/core/database/modelRegistry";
 import { bounded, deferred, pending, rejected } from "../fixtures/applicationOwnershipSupport";
 
 const sql = (text: string, params: readonly unknown[] = []) => ({ text, params });
@@ -1649,10 +1654,21 @@ test("synthetic internal joined admission rejection starts no business node and 
           return actual.joined(work, enter);
         },
       };
+      const context = scope.resolve(CORE_EXECUTION_CONTEXT_TOKEN);
+      const appIdentity = Object.freeze({});
+      const registry = createBoundRegistryFactory(
+        prepareRegistry(snapshotRegistry([], []), [], appIdentity),
+        context,
+        ownership,
+        (pool) => pool,
+      );
       const runtime = new TransactionRuntime(
-        scope.resolve(CORE_EXECUTION_CONTEXT_TOKEN),
+        context,
         scope.resolve(CORE_EXECUTION_OPERATIONS_TOKEN),
         ownership,
+        (session, authority) => registry.attach(session, authority),
+        () => scope.resolve(DATABASE_SESSION_TOKEN),
+        (pool) => ({ app: appIdentity, configuredPool: pool }),
       );
       return attempt(() =>
         runtime.run(fixture.pool, () => {

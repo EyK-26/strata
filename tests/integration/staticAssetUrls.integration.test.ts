@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, relative } from "node:path";
-import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
 import {
   type AppDependencies,
   type AppRouteMap,
@@ -12,20 +11,19 @@ import { createSpaRoutes } from "@getstrata/bootstrap/createSpaRoutes";
 import { createWebRoutes } from "@getstrata/bootstrap/createWebRoutes";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
-import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { LocalStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
+import { createMockDependencies } from "../unit/testHelpers";
 
 function dependencies(root: string): AppDependencies {
   const container = new ServiceContainer();
-  container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
-  return {
+  return createMockDependencies(
     container,
-    cache: new CacheRepository(new SimpleCacheStore(new SimpleCache())),
-    storage: new StorageManager(new LocalStorageDriver(root)),
-  };
+    new CacheRepository(new SimpleCacheStore(new SimpleCache())),
+    new StorageManager(new LocalStorageDriver(root)),
+  );
 }
 
 const filenames = [

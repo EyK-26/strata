@@ -4,10 +4,8 @@ import {
   createSamlServiceProvider,
   InMemorySamlAssertionReplayStore,
   readSamlEnvOptions,
-  resetSamlReplayCacheForTests,
   SamlServiceProvider,
   setNodeSamlLoaderForTests,
-  setSamlAssertionReplayStoreForTests,
 } from "@getstrata/core/auth/saml/samlServiceProvider";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 import { createSignedSamlResponse } from "../helpers/samlFixture";
@@ -38,13 +36,12 @@ function verifiedAssertion(id: string, confirmations: Confirmation[] = [validCon
   return { Assertion: { $: { ID: id }, Subject: [{ SubjectConfirmation: confirmations }] } };
 }
 
+let replayStore: InMemorySamlAssertionReplayStore;
 beforeEach(() => {
-  setSamlAssertionReplayStoreForTests(new InMemorySamlAssertionReplayStore());
+  replayStore = new InMemorySamlAssertionReplayStore();
 });
 
 afterEach(() => {
-  resetSamlReplayCacheForTests();
-  setSamlAssertionReplayStoreForTests(null);
   setNodeSamlLoaderForTests(null);
 });
 
@@ -58,6 +55,7 @@ describe("SamlProvider", () => {
   test("oauth helpers throw so callers use authorizationUrl and consumePost", async () => {
     const fixture = await createSignedSamlResponse();
     const provider = new SamlProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: fixture.cert,
@@ -116,7 +114,9 @@ describe("SamlServiceProvider", () => {
     process.env.SAML_ACS_URL = ACS;
     process.env.SAML_IDP_ISSUER = "https://idp.example.test/metadata";
     try {
-      expect(createSamlServiceProvider()).toBeInstanceOf(SamlServiceProvider);
+      expect(createSamlServiceProvider({ ...readSamlEnvOptions(), replayStore })).toBeInstanceOf(
+        SamlServiceProvider,
+      );
     } finally {
       restoreEnvVar("SAML_IDP_SSO_URL", previous.sso);
       restoreEnvVar("SAML_IDP_CERT", previous.cert);
@@ -161,6 +161,7 @@ describe("SamlServiceProvider", () => {
   test("authorizationUrl returns an IdP redirect", async () => {
     const fixture = await createSignedSamlResponse();
     const provider = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: fixture.cert,
@@ -175,6 +176,7 @@ describe("SamlServiceProvider", () => {
   test("consumePost rejects an empty response", async () => {
     const fixture = await createSignedSamlResponse();
     const provider = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: fixture.cert,
@@ -187,6 +189,7 @@ describe("SamlServiceProvider", () => {
   test("consumePost rejects an unsigned assertion", async () => {
     const fixture = await createSignedSamlResponse({ signed: false });
     const provider = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: fixture.cert,
@@ -199,6 +202,7 @@ describe("SamlServiceProvider", () => {
   test("consumePost rejects a wrong audience", async () => {
     const fixture = await createSignedSamlResponse({ audience: "https://other.example/metadata" });
     const provider = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: fixture.cert,
@@ -214,6 +218,7 @@ describe("SamlServiceProvider", () => {
       destination: ACS,
     });
     const provider = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: fixture.cert,
@@ -233,6 +238,7 @@ describe("SamlServiceProvider", () => {
       recipient: `${ACS}/other`,
     });
     const provider = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: fixture.cert,
@@ -249,6 +255,7 @@ describe("SamlServiceProvider", () => {
       recipient: ACS,
     });
     const provider = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: fixture.cert,
@@ -280,6 +287,7 @@ describe("SamlServiceProvider", () => {
       },
     }));
     const provider = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: "cert",
@@ -326,6 +334,7 @@ describe("SamlServiceProvider", () => {
       },
     }));
     const provider = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: "cert",
@@ -396,6 +405,7 @@ describe("SamlServiceProvider", () => {
       issuer: "https://evil.example/idp",
     });
     const provider = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: fixture.cert,
@@ -426,6 +436,7 @@ describe("SamlServiceProvider", () => {
       },
     }));
     const provider = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: "cert",
@@ -453,6 +464,7 @@ describe("SamlServiceProvider", () => {
       },
     }));
     const wrongIssuer = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: "cert",
@@ -472,6 +484,7 @@ describe("SamlServiceProvider", () => {
       },
     }));
     const loggedOut = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: "cert",
@@ -508,6 +521,7 @@ describe("SamlServiceProvider", () => {
     }));
     try {
       const provider = new SamlServiceProvider({
+        replayStore,
         idpSsoUrl: SSO,
         idpIssuer: IDP_ISSUER,
         idpCert: "cert",
@@ -545,6 +559,7 @@ describe("SamlServiceProvider", () => {
       },
     }));
     const fallback = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: "cert",
@@ -572,6 +587,7 @@ describe("SamlServiceProvider", () => {
       },
     }));
     const fromXml = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: "cert",
@@ -598,6 +614,7 @@ describe("SamlServiceProvider", () => {
       },
     }));
     const provider = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: "cert",
@@ -627,6 +644,7 @@ describe("SamlServiceProvider", () => {
       },
     }));
     const provider = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: "cert",
@@ -642,6 +660,7 @@ describe("SamlServiceProvider", () => {
     expect(
       () =>
         new SamlServiceProvider({
+          replayStore,
           idpSsoUrl: SSO,
           idpIssuer: "  ",
           idpCert: "cert",
@@ -656,6 +675,7 @@ describe("SamlServiceProvider", () => {
       throw Object.assign(new Error("Cannot find package"), { code: "ERR_MODULE_NOT_FOUND" });
     });
     const provider = new SamlServiceProvider({
+      replayStore,
       idpSsoUrl: SSO,
       idpIssuer: IDP_ISSUER,
       idpCert: "cert",
@@ -664,4 +684,113 @@ describe("SamlServiceProvider", () => {
     });
     await expect(provider.authorizationUrl("x")).rejects.toThrow("@node-saml/node-saml");
   });
+});
+
+test("explicit SAML replay dependency rejects missing/malformed values before loading the verifier", () => {
+  let loads = 0;
+  setNodeSamlLoaderForTests(async () => {
+    loads++;
+    throw new Error("must not load");
+  });
+  const config = {
+    idpSsoUrl: SSO,
+    idpCert: "certificate",
+    spEntityId: SP_ENTITY,
+    acsUrl: ACS,
+    idpIssuer: IDP_ISSUER,
+  };
+  for (const options of [
+    undefined,
+    config,
+    { ...config, replayStore: {} },
+    { ...config, replayStore: { consume: 1 } },
+  ]) {
+    expect(() => Reflect.construct(SamlServiceProvider, [options])).toThrow("explicit replayStore");
+  }
+  expect(loads).toBe(0);
+});
+
+test("SAML captures validation config and exact store method; explicit instances remain independent", async () => {
+  const fixture = await createSignedSamlResponse({
+    audience: SP_ENTITY,
+    destination: ACS,
+    issuer: IDP_ISSUER,
+  });
+  const original = new InMemorySamlAssertionReplayStore();
+  const options = {
+    idpSsoUrl: SSO,
+    idpCert: fixture.cert,
+    spEntityId: SP_ENTITY,
+    acsUrl: ACS,
+    idpIssuer: IDP_ISSUER,
+    wantAssertionsSigned: true,
+    wantAuthnResponseSigned: true,
+    replayStore: original,
+  };
+  const provider = new SamlServiceProvider(options);
+  options.idpIssuer = "https://attacker.invalid";
+  options.acsUrl = "https://attacker.invalid/acs";
+  options.wantAssertionsSigned = false;
+  options.wantAuthnResponseSigned = false;
+  options.replayStore = new InMemorySamlAssertionReplayStore();
+  original.consume = async () => {
+    throw new Error("replaced consume must not run");
+  };
+  expect((await provider.consumePost(fixture.responseB64)).email).toBeTruthy();
+  const unsigned = await createSignedSamlResponse({
+    audience: SP_ENTITY,
+    destination: ACS,
+    issuer: IDP_ISSUER,
+    cert: fixture.cert,
+    privateKey: fixture.privateKey,
+    signed: false,
+  });
+  await expect(provider.consumePost(unsigned.responseB64)).rejects.toThrow();
+  await expect(provider.consumePost(fixture.responseB64)).rejects.toThrow("replay");
+  const separate = new SamlServiceProvider({
+    idpSsoUrl: SSO,
+    idpCert: fixture.cert,
+    spEntityId: SP_ENTITY,
+    acsUrl: ACS,
+    idpIssuer: IDP_ISSUER,
+    replayStore: new InMemorySamlAssertionReplayStore(),
+  });
+  expect((await separate.consumePost(fixture.responseB64)).email).toBeTruthy();
+});
+
+test("public SAML exports retain explicit stores and retire ambient replay hooks", async () => {
+  for (const api of [
+    await import("@getstrata/core"),
+    await import("@getstrata/core/auth/saml/samlServiceProvider"),
+  ]) {
+    for (const name of [
+      "consumeSamlAssertion",
+      "setSamlAssertionReplayStoreForTests",
+      "resetSamlReplayCacheForTests",
+    ])
+      expect(Object.hasOwn(api, name)).toBe(false);
+    expect(typeof api.InMemorySamlAssertionReplayStore).toBe("function");
+  }
+});
+
+test("a supplied replay-store failure escapes the provider without replacement", async () => {
+  const fixture = await createSignedSamlResponse({
+    audience: SP_ENTITY,
+    destination: ACS,
+    issuer: IDP_ISSUER,
+  });
+  const failure = new Error("explicit replay store unavailable");
+  const provider = new SamlServiceProvider({
+    idpSsoUrl: SSO,
+    idpCert: fixture.cert,
+    spEntityId: SP_ENTITY,
+    acsUrl: ACS,
+    idpIssuer: IDP_ISSUER,
+    replayStore: {
+      consume: async () => {
+        throw failure;
+      },
+    },
+  });
+  await expect(provider.consumePost(fixture.responseB64)).rejects.toBe(failure);
 });

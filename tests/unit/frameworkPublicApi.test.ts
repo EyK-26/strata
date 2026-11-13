@@ -14,11 +14,13 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.indexBelongsToManyRelation).toBe("function");
   });
 
-  test("exports Model helpers for the active-record ORM", () => {
+  test("exports explicit bound Model definition helpers", () => {
     expect(typeof core.Model).toBe("function");
     expect(typeof core.defineModel).toBe("function");
-    expect(typeof core.bootModels).toBe("function");
-    expect(typeof core.registerModelRepository).toBe("function");
+    expect(typeof core.defineRepository).toBe("function");
+    expect(typeof core.createDatabaseBindings).toBe("function");
+    expect("bootModels" in core).toBe(false);
+    expect("registerModelRepository" in core).toBe(false);
     expect(typeof core.hydrateValue).toBe("function");
     expect(typeof core.filterMassAssignable).toBe("function");
     expect(typeof core.HasManyRelationQuery).toBe("function");
@@ -45,7 +47,7 @@ describe("@getstrata/core public API", () => {
   });
 
   test("exports membership lookup used by published bootstrap", () => {
-    expect(typeof core.resolveMembershipLookup).toBe("function");
+    expect(typeof core.resolveMembershipService).toBe("function");
     expect(typeof core.runWithMembershipContext).toBe("function");
   });
 
@@ -77,9 +79,6 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.FailedJobService).toBe("function");
     expect(typeof core.createStorageDriver).toBe("function");
     expect(typeof core.registerDefaultDatabasePool).toBe("function");
-    expect(typeof core.runInTransaction).toBe("function");
-    expect(typeof core.afterCommit).toBe("function");
-    expect(typeof core.requestTransactionRollback).toBe("function");
     expect(typeof core.getBoundDatabaseConnection).toBe("function");
     expect(typeof core.resetBoundDatabaseConnection).toBe("function");
     expect(typeof core.bindBunSql).toBe("function");
@@ -98,11 +97,28 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.createMysqlConnectionFromPool).toBe("function");
     expect(typeof core.loginRedirectLocation).toBe("function");
     expect(typeof core.assertSafeOutboundUrl).toBe("function");
-    expect(typeof core.dispatchModelEvent).toBe("function");
-    expect(typeof core.runWithDeferredModelEvents).toBe("function");
     expect(typeof core.webErrorResponse).toBe("function");
     expect(typeof core.renderWebErrorHtml).toBe("function");
     expect(typeof core.createMemoryLoginThrottleMiddleware).toBe("function");
     expect(typeof core.resolveLoginIdentity).toBe("function");
   });
+});
+
+test("root API excludes ambient owners while retaining canonical bindings and event utilities", () => {
+  for (const name of [
+    "afterCommit",
+    "hasActiveTransaction",
+    "isActiveTransactionConnection",
+    "requestTransactionRollback",
+    "runInTransaction",
+    "eventBus",
+    "readSharedEventBus",
+    "dispatchModelEvent",
+    "runWithDeferredModelEvents",
+    "onDeferredModelRollback",
+  ])
+    expect(name in core).toBe(false);
+  expect(typeof core.createDatabaseBindings).toBe("function");
+  expect(typeof core.EventBus).toBe("function");
+  expect(core.modelEventName("orders", "created")).toBe("orders.created");
 });

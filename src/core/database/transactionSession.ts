@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { mapDatabaseError, PersistenceError } from "@getstrata/core/database/errors";
+import { runWithTransactionLineage, type SessionOwnerIdentity } from "#strata-orm-internal";
 import type { ExecutionContext } from "../contracts/application";
 import type { ExecutionOperations } from "../contracts/executionOperations";
 import type { Joined, OwnedBoundary, OwnedExecution } from "../contracts/executionOwnership";
@@ -19,9 +20,11 @@ import type {
   Terminal,
   TransactionOptions,
 } from "./driverPorts";
+import type { BoundRegistry, SessionAuthority } from "./modelRegistry";
+import type { DatabaseSession } from "./session";
 import type { SqlDialect } from "./sqlDialects";
 
-interface TransactionSession {
+interface TransactionSession extends BoundRegistry {
   readonly dialect: SqlDialect;
   readonly capabilities: DatabaseCapabilities;
   execute<Row>(statement: SqlStatement): Promise<readonly Row[]>;
@@ -42,6 +45,14 @@ type Business<T> =
       childFailure: FailureTag | null;
       observers: readonly Observer[];
     }>;
+type RestoreHistory =
+  | {
+      readonly kind: "restore";
+      readonly restore: () => undefined;
+      consumed: boolean;
+      outerOnly: boolean;
+    }
+  | { readonly kind: "child"; readonly entries: RestoreHistory[] };
 type Branch = {
   readonly pool: RawPool;
   readonly raw: RawTransaction;
@@ -53,6 +64,8 @@ type Branch = {
   poison: FailureTag | null;
   childFailure: FailureTag | null;
   readonly observers: Observer[];
+  readonly restores: RestoreHistory[];
+  facade?: TransactionSession;
 };
 type Attempt<T> = {
   stage: DecisionStage<Business<T>>;
@@ -64,6 +77,7 @@ type Attempt<T> = {
   checkoutFailed: boolean;
   preAdmissionFailure?: FailureTag;
   branch?: Branch;
+  readonly restores: RestoreHistory[];
 };
 
 function rejected<T>(error: unknown): Promise<T> {
@@ -177,6 +191,12 @@ class TransactionRuntime {
     private readonly context: ExecutionContext,
     private readonly operations: ExecutionOperations,
     private readonly ownership: OwnedExecution,
+    private readonly attachRegistry: (
+      session: TransactionSession,
+      authority: SessionAuthority,
+    ) => BoundRegistry,
+    private readonly rootSession: (pool: RawPool) => DatabaseSession,
+    private readonly ownerForPool: (pool: RawPool) => SessionOwnerIdentity,
   ) {}
 
   assertOutside(): void {
@@ -198,7 +218,23 @@ class TransactionRuntime {
   }
 
   private facade(branch: Branch): TransactionSession {
+    if (branch.facade) return branch.facade;
+    let registry: BoundRegistry;
+    const assertActive = () => this.assertBranch(branch);
+    const run = <T>(work: () => T | Promise<T>): Promise<T> => {
+      try {
+        assertActive();
+        return this.operations.operation(() => {
+          assertActive();
+          return work();
+        });
+      } catch (error) {
+        return rejected(error);
+      }
+    };
     const session: TransactionSession = {
+      repository: (definition) => registry.repository(definition),
+      model: (definition) => registry.model(definition),
       dialect: branch.pool.dialect,
       capabilities: branch.pool.capabilities,
       execute: <Row>(input: SqlStatement) => {
@@ -256,7 +292,20 @@ class TransactionRuntime {
         branch.rollback = true;
       },
     };
-    return Object.freeze(session);
+    registry = this.attachRegistry(session, {
+      pool: branch.pool,
+      branch,
+      transactional: true,
+      assertActive,
+      run,
+      registerRestore: (restore) => {
+        assertActive();
+        branch.restores.push({ kind: "restore", restore, consumed: false, outerOnly: false });
+      },
+      root: () => this.rootSession(branch.pool),
+    });
+    branch.facade = Object.freeze(session);
+    return branch.facade;
   }
 
   private async business<T>(
@@ -275,6 +324,7 @@ class TransactionRuntime {
       poison: null,
       childFailure: null,
       observers: [],
+      restores: attempt.restores,
     };
     attempt.branch = branch;
     try {
@@ -287,7 +337,14 @@ class TransactionRuntime {
             branch.phase = "joining";
           }
         },
-        (invoke) => this.storage.run(branch, invoke),
+        (invoke) =>
+          this.storage.run(branch, () =>
+            runWithTransactionLineage(
+              this.ownerForPool(branch.pool),
+              () => branch.phase !== "terminal",
+              invoke,
+            ),
+          ),
       );
       return Object.freeze({
         kind: "joined",
@@ -312,6 +369,7 @@ class TransactionRuntime {
       nativeState: "idle",
       releaseAcknowledged: false,
       checkoutFailed: false,
+      restores: [],
     };
   }
 
@@ -457,11 +515,38 @@ class TransactionRuntime {
     throw new PersistenceError("DATABASE_TRANSACTION_FAILED", options);
   }
 
+  private markUnknown(entries: RestoreHistory[]): void {
+    for (const entry of entries) {
+      if (entry.kind === "child") this.markUnknown(entry.entries);
+      else entry.outerOnly = true;
+    }
+  }
+
+  private async restoreHistory(
+    task: OwnedBoundary,
+    entries: RestoreHistory[],
+    outer: boolean,
+  ): Promise<void> {
+    for (let index = entries.length - 1; index >= 0; index--) {
+      const entry = entries[index];
+      if (!entry) continue;
+      if (entry.kind === "child") await this.restoreHistory(task, entry.entries, outer);
+      else if (!entry.consumed && (outer || !entry.outerOnly)) {
+        entry.consumed = true;
+        await task.finalize(() => {
+          entry.restore();
+          return undefined;
+        });
+      }
+    }
+  }
+
   private async nested<T>(
     parent: Branch,
     work: (tx: TransactionSession) => T | Promise<T>,
   ): Promise<T> {
     const attempt = this.newAttempt<T>();
+    parent.restores.push({ kind: "child", entries: attempt.restores });
     const joined = await this.ownership.joined(async (task) => {
       await this.control(
         task,
@@ -470,6 +555,9 @@ class TransactionRuntime {
         (callback) => parent.raw.savepoint(callback),
         work,
       );
+      if (attempt.terminal?.data === "rolled-back")
+        await this.restoreHistory(task, attempt.restores, false);
+      else if (attempt.terminal?.data !== "released") this.markUnknown(attempt.restores);
     });
     const unsafe =
       !attempt.terminal ||
@@ -551,6 +639,8 @@ class TransactionRuntime {
             work,
             admission,
           );
+          if (attempt.terminal?.data === "rolled-back")
+            await this.restoreHistory(task, attempt.restores, true);
         });
         const value = this.result(attempt, joined, false);
         if (

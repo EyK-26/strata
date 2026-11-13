@@ -122,6 +122,8 @@ const neutralEdges: Readonly<
       "config/configSnapshot",
       "database/errors",
       "database/manager",
+      "database/ormInternal",
+      "database/modelRegistry",
       "database/rawMysql",
       "database/rawPostgres",
       "database/rawSqlite",
@@ -130,9 +132,12 @@ const neutralEdges: Readonly<
     ],
     types: ["contracts/application", "database/driverPorts"],
   },
-  [PATH("database/manager")]: { values: ["database/errors"], types: ["database/driverPorts"] },
+  [PATH("database/manager")]: {
+    values: ["database/errors"],
+    types: ["database/driverPorts", "database/ormInternal"],
+  },
   [PATH("database/sessionFactory")]: {
-    values: ["database/errors", "database/transactionSession"],
+    values: ["database/errors", "database/transactionSession", "database/modelRegistry"],
     types: [
       "contracts/application",
       "contracts/executionOperations",
@@ -140,20 +145,28 @@ const neutralEdges: Readonly<
       "database/driverPorts",
       "database/manager",
       "database/session",
+      "database/modelRegistry",
     ],
   },
   [PATH("database/session")]: {
     values: [],
-    types: ["database/driverPorts", "database/sqlDialects", "database/transactionSession"],
+    types: [
+      "database/driverPorts",
+      "database/sqlDialects",
+      "database/transactionSession",
+      "database/modelRegistry",
+    ],
   },
   [PATH("database/transactionSession")]: {
-    values: ["database/errors"],
+    values: ["database/errors", "database/ormInternal"],
     types: [
       "contracts/application",
       "contracts/executionOperations",
       "contracts/executionOwnership",
       "database/driverPorts",
       "database/sqlDialects",
+      "database/modelRegistry",
+      "database/session",
     ],
   },
   [PATH("database/tokens")]: {
@@ -172,7 +185,13 @@ const neutralEdges: Readonly<
   },
   [PATH("database/driverPorts")]: {
     values: [],
-    types: ["contracts/application", "database/acquisitionMetrics", "database/sqlDialects"],
+    types: [
+      "contracts/application",
+      "database/acquisitionMetrics",
+      "database/sqlDialects",
+      "database/definitions",
+      "contracts/token",
+    ],
   },
   [PATH("database/rawSqlite")]: {
     values: ["database/nativeTransactions", "database/sqlDialects"],
@@ -198,6 +217,180 @@ const neutralEdges: Readonly<
   [PATH("runtime/optionalPeer")]: { values: [], types: [] },
   [PATH("http/databaseError")]: { values: ["database/errors", "errors/http"], types: [] },
   [PATH("errors/http")]: { values: [], types: [] },
+
+  // M3b2 immutable definitions and the single private ORM runtime closure.
+  [PATH("database/definitions")]: {
+    values: ["contracts/token"],
+    types: [
+      "contracts/application",
+      "contracts/persistence",
+      "contracts/services",
+      "pagination/index",
+      "database/baseRepository",
+      "database/driverPorts",
+      "database/model",
+      "database/modelAttributes",
+      "database/modelQuery",
+      "database/relationQuery",
+      "database/repositoryQuery",
+      "database/session",
+      "database/sqlDialects",
+      "database/table",
+      "database/transactionSession",
+      "database/types",
+    ],
+  },
+  [PATH("database/modelRegistry")]: {
+    values: [
+      "contracts/services",
+      "contracts/token",
+      "database/definitions",
+      "database/ormInternal",
+      "database/ormRuntime",
+      "events/eventBusClass",
+      "tenant/scopedDatabasePolicy",
+    ],
+    types: [
+      "contracts/application",
+      "contracts/executionOwnership",
+      "database/driverPorts",
+      "database/session",
+      "database/transactionSession",
+    ],
+  },
+  [PATH("contracts/persistence")]: {
+    values: [],
+    types: ["contracts/application", "database/session"],
+  },
+  [PATH("tenant/scopedDatabasePolicy")]: {
+    values: ["database/ormInternal"],
+    types: [
+      "contracts/application",
+      "contracts/executionOwnership",
+      "contracts/persistence",
+      "database/session",
+    ],
+  },
+  [PATH("database/ormInternal")]: {
+    values: ["contracts/token", "database/errors"],
+    types: [
+      "contracts/executionOwnership",
+      "database/baseRepository",
+      "database/definitions",
+      "database/driverPorts",
+      "database/model",
+      "database/session",
+      "database/transactionSession",
+    ],
+  },
+  [PATH("database/ormRuntime")]: {
+    values: ["database/baseRepository", "database/repositoryQuery", "database/model"],
+    types: [],
+  },
+  [PATH("database/baseRepository")]: {
+    values: [
+      "database/errors",
+      "database/ormInternal",
+      "pagination/index",
+      "database/keyset",
+      "database/query",
+      "database/queryPlanSnapshot",
+      "database/relationQueries",
+      "database/relationships",
+      "database/repositoryQuery",
+    ],
+    types: [
+      "database/definitions",
+      "database/sqlDialects",
+      "database/table",
+      "database/types",
+      "database/whereBuilder",
+    ],
+  },
+  [PATH("database/model")]: {
+    values: [
+      "database/errors",
+      "errors/http",
+      "database/ormInternal",
+      "database/baseRepository",
+      "database/inflection",
+      "database/modelAttributes",
+      "database/modelQuery",
+      "database/query",
+      "database/queryPlanSnapshot",
+      "database/relationQuery",
+      "database/relationships",
+      "database/definitions",
+    ],
+    types: ["pagination/index", "database/repositoryQuery", "database/types"],
+  },
+  [PATH("auth/password")]: { values: [], types: [] },
+  [PATH("database/modelAttributes")]: { values: ["auth/password"], types: [] },
+  [PATH("database/modelQuery")]: {
+    values: [
+      "errors/http",
+      "database/ormInternal",
+      "database/model",
+      "database/modelAttributes",
+      "database/queryPlanSnapshot",
+      "database/repositoryQuery",
+    ],
+    types: [
+      "pagination/index",
+      "database/baseRepository",
+      "database/relationQuery",
+      "database/relationships",
+      "database/types",
+      "database/whereBuilder",
+    ],
+  },
+  [PATH("database/relationQuery")]: {
+    values: [
+      "database/ormInternal",
+      "database/baseRepository",
+      "database/model",
+      "database/pluck",
+      "database/query",
+      "database/queryPlanSnapshot",
+    ],
+    types: [
+      "database/relationships",
+      "database/repositoryQuery",
+      "database/sqlDialects",
+      "database/types",
+    ],
+  },
+  [PATH("database/repositoryQuery")]: {
+    values: [
+      "database/ormInternal",
+      "database/baseRepository",
+      "database/pluck",
+      "database/query",
+      "database/queryPlanSnapshot",
+      "database/relationships",
+      "database/whereBuilder",
+    ],
+    types: ["database/definitions", "pagination/index", "database/types"],
+  },
+  [PATH("database/queryPlanSnapshot")]: { values: ["database/definitions"], types: [] },
+  [PATH("database/relationships")]: { values: [], types: [] },
+  [PATH("database/keyset")]: {
+    values: [],
+    types: [
+      "pagination/index",
+      "database/sqlDialects",
+      "database/table",
+      "database/types",
+      "database/whereBuilder",
+    ],
+  },
+  [PATH("database/inflection")]: { values: [], types: [] },
+  [PATH("database/table")]: { values: [], types: ["database/types"] },
+  [PATH("database/types")]: { values: [], types: ["database/whereBuilder"] },
+  [PATH("database/whereBuilder")]: { values: [], types: ["database/types"] },
+  [PATH("database/pluck")]: { values: [], types: ["database/types"] },
+  [PATH("pagination/index")]: { values: [], types: [] },
+  [PATH("events/eventBusClass")]: { values: [], types: [] },
   // Legacy compatibility facade: preserve only its enumerated type debt, never runtime ownership.
   [PATH("contracts/serviceTokens")]: {
     values: ["contracts/token", "cache/tokens"],
@@ -212,6 +405,7 @@ const neutralEdges: Readonly<
 };
 const canonicalValues = new Set(
   [
+    "database/definitions",
     "contracts/token",
     "contracts/container",
     "contracts/services",
@@ -348,7 +542,12 @@ function dependencyEdge(tokens: Token[], index: number): DependencyEdge | undefi
     return undefined;
   return { path: specifier.value, typeOnly };
 }
+const privateAliases: Readonly<Record<string, string>> = {
+  "#strata-orm-internal": PATH("database/ormInternal"),
+  "#strata-orm-runtime": PATH("database/ormRuntime"),
+};
 function resolveEdge(file: string, edge: string): string | undefined {
+  if (Object.hasOwn(privateAliases, edge)) return privateAliases[edge];
   if (edge.startsWith("@getstrata/core/"))
     return PATH(edge.slice("@getstrata/core/".length).replace(/\.ts$/, ""));
   if (edge.startsWith(".")) {
@@ -358,9 +557,11 @@ function resolveEdge(file: string, edge: string): string | undefined {
   return undefined;
 }
 function allows(file: string, edge: DependencyEdge): boolean {
-  // Only the existing task owner and execution-local TransactionRuntime own propagation.
+  // Existing execution owners propagate context; the private ORM lineage is rejection-only.
   if (
-    [RUNTIME_PATH, PATH("database/transactionSession")].includes(file) &&
+    [RUNTIME_PATH, PATH("database/transactionSession"), PATH("database/ormInternal")].includes(
+      file,
+    ) &&
     edge.path === "node:async_hooks"
   )
     return true;
@@ -370,11 +571,26 @@ function allows(file: string, edge: DependencyEdge): boolean {
     [PATH("database/rawPostgres")]: edge.typeOnly ? ["bun"] : [],
   };
   if (nativeEdges[file]?.includes(edge.path)) return true;
+  if (
+    [
+      PATH("database/modelRegistry"),
+      PATH("database/model"),
+      PATH("database/modelAttributes"),
+    ].includes(file) &&
+    edge.path === "node:util"
+  )
+    return true;
   const rules = neutralEdges[file];
   const target = resolveEdge(file, edge.path);
   if (!rules || !target) return false;
   const allowed = edge.typeOnly ? [...rules.types, ...rules.values] : rules.values;
   if (!allowed.map(PATH).includes(target)) return false;
+  if (
+    !edge.typeOnly &&
+    Object.values(privateAliases).includes(target) &&
+    !Object.hasOwn(privateAliases, edge.path)
+  )
+    return false;
   // Pure public identity artifacts must stay external even when the owner is bundled.
   return edge.typeOnly || !canonicalValues.has(target) || edge.path.startsWith("@getstrata/core/");
 }
@@ -397,10 +613,12 @@ function checkApplicationBoundary(sources: ApplicationBoundarySources): Boundary
         message,
       });
     };
+    let executableImports: readonly { path: string; kind: string }[] = [];
     try {
       const emitted = transpiler.transformSync(source);
+      executableImports = transpiler.scan(source).imports;
       // Bun validates syntax and scans executable imports, including require and dynamic import.
-      for (const edge of transpiler.scan(source).imports) {
+      for (const edge of executableImports) {
         if (
           !(
             (edge.kind === "import-statement" &&
@@ -454,7 +672,15 @@ function checkApplicationBoundary(sources: ApplicationBoundarySources): Boundary
           tokens[index + 2]?.kind === SyntaxKind.StringLiteral &&
           tokens[index + 2]?.value === "mysql2/promise" &&
           tokens[index + 3]?.text === ")";
-        if (!mysqlPeer && (!edge || !allows(file, edge))) {
+        const erasedTypeImport =
+          next === "(" &&
+          tokens[index + 2]?.kind === SyntaxKind.StringLiteral &&
+          tokens[index + 3]?.text === ")" &&
+          allows(file, { path: tokens[index + 2]!.value, typeOnly: true }) &&
+          !executableImports.some(
+            (item) => item.path === tokens[index + 2]?.value && item.kind === "dynamic-import",
+          );
+        if (!mysqlPeer && !erasedTypeImport && (!edge || !allows(file, edge))) {
           report(
             token.start,
             file === CONTRACT_PATH ? "contract-value" : "dependency",
@@ -493,7 +719,20 @@ function checkApplicationBoundary(sources: ApplicationBoundarySources): Boundary
       // No scope analysis: banned names cannot be local bindings either. Labels/member names
       // are inert; shorthand/computed values are checked. Strings/comments are scanner tokens.
       const inertLabel = next === ":" && ["{", ",", ";", "readonly"].includes(previous ?? "");
+      // Password primitives are the sole Bun capability in this dependency-free leaf.
+      // Require the complete direct call: no aliases, computed members, or object escape.
+      const passwordCall =
+        file === PATH("auth/password") &&
+        token.text === "Bun" &&
+        !propertyAccess &&
+        next === "." &&
+        tokens[index + 2]?.text === "password" &&
+        tokens[index + 3]?.text === "." &&
+        ["hash", "verify"].includes(tokens[index + 4]?.text ?? "") &&
+        tokens[index + 5]?.text === "(" &&
+        previous !== "new";
       if (
+        !passwordCall &&
         tokenIsIdentifierOrKeyword(token.kind) &&
         AMBIENT_CAPABILITIES.has(token.value) &&
         !propertyAccess &&

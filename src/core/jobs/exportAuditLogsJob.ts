@@ -1,6 +1,5 @@
-import { exportPendingAuditLogs } from "../audit/exportAuditLogs";
 import { appLogger } from "../logging/logger";
-import { Job } from "../queue";
+import { Job, type JobContext } from "../queue";
 
 interface ExportAuditLogsPayload {
   reason?: string;
@@ -10,8 +9,17 @@ class ExportAuditLogsJob extends Job<ExportAuditLogsPayload> {
   override readonly maxAttempts = 2;
   override readonly backoffMs = 5_000;
 
-  override async handle(_payload: ExportAuditLogsPayload = {}): Promise<void> {
-    const exported = await exportPendingAuditLogs();
+  constructor(private readonly exporter?: () => Promise<number>) {
+    super();
+  }
+
+  override async handle(
+    _payload: ExportAuditLogsPayload = {},
+    context?: JobContext,
+  ): Promise<void> {
+    const exporter = this.exporter ?? context?.auditExport;
+    if (!exporter) throw new Error("Audit export requires an application-owned exporter.");
+    const exported = await exporter();
 
     if (exported > 0) {
       appLogger.info(`Exported ${exported} audit log entries to SIEM.`);

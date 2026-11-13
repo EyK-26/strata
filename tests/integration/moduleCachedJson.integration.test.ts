@@ -1,18 +1,14 @@
 import { expect, test } from "bun:test";
 import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
 import { buildWebModuleRoutes } from "@getstrata/bootstrap/buildWebModuleRoutes";
-import { CORE_AUTH_TOKEN, CORE_HTTP_CLEANUP_TOKEN } from "@getstrata/bootstrap/config";
-import {
-  type AppDependencies,
-  type AppModule,
-  ServiceContainer,
-} from "@getstrata/bootstrap/contracts";
-import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { CORE_HTTP_CLEANUP_TOKEN } from "@getstrata/bootstrap/config";
+import { type AppModule, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { LocalStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
 import { restoreEnvVar } from "../helpers/restoreEnv";
+import { createMockDependencies } from "../unit/testHelpers";
 
 async function withModuleServer(
   mode: "api" | "web",
@@ -26,13 +22,12 @@ async function withModuleServer(
   const cache = new CacheRepository(new SimpleCacheStore(new SimpleCache()));
   const cleanups: Array<() => void | Promise<void>> = [];
   const container = new ServiceContainer();
-  container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
   container.set(CORE_HTTP_CLEANUP_TOKEN, (cleanup) => cleanups.push(cleanup));
-  const dependencies: AppDependencies = {
+  const dependencies = createMockDependencies(
     container,
     cache,
-    storage: new StorageManager(new LocalStorageDriver()),
-  };
+    new StorageManager(new LocalStorageDriver()),
+  );
   const module: AppModule = {
     name: "cached-json-contract",
     ...(mode === "api" ? { routes } : { webRoutes: routes }),

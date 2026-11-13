@@ -53,7 +53,6 @@ const SUBPATHS = new Set([
   "database/seeders",
   "database/schema",
   "database/table",
-  "database/transaction",
   "errors/http",
   "events",
   "http",

@@ -86,6 +86,11 @@ test("production async queue drains actual resilient job execution", async () =>
   jobRegistry.register(name, () => new Pending());
   const queue = new ResilientQueue(
     {
+      runAttempt: (
+        _envelope: unknown,
+        context: import("@getstrata/core/queue").JobContext,
+        work: (context: import("@getstrata/core/queue").JobContext) => Promise<void>,
+      ) => work(context),
       recordFailure: async () => {
         throw new Error("unexpected failure");
       },

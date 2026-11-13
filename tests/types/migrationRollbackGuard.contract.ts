@@ -1,8 +1,8 @@
+import type { Migration, MigrationDownContext } from "@getstrata/core/database/migrations/types";
 import {
   guardMigrationRollback,
   type MigrationRollbackGuard,
-} from "@getstrata/core/database/migrations";
-import type { Migration, MigrationDownContext } from "@getstrata/core/database/migrations/types";
+} from "../../src/core/database/migrations/rollbackGuard";
 
 const guard: MigrationRollbackGuard = { hasHistory: async () => true, message: "Retain purchases" };
 const result: Promise<void> = guardMigrationRollback(undefined, guard);

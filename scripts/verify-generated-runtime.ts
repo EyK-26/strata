@@ -28,99 +28,116 @@ const mysql = args.includes("--mysql");
 assert.ok(!(sqlite && mysql), "Select only one generated database engine.");
 const columnTenancy = sqlite || mysql;
 const fixture = await createGeneratedSecurityApp(sqlite ? "sqlite" : mysql ? "mysql" : "postgres");
-const cli = join(fixture.app, "node_modules/@getstrata/cli/cli.ts");
-const env: Record<string, string | undefined> = {
-  ...process.env,
-  DATABASE_URL: fixture.runtimeUrl,
-  APP_DATABASE_URL: fixture.runtimeUrl,
-  MIGRATION_DATABASE_URL: fixture.migrationUrl,
-  APP_ENV: mysql ? "production" : "local",
-  APP_DEBUG: "false",
-  APP_NAME: "HiroApp",
-  APP_KEY_PREFIX: `runtime_${crypto.randomUUID()}`,
-  APP_URL: mysql ? "https://q01.example.test" : "http://localhost:3000",
-  API_PREFIX: "/api",
-  FRONTEND_MODE: "server-htmx",
-  TENANCY_DRIVER: columnTenancy ? "column" : "rls",
-  AUTH_DEV_HEADERS: "false",
-  FEATURE_API_TOKENS: "true",
-  FEATURE_MFA: "true",
-  FEATURE_EMAIL_VERIFICATION: "true",
-  FEATURE_SCIM: "true",
-  SCIM_BEARER_TOKEN: mysql ? "q01-scim-tenant-1" : "",
-  SCIM_TENANT_TOKENS: "1:q01-scim-tenant-1,2:q01-scim-tenant-2",
-  FEATURE_SAML: "false",
-  FEATURE_OAUTH: "false",
-  FEATURE_REGISTRATION: "true",
-  FEATURE_PUBLIC_READS: "false",
-  CACHE_DRIVER: checkHttp ? "redis" : (process.env.CACHE_DRIVER ?? "array"),
-  QUEUE_DRIVER: "sync",
-  MAIL_DRIVER: "log",
-  SESSION_SECRET: "generated-runtime-fixture-session-secret-32-characters",
-  JWT_SECRET: "generated-runtime-fixture-jwt-secret-32-characters",
-  TOKEN_HASH_PEPPER: "generated-runtime-fixture-pepper",
-  API_TOKEN_DEFAULT_EXPIRY_DAYS: "30",
-  KMS_ENCRYPTION_KEY: Buffer.alloc(32, 17).toString("base64"),
-  METRICS_TOKEN: crypto.randomUUID(),
-  PORT: "0",
-  HOST: "127.0.0.1",
-};
-delete env.DOGFOOD_APP;
-delete env.HIROAPP_TEST;
-delete env.STRATA_SCHEMA;
-if (mysql) {
-  for (const name of [
-    "MIGRATION_DATABASE_URL",
-    "MYSQL_OBSERVABILITY_ADMIN_URL",
-    "MYSQL_URL",
-    "RLS_TEST_DATABASE_URL",
-    "POSTGRES_PASSWORD",
-    "STRATA_APP_PASSWORD",
-    "ADMIN_API_TOKEN",
-    "MEMBER_API_TOKEN",
-  ])
-    delete env[name];
-}
-
-async function run(
-  args: string[],
-  options: { cwd?: string; env?: Record<string, string | undefined>; success?: boolean } = {},
-) {
-  const child = Bun.spawn([process.execPath, ...args], {
-    cwd: options.cwd ?? fixture.app,
-    env: options.env ?? env,
-    stdout: "pipe",
-    stderr: "pipe",
-    timeout: 60000,
-    killSignal: "SIGKILL",
-  });
-  const [code, out, err] = await Promise.all([
-    child.exited,
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-  ]);
-  const output = `${out}${err}`;
-  if (options.success !== false)
-    assert.equal(code, 0, `Generated CLI ${args[0]} failed:\n${output.slice(-8192)}`);
-  return { code, output };
-}
+const failures: unknown[] = [];
 let server: ReturnType<typeof Bun.spawn<"ignore", "pipe", "pipe">> | undefined;
-let streams: Promise<void>[] = [];
+let serverObservation: Promise<PromiseSettledResult<unknown>[]> | undefined;
 let diagnostic = "";
-async function capture(stream: ReadableStream<Uint8Array>) {
-  const reader = stream.getReader(),
-    decoder = new TextDecoder();
-  try {
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      diagnostic = (diagnostic + decoder.decode(value, { stream: true })).slice(-32768);
-    }
-  } finally {
-    reader.releaseLock();
-  }
+function throwFailures(errors: unknown[], message: string): void {
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) throw new AggregateError(errors, message);
 }
 try {
+  const cli = join(fixture.app, "node_modules/@getstrata/cli/cli.ts");
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    DATABASE_URL: fixture.runtimeUrl,
+    APP_DATABASE_URL: fixture.runtimeUrl,
+    MIGRATION_DATABASE_URL: fixture.migrationUrl,
+    APP_ENV: mysql ? "production" : "local",
+    APP_DEBUG: "false",
+    APP_NAME: "HiroApp",
+    APP_KEY_PREFIX: `runtime_${crypto.randomUUID()}`,
+    APP_URL: mysql ? "https://q01.example.test" : "http://localhost:3000",
+    API_PREFIX: "/api",
+    FRONTEND_MODE: "server-htmx",
+    TENANCY_DRIVER: columnTenancy ? "column" : "rls",
+    AUTH_DEV_HEADERS: "false",
+    FEATURE_API_TOKENS: "true",
+    FEATURE_MFA: "true",
+    FEATURE_EMAIL_VERIFICATION: "true",
+    FEATURE_SCIM: "true",
+    SCIM_BEARER_TOKEN: mysql ? "q01-scim-tenant-1" : "",
+    SCIM_TENANT_TOKENS: "1:q01-scim-tenant-1,2:q01-scim-tenant-2",
+    FEATURE_SAML: "false",
+    FEATURE_OAUTH: "false",
+    FEATURE_REGISTRATION: "true",
+    FEATURE_PUBLIC_READS: "false",
+    CACHE_DRIVER: checkHttp ? "redis" : (process.env.CACHE_DRIVER ?? "array"),
+    QUEUE_DRIVER: "sync",
+    MAIL_DRIVER: "log",
+    SESSION_SECRET: "generated-runtime-fixture-session-secret-32-characters",
+    JWT_SECRET: "generated-runtime-fixture-jwt-secret-32-characters",
+    TOKEN_HASH_PEPPER: "generated-runtime-fixture-pepper",
+    API_TOKEN_DEFAULT_EXPIRY_DAYS: "30",
+    KMS_ENCRYPTION_KEY: Buffer.alloc(32, 17).toString("base64"),
+    METRICS_TOKEN: crypto.randomUUID(),
+    PORT: "0",
+    HOST: "127.0.0.1",
+  };
+  delete env.DOGFOOD_APP;
+  delete env.HIROAPP_TEST;
+  delete env.STRATA_SCHEMA;
+  if (mysql) {
+    for (const name of [
+      "MIGRATION_DATABASE_URL",
+      "MYSQL_OBSERVABILITY_ADMIN_URL",
+      "MYSQL_URL",
+      "RLS_TEST_DATABASE_URL",
+      "POSTGRES_PASSWORD",
+      "STRATA_APP_PASSWORD",
+      "ADMIN_API_TOKEN",
+      "MEMBER_API_TOKEN",
+    ])
+      delete env[name];
+  }
+
+  async function run(
+    args: string[],
+    options: { cwd?: string; env?: Record<string, string | undefined>; success?: boolean } = {},
+  ) {
+    const child = Bun.spawn([process.execPath, ...args], {
+      cwd: options.cwd ?? fixture.app,
+      env: { ...(options.env ?? env) },
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 60000,
+      killSignal: "SIGKILL",
+    });
+    const results = await Promise.allSettled([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ] as const);
+    const errors = results.flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : [],
+    );
+    const [terminal, out, err] = results;
+    const output = `${out.status === "fulfilled" ? out.value : ""}${err.status === "fulfilled" ? err.value : ""}`;
+    if (options.success !== false && terminal.status === "fulfilled") {
+      try {
+        assert.equal(terminal.value, 0, `Generated CLI ${args[0]} failed:\n${output.slice(-8192)}`);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    throwFailures(errors, "Generated CLI exit/output collection failed.");
+    if (terminal.status !== "fulfilled" || out.status !== "fulfilled" || err.status !== "fulfilled")
+      throw new Error("Generated CLI channels did not settle successfully.");
+    return { code: terminal.value, output };
+  }
+  async function capture(stream: ReadableStream<Uint8Array>) {
+    const reader = stream.getReader(),
+      decoder = new TextDecoder();
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        diagnostic = (diagnostic + decoder.decode(value, { stream: true })).slice(-32768);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
   // Execute public APIs from the installed package outside this repo's TS path aliases.
   const outboundProbe = join(fixture.app, "acceptance-outbound.ts");
   await Bun.write(
@@ -169,38 +186,53 @@ console.log('Packed outbound consumers share resolver state, address pinning and
   await Bun.write(
     membershipProbe,
     `import assert from 'node:assert/strict';
-import {configureMembershipLookup,resetMembershipLookupForTests,runWithMembershipContext,currentOrganizationIds} from '@getstrata/core/auth/membershipContext';
-import {runWithAuthUser} from '@getstrata/core/auth/authContext';
+import {loadMembershipSnapshot,runWithMembershipContext,runWithMembershipSnapshot,currentOrganizationIds,currentOrgRole} from '@getstrata/core/auth/membershipContext';
 import {createMembershipMiddleware} from '@getstrata/core/auth/membershipMiddleware';
 import MembershipService from '@getstrata/core/auth/membershipService';
 const row=(user,org)=>({id:user,organization_id:org,user_id:user,role:'member',created_at:new Date(0)});
-function lookup(offset=0){return {
-  async listForUser(user){await Promise.resolve();return user===4?[row(user,7+offset)]:user===5?[row(user,9+offset)]:[];},
+const rowsA=[row(4,7),row(5,9)],rowsB=[row(4,107),row(5,109)];
+function lookup(rows){return Object.freeze({
+  async listForUser(user){await Promise.resolve();return rows.filter(item=>item.user_id===user);},
   async findMembership(user,org){return (await this.listForUser(user)).find(item=>item.organization_id===org)??null;},
-  async listForOrganization(){return [];},
+  async listForOrganization(org){return rows.filter(item=>item.organization_id===org);},
   async addMember(){throw new Error('not used');},async removeMember(){throw new Error('not used');},async updateMemberRole(){throw new Error('not used');}
-};}
-const original=lookup();
-const middleware=createMembershipMiddleware();
-const request=user=>runWithAuthUser({id:user,role:'member'},()=>middleware(new Request('https://app.example.test/member'),async()=>{await Promise.resolve();return Response.json(currentOrganizationIds());}));
-try{
-  configureMembershipLookup(original);
-  assert.deepEqual(await runWithAuthUser({id:4,role:'member'},()=>runWithMembershipContext(()=>currentOrganizationIds())),[7]);
-  assert.deepEqual(await (await request(4)).json(),[7],'Installed middleware must use the configured application lookup.');
-  assert.deepEqual(await new MembershipService().listOrganizationIdsForUser(4),[7],'Default installed service must use the configured application lookup.');
-  const simultaneous=await Promise.all([request(4),request(5),request(6)]);
-  assert.deepEqual(await Promise.all(simultaneous.map(response=>response.json())),[[7],[9],[]]);
-  assert.deepEqual(currentOrganizationIds(),[],'Membership context must be restored after requests.');
-  configureMembershipLookup(lookup(100));
-  assert.deepEqual(await (await request(4)).json(),[107],'Existing middleware must observe explicitly replaced lookup configuration.');
-  assert.deepEqual(await new MembershipService().listOrganizationIdsForUser(4),[107]);
-  assert.deepEqual(await new MembershipService(original).listOrganizationIdsForUser(4),[7],'Explicit constructor injection remains supported.');
-  configureMembershipLookup({...original,async listForUser(){throw new Error('lookup unavailable');}});
-  await assert.rejects(()=>request(4),/lookup unavailable/);
-  await assert.rejects(()=>new MembershipService().listOrganizationIdsForUser(4),/lookup unavailable/);
-  assert.deepEqual(currentOrganizationIds(),[]);
-}finally{resetMembershipLookupForTests();}
-console.log('Packed membership configuration, concurrent isolation, replacement, injection and errors passed.');
+});}
+const lookupA=lookup(rowsA),lookupB=lookup(rowsB);
+const serviceA=new MembershipService(lookupA),serviceB=new MembershipService(lookupB);
+assert.deepEqual(await serviceA.listOrganizationIdsForUser(4),[7]);
+assert.deepEqual(await serviceB.listOrganizationIdsForUser(4),[107]);
+assert.deepEqual(await serviceA.listOrganizationIdsForUser(5),[9]);
+const user=id=>({id,role:'member'});
+const [a4,a5,a6,b4]=await Promise.all([loadMembershipSnapshot(lookupA,user(4)),loadMembershipSnapshot(lookupA,user(5)),loadMembershipSnapshot(lookupA,user(6)),loadMembershipSnapshot(lookupB,user(4))]);
+assert.equal(Object.isFrozen(a4),true);assert.equal(Object.isFrozen(a4[0]),true);
+rowsA[0].organization_id=700;rowsA[0].role='owner';
+assert.deepEqual(await serviceA.listOrganizationIdsForUser(4),[700],'The injected lookup still reads its live rows; captured snapshots alone are immutable.');
+assert.deepEqual(a4,[{organization_id:7,role:'member'}]);
+function gate(){let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};}
+const enteredA=gate(),enteredB=gate();
+function request(snapshot,own,other){return createMembershipMiddleware(snapshot)(new Request('https://app.example.test/member'),async()=>{
+  const before=currentOrganizationIds();own?.resolve();if(other)await other.promise;await Promise.resolve();
+  assert.deepEqual(currentOrganizationIds(),before);return Response.json(currentOrganizationIds());
+});}
+const simultaneous=await Promise.all([request(a4,enteredA,enteredB),request(b4,enteredB,enteredA),request(a5),request(a6)]);
+assert.deepEqual(await Promise.all(simultaneous.map(response=>response.json())),[[7],[107],[9],[]]);
+assert.deepEqual(currentOrganizationIds(),[],'Pre-established snapshot middleware restores its own context; it does not own an Application.');
+await runWithMembershipSnapshot(a4,async()=>{
+  assert.deepEqual(currentOrganizationIds(),[7]);assert.equal(currentOrgRole(7),'member');
+  await runWithMembershipSnapshot(b4,async()=>{await Promise.resolve();assert.deepEqual(currentOrganizationIds(),[107]);});
+  assert.deepEqual(currentOrganizationIds(),[7]);
+});
+assert.deepEqual(currentOrganizationIds(),[]);
+assert.deepEqual(await runWithMembershipContext(lookupB,user(5),()=>currentOrganizationIds()),[109]);
+for(const reason of [new Error('lookup unavailable'),false]){
+  const failing=Object.freeze({...lookupA,async listForUser(){throw reason;}});
+  for(const work of [()=>loadMembershipSnapshot(failing,user(4)),()=>runWithMembershipContext(failing,user(4),()=>{throw new Error('must not enter failed snapshot');}),()=>new MembershipService(failing).listOrganizationIdsForUser(4)]){
+    let caught=false,actual;try{await work();}catch(error){caught=true;actual=error;}
+    assert.equal(caught,true);assert.equal(actual,reason,'Explicit lookup failures retain exact opaque identity.');
+    assert.deepEqual(currentOrganizationIds(),[]);
+  }
+}
+console.log('Packed explicit lookup/service injection and immutable pre-established membership snapshots passed overlapping users, restoration and exact failures (not Application ownership).');
 `,
   );
   await run([membershipProbe]);
@@ -360,15 +392,19 @@ console.log('Packed admission errors preserve exact contracts, no-store, denial 
   const probe = join(fixture.app, "acceptance-routes.ts");
   await Bun.write(
     probe,
-    `import {bootstrapApp} from './src/bootstrap/createApp.ts';
-import {closeDatabase} from './src/bootstrap/database.ts';
+    `import assert from 'node:assert/strict';
+import {bootstrapApp} from './src/bootstrap/createApp.ts';
 import {routeRegistry} from '@getstrata/bootstrap/routeRegistry';
 import {registerOpenApiRouteMap} from '@getstrata/bootstrap/buildModuleRoutes';
-const app=await bootstrapApp({migrate:false});try{
-registerOpenApiRouteMap(app.routes,[]);
-const routes=[...new Set(routeRegistry.list().filter(r=>!r.path.includes('*')).map(r=>r.method+' '+r.path.replace(/:([A-Za-z0-9_]+)/g,'{$1}')))].sort();
-await Bun.write('acceptance-routes.json',JSON.stringify(routes));
-}finally{try{await app.context.dispose();}finally{await closeDatabase();}}`,
+let app:Awaited<ReturnType<typeof bootstrapApp>>|undefined;const failures:unknown[]=[];
+try{
+  app=await bootstrapApp({migrate:false,mode:'command'});
+  registerOpenApiRouteMap(app.routes,[]);
+  const routes=[...new Set(routeRegistry.list().filter(r=>!r.path.includes('*')).map(r=>r.method+' '+r.path.replace(/:([A-Za-z0-9_]+)/g,'{$1}')))].sort();
+  await Bun.write('acceptance-routes.json',JSON.stringify(routes));
+}catch(error){failures.push(error);}
+if(app)try{const stopped=await app.application.stop({reason:'runtime inventory complete'});if(!stopped.successful)throw new Error('Runtime inventory owner did not stop cleanly',{cause:stopped});}catch(error){failures.push(error);}
+if(failures.length===1)throw failures[0];if(failures.length>1)throw new AggregateError(failures,'Runtime inventory and cleanup failed.');`,
   );
   await run([probe]);
   if (columnTenancy) {
@@ -377,20 +413,34 @@ await Bun.write('acceptance-routes.json',JSON.stringify(routes));
       data,
       `import assert from 'node:assert/strict';
 import {bootstrapApp} from './src/bootstrap/createApp.ts';
-import {getSql,closeDatabase} from './src/bootstrap/database.ts';
 import DefaultRepository,{BaseRepository} from '@getstrata/core/database/baseRepository';
+import {defineRepository} from '@getstrata/core/database/definitions';
 import {defineTable} from '@getstrata/core/database/table';
-const app=await bootstrapApp({migrate:false});try{
-assert.equal(DefaultRepository,BaseRepository);
+import {PersistenceError} from '@getstrata/core/database/errors';
+const tenants=defineRepository({name:'RuntimeAcceptanceTenant',table:defineTable<{id:number;slug:string},'id'>({name:'tenant',primaryKey:'id',columns:['id','slug']}),dependencies:[],create:binding=>new DefaultRepository(binding)});
+let app:Awaited<ReturnType<typeof bootstrapApp>>|undefined;const failures:unknown[]=[];
+function nativeDdlDenial(error:unknown):boolean{
+  if(error instanceof PersistenceError)return error.code==='DATABASE_OPERATION_FAILED'&&nativeDdlDenial(error.cause);
+  if(error instanceof AggregateError)return error.errors.length>0&&error.errors.every(nativeDdlDenial);
+  return error!==null&&typeof error==='object'&&'code' in error&&error.code==='ER_TABLEACCESS_DENIED_ERROR';
+}
+try{
+  app=await bootstrapApp({migrate:false,mode:'command',persistence:{repositories:[tenants]}});
+  assert.equal(DefaultRepository,BaseRepository);
+  const invoke=app.invoke;const envelope={kind:'command' as const,actor:{kind:'system' as const,policy:'fixture.runtime-data'}};
 ${
   mysql
-    ? `const [identity]=await getSql().unsafe('SELECT CURRENT_USER() AS account');assert.match(identity.account,/^q01_[a-f0-9]+@/);
-await assert.rejects(()=>getSql().unsafe('CREATE TABLE q01_forbidden_ddl (id INTEGER)'),{code:'ER_TABLEACCESS_DENIED_ERROR'});`
+    ? `await invoke(envelope,async({database})=>{const [identity]=await database.execute<{account:string}>({text:'SELECT CURRENT_USER() AS account',params:[]});assert.match(identity.account,/^q01_[a-f0-9]+@/);});
+await assert.rejects(()=>invoke(envelope,({database})=>database.execute({text:'CREATE TABLE q01_forbidden_ddl (id INTEGER)',params:[]})),nativeDdlDenial);`
     : ""
 }
-const tenants=new DefaultRepository(defineTable<{id:number;slug:string},'id'>({name:'tenant',primaryKey:'id',columns:['id','slug']}),getSql());
-const row=await tenants.create({slug:'q01-other'});assert.equal(row.id,2);
-}finally{try{await app.context.dispose();}finally{await closeDatabase();}}`,
+  await invoke(envelope,async({database})=>{
+    const repository=database.repository(tenants);const row=await repository.create({slug:'q01-other'});assert.equal(row.id,2);
+    const durable=await repository.findById(row.id);assert.equal(durable?.id,2);assert.equal(durable?.slug,'q01-other');
+  });
+}catch(error){failures.push(error);}
+if(app)try{const stopped=await app.application.stop({reason:'runtime tenant data complete'});if(!stopped.successful)throw new Error('Runtime data owner did not stop cleanly',{cause:stopped});}catch(error){failures.push(error);}
+if(failures.length===1)throw failures[0];if(failures.length>1)throw new AggregateError(failures,'Runtime data and cleanup failed.');`,
     );
     await run([data]);
   }
@@ -490,7 +540,11 @@ const row=await tenants.create({slug:'q01-other'});assert.equal(row.id,2);
       stdout: "pipe",
       stderr: "pipe",
     });
-    streams = [capture(server.stdout), capture(server.stderr)];
+    serverObservation = Promise.allSettled([
+      server.exited,
+      capture(server.stdout),
+      capture(server.stderr),
+    ]);
     const deadline = Date.now() + 30000;
     let origin: string | undefined;
     while (Date.now() < deadline) {
@@ -580,20 +634,45 @@ assert.equal(prometheusRegistry.getHttpRequestSummary().totalRequests,1);
       "Generated CLI start, health/readiness, authenticated metrics, login and WebView smoke passed.",
     );
   }
+} catch (error) {
+  failures.push(error);
 } finally {
-  try {
-    if (server) {
+  if (server) {
+    try {
       if (server.exitCode === null) server.kill("SIGTERM");
-      const timer = setTimeout(() => server?.kill("SIGKILL"), 15000);
-      try {
-        const code = await server.exited;
-        await Promise.all(streams);
-        assert.equal(code, 0, `Generated CLI did not drain cleanly: ${diagnostic}`);
-      } finally {
-        clearTimeout(timer);
-      }
+    } catch (error) {
+      failures.push(error);
     }
-  } finally {
+    const timer = setTimeout(() => {
+      try {
+        if (server?.exitCode === null) server.kill("SIGKILL");
+      } catch (error) {
+        failures.push(error);
+      }
+    }, 15000);
+    try {
+      if (!serverObservation)
+        failures.push(new Error("Generated server observation was not registered."));
+      const results = await (serverObservation ?? Promise.allSettled([server.exited]));
+      for (const result of results) if (result.status === "rejected") failures.push(result.reason);
+      const terminal = results[0];
+      if (terminal?.status === "fulfilled") {
+        try {
+          assert.equal(terminal.value, 0, `Generated CLI did not drain cleanly: ${diagnostic}`);
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+    } catch (error) {
+      failures.push(error);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  try {
     await fixture.close();
+  } catch (error) {
+    failures.push(error);
   }
 }
+throwFailures(failures, "Generated runtime verification and cleanup failed.");

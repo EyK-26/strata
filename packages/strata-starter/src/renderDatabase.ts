@@ -11,176 +11,37 @@ function driverName(database: DatabaseLayer): "pgsql" | "mysql" | "sqlite" {
 
 function renderDatabaseTs(layers: StarterLayers): string {
   const driver = driverName(layers.database);
-
-  if (layers.database === "sqlite") {
-    return `import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
-import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
-import { bindDatabaseConnection } from "@getstrata/core/database/boundConnection";
-import { registerDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
-import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
-import { useSqlDialect } from "@getstrata/core/database/dialect";
-
-export type SqlClient = {
-  unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
-  close?: () => Promise<void> | void;
-};
-
-let sql: SqlClient | null = null;
-
+  const filename =
+    layers.database === "sqlite"
+      ? `
 function sqliteFilename(url: string): string {
   const trimmed = url.trim();
-  if (trimmed === ":memory:" || trimmed === "sqlite::memory:") {
-    return ":memory:";
-  }
-  if (trimmed.startsWith("sqlite:")) {
-    return trimmed.slice("sqlite:".length).replace(/^\\/\\//, "") || "./storage/app.sqlite";
-  }
+  if (trimmed === ":memory:" || trimmed === "sqlite::memory:") return ":memory:";
+  if (trimmed.startsWith("sqlite:")) return trimmed.slice("sqlite:".length).replace(/^\\/\\//, "") || "./storage/app.sqlite";
   return trimmed || "./storage/app.sqlite";
 }
-
-function asSqlPool(client: SqlClient): SqlDatabaseConnection {
-  const tagged = async () => {
-    throw new Error(
-      "SQLite starter connections do not run tagged SQL. Keep TENANCY_DRIVER=none or use Postgres.",
-    );
-  };
-  return Object.assign(tagged, client) as SqlDatabaseConnection;
+`
+      : "";
+  const options =
+    layers.database === "sqlite"
+      ? `return Object.freeze({ driver: "sqlite", filename: sqliteFilename(url) });`
+      : `return Object.freeze({ driver: "${driver}", url${driver === "pgsql" ? ", max: 5" : ""} });`;
+  return `import type { DatabaseConnectionOptions, DatabaseSession, TransactionSession } from "@getstrata/core/database/session";
+${filename}
+/** Copy configuration once at composition; opening and closing belong to the Application. */
+export function databaseOptions(env: Readonly<Record<string, string | undefined>> = process.env): DatabaseConnectionOptions {
+  const url = env.APP_DATABASE_URL?.trim() || env.DATABASE_URL?.trim();
+  if (!url) throw new Error("DATABASE_URL is required");
+  ${options}
 }
 
-export function getSql(): SqlClient {
-  if (sql) {
-    return sql;
-  }
-
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error("DATABASE_URL is required");
-  }
-
-  useSqlDialect("${driver}");
-  const filename = sqliteFilename(url);
-  if (filename !== ":memory:") {
-    mkdirSync(dirname(filename), { recursive: true });
-  }
-  sql = createSqliteConnection(filename);
-  bindDatabaseConnection(sql);
-  registerDefaultDatabasePool(asSqlPool(sql));
-  return sql;
-}
-
-export async function pingDatabase(): Promise<boolean> {
+export async function pingDatabase(selected: DatabaseSession | TransactionSession): Promise<boolean> {
   try {
-    await getSql().unsafe("SELECT 1");
+    await selected.execute({ text: "SELECT 1", params: [] });
     return true;
   } catch {
     return false;
   }
-}
-
-export async function closeDatabase() {
-  if (sql?.close) {
-    await sql.close();
-  }
-  sql = null;
-}
-`;
-  }
-
-  if (layers.database === "mysql") {
-    return `import { bindDatabaseConnection } from "@getstrata/core/database/boundConnection";
-import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
-import { registerDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
-import { createMysqlConnection } from "@getstrata/core/database/mysqlConnection";
-import { useSqlDialect } from "@getstrata/core/database/dialect";
-
-export type SqlClient = {
-  unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
-  close?: () => Promise<void> | void;
-};
-
-let sql: SqlClient | null = null;
-
-export function getSql(): SqlClient {
-  if (sql) {
-    return sql;
-  }
-
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error("DATABASE_URL is required");
-  }
-
-  useSqlDialect("${driver}");
-  sql = createMysqlConnection(url);
-  bindDatabaseConnection(sql);
-  registerDefaultDatabasePool(sql as SqlDatabaseConnection);
-  return sql;
-}
-
-export async function pingDatabase(): Promise<boolean> {
-  try {
-    await getSql().unsafe("SELECT 1");
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export async function closeDatabase() {
-  if (sql?.close) {
-    await sql.close();
-  }
-  sql = null;
-}
-`;
-  }
-
-  return `import { createBunSqlPool } from "@getstrata/core/database/bunSql";
-import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
-import { bindDatabaseConnection } from "@getstrata/core/database/boundConnection";
-import {
-  getDefaultDatabaseQuery,
-  registerDefaultDatabasePool,
-} from "@getstrata/core/database/defaultConnection";
-import { useSqlDialect } from "@getstrata/core/database/dialect";
-
-export type SqlClient = SqlDatabaseConnection;
-
-let sql: SqlClient | null = null;
-
-export function getSql(): SqlClient {
-  if (sql) {
-    return sql;
-  }
-
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error("DATABASE_URL is required");
-  }
-
-  useSqlDialect("${driver}");
-  const pool = createBunSqlPool({ url, max: 5 }) as SqlDatabaseConnection;
-  registerDefaultDatabasePool(pool);
-  bindDatabaseConnection(getDefaultDatabaseQuery());
-  sql = getDefaultDatabaseQuery();
-  return sql;
-}
-
-export async function pingDatabase(): Promise<boolean> {
-  try {
-    await getSql().unsafe("SELECT 1");
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export async function closeDatabase() {
-  if (sql?.close) {
-    await sql.close();
-  }
-  sql = null;
 }
 `;
 }

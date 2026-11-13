@@ -3,9 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
-import { resetBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
-import { resetDefaultDatabasePoolForTests } from "@getstrata/core/database/defaultConnection";
-import { resetSqlDialect } from "@getstrata/core/database/dialect";
+import type { ExecutionPersistence } from "@getstrata/core/contracts/persistence";
 import { generateTotp, generateTotpSecret } from "@getstrata/core/security/totp";
 import {
   generateProject,
@@ -22,6 +20,8 @@ import { appTest, installGeneratedAppDependencies, repoRoot } from "./helpers";
 const tempDirectories: string[] = [];
 const ENV_KEYS = [
   "DATABASE_URL",
+  "APP_DATABASE_URL",
+  "APP_URL",
   "APP_ENV",
   "FRONTEND_MODE",
   "AUTH_DEV_HEADERS",
@@ -46,9 +46,6 @@ function restoreRuntime(): void {
       process.env[key] = value;
     }
   }
-  resetSqlDialect();
-  resetBoundDatabaseConnection();
-  resetDefaultDatabasePoolForTests();
   resetDiscoverModulesForTests();
 }
 
@@ -128,20 +125,29 @@ describe("starter security flows", () => {
       "--yes",
     ]);
     const scim = await readFile(join(app, "src/modules/scim/index.ts"), "utf8");
-    expect(scim).toContain("User.where({ email, tenant_id: tenantId() }).first()");
-    expect(scim).toContain("User.where({ tenant_id: tenantId() }).count()");
     expect(scim).toContain(
-      "User.where({ tenant_id: tenantId() }).offset(startIndex - 1).limit(count).get()",
+      "ports.database.model(User).where({ email, tenant_id: tenantId(ports) }).first()",
     );
-    expect(scim).toContain("User.where({ id, tenant_id: tenantId() }).first()");
+    expect(scim).toContain(
+      "ports.database.model(User).where({ tenant_id: tenantId(ports) }).count()",
+    );
+    expect(scim).toContain(
+      "ports.database.model(User).where({ tenant_id: tenantId(ports) }).offset(startIndex - 1).limit(count).get()",
+    );
+    expect(scim).toContain(
+      "ports.database.model(User).where({ id, tenant_id: tenantId(ports) }).first()",
+    );
     expect(scim).toContain("parsePositiveIntParam");
-    expect(scim).toContain("User.create({");
-    expect(scim).toContain("tenant_id: tenantId()");
+    expect(scim).toContain("ports.database.model(User).create({");
+    expect(scim).toContain("tenant_id: tenantId(ports)");
     expect(scim).not.toContain("FROM users");
     expect(scim).not.toContain("INTO users");
     expect(scim).not.toMatch(/SELECT id, name, email FROM users"/);
     expect(await readFile(join(app, "src/modules/auth/index.ts"), "utf8")).toContain(
-      "FEATURE_REGISTRATION",
+      "authServices.config.registrationEnabled",
+    );
+    expect(await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8")).toContain(
+      '(env.FEATURE_REGISTRATION ?? "true") !== "false"',
     );
     expect(await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8")).toContain(
       "auth_one_time_tokens",
@@ -167,6 +173,7 @@ describe("starter security flows", () => {
     await installWorkspaceApp(app);
     process.chdir(app);
     process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
+    process.env.APP_DATABASE_URL = "sqlite:./storage/app.sqlite";
     process.env.APP_ENV = "local";
     process.env.FRONTEND_MODE = "server-htmx";
     process.env.TENANCY_DRIVER = "column";
@@ -180,13 +187,18 @@ describe("starter security flows", () => {
     process.env.MAIL_DRIVER = "log";
     process.env.FEATURE_REGISTRATION = "true";
 
-    const { bootstrapApp, createAppServer } = await import(
-      `${join(app, "src/bootstrap/createApp.ts")}`
-    );
-    const { closeDatabase, getSql } = await import(`${join(app, "src/bootstrap/database.ts")}`);
-    const { routes } = await bootstrapApp();
+    const { bootstrapApp } = await import(`${join(app, "src/bootstrap/createApp.ts")}`);
+    async function startHttp() {
+      const probe = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response(null) });
+      const port = probe.port;
+      await probe.stop(true);
+      process.env.APP_URL = `http://127.0.0.1:${port}`;
+      return bootstrapApp({ mode: "http", server: { port, native: { hostname: "127.0.0.1" } } });
+    }
+    const boot = await startHttp();
     await (await import(join(app, "src/db/migrate.ts"))).seed();
-    const server = createAppServer(routes, 0, undefined, { hostname: "127.0.0.1" });
+    const server = boot.server;
+    if (!server) throw new Error("Expected application-owned HTTP server");
     const origin = `http://127.0.0.1:${server.port}`;
 
     try {
@@ -222,22 +234,36 @@ describe("starter security flows", () => {
       expect(allowed.status).toBe(302);
 
       process.env.FEATURE_REGISTRATION = "false";
-      const register = await fetch(`${origin}/register`);
-      expect(register.status).toBe(404);
-      const apiRegister = await fetch(`${origin}/api/v1/auth/register`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: "A", email: "a@example.com", password: "long-password" }),
-      });
-      expect(apiRegister.status).toBe(403);
-      const registerCsrf = await jsonCsrfHeaders(origin);
-      const apiRegisterWithCsrf = await fetch(`${origin}/api/v1/auth/register`, {
-        method: "POST",
-        headers: registerCsrf.headers,
-        body: JSON.stringify({ name: "A", email: "a@example.com", password: "long-password" }),
-      });
-      expect(apiRegisterWithCsrf.status).toBe(404);
-      process.env.FEATURE_REGISTRATION = "true";
+      // The admitted app retains its captured config; the alternate app captures the new flag.
+      expect((await fetch(`${origin}/register`)).status).toBe(200);
+      const disabled = await startHttp();
+      const disabledServer = disabled.server;
+      if (!disabledServer) throw new Error("Expected disabled-registration HTTP server");
+      const disabledOrigin = `http://127.0.0.1:${disabledServer.port}`;
+      try {
+        const register = await fetch(`${disabledOrigin}/register`);
+        expect(register.status).toBe(404);
+        const apiRegister = await fetch(`${disabledOrigin}/api/v1/auth/register`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: "A", email: "a@example.com", password: "long-password" }),
+        });
+        expect(apiRegister.status).toBe(403);
+        const registerCsrf = await jsonCsrfHeaders(disabledOrigin);
+        const apiRegisterWithCsrf = await fetch(`${disabledOrigin}/api/v1/auth/register`, {
+          method: "POST",
+          headers: registerCsrf.headers,
+          body: JSON.stringify({ name: "A", email: "a@example.com", password: "long-password" }),
+        });
+        expect(apiRegisterWithCsrf.status).toBe(404);
+      } finally {
+        expect(
+          (await disabled.application.stop({ reason: "registration scenario complete" }))
+            .successful,
+        ).toBe(true);
+        process.env.APP_URL = origin;
+        process.env.FEATURE_REGISTRATION = "true";
+      }
 
       expect((await fetch(`${origin}/scim/v2/Users`)).status).toBe(401);
       expect(
@@ -249,10 +275,14 @@ describe("starter security flows", () => {
       ).toBe(401);
 
       const secret = generateTotpSecret();
-      await getSql().unsafe("UPDATE users SET mfa_enabled = 1, mfa_secret = ? WHERE email = ?", [
-        secret,
-        "demo@example.com",
-      ]);
+      await boot.invoke(
+        { kind: "command", actor: { kind: "system", policy: "fixture.enable-mfa" } },
+        ({ database }: ExecutionPersistence) =>
+          database.execute({
+            text: "UPDATE users SET mfa_enabled = 1, mfa_secret = ? WHERE email = ?",
+            params: [secret, "demo@example.com"],
+          }),
+      );
       const loginCsrf = await jsonCsrfHeaders(origin);
       const withoutMfa = await fetch(`${origin}/api/v1/auth/login`, {
         method: "POST",
@@ -305,8 +335,9 @@ describe("starter security flows", () => {
         htmlWithoutMfa.headers.getSetCookie().some((item) => item.includes("strata_mfa_pending")),
       ).toBe(true);
     } finally {
-      server.stop();
-      await closeDatabase();
+      expect(
+        (await boot.application.stop({ reason: "security fixture complete" })).successful,
+      ).toBe(true);
     }
   });
 });

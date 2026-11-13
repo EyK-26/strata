@@ -1,5 +1,4 @@
 import { RedisClient } from "bun";
-import type FailedJobService from "./failedJobService";
 import type { Job, Queue } from "./index";
 import { jobRegistry } from "./jobRegistry";
 import { parseQueueJobEnvelope, type QueueJobEnvelope, runQueueJob } from "./jobRunner";
@@ -7,6 +6,7 @@ import {
   readQueueVisibilityMs as readVisibilityMs,
   resolveRedisQueueTransport,
 } from "./queueConfig";
+import type { QueueServices } from "./queueServices";
 import {
   POLL_LIST_PRIORITIES,
   RECLAIM_JOBS,
@@ -200,7 +200,7 @@ class QueueWorker {
 
   constructor(
     private readonly redisUrl: string,
-    private readonly failedJobs: FailedJobService,
+    private readonly failedJobs: Pick<QueueServices, "recordFailure" | "runAttempt">,
     private readonly timeoutSeconds = 5,
     private readonly queueKeys: readonly string[] = QUEUE_KEYS,
   ) {

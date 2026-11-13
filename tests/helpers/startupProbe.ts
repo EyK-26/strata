@@ -1,5 +1,5 @@
 /** Shared installation of the normal module used by opt-in and mandatory startup probes. */
-import { copyFile, mkdir, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 export const STARTUP_PROBE_OPTIONS = [
   "--frontend=api",
@@ -26,6 +26,20 @@ export async function installStartupProbe(app: string) {
     join(directory, "index.ts"),
     'export { default } from "../../qualification/module.ts";\n',
     { flag: "wx" },
+  );
+  // Observe the original entrypoint owner through its existing public option. This is
+  // test-only instrumentation; the real generated server and lifecycle still execute.
+  const entrypoint = join(app, "src/bootstrap/server.ts");
+  const original = await readFile(entrypoint, "utf8");
+  if (!original.includes("await createAppServer();"))
+    throw new Error("Startup probe expected the canonical generated server entrypoint");
+  await writeFile(
+    entrypoint,
+    'import { captureOwner } from "../qualification/state.ts";\n' +
+      original.replace(
+        "await createAppServer();",
+        "await createAppServer({ onConstructed: captureOwner });",
+      ),
   );
   return target;
 }

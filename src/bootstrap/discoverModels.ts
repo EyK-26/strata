@@ -1,9 +1,9 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { bootModels, Model } from "@getstrata/core/database/model";
+import { type AnyModelDefinition, assertDefinition } from "@getstrata/core/database/definitions";
 
-/** Import trusted application model modules, then bind and boot their exported classes. */
+/** Import trusted application model modules, then collect their immutable exported definitions. */
 interface DiscoverModelsOptions {
   /** Startup orchestration files are not model modules; avoids importing the awaiting caller. */
   exclude?: readonly string[];
@@ -12,7 +12,7 @@ interface DiscoverModelsOptions {
 async function discoverModels(
   directory = join(process.cwd(), "src", "models"),
   options: DiscoverModelsOptions = {},
-): Promise<object[]> {
+): Promise<AnyModelDefinition[]> {
   const excluded = new Set([
     "register.ts",
     "register.js",
@@ -20,7 +20,7 @@ async function discoverModels(
     "index.js",
     ...(options.exclude ?? []),
   ]);
-  const models = new Set<object>();
+  const models = new Set<AnyModelDefinition>();
   async function visit(path: string): Promise<void> {
     const entries = await readdir(path, { withFileTypes: true });
     entries.sort((a, b) => a.name.localeCompare(b.name));
@@ -35,14 +35,20 @@ async function discoverModels(
       ) {
         const exports = await import(pathToFileURL(file).href);
         for (const value of Object.values(exports)) {
-          if (typeof value === "function" && value.prototype instanceof Model) models.add(value);
+          if (
+            value &&
+            typeof value === "object" &&
+            Object.getOwnPropertyDescriptor(value, "kind")?.value === "model"
+          ) {
+            assertDefinition(value, "model");
+            models.add(value);
+          }
         }
       }
     }
   }
   await visit(directory);
   const result = [...models];
-  bootModels(result);
   return result;
 }
 

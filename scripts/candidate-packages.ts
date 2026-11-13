@@ -9,20 +9,66 @@ type Part = (typeof PARTS)[number];
 type Archive = { file: string; sha256: string; manifestSha256: string };
 type ArchiveManifest = { version: 1; root: string; archives: Record<Part, Archive> };
 const digest = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
+type PackChild = ReturnType<typeof Bun.spawn<"ignore", "pipe", "pipe">>;
+
+/** A rejected exit observer leaves this exact packer/destination owned, not cleaned. */
+export class CandidatePackageOwnershipError extends AggregateError {
+  readonly disposition = "unresolved";
+  readonly pid: number;
+  readonly #child: PackChild;
+  constructor(
+    errors: unknown[],
+    readonly destination: string,
+    child: PackChild,
+  ) {
+    super(errors, "Candidate pack termination is unconfirmed; destination retained.");
+    this.pid = child.pid;
+    this.#child = child;
+  }
+  requestStop(): void {
+    this.#child.kill("SIGTERM");
+  }
+}
 
 async function packCandidate(part: Part, destination: string): Promise<string> {
   const child = Bun.spawn(["npm", "pack", "--silent", "--pack-destination", destination], {
     cwd: join(ROOT, `packages/strata-${part}`),
+    stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
     timeout: 30000,
   });
-  const [stdout, stderr, exitCode] = await Promise.all([
+  // Packing may already be writing into a fixture directory: join exit and BOTH
+  // streams even if one observer fails before allowing its caller to remove it.
+  const stopErrors: unknown[] = [];
+  const exited = child.exited.catch((reason) => {
+    try {
+      child.kill("SIGTERM");
+    } catch (error) {
+      stopErrors.push(error);
+    }
+    throw reason;
+  });
+  const results = await Promise.allSettled([
     new Response(child.stdout).text(),
     new Response(child.stderr).text(),
-    child.exited,
-  ]);
-  assert.equal(exitCode, 0, `Candidate ${part} pack failed: ${stdout}\n${stderr}`);
+    exited,
+  ] as const);
+  const errors = results.flatMap((result) => (result.status === "rejected" ? [result.reason] : []));
+  errors.push(...stopErrors);
+  const [out, err, terminal] = results;
+  const stdout = out.status === "fulfilled" ? out.value : "";
+  const stderr = err.status === "fulfilled" ? err.value : "";
+  if (terminal.status === "rejected")
+    throw new CandidatePackageOwnershipError(errors, destination, child);
+  if (terminal.status === "fulfilled")
+    try {
+      assert.equal(terminal.value, 0, `Candidate ${part} pack failed: ${stdout}\n${stderr}`);
+    } catch (error) {
+      errors.push(error);
+    }
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) throw new AggregateError(errors, `Candidate ${part} packing failed.`);
   const file = stdout.trim().split("\n").at(-1);
   assert.ok(file && file === basename(file) && file.endsWith(".tgz"), `Invalid ${part} tarball`);
   return join(destination, file);

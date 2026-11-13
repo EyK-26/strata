@@ -1,31 +1,35 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { startInProcessCronIfEnabled, stopInProcessCron } from "../../src/bootstrap/inProcessCron";
-import { restoreEnvVar } from "../helpers/restoreEnv";
+import { createApplication } from "@getstrata/core/runtime/application";
+import { Schedule } from "@getstrata/core/scheduler/schedule";
+import { createInProcessCronResource } from "../../src/bootstrap/inProcessCron";
 
 describe("inProcessCron bootstrap", () => {
-  test("starts and stops when SCHEDULER_DRIVER=in-process-cron", async () => {
-    const previous = process.env.SCHEDULER_DRIVER;
-    process.env.SCHEDULER_DRIVER = "in-process-cron";
-
-    try {
-      startInProcessCronIfEnabled();
-      startInProcessCronIfEnabled();
-      stopInProcessCron();
-    } finally {
-      restoreEnvVar("SCHEDULER_DRIVER", previous);
-    }
+  test("native cron start/stop follows one canonical application owner", async () => {
+    const descriptor = createInProcessCronResource(new Schedule(), {
+      coordination: "single-runner",
+      redisUrl: "",
+      namespace: "test:schedule",
+    });
+    const app = createApplication({
+      providers: [
+        {
+          name: "cron",
+          async setup(scope) {
+            await scope.acquire(descriptor);
+          },
+        },
+      ],
+    });
+    expect(app.state.phase).toBe("constructed");
+    const first = app.start();
+    expect(app.start()).toBe(first);
+    await first;
+    const stopped = await app.stop();
+    expect(stopped.successful).toBe(true);
+    expect(await app.stop()).toBe(stopped);
   });
-
-  test("no-ops for other scheduler drivers", () => {
-    const previous = process.env.SCHEDULER_DRIVER;
-    process.env.SCHEDULER_DRIVER = "external";
-
-    try {
-      expect(() => startInProcessCronIfEnabled()).not.toThrow();
-      stopInProcessCron();
-    } finally {
-      restoreEnvVar("SCHEDULER_DRIVER", previous);
-    }
+  test("cron refuses implicit coordination or namespace before native acquisition", () => {
+    expect(() => createInProcessCronResource(new Schedule(), {})).toThrow("must be explicit");
   });
 });
 

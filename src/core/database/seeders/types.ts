@@ -1,5 +1,5 @@
 interface SeederDatabase {
-  unsafe(query: string): Promise<unknown>;
+  unsafe(query: string, params?: readonly unknown[]): Promise<unknown>;
 }
 
 interface Seeder {

@@ -1,11 +1,16 @@
 import { requestPrefersJson } from "@getstrata/core/http/contentNegotiation";
 import type { RouteHandler } from "@getstrata/core/http/middleware";
-import { withErrorHandling } from "@getstrata/core/http/response";
 import type { RouteRequest } from "@getstrata/core/http/route";
+import type { ComposedRouteHandler } from "#strata-http-route";
+import { identityModes, scimMiddleware } from "#strata-http-route";
 import type { AppDependencies } from "../contracts.ts";
-import { securedBindRouteModelByKey } from "../http/securedRouteModelBinding.ts";
+import {
+  type RouteModelBindingPorts,
+  securedBindRouteModelByKey,
+} from "../http/securedRouteModelBinding.ts";
 import type { HttpKernel } from "../httpKernel.ts";
 import { createHttpKernel } from "../httpKernel.ts";
+import type { BusinessRequestPorts, BusinessRouteHandler } from "../persistenceContracts";
 
 /** Read Bun native `:param` values from a route handler request. */
 export function routeParams(request: Request): Record<string, string> {
@@ -53,10 +58,9 @@ export function wrapSecuredRouteModelByKey<
     etag?: boolean;
   },
   handler: (request: RouteRequest<TParams>, model: TModel) => Response | Promise<Response>,
+  ports: RouteModelBindingPorts,
 ): RouteHandler {
-  const bound = withErrorHandling(
-    securedBindRouteModelByKey(param, resolver, authorization, handler),
-  );
+  const bound = securedBindRouteModelByKey(param, resolver, authorization, handler, ports);
 
   return async (request) => bound(toRouteRequest<TParams>(request));
 }
@@ -64,36 +68,41 @@ export function wrapSecuredRouteModelByKey<
 /** Web group (CSRF + flash + HTML errors) plus login throttle. Do not wrap with wrapWeb again. */
 export function wrapWebLogin<TRequest extends Request = Request>(
   kernel: HttpKernel,
-  handler: RouteHandler<TRequest>,
-  onThrottled: (request: TRequest) => Response | Promise<Response>,
-): RouteHandler<TRequest> {
+  handler: BusinessRouteHandler<TRequest>,
+  onThrottled: (request: TRequest, ports: BusinessRequestPorts) => Response | Promise<Response>,
+): ComposedRouteHandler<TRequest> {
   return kernel.wrapWeb(wrapWebThrottle(kernel, "login", handler, onThrottled));
 }
 
 /** Web group (CSRF + flash + HTML errors) plus register throttle. Do not wrap with wrapWeb again. */
 export function wrapWebRegister<TRequest extends Request = Request>(
   kernel: HttpKernel,
-  handler: RouteHandler<TRequest>,
-  onThrottled: (request: TRequest) => Response | Promise<Response>,
-): RouteHandler<TRequest> {
+  handler: BusinessRouteHandler<TRequest>,
+  onThrottled: (request: TRequest, ports: BusinessRequestPorts) => Response | Promise<Response>,
+): ComposedRouteHandler<TRequest> {
   return kernel.wrapWeb(wrapWebThrottle(kernel, "register", handler, onThrottled));
 }
 
 function wrapWebThrottle<TRequest extends Request = Request>(
   kernel: HttpKernel,
   scope: "login" | "register",
-  handler: RouteHandler<TRequest>,
-  onThrottled: (request: TRequest) => Response | Promise<Response>,
-): RouteHandler<TRequest> {
+  handler: BusinessRouteHandler<TRequest>,
+  onThrottled: (request: TRequest, ports: BusinessRequestPorts) => Response | Promise<Response>,
+): BusinessRouteHandler<TRequest> {
   const throttled = scope === "login" ? kernel.wrapLogin(handler) : kernel.wrapRegister(handler);
 
-  return async (request) => {
-    const response = await throttled(request);
-    if (response.status === 429 && !requestPrefersJson(request)) {
-      return onThrottled(request);
-    }
-    return response;
-  };
+  return kernel.composed(
+    async (request, ports) => {
+      const response = await throttled(request, ports);
+      if (response.status === 429 && !requestPrefersJson(request)) {
+        return onThrottled(request, ports);
+      }
+      return response;
+    },
+    "web",
+    identityModes(handler),
+    scimMiddleware(handler),
+  );
 }
 
 /** Convenience alias for `createHttpKernel`. */

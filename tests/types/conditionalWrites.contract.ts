@@ -1,14 +1,20 @@
 import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineRepository } from "@getstrata/core/database/definitions";
+import type { DatabaseSession } from "@getstrata/core/database/session";
 import { defineTable } from "@getstrata/core/database/table";
 
-const repo = new BaseRepository(
-  defineTable<{ id: number; stock: number; owner: string }, "id">({
+const repositoryDefinition = defineRepository({
+  name: "conditionalWrites",
+  table: defineTable<{ id: number; stock: number; owner: string }, "id">({
     name: "stock",
     primaryKey: "id",
     columns: ["id", "stock", "owner"],
   }),
-);
-export async function writeContracts(): Promise<void> {
+  dependencies: [] as const,
+  create: (binding) => new BaseRepository(binding),
+});
+export async function writeContracts(database: DatabaseSession): Promise<void> {
+  const repo = database.repository(repositoryDefinition);
   const count: number = await repo.query().where({ id: 1, owner: "expected" }).update({ stock: 1 });
   const rows: { stock: number }[] = await repo
     .query()

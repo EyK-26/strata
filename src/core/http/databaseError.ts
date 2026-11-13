@@ -18,7 +18,34 @@ function mapDatabaseHttpError(error: unknown): HttpError {
   if (existing) return existing;
   if (!(error instanceof PersistenceError) && !isPostgresError(error))
     return new InternalServerError();
-  const failure = mapDatabaseError(error);
+  const outer = mapDatabaseError(error);
+  let failure = outer;
+  if (
+    (outer.code === "DATABASE_TRANSACTION_UNKNOWN" ||
+      outer.code === "DATABASE_TRANSACTION_FAILED") &&
+    outer.data !== "committed"
+  ) {
+    const cause = Object.getOwnPropertyDescriptor(outer, "cause")?.value;
+    // A single native constraint can determine an HTTP status without determining
+    // transaction durability. Never traverse unrelated causes or cleanup aggregates.
+    if (
+      !(cause instanceof AggregateError) &&
+      (cause instanceof PersistenceError || isPostgresError(cause))
+    ) {
+      const direct = mapDatabaseError(cause);
+      if (
+        [
+          "DATABASE_UNIQUE_CONSTRAINT",
+          "DATABASE_FOREIGN_KEY_CONSTRAINT",
+          "DATABASE_REFERENCED_RECORD",
+          "DATABASE_RELATED_RECORD_CONSTRAINT",
+          "DATABASE_NOT_NULL_CONSTRAINT",
+          "DATABASE_CHECK_CONSTRAINT",
+        ].includes(direct.code)
+      )
+        failure = direct;
+    }
+  }
   switch (failure.code) {
     case "DATABASE_UNIQUE_CONSTRAINT":
     case "DATABASE_TRANSACTION_ROLLBACK_ONLY":

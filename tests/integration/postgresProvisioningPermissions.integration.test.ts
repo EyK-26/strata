@@ -1,36 +1,24 @@
 import { expect, test } from "bun:test";
-import {
-  BaseRepository,
-  type SqlDatabaseConnection,
-} from "@getstrata/core/database/baseRepository";
-import {
-  bindDatabaseConnection,
-  getBoundDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "@getstrata/core/database/boundConnection";
-import {
-  getDefaultDatabasePool,
-  registerDefaultDatabasePool,
-} from "@getstrata/core/database/defaultConnection";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineRepository } from "@getstrata/core/database/definitions";
 import { runWithSqlDialect } from "@getstrata/core/database/dialect";
 import { Schema } from "@getstrata/core/database/schema";
 import { defineTable } from "@getstrata/core/database/table";
-import { createOutboxMigration, SqlOutbox } from "@getstrata/core/events/outbox";
-import { FailedJobRepository } from "@getstrata/core/queue/failedJobRepository";
+import { createOutboxMigration } from "@getstrata/core/events/outbox";
+import { failedJobRepository } from "@getstrata/core/queue/failedJobRepository";
 import { generatedRlsBootstrapSql } from "@getstrata/core/tenant/enableTenantRls";
-import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import { migrateDatabase } from "../../src/core/database/migrations/runner.ts";
 import {
   ensurePostgresAppRole,
   grantPostgresAppRolePrivileges,
 } from "../../src/core/tenant/postgresAppRole.ts";
+import { withOutboxes } from "../helpers/outboxApplication";
 import {
   capturePostgresFailure,
   postgresIdentity,
   postgresSchemaAcl,
   withPostgresProvisioningFixture,
 } from "../helpers/postgresProvisioningFixture.ts";
-import { restoreEnvVar } from "../helpers/restoreEnv.ts";
 
 function evidence(label: string, value: unknown) {
   console.log(`PG_PROVISION_EVIDENCE ${JSON.stringify({ label, value })}`);
@@ -178,105 +166,127 @@ test("runtime HTTP, RLS and queue effects need no schema CREATE after owner migr
       database: f.databases[0],
       role: f.runtimeRole,
     });
-    const oldPool = getDefaultDatabasePool();
-    const oldBound = getBoundDatabaseConnection();
-    const oldTenancy = process.env.TENANCY_DRIVER;
-    const tenant = { id: 1, slug: "one" };
-    const oldOther = { id: 2, slug: "two" };
-    let server: ReturnType<typeof Bun.serve> | undefined;
-    try {
-      process.env.TENANCY_DRIVER = "rls";
-      registerDefaultDatabasePool(f.runtime as SqlDatabaseConnection);
-      bindDatabaseConnection(f.runtime);
-      await runWithSqlDialect("pgsql", async () => {
-        const entries = new BaseRepository(
-          defineTable<{ id: number; tenant_id: number; value: string }, "id">({
-            name: "scoped_entries",
-            primaryKey: "id",
-            columns: ["id", "tenant_id", "value"],
-          }),
-        );
-        const observed: unknown[] = [];
-        const outbox = new SqlOutbox({
+    const entries = defineRepository({
+      name: "provisioning.entries",
+      table: defineTable<{ id: number; tenant_id: number; value: string }, "id">({
+        name: "scoped_entries",
+        primaryKey: "id",
+        columns: ["id", "tenant_id", "value"],
+      }),
+      dependencies: [] as const,
+      create: (binding) => new BaseRepository(binding),
+    });
+    const observed: unknown[] = [];
+    const runtimeUrl = new URL(process.env.MIGRATION_DATABASE_URL!);
+    runtimeUrl.pathname = `/${f.databases[0]}`;
+    runtimeUrl.username = f.runtimeRole;
+    runtimeUrl.password = f.password;
+    await withOutboxes(
+      [
+        {
           listeners: [
             {
               event: "entry.saved",
               name: "owned-listener",
-              async handle(event) {
+              async handle(event, { database }) {
                 observed.push(event.payload);
-                expect((await entries.query().get()).every((row) => row.tenant_id === 1)).toBe(
-                  true,
-                );
+                expect(
+                  (await database.repository(entries).query().get()).every(
+                    (row) => row.tenant_id === 1,
+                  ),
+                ).toBe(true);
               },
             },
           ],
-          resolveTenant: async (id) => ({ id, slug: String(id) }),
-        });
-        server = Bun.serve({
+          resolveTenant: async (_selected, id) => ({ id, slug: String(id) }),
+        },
+      ],
+      async (fixture) => {
+        const [outbox] = fixture.outboxes;
+        if (!outbox) throw Error("Missing coordinator");
+        const server = Bun.serve({
           hostname: "127.0.0.1",
           port: 0,
           fetch: () =>
-            runWithTenantDatabase(tenant, async () => {
-              const created = await entries.create({ tenant_id: 1, value: "through-http" });
-              await outbox.publish("entry.saved", { id: created.id });
+            fixture.transaction(async (selected) => {
+              const created = await selected
+                .repository(entries)
+                .create({ tenant_id: 1, value: "through-http" });
+              await outbox.publish(selected, "entry.saved", { id: created.id }, { tenantId: 1 });
               return Response.json(created);
-            }),
+            }, 1),
         });
-        const response = await fetch(server.url);
-        expect(response.status).toBe(200);
-        const created = (await response.json()) as { id: number };
-        expect(Number(created.id)).toBeGreaterThan(0);
-        expect(await outbox.processNext()).toBe(true);
-        expect(observed).toHaveLength(1);
-        await runWithTenantDatabase(tenant, async () => {
-          expect((await entries.query().get()).map((row) => row.value)).toEqual(["through-http"]);
-          expect(await entries.updateById(Number(created.id), { value: "updated" })).not.toBeNull();
+        try {
+          const response = await fetch(server.url);
+          expect(response.status).toBe(200);
+          const created = (await response.json()) as { id: number };
+          expect(Number(created.id)).toBeGreaterThan(0);
+          expect(await outbox.processNext()).toBe(true);
+          expect(observed).toHaveLength(1);
+          await fixture.transaction(async (selected) => {
+            const repository = selected.repository(entries);
+            expect((await repository.query().get()).map((row) => row.value)).toEqual([
+              "through-http",
+            ]);
+            expect(
+              await repository.updateById(Number(created.id), { value: "updated" }),
+            ).not.toBeNull();
+          }, 1);
+          await expect(
+            fixture.transaction(
+              (selected) =>
+                selected.repository(entries).create({ tenant_id: 2, value: "wrong-tenant" }),
+              1,
+            ),
+          ).rejects.toThrow();
+          await fixture.transaction(async (selected) => {
+            const repository = selected.repository(entries);
+            expect((await repository.query().get()).map((row) => row.value)).toEqual([
+              "private-two",
+            ]);
+            expect(await repository.findById(Number(created.id))).toBeNull();
+          }, 2);
+          await fixture.run(async (selected) => {
+            const failures = selected.repository(failedJobRepository);
+            const failed = await failures.create({
+              job_name: "owned",
+              job_id: "owned-id",
+              payload: { value: "record" },
+              exception: "controlled",
+              failed_at: new Date(),
+            });
+            expect(Number(failed.id)).toBeGreaterThan(0);
+            expect((await failures.findAll())[0]?.payload).toEqual({ value: "record" });
+          });
+          await fixture.transaction(async (selected) => {
+            expect(await selected.repository(entries).deleteById(Number(created.id))).toBe(true);
+          }, 1);
+        } finally {
+          await server.stop(true);
+        }
+        evidence("runtime-before-ddl-negative", {
+          identity: await postgresIdentity(f.runtime),
+          acl: await postgresSchemaAcl(f.admin),
+          http: true,
+          rls: true,
+          queueFailurePersistence: true,
+          durableWorker: true,
         });
-        await expect(
-          runWithTenantDatabase(tenant, () =>
-            entries.create({ tenant_id: 2, value: "wrong-tenant" }),
+        // A real denied statement is the regression, not only a rendered SQL/string assertion.
+        expect(
+          await capturePostgresFailure(() =>
+            f.runtime.unsafe("CREATE TABLE forbidden_runtime_table(id SERIAL PRIMARY KEY)"),
           ),
-        ).rejects.toThrow();
-        await runWithTenantDatabase(oldOther, async () => {
-          expect((await entries.query().get()).map((row) => row.value)).toEqual(["private-two"]);
-          expect(await entries.findById(Number(created.id))).toBeNull();
-        });
-        const failures = new FailedJobRepository();
-        const failed = await failures.create({
-          job_name: "owned",
-          job_id: "owned-id",
-          payload: { value: "record" },
-          exception: "controlled",
-          failed_at: new Date(),
-        });
-        expect(Number(failed.id)).toBeGreaterThan(0);
-        expect((await failures.findAll())[0]?.payload).toEqual({ value: "record" });
-        await runWithTenantDatabase(tenant, async () => {
-          expect(await entries.deleteById(Number(created.id))).toBe(true);
-        });
-      });
-      evidence("runtime-before-ddl-negative", {
-        identity: await postgresIdentity(f.runtime),
-        acl: await postgresSchemaAcl(f.admin),
-        http: true,
-        rls: true,
-        queueFailurePersistence: true,
-        durableWorker: true,
-      });
-      // A real denied statement is the regression, not only a rendered SQL/string assertion.
-      expect(
-        await capturePostgresFailure(() =>
-          f.runtime.unsafe("CREATE TABLE forbidden_runtime_table(id SERIAL PRIMARY KEY)"),
-        ),
-      ).toBe("42501");
-      expect((await postgresIdentity(f.runtime)).schema_create).toBe(false);
-    } finally {
-      await server?.stop(true);
-      registerDefaultDatabasePool(oldPool);
-      if (oldBound) bindDatabaseConnection(oldBound);
-      else resetBoundDatabaseConnection();
-      restoreEnvVar("TENANCY_DRIVER", oldTenancy);
-    }
+        ).toBe("42501");
+        expect((await postgresIdentity(f.runtime)).schema_create).toBe(false);
+      },
+      {
+        connection: { driver: "pgsql", url: runtimeUrl.href, max: 4 },
+        tenancy: "rls",
+        migrate: false,
+        prepare: () => ({ repositories: [entries, failedJobRepository] }),
+      },
+    );
   });
 }, 30000);
 

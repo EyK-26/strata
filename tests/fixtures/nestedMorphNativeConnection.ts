@@ -1,60 +1,132 @@
+/** Installed native ORM fixture: one canonical owner; DDL uses the generated migration owner. */
 import { afterEach } from "bun:test";
 import assert from "node:assert/strict";
-import type { DatabaseConnection } from "@getstrata/core/database/baseRepository";
-import { createMysqlConnection } from "@getstrata/core/database/mysqlConnection";
+import type { OpenOutcome, ResourceSpec } from "@getstrata/core/contracts/application";
+import { resourceService, type ServiceDeclaration } from "@getstrata/core/contracts/services";
+import type { ServiceToken } from "@getstrata/core/contracts/token";
+import { createDatabaseBindings } from "@getstrata/core/database/bindings";
 import { Schema } from "@getstrata/core/database/schema";
-import { SQL } from "bun";
+import type {
+  DatabaseConnectionOptions,
+  DatabaseSession,
+  SqlStatement,
+} from "@getstrata/core/database/session";
+import { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
+import { createApplication } from "@getstrata/core/runtime/application";
 
+interface NativeTransaction {
+  execute: DatabaseSession["execute"];
+  savepoint<T>(work: (child: NativeTransaction) => Promise<T>): Promise<unknown>;
+}
+interface NativePin {
+  begin<T>(work: (child: NativeTransaction) => Promise<T>): Promise<unknown>;
+  release(): Promise<unknown>;
+  discard(): Promise<unknown>;
+}
+interface NativePool {
+  readonly dialect: DatabaseSession["dialect"];
+  readonly capabilities: DatabaseSession["capabilities"];
+  execute: DatabaseSession["execute"];
+  checkout(options: unknown): Promise<OpenOutcome<NativePin>>;
+  close(): unknown;
+}
+interface NativeFixture {
+  readonly definition: Parameters<typeof createDatabaseBindings>[0];
+  readonly services?: readonly ServiceDeclaration[];
+  readonly observe?: (statement: SqlStatement) => void;
+  readonly schema: Parameters<typeof Schema.run>[2];
+}
 const pendingCloses = new Set<() => Promise<void>>();
 afterEach(async () => {
-  // A setup failure happens before the original test can enter its finally.
   await Promise.all([...pendingCloses].map((close) => close()));
 });
-
-function adapter(url: string, dialect: "mysql" | "postgres") {
-  if (dialect === "mysql") return createMysqlConnection(url);
-  const client = new SQL(url, { max: 1 });
-  return {
-    async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
-      try {
-        return [...(await client.unsafe(query, [...params]))] as T[];
-      } catch (error) {
-        if (error instanceof Error) {
-          console.error("Native fixture SQL failure", {
-            code: Reflect.get(error, "errno"),
-            message: error.message,
-          });
-        }
-        throw error;
-      }
-    },
-    async close() {
-      await client.close();
-    },
-  };
-}
-export async function createNativeFixture() {
-  const dialect = process.env.QUALIFICATION_DATABASE;
-  assert.ok(dialect === "mysql" || dialect === "postgres");
-  const driver = dialect === "postgres" ? "pgsql" : dialect;
-  const appUrl = process.env.APP_DATABASE_URL;
-  const migrationUrl = process.env.MIGRATION_DATABASE_URL;
-  assert.ok(appUrl && migrationUrl);
-  const runtime = adapter(appUrl, dialect);
+export async function withNestedMorphDatabase<T>(
+  fixture: NativeFixture,
+  work: (database: DatabaseSession) => T | Promise<T>,
+): Promise<T> {
+  const engine = process.env.QUALIFICATION_DATABASE;
+  assert.ok(engine === "mysql" || engine === "postgres" || engine === "sqlite");
+  const driver = engine === "postgres" ? "pgsql" : engine;
+  const configured: {
+    databaseOptions(env: Readonly<Record<string, string | undefined>>): DatabaseConnectionOptions;
+  } = await import(new URL("./src/bootstrap/database.ts", import.meta.url).href);
   const migration: {
-    withMigrationDatabase<T>(operation: (connection: DatabaseConnection) => Promise<T>): Promise<T>;
+    withMigrationDatabase<T>(
+      work: (connection: {
+        unsafe<Row>(text: string, params?: readonly unknown[]): Promise<Row[]>;
+      }) => Promise<T>,
+    ): Promise<T>;
   } = await import(new URL("./src/db/migrationRuntime.ts", import.meta.url).href);
-  const runSchema = (operation: Parameters<typeof Schema.run>[2]) =>
-    migration.withMigrationDatabase((connection) => Schema.run(connection, driver, operation));
+  const runSchema = (schema: Parameters<typeof Schema.run>[2]) =>
+    migration.withMigrationDatabase((connection) => Schema.run(connection, driver, schema));
+  const declarations = createDatabaseBindings({
+    ...fixture.definition,
+    default: "native",
+    connections: { native: configured.databaseOptions(Object.freeze({ ...process.env })) },
+  });
+  const overrides = declarations
+    .filter((item) => item.kind === "resource")
+    .map((item) => {
+      if (item.kind !== "resource") throw Error("Expected a canonical pool resource");
+      return resourceService(item.token as ServiceToken<NativePool>, {
+        lifetime: "application",
+        dependencies: item.dependencies,
+        create: (...dependencies) => {
+          const descriptor = item.create(...(dependencies as never[])) as ResourceSpec<NativePool>;
+          // Observe real native statements; every control receipt passes through unchanged.
+          const tx = (native: NativeTransaction): NativeTransaction => ({
+            execute: <R>(statement: SqlStatement) => {
+              fixture.observe?.(statement);
+              return native.execute<R>(statement);
+            },
+            savepoint: (callback) => native.savepoint((child) => callback(tx(child))),
+          });
+          const pin = (native: NativePin): NativePin => ({
+            begin: (callback) => native.begin((child) => callback(tx(child))),
+            release: () => native.release(),
+            discard: () => native.discard(),
+          });
+          return {
+            ...descriptor,
+            open: async (signal) => {
+              const outcome = await descriptor.open(signal);
+              if (!outcome.ok) return outcome;
+              const native = outcome.value;
+              return {
+                ok: true,
+                value: {
+                  dialect: native.dialect,
+                  capabilities: native.capabilities,
+                  execute: <R>(statement: SqlStatement) => {
+                    fixture.observe?.(statement);
+                    return native.execute<R>(statement);
+                  },
+                  checkout: async (options) => {
+                    const selected = await native.checkout(options);
+                    return selected.ok ? { ok: true, value: pin(selected.value) } : selected;
+                  },
+                  close: () => native.close(),
+                },
+              };
+            },
+          } satisfies ResourceSpec<NativePool>;
+        },
+      });
+    });
+  const app = createApplication({
+    providers: [],
+    services: [...declarations, ...(fixture.services ?? [])],
+    overrides,
+  });
   let closed = false;
-  const database: DatabaseConnection & { close(): Promise<void> } = {
-    unsafe: (query, params) => runtime.unsafe(query, params),
-    async close() {
-      if (closed) return;
-      closed = true;
-      pendingCloses.delete(database.close);
+  const close = async () => {
+    if (closed) return;
+    closed = true;
+    try {
+      const result = await app.stop();
+      assert.ok(result.successful, "Canonical native fixture cleanup must be confirmed");
+    } finally {
       try {
-        // Fixture DDL belongs to the existing migration owner, never the app role.
         await runSchema((schema) => {
           for (const table of [
             "nested_comments",
@@ -66,11 +138,16 @@ export async function createNativeFixture() {
             schema.drop(table);
         });
       } finally {
-        await runtime.close();
+        pendingCloses.delete(close);
       }
-    },
+    }
   };
-  pendingCloses.add(database.close);
-  if ("begin" in runtime) database.begin = runtime.begin.bind(runtime);
-  return { database, runSchema, dialect };
+  pendingCloses.add(close);
+  try {
+    await runSchema(fixture.schema);
+    await app.start();
+    return await app.run((scope) => work(scope.resolve(DATABASE_SESSION_TOKEN)));
+  } finally {
+    await close();
+  }
 }

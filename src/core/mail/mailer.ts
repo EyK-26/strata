@@ -28,25 +28,27 @@ interface SmtpConfig {
   from: string;
   secure: boolean;
   timeoutMs?: number;
+  ehloHost?: string;
   tls?: Pick<TLSOptions, "ca" | "serverName">;
 }
 
 type SmtpTransport = (config: SmtpConfig, message: MailMessage) => Promise<void>;
 
-function resolveSmtpConfig(): SmtpConfig {
-  const host = process.env.MAIL_HOST?.trim();
+function resolveSmtpConfig(environment?: Readonly<Record<string, string | undefined>>): SmtpConfig {
+  const env = environment ?? process.env;
+  const host = env.MAIL_HOST?.trim();
 
   if (!host) {
     throw new Error('MAIL_DRIVER="smtp" requires MAIL_HOST to be set.');
   }
 
-  const from = process.env.MAIL_FROM?.trim();
+  const from = env.MAIL_FROM?.trim();
 
   if (!from) {
     throw new Error('MAIL_DRIVER="smtp" requires MAIL_FROM to be set.');
   }
 
-  const port = Number(process.env.MAIL_PORT ?? "587");
+  const port = Number(env.MAIL_PORT ?? "587");
 
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
     throw new Error('Environment variable "MAIL_PORT" must be a positive integer.');
@@ -54,14 +56,15 @@ function resolveSmtpConfig(): SmtpConfig {
 
   return {
     host,
+    ...(environment ? { ehloHost: smtpEhloHost(env) } : {}),
     port,
     from,
-    secure: (process.env.MAIL_SECURE ?? "false") === "true",
-    ...(process.env.MAIL_TIMEOUT_MS !== undefined
-      ? { timeoutMs: smtpTimeout(Number(process.env.MAIL_TIMEOUT_MS)) }
+    secure: (env.MAIL_SECURE ?? "false") === "true",
+    ...(env.MAIL_TIMEOUT_MS !== undefined
+      ? { timeoutMs: smtpTimeout(Number(env.MAIL_TIMEOUT_MS)) }
       : {}),
-    ...(process.env.MAIL_USERNAME?.trim() ? { username: process.env.MAIL_USERNAME.trim() } : {}),
-    ...(process.env.MAIL_PASSWORD?.trim() ? { password: process.env.MAIL_PASSWORD.trim() } : {}),
+    ...(env.MAIL_USERNAME?.trim() ? { username: env.MAIL_USERNAME.trim() } : {}),
+    ...(env.MAIL_PASSWORD?.trim() ? { password: env.MAIL_PASSWORD.trim() } : {}),
   };
 }
 
@@ -80,6 +83,10 @@ function smtpTimeout(value = 10000): number {
 
 async function defaultSmtpTransport(config: SmtpConfig, message: MailMessage): Promise<void> {
   const timeoutMs = smtpTimeout(config.timeoutMs);
+  const ehloHost =
+    config.ehloHost === undefined
+      ? smtpEhloHost()
+      : config.ehloHost.replace(/[^a-zA-Z0-9.-]/g, "") || "strata.local";
   if (
     !config.host.trim() ||
     !Number.isInteger(config.port) ||
@@ -265,7 +272,7 @@ async function defaultSmtpTransport(config: SmtpConfig, message: MailMessage): P
     );
     socket = await Promise.race([connecting, failurePromise]);
     await readResponse(["220"]);
-    await write(`EHLO ${smtpEhloHost()}\r\n`);
+    await write(`EHLO ${ehloHost}\r\n`);
     await readResponse(["250"]);
     if (config.username && config.password) {
       await write("AUTH LOGIN\r\n");
@@ -337,11 +344,13 @@ class Mailer {
   }
 }
 
-function createMailDriver(): MailDriver {
-  const driver = process.env.MAIL_DRIVER ?? "log";
+function createMailDriver(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): MailDriver {
+  const driver = env.MAIL_DRIVER ?? "log";
 
   if (driver === "smtp") {
-    return new SmtpMailDriver(resolveSmtpConfig());
+    return new SmtpMailDriver(resolveSmtpConfig(env));
   }
 
   return new LogMailDriver();

@@ -2,9 +2,13 @@ import {
   installGracefulShutdownSignals,
   LifecycleCoordinator,
 } from "@getstrata/core/lifecycle/gracefulShutdown";
-import { appSchedule, runDueScheduledTasks } from "@getstrata/core/scheduler/schedule";
+import {
+  runDueScheduledTasks,
+  type Schedule,
+  type SchedulerRunOptions,
+} from "@getstrata/core/scheduler/schedule";
 
-type LoadAppSchedule = () => void | Promise<void>;
+type LoadAppSchedule = () => Schedule | Promise<Schedule>;
 type CloseScheduledApp = () => void | Promise<void>;
 
 function createScheduleRunCommand(
@@ -12,6 +16,7 @@ function createScheduleRunCommand(
   close?: CloseScheduledApp,
   options: {
     lifecycle?: LifecycleCoordinator;
+    scheduler?: SchedulerRunOptions;
     flush?: CloseScheduledApp;
     drain?: CloseScheduledApp;
   } = {},
@@ -58,13 +63,18 @@ function createScheduleRunCommand(
     let failure: unknown;
     try {
       execution = (async () => {
-        await loadSchedule();
+        const schedule = await loadSchedule();
+        if (!schedule || typeof schedule.dueTasks !== "function")
+          throw new TypeError("Schedule boot must return its application-owned Schedule.");
         if (stopping) return;
-        const due = appSchedule.dueTasks();
+        const due = schedule.dueTasks();
         if (due.length === 0) console.log("No scheduled tasks due.");
         else {
           for (const task of due) console.log(`Running scheduled task: ${task.name}`);
-          await runDueScheduledTasks(appSchedule, new Date(), { signal: admission.signal });
+          await runDueScheduledTasks(schedule, new Date(), {
+            ...options.scheduler,
+            signal: admission.signal,
+          });
         }
       })();
       await execution;

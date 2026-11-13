@@ -1,15 +1,10 @@
-/** biome-ignore-all lint/complexity/noThisInStatic: Concrete model owns its scope. */
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { test as bunTest, expect } from "bun:test";
 import { BaseRepository } from "@getstrata/core/database/baseRepository";
-import {
-  bindDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "@getstrata/core/database/boundConnection";
-import { resetSqlDialect, useSqlDialect } from "@getstrata/core/database/dialect";
-import { defineModel } from "@getstrata/core/database/model";
-import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
+import { defineRepository } from "@getstrata/core/database/definitions";
+import { defineModel, Model } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 import type { KeysetCursor } from "@getstrata/core/pagination";
+import { withBoundDatabase } from "../../helpers/boundRepositoryHarness";
 
 type Row = {
   id: number;
@@ -25,36 +20,106 @@ const table = defineTable<Row, "id">({
   columns: ["id", "stamp", "active", "label", "score", "deleted_at"],
   softDeletes: true,
 });
-class Visible extends defineModel(table) {
-  static override boot() {
-    this.addGlobalScope<Row, "id">("active", (q) => q.where({ active: 1 }));
+class VisibleModel extends Model<Row, "id"> {}
+class ChildModel extends Model<Row, "id"> {}
+class ParentModel extends Model<Row, "id"> {
+  children() {
+    return this.hasMany(childDefinition, "active");
   }
+}
+const repositoryDefinition = defineRepository({
+  name: "keyset.repo",
+  table,
+  dependencies: [] as const,
+  create: (binding) => new BaseRepository(binding),
+});
+const visibleDefinition = defineModel({
+  name: "Visible",
+  repository: repositoryDefinition,
+  dependencies: [] as const,
+  attributes: {},
+  scopes: [(query) => query.where({ active: 1 })],
+  construct: (state, binding) => new VisibleModel(state, binding),
+});
+const childDefinition = defineModel({
+  name: "Child",
+  repository: repositoryDefinition,
+  dependencies: [] as const,
+  attributes: {},
+  construct: (state, binding) => new ChildModel(state, binding),
+});
+const parentDefinition = defineModel({
+  name: "Parent",
+  repository: repositoryDefinition,
+  dependencies: [] as const,
+  attributes: {},
+  construct: (state, binding) => new ParentModel(state, binding),
+});
+const collisionTable = defineTable<{ id: number; __STRATA_KEYSET_0: string }, "id">({
+  name: "keyset_rows",
+  primaryKey: "id",
+  columns: ["id", "__STRATA_KEYSET_0"],
+});
+const collisionDefinition = defineRepository({
+  name: "collision.repo",
+  table: collisionTable,
+  dependencies: [] as const,
+  create: (binding) => new BaseRepository(binding),
+});
+function requireCursor(cursor: KeysetCursor | null): KeysetCursor {
+  if (!cursor) throw Error("Expected a continuation cursor.");
+  return cursor;
 }
 const order = [
   { column: "stamp", direction: "desc" },
   { column: "id", direction: "desc" },
 ] as const;
-let db: ReturnType<typeof createSqliteConnection>;
-let repo: BaseRepository<Row, "id">;
-beforeEach(async () => {
-  db = createSqliteConnection(":memory:");
-  useSqlDialect("sqlite");
-  bindDatabaseConnection(db);
-  repo = new BaseRepository(table, db);
-  await db.unsafe(
-    "CREATE TABLE keyset_rows (id INTEGER PRIMARY KEY,stamp TEXT,active INTEGER,label TEXT,score REAL,deleted_at TEXT)",
+async function withFixture(
+  work: (ports: {
+    repo: BaseRepository<Row, "id">;
+    db: { unsafe: <T>(text: string, params?: readonly unknown[]) => Promise<readonly T[]> };
+    Visible: import("@getstrata/core/database/definitions").BoundModel<Row, "id", VisibleModel>;
+    Parent: import("@getstrata/core/database/definitions").BoundModel<Row, "id", ParentModel>;
+    collisionRepository: BaseRepository<{ id: number; __STRATA_KEYSET_0: string }, "id">;
+  }) => unknown,
+) {
+  return withBoundDatabase(
+    {
+      definition: {
+        default: "test",
+        connections: { test: { driver: "sqlite", filename: ":memory:" } },
+        repositories: [repositoryDefinition, collisionDefinition],
+        models: [visibleDefinition, childDefinition, parentDefinition],
+      },
+    },
+    async (database) => {
+      const db = {
+        unsafe: <T>(text: string, params: readonly unknown[] = []) =>
+          database.execute<T>({ text, params }),
+      };
+      await db.unsafe(
+        "CREATE TABLE keyset_rows (id INTEGER PRIMARY KEY,stamp TEXT,active INTEGER,label TEXT,score REAL,deleted_at TEXT)",
+      );
+      await db.unsafe(
+        "INSERT INTO keyset_rows VALUES (10,'2030-01-01 00:00:00.000001',1,'a',1.0000000000000002,NULL),(2,'2030-01-01 00:00:00.000002',1,'b',1.0000000000000004,NULL),(8,'2030-01-01 00:00:00.000002',1,'c',2,NULL),(1,'2030-01-02',0,'hidden',3,NULL),(3,'2030-01-03',1,'deleted',4,'2030-01-04')",
+      );
+      await work({
+        repo: database.repository(repositoryDefinition),
+        db,
+        Visible: database.model(visibleDefinition),
+        Parent: database.model(parentDefinition),
+        collisionRepository: database.repository(collisionDefinition),
+      });
+    },
   );
-  await db.unsafe(
-    "INSERT INTO keyset_rows VALUES (10,'2030-01-01 00:00:00.000001',1,'a',1.0000000000000002,NULL),(2,'2030-01-01 00:00:00.000002',1,'b',1.0000000000000004,NULL),(8,'2030-01-01 00:00:00.000002',1,'c',2,NULL),(1,'2030-01-02',0,'hidden',3,NULL),(3,'2030-01-03',1,'deleted',4,'2030-01-04')",
-  );
-});
-afterEach(() => {
-  db.close();
-  resetBoundDatabaseConnection();
-  resetSqlDialect();
-});
+}
+function test(name: string, work: Parameters<typeof withFixture>[0]) {
+  bunTest(name, () => withFixture(work));
+}
 
-test("timestamp ties and nonmonotonic IDs traverse without skipping or repeating", async () => {
+test("timestamp ties and nonmonotonic IDs traverse without skipping or repeating", async ({
+  repo,
+}) => {
   let cursor: KeysetCursor | undefined;
   const ids: number[] = [];
   do {
@@ -73,7 +138,9 @@ test("timestamp ties and nonmonotonic IDs traverse without skipping or repeating
   expect(empty.data).toEqual([]);
 });
 
-test("mixed directions and SQLite REAL cursor precision preserve adjacent doubles", async () => {
+test("mixed directions and SQLite REAL cursor precision preserve adjacent doubles", async ({
+  repo,
+}) => {
   const mixed = [
     { column: "stamp", direction: "desc" },
     { column: "id", direction: "asc" },
@@ -88,12 +155,15 @@ test("mixed directions and SQLite REAL cursor precision preserve adjacent double
   const first = await repo.query().keysetPaginate({ perPage: 1, orderBy });
   const next = await repo
     .query()
-    .keysetPaginate({ perPage: 1, orderBy, cursor: first.meta.next_cursor! });
+    .keysetPaginate({ perPage: 1, orderBy, cursor: requireCursor(first.meta.next_cursor) });
   expect(first.data[0]?.id).toBe(10);
   expect(next.data[0]?.id).toBe(2);
 });
 
-test("boundary survives deletion, excludes new rows before it and includes rows after it", async () => {
+test("boundary survives deletion, excludes new rows before it and includes rows after it", async ({
+  repo,
+  db,
+}) => {
   const first = await repo
     .query()
     .where({ active: 1 })
@@ -113,7 +183,10 @@ test("boundary survives deletion, excludes new rows before it and includes rows 
   expect(page.data.map((r) => r.id)).toEqual([2, 10, 11]);
 });
 
-test("model/global/caller OR scopes intersect the cursor; projections stay partial", async () => {
+test("model/global/caller OR scopes intersect the cursor; projections stay partial", async ({
+  Visible,
+  repo,
+}) => {
   const first = await Visible.query()
     .where((q) => q.where({ label: "a" }).orWhere({ label: "b" }).orWhere({ label: "hidden" }))
     .keysetPaginate({ perPage: 1, orderBy: order });
@@ -121,7 +194,7 @@ test("model/global/caller OR scopes intersect the cursor; projections stay parti
   const page = await Visible.query()
     .where((q) => q.where({ label: "a" }).orWhere({ label: "hidden" }))
     .select("label")
-    .keysetPaginate({ perPage: 1, orderBy: order, cursor: first.meta.next_cursor! });
+    .keysetPaginate({ perPage: 1, orderBy: order, cursor: requireCursor(first.meta.next_cursor) });
   expect(page.data).toEqual([{ label: "a" }]);
   expect(
     (await Visible.keysetPaginate({ perPage: 10, orderBy: order })).data.map((r) => r.get("id")),
@@ -133,8 +206,10 @@ test("model/global/caller OR scopes intersect the cursor; projections stay parti
   expect(projected.data).toEqual([{ label: "hidden" }]);
 });
 
-test("invalid options and cursor shapes fail before database access", async () => {
-  const valid = (await repo.keysetPaginate({ perPage: 1, orderBy: order })).meta.next_cursor!;
+test("invalid options and cursor shapes fail before database access", async ({ repo }) => {
+  const valid = requireCursor(
+    (await repo.keysetPaginate({ perPage: 1, orderBy: order })).meta.next_cursor,
+  );
   for (const options of [
     { perPage: 0, orderBy: order },
     { perPage: 1001, orderBy: order },
@@ -189,8 +264,13 @@ test("invalid options and cursor shapes fail before database access", async () =
   ).rejects.toThrow();
 });
 
-test("hostile cursor values are bound; null source keys and oversized keys fail explicitly", async () => {
-  const cursor = (await repo.keysetPaginate({ perPage: 1, orderBy: order })).meta.next_cursor!;
+test("hostile cursor values are bound; null source keys and oversized keys fail explicitly", async ({
+  repo,
+  db,
+}) => {
+  const cursor = requireCursor(
+    (await repo.keysetPaginate({ perPage: 1, orderBy: order })).meta.next_cursor,
+  );
   await repo.keysetPaginate({
     perPage: 1,
     orderBy: order,
@@ -203,13 +283,9 @@ test("hostile cursor values are bound; null source keys and oversized keys fail 
   await expect(repo.keysetPaginate({ perPage: 1, orderBy: order })).rejects.toThrow("bounded");
 });
 
-test("model pages eager-load visible relations and honor the maximum page size", async () => {
-  class Child extends defineModel(table) {}
-  class Parent extends defineModel(table) {
-    children() {
-      return this.hasMany<Row, "id">(Child, "active");
-    }
-  }
+test("model pages eager-load visible relations and honor the maximum page size", async ({
+  Parent,
+}) => {
   const page = await Parent.query()
     .with("children")
     .keysetPaginate({ perPage: 1000, orderBy: order });
@@ -224,14 +300,12 @@ test("model pages eager-load visible relations and honor the maximum page size",
   expect(page.meta.next_cursor).toBeNull();
 });
 
-test("reserved cursor aliases are rejected case-insensitively", async () => {
-  const collision = defineTable<{ id: number; __STRATA_KEYSET_0: string }, "id">({
-    name: "keyset_rows",
-    primaryKey: "id",
-    columns: ["id", "__STRATA_KEYSET_0"],
-  });
+test("reserved cursor aliases are rejected case-insensitively", async ({
+  repo,
+  collisionRepository,
+}) => {
   await expect(
-    new BaseRepository(collision, db).keysetPaginate({
+    collisionRepository.keysetPaginate({
       perPage: 1,
       orderBy: [{ column: "id", direction: "asc" }],
     }),
@@ -245,7 +319,7 @@ test("reserved cursor aliases are rejected case-insensitively", async () => {
   ).rejects.toThrow("reserved");
 });
 
-test("three-column mixed ordering compares every equal prefix", async () => {
+test("three-column mixed ordering compares every equal prefix", async ({ repo, db }) => {
   await db.unsafe("INSERT INTO keyset_rows VALUES (12,'2030-01-01',1,'tie',2,NULL)");
   const orderBy = [
     { column: "active", direction: "asc" },

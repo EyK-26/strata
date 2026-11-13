@@ -5,7 +5,9 @@ import type { StorageManager } from "@getstrata/core/storage/storage";
 import { restoreEnvVar } from "../../helpers/restoreEnv";
 import { cliTestEnv, formatCliResult, repoRoot } from "./helpers";
 
-afterAll(() => {
+const contexts: Array<{ stop(): Promise<void> }> = [];
+afterAll(async () => {
+  await Promise.all(contexts.map((context) => context.stop()));
   mock.restore();
 });
 
@@ -15,6 +17,7 @@ describe("createTinkerContext", () => {
     mock.restore();
     const { createTinkerContext: createContext } = await import("../../../src/cli/commands/tinker");
     const context = await createContext();
+    contexts.push(context);
 
     expect(context.container).toBeDefined();
     expect(context.dependencies.container).toBe(context.container);
@@ -28,6 +31,7 @@ describe("createTinkerContext", () => {
       "../../../src/cli/commands/tinker"
     );
     const context = await createContext();
+    contexts.push(context);
     assignGlobals(context);
 
     expect((globalThis as { container?: unknown }).container).toBe(context.container);
@@ -47,6 +51,7 @@ describe("tinker preload script", () => {
         hasContainer: Boolean(ctx.container),
         mailerName: ctx.mailer().constructor.name,
       }));
+      await ctx.stop();
     `;
 
     const previousMailDriver = process.env.MAIL_DRIVER;

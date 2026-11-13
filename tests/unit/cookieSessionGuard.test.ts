@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   CookieSessionAuthManager,
   CookieSessionGuard,
@@ -7,19 +7,8 @@ import {
   type SessionUser,
 } from "@getstrata/bootstrap/web/session";
 import { createSessionCookie, sessionCookieName } from "@getstrata/core/auth/sessionCookie";
-import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
-import {
-  bindDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "@getstrata/core/database/boundConnection";
-import {
-  getDefaultDatabasePool,
-  registerDefaultDatabasePool,
-  resetDefaultDatabasePoolForTests,
-} from "@getstrata/core/database/defaultConnection";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
-import { getDatabase } from "../../src/db/connection";
-import { restoreEnvVar } from "../helpers/restoreEnv";
+import { withPolicyPersistence } from "../helpers/policyPersistence";
 
 function createFakeSql(user: SessionUser & { session_valid_after?: Date | string | null }) {
   const sessions = new Map<
@@ -83,7 +72,7 @@ function createFakeSql(user: SessionUser & { session_valid_after?: Date | string
         return [] as T[];
       }
 
-      if (query.includes("FROM sessions") && query.includes("user_id = $1")) {
+      if (query.includes("FROM sessions") && query.includes("user_id = ")) {
         const userId = Number(params[0]);
         return [...sessions.entries()]
           .filter(
@@ -142,10 +131,6 @@ function createFakeSql(user: SessionUser & { session_valid_after?: Date | string
 }
 
 describe("CookieSessionGuard", () => {
-  afterEach(() => {
-    resetBoundDatabaseConnection();
-  });
-
   test("AuthManager.resolve maps a store cookie, not HMAC strata_session", async () => {
     const user: SessionUser = {
       id: 9,
@@ -154,35 +139,46 @@ describe("CookieSessionGuard", () => {
       is_admin: true,
     };
     const sql = createFakeSql(user);
-    const store = new CookieSessionStore(sql, "session-secret", "strata_session");
-    const auth = createCookieSessionAuthManager({
-      store,
-      mapUser: (sessionUser) => ({
-        id: sessionUser.id,
-        role: sessionUser.is_admin
-          ? "admin"
-          : sessionUser.learn_subscriber
-            ? "subscriber"
-            : "member",
-      }),
-    });
+    await withPolicyPersistence(
+      sql,
+      async ({ database, policy }) => {
+        const store = new CookieSessionStore(
+          database,
+          policy,
+          "session-secret",
+          { production: false, rls: false },
+          "strata_session",
+        );
+        const auth = new CookieSessionAuthManager(store, (sessionUser) => ({
+          id: sessionUser.id,
+          role: sessionUser.is_admin
+            ? "admin"
+            : sessionUser.learn_subscriber
+              ? "subscriber"
+              : "member",
+        }));
 
-    const sessionId = await store.create(user);
-    const cookie = store.cookieHeader(user, sessionId).split(";")[0] ?? "";
+        const sessionId = await store.create(user);
+        const cookie = store.cookieHeader(user, sessionId).split(";")[0] ?? "";
 
-    expect(
-      await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
-    ).toEqual({ id: 9, role: "admin" });
-    expect(cookie.startsWith("strata_session=")).toBe(true);
+        expect(
+          await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
+        ).toEqual({ id: 9, role: "admin" });
+        expect(cookie.startsWith("strata_session=")).toBe(true);
 
-    const hmacCookie = createSessionCookie(9).split(";")[0] ?? "";
-    expect(hmacCookie.startsWith(`${sessionCookieName()}=`)).toBe(true);
-    expect(
-      await auth.resolve(new Request("http://example.test/", { headers: { cookie: hmacCookie } })),
-    ).toBeNull();
+        const hmacCookie = createSessionCookie(9).split(";")[0] ?? "";
+        expect(hmacCookie.startsWith(`${sessionCookieName()}=`)).toBe(true);
+        expect(
+          await auth.resolve(
+            new Request("http://example.test/", { headers: { cookie: hmacCookie } }),
+          ),
+        ).toBeNull();
+      },
+      { driver: "sqlite" },
+    );
   });
 
-  test("rebinds the SQL client through bindDatabaseConnection", async () => {
+  test("uses the explicitly selected live SQL session without ambient resolution", async () => {
     const user: SessionUser = {
       id: 4,
       name: "Member",
@@ -190,23 +186,38 @@ describe("CookieSessionGuard", () => {
       is_admin: true,
     };
     const sql = createFakeSql(user);
-    bindDatabaseConnection(sql);
 
-    const store = new CookieSessionStore(() => sql, "session-secret", "strata_session");
-    const auth = createCookieSessionAuthManager({
-      secret: "session-secret",
-      cookieName: "strata_session",
-    });
+    await withPolicyPersistence(
+      sql,
+      async ({ database, policy }) => {
+        const store = new CookieSessionStore(
+          database,
+          policy,
+          "session-secret",
+          { production: false, rls: false },
+          "strata_session",
+        );
+        const auth = createCookieSessionAuthManager({
+          selected: database,
+          policy,
+          production: false,
+          rls: false,
+          secret: "session-secret",
+          cookieName: "strata_session",
+        });
 
-    const sessionId = await store.create(user);
-    const cookie = store.cookieHeader(user, sessionId).split(";")[0] ?? "";
+        const sessionId = await store.create(user);
+        const cookie = store.cookieHeader(user, sessionId).split(";")[0] ?? "";
 
-    expect(
-      await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
-    ).toEqual({ id: 4, role: "admin" });
-    expect(
-      await new CookieSessionGuard(store).resolve(new Request("http://example.test/")),
-    ).toBeNull();
+        expect(
+          await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
+        ).toEqual({ id: 4, role: "admin" });
+        expect(
+          await new CookieSessionGuard(store).resolve(new Request("http://example.test/")),
+        ).toBeNull();
+      },
+      { driver: "sqlite" },
+    );
   });
 
   test("loadSessionUser replaces the default users-table query", async () => {
@@ -227,21 +238,31 @@ describe("CookieSessionGuard", () => {
       },
     };
 
-    const auth = createCookieSessionAuthManager({
+    await withPolicyPersistence(
       sql,
-      secret: "session-secret",
-      cookieName: "strata_session",
-      loadSessionUser: async (_client, sessionId) => sessions.get(sessionId) ?? null,
-      mapUser: (sessionUser) => ({ id: sessionUser.id, role: "member" }),
-    });
+      async ({ database, policy }) => {
+        const auth = createCookieSessionAuthManager({
+          selected: database,
+          policy,
+          production: false,
+          rls: false,
+          secret: "session-secret",
+          cookieName: "strata_session",
+          loadSessionUser: async (_client, _policy, _rls, sessionId) =>
+            sessions.get(sessionId) ?? null,
+          mapUser: (sessionUser) => ({ id: sessionUser.id, role: "member" }),
+        });
 
-    const signedIn = await auth.signIn(user);
-    const request = new Request("http://example.test/", {
-      headers: { cookie: signedIn.setCookie.split(";")[0] ?? "" },
-    });
+        const signedIn = await auth.signIn(user);
+        const request = new Request("http://example.test/", {
+          headers: { cookie: signedIn.setCookie.split(";")[0] ?? "" },
+        });
 
-    expect(await auth.resolve(request)).toEqual({ id: 12, role: "member" });
-    expect(sessions.size).toBe(1);
+        expect(await auth.resolve(request)).toEqual({ id: 12, role: "member" });
+        expect(sessions.size).toBe(1);
+      },
+      { driver: "sqlite" },
+    );
   });
 
   test("signIn and signOut set cookies and destroy the session row", async () => {
@@ -252,27 +273,36 @@ describe("CookieSessionGuard", () => {
       is_admin: false,
     };
     const sql = createFakeSql(user);
-    const auth = createCookieSessionAuthManager({
+    await withPolicyPersistence(
       sql,
-      secret: "session-secret",
-      cookieName: "strata_session",
-    });
+      async ({ database, policy }) => {
+        const auth = createCookieSessionAuthManager({
+          selected: database,
+          policy,
+          production: false,
+          rls: false,
+          secret: "session-secret",
+          cookieName: "strata_session",
+        });
 
-    expect(auth).toBeInstanceOf(CookieSessionAuthManager);
+        expect(auth).toBeInstanceOf(CookieSessionAuthManager);
 
-    const signedIn = await auth.signIn(user);
-    expect(signedIn.sessionId.length).toBeGreaterThan(8);
-    expect(signedIn.setCookie.startsWith("strata_session=")).toBe(true);
-    expect(sql.sessions.has(signedIn.sessionId)).toBe(true);
+        const signedIn = await auth.signIn(user);
+        expect(signedIn.sessionId.length).toBeGreaterThan(8);
+        expect(signedIn.setCookie.startsWith("strata_session=")).toBe(true);
+        expect(sql.sessions.has(signedIn.sessionId)).toBe(true);
 
-    const cookie = signedIn.setCookie.split(";")[0] ?? "";
-    const request = new Request("http://example.test/", { headers: { cookie } });
-    expect(await auth.resolve(request)).toEqual({ id: 8, role: "member" });
+        const cookie = signedIn.setCookie.split(";")[0] ?? "";
+        const request = new Request("http://example.test/", { headers: { cookie } });
+        expect(await auth.resolve(request)).toEqual({ id: 8, role: "member" });
 
-    const signedOut = await auth.signOut(request);
-    expect(signedOut.setCookie).toContain("Max-Age=0");
-    expect(sql.sessions.has(signedIn.sessionId)).toBe(false);
-    expect(await auth.resolve(request)).toBeNull();
+        const signedOut = await auth.signOut(request);
+        expect(signedOut.setCookie).toContain("Max-Age=0");
+        expect(sql.sessions.has(signedIn.sessionId)).toBe(false);
+        expect(await auth.resolve(request)).toBeNull();
+      },
+      { driver: "sqlite" },
+    );
   });
 
   test("signIn records the client address and user agent from the request context", async () => {
@@ -283,32 +313,44 @@ describe("CookieSessionGuard", () => {
       is_admin: false,
     };
     const sql = createFakeSql(user);
-    const auth = createCookieSessionAuthManager({
+    await withPolicyPersistence(
       sql,
-      secret: "session-secret",
-      cookieName: "strata_session",
-    });
+      async ({ database, policy }) => {
+        const auth = createCookieSessionAuthManager({
+          selected: database,
+          policy,
+          production: false,
+          rls: false,
+          secret: "session-secret",
+          cookieName: "strata_session",
+        });
 
-    const fromContext = await runWithRequestMeta(
-      { ipAddress: "203.0.113.9", userAgent: "probe/1.0" },
-      () => auth.signIn(user),
+        const fromContext = await runWithRequestMeta(
+          { ipAddress: "203.0.113.9", userAgent: "probe/1.0" },
+          () => auth.signIn(user),
+        );
+        expect(sql.sessions.get(fromContext.sessionId)).toMatchObject({
+          ipAddress: "203.0.113.9",
+          userAgent: "probe/1.0",
+        });
+
+        const explicit = await runWithRequestMeta(
+          { ipAddress: "203.0.113.9", userAgent: "probe/1.0" },
+          () => auth.signIn(user, { ipAddress: "198.51.100.1" }),
+        );
+        expect(sql.sessions.get(explicit.sessionId)).toMatchObject({
+          ipAddress: "198.51.100.1",
+          userAgent: "probe/1.0",
+        });
+
+        const outside = await auth.signIn(user);
+        expect(sql.sessions.get(outside.sessionId)).toMatchObject({
+          ipAddress: null,
+          userAgent: null,
+        });
+      },
+      { driver: "sqlite" },
     );
-    expect(sql.sessions.get(fromContext.sessionId)).toMatchObject({
-      ipAddress: "203.0.113.9",
-      userAgent: "probe/1.0",
-    });
-
-    const explicit = await runWithRequestMeta(
-      { ipAddress: "203.0.113.9", userAgent: "probe/1.0" },
-      () => auth.signIn(user, { ipAddress: "198.51.100.1" }),
-    );
-    expect(sql.sessions.get(explicit.sessionId)).toMatchObject({
-      ipAddress: "198.51.100.1",
-      userAgent: "probe/1.0",
-    });
-
-    const outside = await auth.signIn(user);
-    expect(sql.sessions.get(outside.sessionId)).toMatchObject({ ipAddress: null, userAgent: null });
   });
 
   test("signInRedirect and signOutRedirect attach Set-Cookie", async () => {
@@ -319,30 +361,39 @@ describe("CookieSessionGuard", () => {
       is_admin: true,
     };
     const sql = createFakeSql(user);
-    const auth = createCookieSessionAuthManager({
+    await withPolicyPersistence(
       sql,
-      secret: "session-secret",
-      cookieName: "strata_session",
-      mapUser: (sessionUser) => ({
-        id: sessionUser.id,
-        role: sessionUser.is_admin ? "admin" : "member",
-      }),
-    });
+      async ({ database, policy }) => {
+        const auth = createCookieSessionAuthManager({
+          selected: database,
+          policy,
+          production: false,
+          rls: false,
+          secret: "session-secret",
+          cookieName: "strata_session",
+          mapUser: (sessionUser) => ({
+            id: sessionUser.id,
+            role: sessionUser.is_admin ? "admin" : "member",
+          }),
+        });
 
-    const login = await auth.signInRedirect(user, "/dashboard", 303);
-    expect(login.status).toBe(303);
-    expect(login.headers.get("location")).toBe("/dashboard");
-    const setCookie = login.headers.get("set-cookie") ?? "";
-    expect(setCookie.startsWith("strata_session=")).toBe(true);
+        const login = await auth.signInRedirect(user, "/dashboard", 303);
+        expect(login.status).toBe(303);
+        expect(login.headers.get("location")).toBe("/dashboard");
+        const setCookie = login.headers.get("set-cookie") ?? "";
+        expect(setCookie.startsWith("strata_session=")).toBe(true);
 
-    const cookie = setCookie.split(";")[0] ?? "";
-    const request = new Request("http://example.test/", { headers: { cookie } });
-    expect(await auth.resolve(request)).toEqual({ id: 3, role: "admin" });
+        const cookie = setCookie.split(";")[0] ?? "";
+        const request = new Request("http://example.test/", { headers: { cookie } });
+        expect(await auth.resolve(request)).toEqual({ id: 3, role: "admin" });
 
-    const logout = await auth.signOutRedirect(request, "/login");
-    expect(logout.status).toBe(302);
-    expect(logout.headers.get("location")).toBe("/login");
-    expect(logout.headers.get("set-cookie") ?? "").toContain("Max-Age=0");
+        const logout = await auth.signOutRedirect(request, "/login");
+        expect(logout.status).toBe(302);
+        expect(logout.headers.get("location")).toBe("/login");
+        expect(logout.headers.get("set-cookie") ?? "").toContain("Max-Age=0");
+      },
+      { driver: "sqlite" },
+    );
   });
 
   test("signOut without a session cookie still clears the cookie header", async () => {
@@ -351,14 +402,23 @@ describe("CookieSessionGuard", () => {
       name: "Guest",
       email: "guest@example.test",
     });
-    const auth = createCookieSessionAuthManager({
+    await withPolicyPersistence(
       sql,
-      secret: "session-secret",
-    });
+      async ({ database, policy }) => {
+        const auth = createCookieSessionAuthManager({
+          selected: database,
+          policy,
+          production: false,
+          rls: false,
+          secret: "session-secret",
+        });
 
-    const result = await auth.signOut(new Request("http://example.test/"));
-    expect(result.setCookie).toContain("Max-Age=0");
-    expect(sql.sessions.size).toBe(0);
+        const result = await auth.signOut(new Request("http://example.test/"));
+        expect(result.setCookie).toContain("Max-Age=0");
+        expect(sql.sessions.size).toBe(0);
+      },
+      { driver: "sqlite" },
+    );
   });
 
   test("create stores browser metadata and listForUser returns live sessions", async () => {
@@ -368,20 +428,32 @@ describe("CookieSessionGuard", () => {
       email: "meta@example.test",
     };
     const sql = createFakeSql(user);
-    const store = new CookieSessionStore(sql, "session-secret", "strata_session");
-    const sessionId = await store.create(user, {
-      userAgent: "HiroAppTest/1.0",
-      ipAddress: "203.0.113.10",
-    });
-    const listed = await store.listForUser(11);
-    expect(listed).toHaveLength(1);
-    expect(listed[0]?.id).toBe(sessionId);
-    expect(listed[0]?.user_agent).toBe("HiroAppTest/1.0");
-    expect(listed[0]?.ip_address).toBe("203.0.113.10");
-    expect(typeof sql.lastInsertExpires()).toBe("string");
-    expect(String(sql.lastInsertExpires())).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    await store.touch(sessionId);
-    expect(sql.sessions.get(sessionId)?.lastActiveAt).toBeInstanceOf(Date);
+    await withPolicyPersistence(
+      sql,
+      async ({ database, policy }) => {
+        const store = new CookieSessionStore(
+          database,
+          policy,
+          "session-secret",
+          { production: false, rls: false },
+          "strata_session",
+        );
+        const sessionId = await store.create(user, {
+          userAgent: "HiroAppTest/1.0",
+          ipAddress: "203.0.113.10",
+        });
+        const listed = await store.listForUser(11);
+        expect(listed).toHaveLength(1);
+        expect(listed[0]?.id).toBe(sessionId);
+        expect(listed[0]?.user_agent).toBe("HiroAppTest/1.0");
+        expect(listed[0]?.ip_address).toBe("203.0.113.10");
+        expect(typeof sql.lastInsertExpires()).toBe("string");
+        expect(String(sql.lastInsertExpires())).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+        await store.touch(sessionId);
+        expect(sql.sessions.get(sessionId)?.lastActiveAt).toBeInstanceOf(Date);
+      },
+      { driver: "sqlite" },
+    );
   });
 
   test("destroyOtherSessions keeps the current cookie row", async () => {
@@ -391,13 +463,25 @@ describe("CookieSessionGuard", () => {
       email: "keep@example.test",
     };
     const sql = createFakeSql(user);
-    const store = new CookieSessionStore(sql, "session-secret", "strata_session");
-    const keep = await store.create(user, { userAgent: "ThisDevice/1.0" });
-    const other = await store.create(user, { userAgent: "OtherDevice/1.0" });
-    await store.destroyOtherSessions(14, keep);
-    expect(sql.sessions.has(keep)).toBe(true);
-    expect(sql.sessions.has(other)).toBe(false);
-    expect(await store.listForUser(14)).toHaveLength(1);
+    await withPolicyPersistence(
+      sql,
+      async ({ database, policy }) => {
+        const store = new CookieSessionStore(
+          database,
+          policy,
+          "session-secret",
+          { production: false, rls: false },
+          "strata_session",
+        );
+        const keep = await store.create(user, { userAgent: "ThisDevice/1.0" });
+        const other = await store.create(user, { userAgent: "OtherDevice/1.0" });
+        await store.destroyOtherSessions(14, keep);
+        expect(sql.sessions.has(keep)).toBe(true);
+        expect(sql.sessions.has(other)).toBe(false);
+        expect(await store.listForUser(14)).toHaveLength(1);
+      },
+      { driver: "sqlite" },
+    );
   });
 
   test("composes a display name from first_name and last_name", async () => {
@@ -410,26 +494,35 @@ describe("CookieSessionGuard", () => {
       is_admin: true,
     } as SessionUser & { first_name: string; last_name: string };
     const sql = createFakeSql(user);
-    const store = new CookieSessionStore(sql, "session-secret", "strata_session");
-    let loadedName = "";
-    const auth = createCookieSessionAuthManager({
-      store,
-      mapUser: (sessionUser) => {
-        loadedName = sessionUser.name;
-        return {
-          id: sessionUser.id,
-          role: sessionUser.is_admin ? "admin" : "member",
-        };
+    await withPolicyPersistence(
+      sql,
+      async ({ database, policy }) => {
+        const store = new CookieSessionStore(
+          database,
+          policy,
+          "session-secret",
+          { production: false, rls: false },
+          "strata_session",
+        );
+        let loadedName = "";
+        const auth = new CookieSessionAuthManager(store, (sessionUser) => {
+          loadedName = sessionUser.name;
+          return {
+            id: sessionUser.id,
+            role: sessionUser.is_admin ? "admin" : "member",
+          };
+        });
+
+        const sessionId = await store.create(user);
+        const cookie = store.cookieHeader(user, sessionId).split(";")[0] ?? "";
+
+        expect(
+          await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
+        ).toEqual({ id: 21, role: "admin" });
+        expect(loadedName).toBe("Ada Lovelace");
       },
-    });
-
-    const sessionId = await store.create(user);
-    const cookie = store.cookieHeader(user, sessionId).split(";")[0] ?? "";
-
-    expect(
-      await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
-    ).toEqual({ id: 21, role: "admin" });
-    expect(loadedName).toBe("Ada Lovelace");
+      { driver: "sqlite" },
+    );
   });
 
   test("rejects a session row that has no created_at", async () => {
@@ -456,12 +549,24 @@ describe("CookieSessionGuard", () => {
         return [] as T[];
       },
     };
-    const store = new CookieSessionStore(sql, "session-secret", "strata_session");
-    const auth = createCookieSessionAuthManager({ store });
-    const cookie = store.cookieHeader(user, "session-without-created").split(";")[0] ?? "";
-    expect(
-      await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
-    ).toBeNull();
+    await withPolicyPersistence(
+      sql,
+      async ({ database, policy }) => {
+        const store = new CookieSessionStore(
+          database,
+          policy,
+          "session-secret",
+          { production: false, rls: false },
+          "strata_session",
+        );
+        const auth = new CookieSessionAuthManager(store);
+        const cookie = store.cookieHeader(user, "session-without-created").split(";")[0] ?? "";
+        expect(
+          await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
+        ).toBeNull();
+      },
+      { driver: "sqlite" },
+    );
   });
 
   test("compares session created_at to session_valid_after", async () => {
@@ -472,18 +577,30 @@ describe("CookieSessionGuard", () => {
       session_valid_after: new Date(Date.now() + 60_000),
     };
     const sql = createFakeSql(user);
-    const store = new CookieSessionStore(sql, "session-secret", "strata_session");
-    const auth = createCookieSessionAuthManager({ store });
-    const sessionId = await store.create(user);
-    const cookie = store.cookieHeader(user, sessionId).split(";")[0] ?? "";
-    expect(
-      await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
-    ).toBeNull();
+    await withPolicyPersistence(
+      sql,
+      async ({ database, policy }) => {
+        const store = new CookieSessionStore(
+          database,
+          policy,
+          "session-secret",
+          { production: false, rls: false },
+          "strata_session",
+        );
+        const auth = new CookieSessionAuthManager(store);
+        const sessionId = await store.create(user);
+        const cookie = store.cookieHeader(user, sessionId).split(";")[0] ?? "";
+        expect(
+          await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
+        ).toBeNull();
 
-    user.session_valid_after = new Date(Date.now() - 60_000);
-    expect(
-      await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
-    ).toEqual({ id: 23, role: "member" });
+        user.session_valid_after = new Date(Date.now() - 60_000);
+        expect(
+          await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
+        ).toEqual({ id: 23, role: "member" });
+      },
+      { driver: "sqlite" },
+    );
   });
 
   test("does not treat users.created_at as the session issued-at", async () => {
@@ -494,70 +611,80 @@ describe("CookieSessionGuard", () => {
       session_valid_after: new Date(Date.now() - 5_000),
     };
     const sql = createFakeSql(user);
-    const store = new CookieSessionStore(sql, "session-secret", "strata_session");
-    const auth = createCookieSessionAuthManager({ store });
-    const sessionId = await store.create(user);
-    const cookie = store.cookieHeader(user, sessionId).split(";")[0] ?? "";
-    expect(
-      await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
-    ).toEqual({ id: 24, role: "member" });
+    await withPolicyPersistence(
+      sql,
+      async ({ database, policy }) => {
+        const store = new CookieSessionStore(
+          database,
+          policy,
+          "session-secret",
+          { production: false, rls: false },
+          "strata_session",
+        );
+        const auth = new CookieSessionAuthManager(store);
+        const sessionId = await store.create(user);
+        const cookie = store.cookieHeader(user, sessionId).split(";")[0] ?? "";
+        expect(
+          await auth.resolve(new Request("http://example.test/", { headers: { cookie } })),
+        ).toEqual({ id: 24, role: "member" });
+      },
+      { driver: "sqlite" },
+    );
   });
 
-  test("session create opens a bypass transaction when RLS is on", async () => {
-    const previous = process.env.TENANCY_DRIVER;
-    process.env.TENANCY_DRIVER = "rls";
+  test("session create applies an identifier scope on the exact child when RLS is on", async () => {
     const calls: string[] = [];
-    let previousPool: SqlDatabaseConnection | null = null;
-    try {
-      previousPool = getDefaultDatabasePool();
-    } catch {
-      previousPool = null;
-    }
-    const pool = Object.assign(async () => [] as unknown[], {
-      async begin<T>(callback: (tx: { unsafe: typeof pool.unsafe }) => Promise<T>) {
+    const pool = {
+      async begin<T>(
+        callback: (transaction: {
+          unsafe: <R>(sql: string, params?: readonly unknown[]) => Promise<R[]>;
+        }) => Promise<T>,
+      ) {
         calls.push("begin");
-        const tx = {
-          async unsafe<TRow>(query: string, params?: readonly unknown[]) {
-            calls.push(`tx:${query} ${JSON.stringify(params ?? [])}`);
-            return [] as TRow[];
+        return callback({
+          unsafe: async <R>(query: string, params: readonly unknown[] = []) => {
+            calls.push(`tx:${query} ${JSON.stringify(params)}`);
+            return [] as R[];
           },
-        };
-        return await callback(tx);
+        });
       },
-      async close() {},
-      async unsafe<T>(query: string, params?: readonly unknown[]) {
-        calls.push(`pool:${query} ${JSON.stringify(params ?? [])}`);
+      async unsafe<T>(query: string, params: readonly unknown[] = []) {
+        calls.push(`pool:${query} ${JSON.stringify(params)}`);
         return [] as T[];
       },
-    }) as SqlDatabaseConnection;
-    registerDefaultDatabasePool(pool);
-    resetBoundDatabaseConnection();
-    const user: SessionUser = { id: 31, name: "Rls", email: "rls@example.test" };
-    const auth = createCookieSessionAuthManager({
-      secret: "session-secret",
-      cookieName: "strata_session",
-    });
-    try {
-      await auth.signIn(user);
-      expect(calls).toContain("begin");
-      expect(calls.some((line) => line.includes("set_config('app.bypass_identifier'"))).toBe(true);
-      expect(calls.some((line) => line.includes("set_config('app.bypass_rls'"))).toBe(false);
-      expect(
-        calls.some((line) => line.startsWith("tx:") && line.includes("INSERT INTO sessions")),
-      ).toBe(true);
-      expect(
-        calls.some((line) => line.startsWith("pool:") && line.includes("INSERT INTO sessions")),
-      ).toBe(false);
-    } finally {
-      if (previousPool) {
-        registerDefaultDatabasePool(previousPool);
-      } else {
-        resetDefaultDatabasePoolForTests();
-        if (process.env.DATABASE_URL) {
-          getDatabase();
-        }
-      }
-      restoreEnvVar("TENANCY_DRIVER", previous);
-    }
+    };
+    await withPolicyPersistence(
+      pool,
+      async ({ database, policy }) => {
+        const user: SessionUser = { id: 31, name: "Rls", email: "rls@example.test" };
+        const auth = createCookieSessionAuthManager({
+          selected: database,
+          policy,
+          secret: "session-secret",
+          cookieName: "strata_session",
+          production: false,
+          rls: true,
+        });
+        await auth.signIn(user);
+        expect(calls).toContain("begin");
+        expect(calls.some((line) => line.includes("set_config('app.bypass_identifier'"))).toBe(
+          true,
+        );
+        // Restoring a captured GUC is required. Identifier admission must never set
+        // the unrestricted bypass flag to true.
+        expect(
+          calls.some(
+            (line) => line.includes("set_config('app.bypass_rls'") && line.includes('"true"'),
+          ),
+        ).toBe(false);
+        expect(
+          calls.some((line) => line.startsWith("tx:") && line.includes("INSERT INTO sessions")),
+        ).toBe(true);
+        expect(
+          calls.some((line) => line.startsWith("pool:") && line.includes("INSERT INTO sessions")),
+        ).toBe(false);
+      },
+      { driver: "pgsql" },
+    );
   });
 });

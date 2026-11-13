@@ -1,103 +1,101 @@
+import type { StopResult } from "@getstrata/core/contracts/application";
 import {
   installGracefulShutdownSignals,
   LifecycleCoordinator,
-  type ShutdownResult,
 } from "@getstrata/core/lifecycle/gracefulShutdown";
-import { closeDatabase, ensureDatabaseConnection, pingDatabase } from "../db/connection";
-import { APP_PORT_CONFIG_KEY, DEFAULT_APP_PORT } from "./config";
-import { appContext, createAppContext, type InitializedAppContext } from "./context";
-import { createRoutes } from "./createRoutes";
 import {
-  drainInProcessCron,
-  startInProcessCronIfEnabled,
-  stopInProcessCron,
-} from "./inProcessCron";
-import { assertProductionSecrets } from "./secretsGuard";
-import { createWebServer } from "./web/server";
-
+  type AppContextOptions,
+  type ApplicationContextHandle,
+  collectProviders,
+  createApplicationContext,
+} from "./context";
+import { type AppRouteMap, assertAppDependenciesComplete, type ServiceProvider } from "./contracts";
+import { createRoutes } from "./createRoutes";
+import { createInProcessCronResource } from "./inProcessCron";
+import { type NativeServerOptions, webServerResource } from "./web/server";
+export interface AppOptions extends AppContextOptions {
+  readonly providers?: readonly ServiceProvider[];
+  readonly port: number;
+  readonly native?: NativeServerOptions;
+  readonly cron?: Readonly<{
+    schedule: import("@getstrata/core/scheduler/schedule").Schedule;
+    options: import("@getstrata/core/scheduler/schedule").SchedulerRunOptions;
+  }>;
+}
 class App {
-  private server?: ReturnType<typeof Bun.serve>;
-
   private startup?: Promise<void>;
-  private lifecycle?: LifecycleCoordinator;
+  private readonly owner: ApplicationContextHandle;
   private uninstallSignals?: () => void;
-
-  async serve(): Promise<void> {
-    this.startup ??= this.start();
-    try {
-      await this.startup;
-    } catch (error) {
-      this.startup = undefined;
-      throw error;
-    }
+  constructor(options: AppOptions) {
+    let routes: AppRouteMap | undefined;
+    const cron = options.cron;
+    const finalProvider: ServiceProvider = {
+      name: "http.routes",
+      boot: ({ dependencies }) => {
+        assertAppDependenciesComplete(dependencies);
+        routes = createRoutes(dependencies);
+      },
+    };
+    const fromScope = options.providersFromScope;
+    this.owner = createApplicationContext(options.providers ?? collectProviders(), {
+      ...options,
+      providersFromScope: (scope) => [...(fromScope?.(scope) ?? []), finalProvider],
+      definition: {
+        ...options.definition,
+        transports: [
+          ...(options.definition.transports ?? []),
+          ...(cron
+            ? [
+                {
+                  name: "scheduler.cron",
+                  async setup(
+                    scope: import("@getstrata/core/contracts/application").ProviderScope,
+                  ) {
+                    await scope.acquire(createInProcessCronResource(cron.schedule, cron.options));
+                  },
+                },
+              ]
+            : []),
+          {
+            name: "http",
+            setup: async (scope) => {
+              if (!routes)
+                throw new Error("HTTP routes were not assembled before transport setup.");
+              await scope.acquire(
+                webServerResource({ port: options.port, native: options.native, routes }),
+              );
+            },
+          },
+        ],
+      },
+    });
   }
-
-  private async start(): Promise<void> {
-    if (this.server) {
-      return;
-    }
-
-    assertProductionSecrets();
-    let context: InitializedAppContext | undefined;
-    try {
-      await ensureDatabaseConnection();
-      if (!(await pingDatabase())) throw new Error("Database is not ready.");
-      context = await createAppContext();
-
-      const port = this.resolvePort();
-
+  get application() {
+    return this.owner.application;
+  }
+  serve(): Promise<void> {
+    if (this.startup) return this.startup;
+    this.startup = (async () => {
+      await this.owner.start();
       const lifecycle = new LifecycleCoordinator();
-      this.lifecycle = lifecycle;
-      this.server = createWebServer({
-        port,
-        routes: createRoutes(context.dependencies),
-        lifecycle,
-      });
-
-      lifecycle.register("in-process-cron:stop", stopInProcessCron, "stop");
-      lifecycle.register("in-process-cron:drain", drainInProcessCron, "drain");
-      lifecycle.register("providers:drain", () => context?.drain(), "drain");
-      lifecycle.register("providers:flush", () => context?.flush(), "flush");
-      lifecycle.register("providers:close", () => context?.dispose(), "close");
-      lifecycle.register("database", closeDatabase, "close");
-      startInProcessCronIfEnabled();
+      lifecycle.register(
+        "application",
+        async () => {
+          const result = await this.shutdown("SIGNAL");
+          if (!result.successful) throw new Error("Application shutdown is incomplete.");
+        },
+        "stop",
+      );
       this.uninstallSignals = installGracefulShutdownSignals(undefined, lifecycle);
-
-      console.log(`Listening on ${this.server.url}`);
-    } catch (error) {
-      this.server?.stop(true);
-      this.server = undefined;
-      const failures: unknown[] = [];
-      for (const cleanup of [() => context?.dispose(), closeDatabase]) {
-        try {
-          await cleanup();
-        } catch (failure) {
-          failures.push(failure);
-        }
-      }
-      if (failures.length)
-        throw new AggregateError([error, ...failures], "Application startup and cleanup failed.", {
-          cause: error,
-        });
-      throw error;
-    }
+    })();
+    return this.startup;
   }
-
-  async shutdown(reason = "MANUAL"): Promise<ShutdownResult> {
-    await this.startup;
-    const result = await this.lifecycle?.shutdown(reason);
+  shutdown(reason = "MANUAL"): Promise<StopResult> {
     this.uninstallSignals?.();
-    return result ?? { successful: true, timedOut: false, errors: [] };
+    return this.owner.application.stop({ reason });
   }
-
-  // Transport-only compatibility API. Use shutdown() to drain and close providers.
-  stop(force = true): void {
-    this.server?.stop(force);
-  }
-
-  private resolvePort(): number {
-    return appContext.config.get<number>(APP_PORT_CONFIG_KEY) ?? DEFAULT_APP_PORT;
+  stop(): Promise<StopResult> {
+    return this.shutdown();
   }
 }
-
 export default App;

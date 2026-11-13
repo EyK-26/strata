@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, symlink } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SQL } from "bun";
@@ -13,7 +14,9 @@ import {
   parseCreateStrataArgs,
 } from "../../packages/strata-starter/src/parseArgs.ts";
 
-const root = join(import.meta.dir, "../..");
+import { candidatePackage } from "../../scripts/candidate-packages.ts";
+import { installGeneratedAppDependencies } from "../unit/cli/helpers";
+
 for (const [frontend, auth] of [
   ["api", "headers"],
   ["api", "token"],
@@ -61,7 +64,37 @@ for (const [frontend, auth] of [
           templateRoot: resolveTemplateRoot(),
           overlayRoot: resolveOverlayRoot(),
         });
-        await symlink(join(root, "node_modules"), join(app, "node_modules"));
+        const manifest = await Bun.file(join(app, "package.json")).json();
+        for (const part of ["core", "bootstrap", "cli"] as const)
+          manifest.dependencies[`@getstrata/${part}`] = `file:${await candidatePackage(part, dir)}`;
+        await Bun.write(join(app, "package.json"), JSON.stringify(manifest));
+        installGeneratedAppDependencies(app);
+        const evidence = process.env.STRATA_GENERATED_RUNTIME_EVIDENCE_DIR;
+        const provenance = evidence
+          ? await mkdtemp(join(evidence, "installed-runtime-provisioning-"))
+          : undefined;
+        if (provenance) {
+          await Bun.write(
+            join(provenance, "package.json"),
+            await Bun.file(join(app, "package.json")).text(),
+          );
+          await Bun.write(
+            join(provenance, "bun.lock"),
+            await Bun.file(join(app, "bun.lock")).text(),
+          );
+          const installed = Object.fromEntries(
+            ["core", "bootstrap", "cli"].map((part) => [
+              part,
+              createRequire(join(app, "package.json")).resolve(`@getstrata/${part}`),
+            ]),
+          );
+          for (const path of Object.values(installed))
+            expect(path.startsWith(join(app, "node_modules/"))).toBe(true);
+          await Bun.write(
+            join(provenance, "resolved.json"),
+            JSON.stringify({ app, installed }, null, 2),
+          );
+        }
         const schema = (await import(join(app, "src/db/migrations/0001_starter_schema.ts")))
           .default;
         await schema.up(owner);
@@ -88,12 +121,11 @@ for (const [frontend, auth] of [
         await Bun.write(
           join(app, "probe.ts"),
           `import {strict as assert} from "node:assert";
-import {bootstrapApp,createAppServer} from "./src/bootstrap/createApp.ts";
-import {closeDatabase,getSql} from "./src/bootstrap/database.ts";
-import {LifecycleCoordinator} from "@getstrata/core/lifecycle/gracefulShutdown";
+import {bootstrapApp} from "./src/bootstrap/createApp.ts";
 assert.equal(process.env.MIGRATION_DATABASE_URL,undefined,"No admin credential defaults");
 assert.equal(process.env.STRATA_APP_PASSWORD,undefined);
-const app=await bootstrapApp(); const lifecycle=new LifecycleCoordinator(); const server=createAppServer(app.routes,0,lifecycle);
+const app=await bootstrapApp({mode:"http",server:{port:0,native:{hostname:"127.0.0.1"}}}); const server=app.server; assert.ok(server);
+const query=(text)=>app.invoke({kind:"command",actor:{kind:"system",policy:"fixture.restricted-runtime-observation"}},({database})=>database.execute({text,params:[]}));
 try {
  const response=await fetch("http://127.0.0.1:"+server.port+"/ready"); assert.equal(response.status,200);
  const health=await fetch("http://127.0.0.1:"+server.port+"/health",{headers:{host:"untrusted.invalid","x-tenant-id":"9999"}});
@@ -102,12 +134,11 @@ try {
  assert.equal(health.headers.get("cache-control"),"no-store");
  const head=await fetch("http://127.0.0.1:"+server.port+"/health",{method:"HEAD"}); assert.equal(head.status,health.status); assert.equal(await head.text(),"");
  const post=await fetch("http://127.0.0.1:"+server.port+"/health",{method:"POST"}); assert.equal(post.status,404);
- if (process.env.PROBE_SCHEMA_DENIED!=="true") { const [visible]=await getSql().unsafe("SELECT count(*)::int AS count FROM notes"); assert.equal(visible.count,0); }
+ if (process.env.PROBE_SCHEMA_DENIED!=="true") { const [visible]=await query("SELECT count(*)::int AS count FROM notes"); assert.equal(visible.count,0); }
  if (process.env.PROBE_AUTH!=="headers") { const protectedResponse=await fetch("http://127.0.0.1:"+server.port+"/api/v1/auth/me"); assert.ok([401,403].includes(protectedResponse.status)); }
- const [role]=await getSql().unsafe("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user"); assert.equal(role.rolsuper,false); assert.equal(role.rolbypassrls,false);
+ const [role]=await query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user"); assert.equal(role.rolsuper,false); assert.equal(role.rolbypassrls,false);
 } finally {
- lifecycle.register("drain",()=>app.context.drain(),"drain"); lifecycle.register("flush",()=>app.context.flush(),"flush"); lifecycle.register("close",()=>app.context.dispose(),"close"); lifecycle.register("database",closeDatabase,"close");
- assert.equal((await lifecycle.shutdown("MANUAL")).successful,true);
+ const stopped=await app.application.stop({reason:"fixture complete"}); assert.equal(stopped.successful,true); assert.equal(app.application.state.phase,"stopped");
 }`,
         );
         url.username = role;

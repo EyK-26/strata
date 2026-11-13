@@ -1,5 +1,5 @@
 import { BlockList, isIP } from "node:net";
-import { ForbiddenError } from "../errors/http";
+import { ForbiddenError } from "@getstrata/core/errors/http";
 import { currentRequestMeta } from "../http/requestMetaContext";
 
 interface PublicTenancyOptions {

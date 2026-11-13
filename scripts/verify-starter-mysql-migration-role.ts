@@ -39,32 +39,77 @@ const env = {
   SESSION_SECRET: crypto.randomUUID() + crypto.randomUUID(),
   OTEL_SDK_DISABLED: "true",
 };
+const failures: unknown[] = [];
+let activeChild: ReturnType<typeof Bun.spawn<"ignore", "pipe", "pipe">> | undefined;
+let terminationTimer: ReturnType<typeof setTimeout> | undefined;
+let interrupted = false;
+const interruption = new Error("Native credential verification interrupted by SIGTERM.");
+function throwFailures(errors: unknown[], message: string): void {
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) throw new AggregateError(errors, message);
+}
+function checkInterrupted(): void {
+  if (interrupted) throw interruption;
+}
+const terminate = () => {
+  interrupted = true;
+  process.exitCode = 143;
+  // The body still owns cleanup. Abort and join its child before releasing the fixture.
+  if (activeChild?.exitCode === null) {
+    try {
+      activeChild.kill("SIGTERM");
+    } catch (error) {
+      failures.push(error);
+    }
+    terminationTimer ??= setTimeout(() => {
+      try {
+        if (activeChild?.exitCode === null) activeChild.kill("SIGKILL");
+      } catch (error) {
+        failures.push(error);
+      }
+    }, 5000);
+  }
+};
+process.once("SIGTERM", terminate);
 async function run(args: string[], expected = 0) {
-  const p = Bun.spawn([process.execPath, ...args], {
+  checkInterrupted();
+  const child = Bun.spawn([process.execPath, ...args], {
     cwd: fixture.app,
     env,
+    stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
     timeout: 60000,
-    killSignal: "SIGTERM",
+    killSignal: "SIGKILL",
   });
-  const [code, out, err] = await Promise.all([
-    p.exited,
-    new Response(p.stdout).text(),
-    new Response(p.stderr).text(),
-  ]);
-  assert.equal(code, expected, out + err);
-  return out + err;
+  activeChild = child;
+  try {
+    const results = await Promise.allSettled([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ] as const);
+    const errors = results.flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : [],
+    );
+    const [terminal, out, err] = results;
+    const output = `${out.status === "fulfilled" ? out.value : ""}${err.status === "fulfilled" ? err.value : ""}`;
+    if (terminal.status === "fulfilled") {
+      try {
+        assert.equal(terminal.value, expected, output);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (interrupted) errors.push(interruption);
+    throwFailures(errors, "Native credential child exit/output collection failed.");
+    return output;
+  } finally {
+    if (terminationTimer) clearTimeout(terminationTimer);
+    terminationTimer = undefined;
+    activeChild = undefined;
+  }
 }
-let closed: Promise<void> | undefined;
-function cleanup() {
-  closed ??= fixture.close();
-  return closed;
-}
-const terminate = () => {
-  void cleanup().finally(() => process.exit(143));
-};
-process.once("SIGTERM", terminate);
 try {
   await writeFile(
     join(fixture.app, ".env"),
@@ -73,34 +118,64 @@ try {
   await writeFile(
     join(fixture.app, "runtime-probe.ts"),
     `import assert from 'node:assert/strict';
-import './src/bootstrap/preload.ts';
-import {getSql,closeDatabase} from './src/bootstrap/database.ts';
-import {Schema} from '@getstrata/core/database/schema';
-import {runWithTenantDatabase} from '@getstrata/core/tenant/tenantDatabaseScope';
-getSql();
-const {User}=await import('./src/models/User.ts');
-try {
- await runWithTenantDatabase({id:1,slug:'default'},async()=>{assert.equal(await User.query().count(),Number(process.argv[2]));});
- await assert.rejects(()=>Schema.run(getSql(),'mysql',schema=>schema.create('runtime_must_not_have_ddl',table=>table.id())), 'Runtime account must remain unable to create tables');
-}finally{await closeDatabase();}
+import type {Application} from '@getstrata/core/contracts/application';
+import {PersistenceError} from '@getstrata/core/database/errors';
+import {bootstrapApp} from './src/bootstrap/createApp.ts';
+import {User} from './src/models/User.ts';
+let owner:Application|undefined;const errors:unknown[]=[];
+const envelope={kind:'command' as const,actor:{kind:'system' as const,policy:'fixture.mysql-runtime'}${tenancy === "column" ? ",tenant:{id:1,slug:'default'}" : ""}};
+function nativeDdlDenial(error:unknown):boolean{
+ if(error instanceof PersistenceError)return error.code==='DATABASE_OPERATION_FAILED'&&nativeDdlDenial(error.cause);
+ if(error instanceof AggregateError)return error.errors.length>0&&error.errors.every(nativeDdlDenial);
+ return error!==null&&typeof error==='object'&&'code' in error&&error.code==='ER_TABLEACCESS_DENIED_ERROR';
+}
+try{
+ const app=await bootstrapApp({migrate:false,mode:'command',onConstructed:application=>{owner=application;return undefined;}});
+ await app.invoke(envelope,async({database})=>{
+  const [identity]=await database.execute<{account:string}>({text:'SELECT CURRENT_USER() AS account',params:[]});
+  assert.equal(identity?.account,${JSON.stringify(`${decodeURIComponent(new URL(fixture.runtimeUrl).username)}@%`)});
+  const users=database.model(User);
+  assert.equal(await users.${tenancy === "column" ? "where({tenant_id:1})" : "query()"}.count(),Number(process.argv[2]));
+ });
+ // A failed operation ends its invocation; later probes must use a fresh invocation.
+ await assert.rejects(()=>app.invoke(envelope,({database})=>database.execute({text:'CREATE TABLE runtime_must_not_have_ddl (id INTEGER)',params:[]})),nativeDdlDenial);
+}catch(error){errors.push(error);}
+if(owner)try{const result=await owner.stop({reason:'MySQL runtime probe complete'});if(!result.successful)throw new Error('MySQL runtime owner did not stop cleanly',{cause:result});}catch(error){errors.push(error);}
+if(errors.length===1)throw errors[0];if(errors.length>1)throw new AggregateError(errors,'MySQL runtime probe and cleanup failed.');
 `,
   );
   await writeFile(
     join(fixture.app, "privilege-context.ts"),
     `import assert from 'node:assert/strict';
-import './src/bootstrap/preload.ts';
-import {getSql,closeDatabase} from './src/bootstrap/database.ts';
-import {withMigrationDatabase} from './src/db/migrationRuntime.ts';
-import {repositoryConnection} from '@getstrata/core/database/repositoryConnection';
+import type {Application} from '@getstrata/core/contracts/application';
+import {PersistenceError} from '@getstrata/core/database/errors';
 import {Schema} from '@getstrata/core/database/schema';
-getSql();
-try {
- await assert.rejects(()=>withMigrationDatabase(async()=>{
-  await Schema.run(repositoryConnection,'mysql',schema=>schema.create('admin_scope_probe',table=>table.id()));
-  throw new Error('expected migration callback failure');
- }),/expected migration callback failure/);
- await assert.rejects(()=>Schema.run(repositoryConnection,'mysql',schema=>schema.create('runtime_context_must_stay_limited',table=>table.id())));
-}finally{await closeDatabase();}
+import {bootstrapApp} from './src/bootstrap/createApp.ts';
+import {withMigrationDatabase} from './src/db/migrationRuntime.ts';
+let owner:Application|undefined;const errors:unknown[]=[];
+const envelope={kind:'command' as const,actor:{kind:'system' as const,policy:'fixture.mysql-migration-context'}};
+function nativeDdlDenial(error:unknown):boolean{
+ if(error instanceof PersistenceError)return error.code==='DATABASE_OPERATION_FAILED'&&nativeDdlDenial(error.cause);
+ if(error instanceof AggregateError)return error.errors.length>0&&error.errors.every(nativeDdlDenial);
+ return error!==null&&typeof error==='object'&&'code' in error&&error.code==='ER_TABLEACCESS_DENIED_ERROR';
+}
+try{
+ const app=await bootstrapApp({migrate:false,mode:'command',onConstructed:application=>{owner=application;return undefined;}});
+ const sentinel=new Error('expected migration callback failure');
+ await assert.rejects(()=>withMigrationDatabase(async(db)=>{
+  await Schema.run(db,'mysql',schema=>schema.create('admin_scope_probe',table=>table.id()));
+  throw sentinel;
+ }),error=>error===sentinel);
+ // MySQL DDL may persist despite callback failure; no DDL rollback guarantee is asserted.
+ await app.invoke(envelope,async({database})=>{
+  const [identity]=await database.execute<{account:string}>({text:'SELECT CURRENT_USER() AS account',params:[]});
+  assert.equal(identity?.account,${JSON.stringify(`${decodeURIComponent(new URL(fixture.runtimeUrl).username)}@%`)});
+  const rows=await database.execute({text:'SELECT id FROM admin_scope_probe',params:[]});assert.equal(rows.length,0);
+ });
+ await assert.rejects(()=>app.invoke(envelope,({database})=>database.execute({text:'CREATE TABLE runtime_context_must_stay_limited (id INTEGER)',params:[]})),nativeDdlDenial);
+}catch(error){errors.push(error);}
+if(owner)try{const result=await owner.stop({reason:'MySQL migration context probe complete'});if(!result.successful)throw new Error('MySQL migration context owner did not stop cleanly',{cause:result});}catch(error){errors.push(error);}
+if(errors.length===1)throw errors[0];if(errors.length>1)throw new AggregateError(errors,'MySQL migration context probe and cleanup failed.');
 `,
   );
   const cli = join(fixture.app, "node_modules/@getstrata/cli/cli.ts");
@@ -136,10 +211,19 @@ export default {name:'9999_runtime_role_marker',async up(db){await Schema.run(db
   await run(["runtime-probe.ts", "0"]);
   await run([cli, "migrate", "--seed"]);
   await run(["runtime-probe.ts", "2"]);
-  console.log(
-    `PASS mysql/${tenancy}: actual migrate/status/rollback/fresh/reapply and seed; runtime ORM reads work while runtime DDL stays denied`,
-  );
+  checkInterrupted();
+} catch (error) {
+  failures.push(error);
 } finally {
+  try {
+    await fixture.close();
+  } catch (error) {
+    failures.push(error);
+  }
+  if (interrupted) failures.push(interruption);
   process.removeListener("SIGTERM", terminate);
-  await cleanup();
 }
+throwFailures(failures, "MySQL migration-role verification and cleanup failed.");
+console.log(
+  `PASS mysql/${tenancy}: actual migrate/status/rollback/fresh/reapply and seed; runtime ORM reads work while runtime DDL stays denied`,
+);

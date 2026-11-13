@@ -1,76 +1,118 @@
-/** Installed native consumer: use the app's migrated table and framework ORM only. */
+/** Installed native consumer: definitions are composed before the owning app starts. */
 import assert from "node:assert/strict";
-import type { BaseRepository } from "@getstrata/core/database/baseRepository";
-import { Model, registerModelRepository } from "@getstrata/core/database/model";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineModel, defineRepository } from "@getstrata/core/database/definitions";
+import { Model } from "@getstrata/core/database/model";
+import type { DatabaseSession } from "@getstrata/core/database/session";
+import { defineTable } from "@getstrata/core/database/table";
 
 type Row = { id: number; scope: string; label: string };
 type Attributes = Record<string, unknown>;
-
-export async function verifyModelWriteHooks(repository: BaseRepository<Row, "id">): Promise<void> {
-  for (const asynchronous of [false, true]) {
+class HookEntity extends Model<Row, "id"> {}
+export function createModelWriteHookFixture() {
+  const table = defineTable<Row, "id">({
+    name: "rebinding_items",
+    primaryKey: "id",
+    columns: ["id", "scope", "label"],
+  });
+  const fixtures = [false, true].map((asynchronous) => {
     const inputs: Attributes[] = [];
     let fail = false;
-    class HookItem extends Model<Row, "id"> {
-      static override $guarded = [];
-      static override $timestamps = false;
-
-      protected static override hydrateAttributes<T extends object>(attributes: T): T {
-        const hydrated = Model.hydrateAttributes(attributes);
-        return "label" in hydrated &&
-          typeof hydrated.label === "string" &&
-          hydrated.label.startsWith("stored:")
-          ? { ...hydrated, label: hydrated.label.slice("stored:".length) }
-          : hydrated;
-      }
-
-      protected static override dehydrateAttributes(
-        attributes: Attributes,
-      ): Attributes | Promise<Attributes> {
-        inputs.push({ ...attributes });
-        const serialize = () => {
-          if (fail) {
-            fail = false;
-            throw new Error("consumer serialization failure");
-          }
-          return "label" in attributes
-            ? { ...attributes, label: `stored:${attributes.label}` }
-            : { ...attributes };
-        };
-        return asynchronous ? Promise.resolve().then(serialize) : serialize();
-      }
-    }
-    registerModelRepository(HookItem, repository);
-    const item = await HookItem.create({
-      scope: asynchronous ? "hook-async" : "hook-sync",
-      label: "created",
+    const repository = defineRepository({
+      name: asynchronous ? "hook-async" : "hook-sync",
+      table,
+      dependencies: [],
+      hooks: {
+        hydrateRow: (row) =>
+          typeof row.label === "string" && row.label.startsWith("stored:")
+            ? { ...row, label: row.label.slice("stored:".length) }
+            : { ...row },
+      },
+      create: (binding) => new BaseRepository(binding),
     });
-    assert.equal(item.get("label"), "created");
-    assert.equal((await repository.findByIdOrThrow(item.id)).label, "stored:created");
-    assert.equal(inputs.length, 1);
-    await item.save();
-    assert.equal(inputs.length, 1, "No-op saves must not invoke the write hook.");
-
-    await repository.updateByIdOrThrow(item.id, { scope: "concurrently-updated" });
-    await item.update({ label: "updated" });
-    assert.deepEqual(inputs[1], { label: "updated" });
-    assert.equal(item.get("label"), "updated");
-    const persisted = await repository.findByIdOrThrow(item.id);
-    assert.equal(persisted.id, item.id);
-    assert.equal(persisted.scope, "concurrently-updated");
-    assert.equal(persisted.label, "stored:updated");
-    assert.deepEqual(Object.keys(persisted).sort(), ["id", "label", "scope"]);
-
-    item.mergeAttributes({ label: "saved" });
-    await item.save();
-    assert.deepEqual(inputs[2], { label: "saved" });
-    assert.equal((await repository.findByIdOrThrow(item.id)).label, "stored:saved");
-    fail = true;
-    await assert.rejects(item.update({ label: "retry" }), /consumer serialization failure/);
-    assert.equal(item.get("label"), "retry");
-    assert.equal((await repository.findByIdOrThrow(item.id)).label, "stored:saved");
-    await item.save();
-    assert.equal((await repository.findByIdOrThrow(item.id)).label, "stored:retry");
-    await item.save();
-    assert.equal(inputs.length, 5);
-  }
+    const model = defineModel({
+      name: asynchronous ? "AsyncHookItem" : "SyncHookItem",
+      repository,
+      dependencies: [],
+      attributes: {
+        guarded: [],
+        timestamps: false,
+        dehydrate: (attributes) => {
+          inputs.push({ ...attributes });
+          const serialize = () => {
+            if (fail) {
+              fail = false;
+              throw new Error("consumer serialization failure");
+            }
+            return "label" in attributes
+              ? { ...attributes, label: `stored:${attributes.label}` }
+              : { ...attributes };
+          };
+          return asynchronous ? Promise.resolve().then(serialize) : serialize();
+        },
+      },
+      construct: (state, binding) => new HookEntity(state, binding),
+    });
+    return {
+      asynchronous,
+      inputs,
+      repository,
+      model,
+      failNextWrite() {
+        fail = true;
+      },
+    };
+  });
+  return {
+    repositories: fixtures.map((fixture) => fixture.repository),
+    models: fixtures.map((fixture) => fixture.model),
+    async verify(database: DatabaseSession): Promise<void> {
+      const placeholder = database.dialect.placeholder;
+      const storedRow = async (id: number) => {
+        const rows = await database.execute<Row>({
+          text: `SELECT * FROM rebinding_items WHERE id = ${placeholder(1)}`,
+          params: [id],
+        });
+        assert.ok(rows[0]);
+        return rows[0];
+      };
+      for (const fixture of fixtures) {
+        const { asynchronous, inputs } = fixture;
+        const HookItem = database.model(fixture.model);
+        const item = await HookItem.create({
+          scope: asynchronous ? "hook-async" : "hook-sync",
+          label: "created",
+        });
+        assert.equal(item.get("label"), "created");
+        assert.equal((await storedRow(item.id)).label, "stored:created");
+        assert.equal(inputs.length, 1);
+        await item.save();
+        assert.equal(inputs.length, 1, "No-op saves must not invoke the write hook.");
+        await database.execute({
+          text: `UPDATE rebinding_items SET scope = ${placeholder(1)} WHERE id = ${placeholder(2)}`,
+          params: ["concurrently-updated", item.id],
+        });
+        await item.update({ label: "updated" });
+        assert.deepEqual(inputs[1], { label: "updated" });
+        assert.equal(item.get("label"), "updated");
+        const persisted = await storedRow(item.id);
+        assert.equal(persisted.id, item.id);
+        assert.equal(persisted.scope, "concurrently-updated");
+        assert.equal(persisted.label, "stored:updated");
+        assert.deepEqual(Object.keys(persisted).sort(), ["id", "label", "scope"]);
+        item.mergeAttributes({ label: "saved" });
+        await item.save();
+        assert.deepEqual(inputs[2], { label: "saved" });
+        assert.equal((await storedRow(item.id)).label, "stored:saved");
+        fixture.failNextWrite();
+        await assert.rejects(item.update({ label: "retry" }), /consumer serialization failure/);
+        assert.equal(item.get("label"), "retry");
+        assert.equal((await storedRow(item.id)).label, "stored:saved");
+        await item.save();
+        assert.equal((await storedRow(item.id)).label, "stored:retry");
+        await item.save();
+        assert.equal(inputs.length, 5);
+      }
+    },
+  };
 }

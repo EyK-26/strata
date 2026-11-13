@@ -1,7 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
-import type FailedJobService from "./failedJobService";
 import { jobRegistry } from "./jobRegistry";
 import { queueConfig } from "./queueConfig";
+import type { QueueServices } from "./queueServices";
 
 interface QueueJobEnvelope {
   name: string;
@@ -81,7 +81,7 @@ function parseQueueJobEnvelope(rawPayload: string): QueueJobEnvelope | null {
 
 async function runQueueJob(
   envelope: QueueJobEnvelope,
-  failedJobs: Pick<FailedJobService, "recordFailure">,
+  failedJobs: Pick<QueueServices, "recordFailure" | "runAttempt">,
   options: {
     onFailureRecorded?: () => void;
     context?: import("./index").JobContext;
@@ -102,7 +102,9 @@ async function runQueueJob(
   };
 
   try {
-    await job.handle(envelope.payload, { ...context, attempt: attempts + 1 });
+    await failedJobs.runAttempt(envelope, { ...context, attempt: attempts + 1 }, (scoped) =>
+      job.handle(envelope.payload, scoped),
+    );
   } catch (error) {
     options.context?.signal.throwIfAborted();
     const nextAttempt = attempts + 1;

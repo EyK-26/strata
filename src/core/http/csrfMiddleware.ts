@@ -2,7 +2,14 @@ import { currentAuthUser, currentCredentialSource } from "@getstrata/core/auth/a
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { envFlagEnabled, isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { createCsrfOriginPolicy } from "./csrfOriginPolicy";
-import { readSubmittedCsrfTokenFromBody, resolveCsrfToken, verifyCsrfToken } from "./csrfToken";
+import {
+  type CsrfTokenOptions,
+  csrfTokenOptionsFromEnvironment,
+  readSubmittedCsrfTokenFromBody,
+  resolveCsrfToken,
+  verifyCsrfToken,
+  verifyCsrfTokenValue,
+} from "./csrfToken";
 import type { Middleware } from "./middleware";
 import { currentRequestMeta } from "./requestMetaContext";
 
@@ -11,10 +18,13 @@ const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 interface CsrfOptions {
   /** Explicit public origin for TLS offload; requires matching URL authority and Host on every request. */
   targetOrigin?: string;
+  readonly token?: CsrfTokenOptions;
+  readonly allowDevelopmentHeaders?: boolean;
+  readonly samlAcsUrl?: string;
 }
 
-function samlAcsPathname(): string {
-  const configured = process.env.SAML_ACS_URL?.trim();
+function samlAcsPathname(value: string | undefined): string {
+  const configured = value?.trim();
   if (!configured) {
     return "/auth/saml/acs";
   }
@@ -26,9 +36,9 @@ function samlAcsPathname(): string {
   }
 }
 
-function skipsCsrfPath(pathname: string): boolean {
+function skipsCsrfPath(pathname: string, samlPathname: string): boolean {
   return (
-    pathname === samlAcsPathname() ||
+    pathname === samlPathname ||
     pathname.startsWith("/scim/") ||
     pathname.startsWith("/billing/webhooks/")
   );
@@ -46,6 +56,13 @@ function appendSetCookie(response: Response, cookie: string): Response {
 }
 
 function createCsrfMiddleware(options: CsrfOptions = {}): Middleware {
+  const env = Object.freeze({ ...process.env });
+  let tokenOptions = options.token ? Object.freeze({ ...options.token }) : undefined;
+  const capturedToken = () => (tokenOptions ??= csrfTokenOptionsFromEnvironment(env));
+  const production = tokenOptions?.production ?? isProductionEnv(env);
+  const allowDevelopmentHeaders =
+    options.allowDevelopmentHeaders ?? envFlagEnabled(env.AUTH_DEV_HEADERS);
+  const samlPathname = samlAcsPathname(options.samlAcsUrl ?? env.SAML_ACS_URL);
   const targetOrigin = options.targetOrigin;
   const policy = targetOrigin === undefined ? undefined : createCsrfOriginPolicy(targetOrigin);
   return async (request: Request, next: () => Promise<Response>) => {
@@ -54,14 +71,14 @@ function createCsrfMiddleware(options: CsrfOptions = {}): Middleware {
     const developmentHeaderProof =
       credentialSource === "guest" &&
       currentAuthUser() !== null &&
-      envFlagEnabled(process.env.AUTH_DEV_HEADERS) &&
-      !isProductionEnv();
+      allowDevelopmentHeaders &&
+      !production;
     if (credentialSource === "bearer" || credentialSource === "basic" || developmentHeaderProof) {
       return await next();
     }
 
     const pathname = new URL(request.url).pathname;
-    if (skipsCsrfPath(pathname)) {
+    if (skipsCsrfPath(pathname, samlPathname)) {
       return await next();
     }
 
@@ -69,7 +86,10 @@ function createCsrfMiddleware(options: CsrfOptions = {}): Middleware {
 
     if (!MUTATING_METHODS.has(method)) {
       const meta = currentRequestMeta();
-      const csrf = meta.csrfToken ? { token: meta.csrfToken } : resolveCsrfToken(request);
+      const csrf =
+        meta.csrfToken && verifyCsrfTokenValue(meta.csrfToken, capturedToken())
+          ? { token: meta.csrfToken }
+          : resolveCsrfToken(request, capturedToken());
       meta.csrfToken = csrf.token;
       const response = await next();
 
@@ -82,7 +102,7 @@ function createCsrfMiddleware(options: CsrfOptions = {}): Middleware {
 
     const submitted = await readSubmittedCsrfTokenFromBody(request);
 
-    if (!verifyCsrfToken(request, submitted)) {
+    if (!verifyCsrfToken(request, submitted, capturedToken())) {
       throw new ForbiddenError("Invalid or missing CSRF token.");
     }
 

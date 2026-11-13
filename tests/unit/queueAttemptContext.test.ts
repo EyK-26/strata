@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { Job, type JobContext } from "@getstrata/core/queue";
-import type FailedJobService from "@getstrata/core/queue/failedJobService";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 import { runQueueJob } from "@getstrata/core/queue/jobRunner";
+import type { QueueServices } from "@getstrata/core/queue/queueServices";
 
 test("one-based attempts share logical identity across synchronous retries", async () => {
   const seen: JobContext[] = [];
@@ -18,7 +18,8 @@ test("one-based attempts share logical identity across synchronous retries", asy
   const name = `attempt-${crypto.randomUUID()}`;
   jobRegistry.register(name, () => new Retry());
   const failures: unknown[] = [];
-  const failedJobs: Pick<FailedJobService, "recordFailure"> = {
+  const failedJobs: Pick<QueueServices, "recordFailure" | "runAttempt"> = {
+    runAttempt: (_envelope, context, work) => work(context),
     async recordFailure(record) {
       failures.push(record);
       return {

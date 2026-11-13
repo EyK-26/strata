@@ -1,22 +1,26 @@
-import { resolveAuthUserDirectory } from "@getstrata/core/contracts/serviceTokens";
-import type { ServiceContainerLike } from "../contracts/serviceContainer";
-import { resolveAbilitiesForRole } from "./abilityCatalog";
+import type { AuthUserDirectory } from "../contracts/authUserDirectory";
 import { isAccountActive, matchesAuthVersion } from "./accountState";
 import type { AuthUser } from "./authContext";
 import type { AuthGuard } from "./guard";
-import { isSessionInvalidated, readSession } from "./sessionCookie";
+import { isSessionInvalidated, type readSession } from "./sessionCookie";
 
 class SessionGuard implements AuthGuard {
-  constructor(private readonly container: ServiceContainerLike) {}
+  constructor(
+    private readonly directory: AuthUserDirectory,
+    private readonly session: {
+      read(request: Request): ReturnType<typeof readSession>;
+      abilities(role: string): string[];
+    },
+  ) {}
 
   async resolve(request: Request): Promise<AuthUser | null> {
-    const session = readSession(request);
+    const session = this.session.read(request);
 
     if (!session) {
       return null;
     }
 
-    const tokenService = resolveAuthUserDirectory(this.container);
+    const tokenService = this.directory;
 
     if (!tokenService) {
       return null;
@@ -47,7 +51,7 @@ class SessionGuard implements AuthGuard {
         id: user.id,
         role: user.role,
         ...(user.auth_version !== undefined ? { authVersion: user.auth_version } : {}),
-        abilities: resolveAbilitiesForRole(user.role),
+        abilities: this.session.abilities(user.role),
         emailVerifiedAt: user.email_verified_at ?? null,
       };
     } catch {

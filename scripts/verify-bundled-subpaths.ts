@@ -10,6 +10,9 @@ const ENTRIES_DIR = join(import.meta.dir, "../packages/strata-core/dist/entries"
 /** Bundled entries that import @getstrata/core/errors/http and must not inline it. */
 const MUST_EXTERNALIZE_ERRORS = [
   "auth/accessControl",
+  "auth/authReader",
+  "auth/basicAuthGuard",
+  "auth/passwordLogin",
   "auth/membershipScope",
   "auth/membershipService",
   "auth/policy",
@@ -34,6 +37,7 @@ const MUST_EXTERNALIZE_ERRORS = [
   "security/safeUrl",
   "security/stripeWebhook",
   "validation/rules",
+  "tenant/publicTenantHost",
 ];
 
 const errors: string[] = [];

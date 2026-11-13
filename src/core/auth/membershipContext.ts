@@ -1,110 +1,69 @@
 import type { MembershipLookup, OrganizationMemberRole } from "../contracts/membership";
 import { createAsyncContextStore } from "../runtime/asyncContextStore";
 import { isGlobalAdmin, resolveUserId } from "./accessControl";
-import { currentAuthUser } from "./authContext";
+import type { AuthUser } from "./authContext";
 
+type MembershipSnapshot = readonly Readonly<{
+  organization_id: number;
+  role: OrganizationMemberRole;
+}>[];
 type MembershipContext = {
   organizationIds: number[];
   rolesByOrganizationId: Map<number, OrganizationMemberRole>;
 };
-
 const membershipContext = createAsyncContextStore<MembershipContext>(
   "@getstrata/membershipContext",
 );
-
-const uninitializedMembershipLookup: MembershipLookup = {
-  async listForUser() {
-    return [];
-  },
-  async findMembership() {
-    return null;
-  },
-  async listForOrganization() {
-    return [];
-  },
-  async addMember() {
-    throw new Error("configureMembershipLookup() must be called before mutating memberships.");
-  },
-  async removeMember() {
-    throw new Error("configureMembershipLookup() must be called before mutating memberships.");
-  },
-  async updateMemberRole() {
-    throw new Error("configureMembershipLookup() must be called before mutating memberships.");
-  },
-};
-
-let membershipRepository: MembershipLookup = uninitializedMembershipLookup;
-
-function configureMembershipLookup(lookup: MembershipLookup): void {
-  membershipRepository = lookup;
+async function loadMembershipSnapshot(
+  lookup: MembershipLookup,
+  user: AuthUser | null,
+): Promise<MembershipSnapshot> {
+  if (!user || isGlobalAdmin(user)) return Object.freeze([]);
+  const rows = await lookup.listForUser(resolveUserId(user));
+  return Object.freeze(
+    rows.map((row) => Object.freeze({ organization_id: row.organization_id, role: row.role })),
+  );
 }
-
-function resolveMembershipLookup(): MembershipLookup {
-  return membershipRepository;
+function runWithMembershipSnapshot<T>(snapshot: MembershipSnapshot, callback: () => T): T {
+  return membershipContext.run(
+    {
+      organizationIds: snapshot.map((row) => row.organization_id),
+      rolesByOrganizationId: new Map(snapshot.map((row) => [row.organization_id, row.role])),
+    },
+    callback,
+  );
 }
-
-function resetMembershipLookupForTests(): void {
-  membershipRepository = uninitializedMembershipLookup;
-}
-
 async function runWithMembershipContext<T>(
+  lookup: MembershipLookup,
+  user: AuthUser | null,
   callback: () => T | Promise<T>,
-): Promise<T | Promise<T>> {
-  const user = currentAuthUser();
-
-  if (!user || isGlobalAdmin(user)) {
-    return await callback();
-  }
-
-  const memberships = await membershipRepository.listForUser(resolveUserId(user));
-  const context: MembershipContext = {
-    organizationIds: memberships.map((membership) => membership.organization_id),
-    rolesByOrganizationId: new Map(
-      memberships.map((membership) => [membership.organization_id, membership.role]),
-    ),
-  };
-
-  return await membershipContext.run(context, callback);
+): Promise<T> {
+  return await runWithMembershipSnapshot(await loadMembershipSnapshot(lookup, user), callback);
 }
-
 function currentOrgRole(organizationId: number): OrganizationMemberRole | null {
   return membershipContext.getStore()?.rolesByOrganizationId.get(organizationId) ?? null;
 }
-
 function hasOrgMembership(organizationId: number): boolean {
   return currentOrgRole(organizationId) !== null;
 }
-
 function currentOrganizationIds(): number[] {
-  return membershipContext.getStore()?.organizationIds ?? [];
+  return [...(membershipContext.getStore()?.organizationIds ?? [])];
 }
-
 function hasMinimumOrgRole(organizationId: number, minimum: OrganizationMemberRole): boolean {
   const role = currentOrgRole(organizationId);
-
-  if (!role) {
-    return false;
-  }
-
-  const ranks: Record<OrganizationMemberRole, number> = {
-    member: 1,
-    admin: 2,
-    owner: 3,
-  };
-
+  if (!role) return false;
+  const ranks: Record<OrganizationMemberRole, number> = { member: 1, admin: 2, owner: 3 };
   return ranks[role] >= ranks[minimum];
 }
 
-export type { MembershipContext };
+export type { MembershipContext, MembershipSnapshot };
 export {
-  configureMembershipLookup,
   currentOrganizationIds,
   currentOrgRole,
   hasMinimumOrgRole,
   hasOrgMembership,
+  loadMembershipSnapshot,
   membershipContext,
-  membershipRepository,
-  resetMembershipLookupForTests,
-  resolveMembershipLookup,
   runWithMembershipContext,
+  runWithMembershipSnapshot,
 };

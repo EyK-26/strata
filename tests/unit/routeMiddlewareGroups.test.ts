@@ -10,7 +10,11 @@ import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { createAuthorizeMiddleware } from "@getstrata/core/http/authorizeMiddleware";
 import { composeMiddleware } from "@getstrata/core/http/middleware";
-import { enableDevAuthHeaders, restoreDevAuthHeaders } from "../helpers/devAuthHeaders";
+import {
+  enableDevAuthHeaders,
+  guestGuardOptions,
+  restoreDevAuthHeaders,
+} from "../helpers/devAuthHeaders";
 
 class ProjectPolicy extends Policy {
   override delete(user: { role?: string } | null): boolean {
@@ -22,7 +26,7 @@ import { createMockDependencies } from "./testHelpers";
 
 function createKernelDependencies(): AppDependencies {
   const container = new ServiceContainer();
-  container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
+  container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard(guestGuardOptions())));
   container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
 
   return createMockDependencies(
@@ -41,7 +45,7 @@ describe("createAuthorizeMiddleware", () => {
   });
   test("returns 403 when the policy rejects the action", async () => {
     const gate = new PolicyGate();
-    const auth = new AuthManager(new GuestGuard());
+    const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
     gate.register("project", new ProjectPolicy());
     const handler = composeMiddleware(createAuthorizeMiddleware(gate, auth, "project", "delete"))(
       async () => Response.json({ ok: true }),
@@ -54,7 +58,7 @@ describe("createAuthorizeMiddleware", () => {
 
   test("allows authorized users through", async () => {
     const gate = new PolicyGate();
-    const auth = new AuthManager(new GuestGuard());
+    const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
     gate.register("project", new ProjectPolicy());
     const handler = composeMiddleware(createAuthorizeMiddleware(gate, auth, "project", "delete"))(
       async () => Response.json({ ok: true }),

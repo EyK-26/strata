@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { DatabaseConnection } from "@getstrata/core/database/baseRepository";
 import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
+import type { DatabaseConnection } from "../../src/core/database/connectionContracts";
 import { observeIsolatedReadOnly } from "../../src/core/database/isolatedReadOnlyObservation";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 

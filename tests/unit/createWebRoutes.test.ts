@@ -17,6 +17,7 @@ import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { CORE_TOKEN_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { SyncQueue } from "@getstrata/core/queue";
+import { guestGuardOptions } from "../helpers/devAuthHeaders";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 import { createMockDependencies } from "./testHelpers";
 
@@ -29,7 +30,7 @@ function createTestDependencies(): AppDependencies {
     new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
   );
 
-  dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
+  dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard(guestGuardOptions())));
   dependencies.container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
   dependencies.container.set(CORE_QUEUE_TOKEN, new SyncQueue());
   dependencies.container.set(CORE_TOKEN_SERVICE_TOKEN, {

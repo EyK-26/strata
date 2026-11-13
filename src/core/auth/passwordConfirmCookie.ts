@@ -7,12 +7,16 @@ import { matchesAuthVersion } from "./accountState";
 const PASSWORD_CONFIRM_COOKIE = appCookieName("password_confirmed");
 const DEFAULT_PASSWORD_CONFIRM_TTL_SECONDS = 3 * 60 * 60;
 
-function passwordConfirmCookieName(): string {
-  return process.env.PASSWORD_CONFIRM_COOKIE_NAME?.trim() || appCookieName("password_confirmed");
+function passwordConfirmCookieName(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string {
+  return env.PASSWORD_CONFIRM_COOKIE_NAME?.trim() || appCookieName("password_confirmed", env);
 }
 
-function passwordConfirmTtlSeconds(): number {
-  const parsed = Number.parseInt(process.env.PASSWORD_CONFIRM_TIMEOUT ?? "", 10);
+function passwordConfirmTtlSeconds(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): number {
+  const parsed = Number.parseInt(env.PASSWORD_CONFIRM_TIMEOUT ?? "", 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_PASSWORD_CONFIRM_TTL_SECONDS;
 }
 
@@ -20,12 +24,25 @@ function resolvePasswordConfirmSecret(): string {
   return requireConfiguredSecret(["SESSION_SECRET", "OAUTH_STATE_SECRET"], "session-secret");
 }
 
-function signPasswordConfirm(userId: number, confirmedAt: number, authVersion?: number): string {
+export interface PasswordConfirmReadOptions {
+  readonly secret: string;
+  readonly cookieName: string;
+  readonly ttlSeconds: number;
+}
+export interface PasswordConfirmWriteOptions extends PasswordConfirmReadOptions {
+  readonly production: boolean;
+}
+function signPasswordConfirm(
+  userId: number,
+  confirmedAt: number,
+  authVersion?: number,
+  secret?: string,
+): string {
   const payload =
     authVersion === undefined
       ? `${userId}.${confirmedAt}`
       : `v2.${userId}.${confirmedAt}.${authVersion}`;
-  const signature = createHmac("sha256", resolvePasswordConfirmSecret())
+  const signature = createHmac("sha256", secret ?? resolvePasswordConfirmSecret())
     .update(payload)
     .digest("hex");
 
@@ -36,8 +53,12 @@ function hasFreshPasswordConfirmation(
   request: Request,
   userId: number,
   authVersion?: number,
+  options?: PasswordConfirmReadOptions,
 ): boolean {
-  const cookieValue = readRequestCookie(request, passwordConfirmCookieName());
+  const cookieValue = readRequestCookie(
+    request,
+    options?.cookieName ?? passwordConfirmCookieName(),
+  );
 
   if (!cookieValue) {
     return false;
@@ -71,11 +92,16 @@ function hasFreshPasswordConfirmation(
     return false;
   }
 
-  if (Date.now() - confirmedAt > passwordConfirmTtlSeconds() * 1000) {
+  if (Date.now() - confirmedAt > (options?.ttlSeconds ?? passwordConfirmTtlSeconds()) * 1000) {
     return false;
   }
 
-  const expectedSignature = signPasswordConfirm(cookieUserId, confirmedAt, proofVersion)
+  const expectedSignature = signPasswordConfirm(
+    cookieUserId,
+    confirmedAt,
+    proofVersion,
+    options?.secret,
+  )
     .split(".")
     .pop();
 
@@ -93,20 +119,26 @@ function hasFreshPasswordConfirmation(
   return timingSafeEqual(expectedBuffer, actualBuffer);
 }
 
-function createPasswordConfirmCookie(userId: number, authVersion?: number): string {
+function createPasswordConfirmCookie(
+  userId: number,
+  authVersion?: number,
+  options?: PasswordConfirmWriteOptions,
+): string {
   if (authVersion !== undefined && (!Number.isSafeInteger(authVersion) || authVersion < 0))
     throw new Error("Invalid authentication version.");
   const confirmedAt = Date.now();
-  const value = signPasswordConfirm(userId, confirmedAt, authVersion);
-  const secure = isProductionEnv() ? "; Secure" : "";
+  const value = signPasswordConfirm(userId, confirmedAt, authVersion, options?.secret);
+  const secure = (options?.production ?? isProductionEnv()) ? "; Secure" : "";
 
-  return `${passwordConfirmCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${passwordConfirmTtlSeconds()}${secure}`;
+  return `${options?.cookieName ?? passwordConfirmCookieName()}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${options?.ttlSeconds ?? passwordConfirmTtlSeconds()}${secure}`;
 }
 
-function clearPasswordConfirmCookie(): string {
-  const secure = isProductionEnv() ? "; Secure" : "";
+function clearPasswordConfirmCookie(
+  options?: Pick<PasswordConfirmWriteOptions, "production" | "cookieName">,
+): string {
+  const secure = (options?.production ?? isProductionEnv()) ? "; Secure" : "";
 
-  return `${passwordConfirmCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
+  return `${options?.cookieName ?? passwordConfirmCookieName()}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
 }
 
 export {

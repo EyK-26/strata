@@ -18,6 +18,25 @@ interface SignedSession {
   authVersion?: number;
 }
 
+export interface SessionReadOptions {
+  readonly cookieName: string;
+  readonly secret: string;
+  readonly ttlSeconds: number;
+}
+export function createSessionReader(
+  options: SessionReadOptions,
+): (request: Request) => SignedSession | null {
+  const snapshot = Object.freeze({ ...options });
+  if (
+    !snapshot.cookieName ||
+    !snapshot.secret ||
+    !Number.isSafeInteger(snapshot.ttlSeconds) ||
+    snapshot.ttlSeconds <= 0
+  )
+    throw new TypeError("Invalid session reader configuration.");
+  return (request) => readSession(request, snapshot);
+}
+
 function sessionCookieName(): string {
   return process.env.SESSION_COOKIE_NAME?.trim() || appCookieName("session");
 }
@@ -47,6 +66,7 @@ function signSession(
   issuedAt: number,
   ttlSeconds?: number,
   authVersion?: number,
+  secret?: string,
 ): string {
   const payload =
     authVersion !== undefined
@@ -54,7 +74,9 @@ function signSession(
       : ttlSeconds === undefined
         ? `${userId}.${issuedAt}`
         : `${userId}.${issuedAt}.${ttlSeconds}`;
-  const signature = createHmac("sha256", resolveSessionSecret()).update(payload).digest("hex");
+  const signature = createHmac("sha256", secret ?? resolveSessionSecret())
+    .update(payload)
+    .digest("hex");
 
   return `${payload}.${signature}`;
 }
@@ -66,6 +88,7 @@ function readSignedSession(
   ttlSeconds: number,
   remember: boolean,
   authVersion?: number,
+  options?: SessionReadOptions,
 ): SignedSession | null {
   const userId = Number.parseInt(userIdRaw, 10);
   const issuedAt = Number.parseInt(issuedAtRaw, 10);
@@ -84,10 +107,10 @@ function readSignedSession(
 
   const expectedSignature = (
     authVersion !== undefined
-      ? signSession(userId, issuedAt, ttlSeconds, authVersion)
+      ? signSession(userId, issuedAt, ttlSeconds, authVersion, options?.secret)
       : remember
-        ? signSession(userId, issuedAt, ttlSeconds)
-        : signSession(userId, issuedAt)
+        ? signSession(userId, issuedAt, ttlSeconds, undefined, options?.secret)
+        : signSession(userId, issuedAt, undefined, undefined, options?.secret)
   )
     .split(".")
     .pop();
@@ -110,8 +133,8 @@ function readSignedSession(
   return { userId, issuedAt, ...(authVersion !== undefined ? { authVersion } : {}) };
 }
 
-function readSession(request: Request): SignedSession | null {
-  const cookieValue = readRequestCookie(request, sessionCookieName());
+function readSession(request: Request, options?: SessionReadOptions): SignedSession | null {
+  const cookieValue = readRequestCookie(request, options?.cookieName ?? sessionCookieName());
 
   if (!cookieValue) {
     return null;
@@ -134,6 +157,7 @@ function readSession(request: Request): SignedSession | null {
       Number(parts[3]),
       true,
       Number(parts[4]),
+      options,
     );
   }
 
@@ -145,6 +169,8 @@ function readSession(request: Request): SignedSession | null {
       cookieSignature,
       Number.parseInt(String(ttlRaw), 10),
       true,
+      undefined,
+      options,
     );
   }
 
@@ -157,8 +183,10 @@ function readSession(request: Request): SignedSession | null {
     String(userIdRaw),
     String(issuedAtRaw),
     cookieSignature,
-    sessionTtlSeconds(),
+    options?.ttlSeconds ?? sessionTtlSeconds(),
     false,
+    undefined,
+    options,
   );
 }
 

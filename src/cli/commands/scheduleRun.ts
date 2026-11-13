@@ -1,22 +1,37 @@
-import { createAppContext, type InitializedAppContext } from "@getstrata/bootstrap/context";
 import { createScheduleRunCommand } from "@getstrata/cli/schedule";
-import { closeDatabase } from "../../db/connection";
+import { createAuditExporter } from "@getstrata/core/audit/exportAuditLogs";
+import { createAppSchedule } from "../../bootstrap/schedule";
+import { bootQueueApplication } from "./queueApplication";
 
 async function scheduleRunCommand(): Promise<void> {
-  let context: InitializedAppContext | undefined;
+  const environment = Object.freeze({ ...process.env });
+  let app: Awaited<ReturnType<typeof bootQueueApplication>> | undefined;
   await createScheduleRunCommand(
     async () => {
-      context = await createAppContext();
-      await import("../../bootstrap/schedule");
+      app = await bootQueueApplication(false);
+      const invoke = app.context.invoke;
+      const auditExport = createAuditExporter({
+        environment,
+        runSql: (work) =>
+          invoke(
+            { kind: "command", actor: { kind: "system", policy: "audit.export" } },
+            ({ database, policy }) =>
+              environment.TENANCY_DRIVER === "rls"
+                ? policy.run(database, { kind: "bypass" }, work)
+                : database.transaction(work),
+          ),
+      });
+      return createAppSchedule({
+        environment,
+        auditExport,
+        invoke: (envelope, work) => invoke(envelope, () => work()),
+      });
     },
     async () => {
-      try {
-        await context?.dispose();
-      } finally {
-        await closeDatabase();
-      }
+      const result = await app?.application.stop();
+      if (result && !result.successful)
+        throw Error("Schedule application shutdown did not complete cleanly.");
     },
-    { drain: () => context?.drain(), flush: () => context?.flush() },
   )();
 }
 

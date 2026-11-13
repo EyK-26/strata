@@ -1,320 +1,279 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
-import { bindDatabaseConnection } from "@getstrata/core/database/bindConnection";
-import { resetBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
-import { runWithDatabaseConnection } from "@getstrata/core/database/connectionContext";
-import {
-  getDefaultDatabasePool,
-  registerDefaultDatabasePool,
-  resetDefaultDatabasePoolForTests,
-} from "@getstrata/core/database/defaultConnection";
-import { requestTransactionRollback, runInTransaction } from "@getstrata/core/database/transaction";
+import { describe, expect, test } from "bun:test";
+import { createPersistenceInvocation } from "@getstrata/bootstrap/persistenceInvocation";
+import type { ExecutionPersistence } from "@getstrata/core/contracts/persistence";
+import { resourceService } from "@getstrata/core/contracts/services";
+import type { ServiceToken } from "@getstrata/core/contracts/token";
+import { createDatabaseBindings } from "@getstrata/core/database/bindings";
 import { withJsonErrorHandling } from "@getstrata/core/http/response";
-import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
-import { currentTenant, type TenantContext } from "@getstrata/core/tenant/tenantContext";
-import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
-import { getDatabase } from "../../src/db/connection";
-import { restoreEnvVar } from "../helpers/restoreEnv";
+import { createApplication } from "@getstrata/core/runtime/application";
+import { currentTenant, runWithTenant } from "@getstrata/core/tenant/tenantContext";
+import type {
+  Decision,
+  RawPin,
+  RawPool,
+  RawTransaction,
+  SqlStatement,
+  Terminal,
+} from "../../src/core/database/driverPorts";
+import { dialectFor } from "../../src/core/database/sqlDialects";
 import { defaultTestTenant } from "./testHelpers";
 
-const otherTenant: TenantContext = {
-  id: 2,
-  slug: "beta",
-  plan: "pro",
-  region: "us",
-};
-
 type SqlCall = { query: string; params: readonly unknown[] };
-
-type FakeTransaction = {
-  unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
-  savepoint?<T>(callback: (savepoint: FakeTransaction) => Promise<T>): Promise<T>;
-};
-
-function restorePool(previous: SqlDatabaseConnection | null): void {
-  if (previous) {
-    registerDefaultDatabasePool(previous);
-    return;
-  }
-  resetDefaultDatabasePoolForTests();
-  if (process.env.DATABASE_URL) {
-    getDatabase();
-  }
-}
-
-function currentPoolOrNull(): SqlDatabaseConnection | null {
-  try {
-    return getDefaultDatabasePool();
-  } catch {
-    return null;
-  }
-}
-
-function installFakePool(
-  options: { savepoint?: boolean; wrapErrors?: boolean; sessionRow?: boolean } = {},
-): {
-  calls: string[];
-  sql: SqlCall[];
-} {
-  const calls: string[] = [];
-  const sql: SqlCall[] = [];
-  const tx: FakeTransaction = {
-    async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
-      sql.push({ query, params: [...params] });
-      if (query.startsWith("SAVEPOINT ")) calls.push("savepoint");
-      if (query.startsWith("ROLLBACK TO SAVEPOINT ")) calls.push("rollback-savepoint");
-      if (query.includes("current_setting")) {
-        if (options.sessionRow === false) {
-          return [] as T[];
-        }
-        return [{ tenant_id: "1", bypass_rls: "false" }] as T[];
-      }
-      return [] as T[];
+async function fixture(
+  work: (ports: ExecutionPersistence, calls: string[], sql: SqlCall[]) => Promise<void>,
+  options: { wrapErrors?: boolean; sessionRow?: boolean; savepoints?: boolean } = {},
+) {
+  const calls: string[] = [],
+    sql: SqlCall[] = [];
+  const raw: RawTransaction = {
+    async execute<T>(statement: SqlStatement) {
+      sql.push({ query: statement.text, params: [...statement.params] });
+      return (
+        statement.text.includes("current_setting") && options.sessionRow !== false
+          ? [{ tenant_id: "1", bypass_rls: "false", bypass_identifier: "" }]
+          : []
+      ) as T[];
     },
-    async savepoint<T>(callback: (savepoint: FakeTransaction) => Promise<T>): Promise<T> {
+    async savepoint(work) {
       calls.push("savepoint");
-      try {
-        return await callback(tx);
-      } catch (error) {
-        calls.push("rollback-savepoint");
-        throw error;
-      }
+      const decision = await work(raw);
+      if (decision.finish === "rollback") calls.push("rollback-savepoint");
+      return {
+        data: decision.finish === "commit" ? "released" : "rolled-back",
+        nativeState: "transaction-active",
+        stage: { kind: "decided", decision },
+        phases: [
+          ...(decision.finish === "rollback"
+            ? [
+                {
+                  phase: "rollback-to" as const,
+                  acknowledgement: "confirmed-reply" as const,
+                  failure: null,
+                },
+              ]
+            : []),
+          { phase: "release-savepoint", acknowledgement: "confirmed-reply", failure: null },
+        ],
+        failure: null,
+      };
     },
   };
-  if (options.savepoint === false) {
-    delete (tx as { savepoint?: unknown }).savepoint;
-  }
-
-  const pool = Object.assign(async () => [] as unknown[], {
-    async begin<T>(callback: (transaction: FakeTransaction) => Promise<T>): Promise<T> {
+  const pin: RawPin = {
+    async begin<R>(work: (tx: RawTransaction) => Promise<Decision<R>>): Promise<Terminal<R>> {
       calls.push("begin");
-      try {
-        const result = await callback(tx);
-        calls.push("commit");
-        return result;
-      } catch (error) {
-        calls.push("rollback");
-        if (options.wrapErrors) {
-          throw new Error("wrapped", { cause: error });
-        }
-        throw error;
-      }
+      const decision = await work(raw);
+      calls.push(decision.finish);
+      return {
+        data: decision.finish === "commit" ? "committed" : "rolled-back",
+        nativeState: "idle",
+        stage: { kind: "decided", decision },
+        phases: [
+          { phase: "begin", acknowledgement: "confirmed-reply", failure: null },
+          { phase: decision.finish, acknowledgement: "confirmed-reply", failure: null },
+        ],
+        failure:
+          options.wrapErrors && decision.finish === "rollback"
+            ? { error: new Error("wrapped driver rollback observation") }
+            : null,
+      };
     },
-    async close() {},
-    async unsafe<T>() {
-      return [] as T[];
+    async release() {
+      return { ok: true };
     },
+    async discard() {
+      return { ok: true };
+    },
+  };
+  const pool: RawPool = {
+    dialect: dialectFor("pgsql"),
+    capabilities: {
+      driver: "pgsql",
+      transactions: true,
+      savepoints: options.savepoints !== false,
+      rowLocks: true,
+      postgresRls: true,
+      cancellableCheckout: false,
+      observableCheckout: false,
+      isolatedDiscard: false,
+    },
+    execute: raw.execute,
+    async checkout() {
+      return { ok: true, value: pin };
+    },
+    close() {},
+  };
+  const services = createDatabaseBindings({
+    default: "main",
+    connections: { main: { driver: "sqlite", filename: ":memory:" } },
   });
-  registerDefaultDatabasePool(pool as SqlDatabaseConnection);
-  return { calls, sql };
+  const declaration = services.find((value) => value.kind === "resource");
+  if (declaration?.kind !== "resource") throw Error("Missing fixture resource");
+  const app = createApplication({
+    providers: [],
+    services,
+    overrides: [
+      resourceService(declaration.token as ServiceToken<RawPool>, {
+        lifetime: "application",
+        dependencies: declaration.dependencies,
+        create: () => ({
+          name: "rollback-sql-fixture",
+          open: () => ({ ok: true, value: pool }),
+          close: () => {},
+        }),
+      }),
+    ],
+  });
+  await app.start();
+  try {
+    await createPersistenceInvocation(app, "main")(
+      { kind: "command", tenant: { id: 1 }, actor: { kind: "system", policy: "rollback-fixture" } },
+      (ports) => runWithTenant(defaultTestTenant, () => work(ports, calls, sql)),
+    );
+  } finally {
+    await app.stop();
+  }
 }
+const tenant = { kind: "tenant" as const, tenantId: 1 };
 
 describe("transaction rollback boundaries", () => {
-  const previousTenancy = process.env.TENANCY_DRIVER;
-  const previousPool = currentPoolOrNull();
-
-  afterEach(() => {
-    restorePool(previousPool);
-    restoreEnvVar("TENANCY_DRIVER", previousTenancy);
-    resetBoundDatabaseConnection();
-  });
-
-  test("requestTransactionRollback outside a transaction does nothing", () => {
-    requestTransactionRollback();
-  });
-
-  test("rolls back when JSON error handling swallows a thrown error", async () => {
-    process.env.TENANCY_DRIVER = "rls";
-    const { calls } = installFakePool();
-
-    const response = await runWithTenantDatabase(defaultTestTenant, async () => {
-      return await withJsonErrorHandling(async () => {
-        throw new Error("observer failed");
-      })();
-    });
-
-    expect(response.status).toBe(500);
-    expect(calls).toContain("rollback");
-    expect(calls).not.toContain("commit");
-  });
-
-  test("unwraps a driver error that wraps the rollback signal", async () => {
-    process.env.TENANCY_DRIVER = "rls";
-    const { calls } = installFakePool({ wrapErrors: true });
-
-    const response = await runWithTenantDatabase(defaultTestTenant, async () => {
-      return await withJsonErrorHandling(async () => {
-        throw new Error("observer failed");
-      })();
-    });
-
-    expect(response.status).toBe(500);
-    expect(calls).toContain("rollback");
-    expect(calls).not.toContain("commit");
-  });
-
-  test("commits a returned 4xx response", async () => {
-    process.env.TENANCY_DRIVER = "rls";
-    const { calls } = installFakePool();
-
-    const response = await runWithTenantDatabase(defaultTestTenant, async () => {
-      return new Response("invalid", { status: 422 });
-    });
-
-    expect(response.status).toBe(422);
-    expect(calls).toContain("commit");
-    expect(calls).not.toContain("rollback");
-  });
-
-  test("propagates a thrown error and rolls back the outer transaction", async () => {
-    process.env.TENANCY_DRIVER = "rls";
-    const { calls } = installFakePool();
-
-    await expect(
-      runWithTenantDatabase(defaultTestTenant, async () => {
-        throw new Error("db down");
-      }),
-    ).rejects.toThrow("db down");
-
-    expect(calls).toContain("rollback");
-    expect(calls).not.toContain("commit");
-  });
-
-  test("rejects a different tenant before changing the database context", async () => {
-    process.env.TENANCY_DRIVER = "rls";
-    const { calls, sql } = installFakePool();
-    await runWithTenantDatabase(defaultTestTenant, async () => {
-      await expect(runWithTenantDatabase(otherTenant, async () => undefined)).rejects.toThrow(
-        "Cannot switch tenants",
+  for (const wrapped of [false, true])
+    test(
+      wrapped
+        ? "unwraps a driver error that wraps the rollback observation"
+        : "rolls back before JSON error handling formats a thrown error",
+      async () =>
+        fixture(
+          async ({ database, policy }, calls) => {
+            const response = await withJsonErrorHandling(() =>
+              policy.run(database, tenant, async () => {
+                throw new Error("observer failed");
+              }),
+            )();
+            expect(response.status).toBe(500);
+            expect(calls).toContain("rollback");
+            expect(calls).not.toContain("commit");
+          },
+          { wrapErrors: wrapped },
+        ),
+    );
+  test("commits a returned 4xx response", async () =>
+    fixture(async ({ database, policy }, calls) => {
+      const response = await policy.run(
+        database,
+        tenant,
+        async () => new Response("invalid", { status: 422 }),
       );
-      expect(currentTenant()?.id).toBe(1);
-    });
-    expect(
-      sql
-        .filter((call) => call.query.includes("set_config('app.tenant_id'"))
-        .map((call) => call.params[0]),
-    ).toEqual(["1"]);
-    expect(calls).not.toContain("savepoint");
-    expect(calls).toContain("commit");
-    expect(currentTenant()).toBeNull();
-  });
-
-  test("rolls back a nested savepoint when the inner scope throws", async () => {
-    process.env.TENANCY_DRIVER = "rls";
-    const { calls } = installFakePool();
-
-    const result = await runWithTenantDatabase(defaultTestTenant, async () => {
-      try {
-        await runWithTenantDatabase(defaultTestTenant, async () => {
-          throw new Error("inner");
-        });
-        return "unexpected";
-      } catch (error) {
-        return error instanceof Error ? error.message : "unknown";
-      }
-    });
-
-    expect(result).toBe("inner");
-    expect(calls).toContain("rollback-savepoint");
-    expect(calls).toContain("commit");
-    expect(calls).not.toContain("rollback");
-  });
-
-  test("rolls back a nested savepoint when error handling returns a response", async () => {
-    process.env.TENANCY_DRIVER = "rls";
-    const { calls } = installFakePool();
-
-    const response = await runWithTenantDatabase(defaultTestTenant, async () => {
-      return await runWithTenantDatabase(defaultTestTenant, async () => {
-        return await withJsonErrorHandling(async () => {
-          throw new Error("observer failed");
-        })();
-      });
-    });
-
-    expect(response.status).toBe(500);
-    expect(calls).toContain("rollback-savepoint");
-    expect(calls).toContain("commit");
-    expect(calls).not.toContain("rollback");
-  });
-
-  test("restores tenant session when the open connection has no savepoint", async () => {
-    process.env.TENANCY_DRIVER = "rls";
-    const { calls, sql } = installFakePool({ savepoint: false, sessionRow: false });
-
-    await runWithTenantDatabase(defaultTestTenant, async () => {
-      await runWithTenantDatabase(defaultTestTenant, async () => {
+      expect(response.status).toBe(422);
+      expect(calls).toContain("commit");
+      expect(calls).not.toContain("rollback");
+    }));
+  test("propagates a thrown error and rolls back the outer transaction", async () =>
+    fixture(async ({ database, policy }, calls) => {
+      await expect(
+        policy.run(database, tenant, async () => {
+          throw new Error("db down");
+        }),
+      ).rejects.toThrow("db down");
+      expect(calls).toContain("rollback");
+      expect(calls).not.toContain("commit");
+    }));
+  test("rejects a different tenant before changing the database context", async () =>
+    fixture(async ({ database, policy }, calls, sql) => {
+      await policy.run(database, tenant, async (child) => {
+        expect(() =>
+          policy.run(child, { kind: "tenant", tenantId: 2 }, async () => undefined),
+        ).toThrow("tenant identity mismatch");
         expect(currentTenant()?.id).toBe(1);
       });
-      expect(currentTenant()?.id).toBe(1);
-    });
-
-    expect(calls).toContain("savepoint");
-    expect(sql.some((call) => call.params[0] === "")).toBe(true);
-    expect(calls).toContain("commit");
-  });
-
-  test("uses a savepoint for runInTransaction inside an open tenant transaction", async () => {
-    process.env.TENANCY_DRIVER = "rls";
-    const { calls } = installFakePool();
-
-    const result = await runWithTenantDatabase(defaultTestTenant, async () => {
-      await expect(
-        runInTransaction(async () => {
-          throw new Error("save");
-        }),
-      ).rejects.toThrow("save");
-      return "outer-ok";
-    });
-
-    expect(result).toBe("outer-ok");
-    expect(calls).toContain("rollback-savepoint");
-    expect(calls).toContain("commit");
-  });
-
-  test("runInTransaction uses SQL savepoints without a driver savepoint helper", async () => {
-    const calls: string[] = [];
-    bindDatabaseConnection({
-      async unsafe() {
-        return [];
-      },
-      async begin<T>(callback: (connection: { unsafe: () => Promise<unknown[]> }) => Promise<T>) {
-        calls.push("begin");
-        return await callback({
-          async unsafe() {
-            return [];
-          },
+      expect(
+        sql
+          .filter((call) => call.query.includes("set_config('app.tenant_id'"))
+          .map((call) => call.params[0]),
+      ).toEqual(["1", "1"]);
+      expect(calls).not.toContain("savepoint");
+      expect(calls).toContain("commit");
+    }));
+  test("rolls back a nested savepoint when the inner scope throws", async () =>
+    fixture(async ({ database, policy }, calls) => {
+      const result = await policy.run(database, tenant, async (child) => {
+        try {
+          await policy.run(child, tenant, async () => {
+            throw new Error("inner");
+          });
+          return "unexpected";
+        } catch (error) {
+          return error instanceof Error ? error.message : "unknown";
+        }
+      });
+      expect(result).toBe("inner");
+      expect(calls).toContain("rollback-savepoint");
+      expect(calls).toContain("commit");
+      expect(calls).not.toContain("rollback");
+    }));
+  test("rolls back a nested savepoint before error handling returns a response", async () =>
+    fixture(async ({ database, policy }, calls) => {
+      const response = await policy.run(database, tenant, (child) =>
+        withJsonErrorHandling(() =>
+          policy.run(child, tenant, async () => {
+            throw new Error("observer failed");
+          }),
+        )(),
+      );
+      expect(response.status).toBe(500);
+      expect(calls).toContain("rollback-savepoint");
+      expect(calls).toContain("commit");
+      expect(calls).not.toContain("rollback");
+    }));
+  test("restores missing tenant session settings via canonical savepoints", async () =>
+    fixture(
+      async ({ database, policy }, calls, sql) => {
+        await policy.run(database, tenant, async (child) => {
+          await policy.run(child, tenant, async () => {
+            expect(currentTenant()?.id).toBe(1);
+          });
+          expect(currentTenant()?.id).toBe(1);
         });
+        expect(calls).toContain("savepoint");
+        expect(sql.some((call) => call.params[0] === "")).toBe(true);
+        expect(calls).toContain("commit");
       },
-    } as unknown as SqlDatabaseConnection);
-
-    await runWithDatabaseConnection(
-      {
-        async unsafe() {
-          return [];
-        },
-      },
-      async () => {
-        await runInTransaction(async (connection) => {
-          await connection.unsafe("SELECT 1");
+      { sessionRow: false },
+    ));
+  test("uses a savepoint for an explicit transaction inside an open tenant transaction", async () =>
+    fixture(async ({ database, policy }, calls) => {
+      const result = await policy.run(database, tenant, async (child) => {
+        await expect(
+          child.transaction(async () => {
+            throw new Error("save");
+          }),
+        ).rejects.toThrow("save");
+        return "outer-ok";
+      });
+      expect(result).toBe("outer-ok");
+      expect(calls).toContain("rollback-savepoint");
+      expect(calls).toContain("commit");
+    }));
+  test("rejects unsupported canonical savepoints before SQL", async () =>
+    fixture(
+      async ({ database }, calls, sql) => {
+        await database.transaction(async (child) => {
+          await expect(child.transaction(async () => undefined)).rejects.toMatchObject({
+            code: "DATABASE_UNSUPPORTED_CAPABILITY",
+          });
         });
+        expect(calls).toEqual(["begin", "commit"]);
+        expect(sql).toEqual([]);
       },
-    );
-
-    expect(calls).toEqual([]);
-  });
-
-  test("requestTransactionRollback rolls back a migration bypass transaction", async () => {
-    process.env.TENANCY_DRIVER = "rls";
-    const { calls } = installFakePool();
-
-    const result = await runWithMigrationBypass(async () => {
-      requestTransactionRollback();
-      return "rolled";
-    });
-
-    expect(result).toBe("rolled");
-    expect(calls).toContain("rollback");
-    expect(calls).not.toContain("commit");
-  });
+      { savepoints: false },
+    ));
+  test("requestRollback rolls back an explicit migration bypass transaction", async () =>
+    fixture(async ({ database, policy }, calls) => {
+      const result = await policy.run(database, { kind: "bypass" }, async (child) => {
+        child.requestRollback();
+        return "rolled";
+      });
+      expect(result).toBe("rolled");
+      expect(calls).toContain("rollback");
+      expect(calls).not.toContain("commit");
+    }));
 });

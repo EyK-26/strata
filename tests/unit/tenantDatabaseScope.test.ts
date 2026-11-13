@@ -1,113 +1,83 @@
 import { describe, expect, test } from "bun:test";
-import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
-import {
-  getDefaultDatabasePool,
-  registerDefaultDatabasePool,
-  resetDefaultDatabasePoolForTests,
-} from "@getstrata/core/database/defaultConnection";
 import { currentTenant, currentTenantId } from "@getstrata/core/tenant/tenantContext";
-import {
-  isInsideTenantDatabaseScope,
-  runWithTenantDatabase,
-} from "@getstrata/core/tenant/tenantDatabaseScope";
-import { getDatabase } from "../../src/db/connection";
-import { restoreEnvVar } from "../helpers/restoreEnv";
-import { defaultTestTenant } from "./testHelpers";
+import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
+import { withPolicyPersistence } from "../helpers/policyPersistence";
 
-function restorePool(previous: SqlDatabaseConnection | null): void {
-  if (previous) {
-    registerDefaultDatabasePool(previous);
-    return;
-  }
-  resetDefaultDatabasePoolForTests();
-  if (process.env.DATABASE_URL) {
-    getDatabase();
-  }
-}
-
-function currentPoolOrNull(): SqlDatabaseConnection | null {
-  try {
-    return getDefaultDatabasePool();
-  } catch {
-    return null;
-  }
-}
-
+const tenant = { id: 1, slug: "acme" };
 describe("runWithTenantDatabase", () => {
-  test("sets application tenant context for the callback", async () => {
-    await runWithTenantDatabase(defaultTestTenant, async () => {
-      expect(currentTenant()).toEqual(defaultTestTenant);
-      expect(currentTenantId()).toBe(1);
-    });
-
+  test("sets callback tenant context and restores it after nested selected scopes", async () => {
+    const statements: Array<{ text: string; params: readonly unknown[] }> = [];
+    await withPolicyPersistence(
+      {
+        async unsafe<T>(text: string, params: readonly unknown[] = []): Promise<T[]> {
+          statements.push({ text, params });
+          return [];
+        },
+      },
+      async ({ database, policy }) => {
+        await runWithTenantDatabase(database, policy, tenant, async (child) => {
+          expect(currentTenant()).toEqual(tenant);
+          expect(currentTenantId()).toBe(1);
+          await runWithTenantDatabase(child, policy, tenant, async (nested) => {
+            expect(nested).not.toBe(child);
+            expect(currentTenantId()).toBe(1);
+            await nested.execute({ text: "SELECT nested_work", params: [] });
+          });
+          expect(currentTenant()).toEqual(tenant);
+        });
+        expect(currentTenant()).toBeNull();
+      },
+      { envelope: { kind: "command", tenant } },
+    );
+    expect(
+      statements.filter((row) =>
+        row.text.includes(
+          "set_config('app.tenant_id', $1, true), set_config('app.bypass_rls', $2, true)",
+        ),
+      ),
+    ).toHaveLength(2);
+    expect(
+      statements.filter((row) => row.params[0] === "1" && row.params[1] === "false"),
+    ).toHaveLength(2);
     expect(currentTenant()).toBeNull();
   });
-
-  test("reuses the active connection instead of opening nested transactions", async () => {
-    const { hasActiveDatabaseConnection } = await import(
-      "@getstrata/core/database/connectionContext"
-    );
-
-    await runWithTenantDatabase(defaultTestTenant, async () => {
-      expect(hasActiveDatabaseConnection()).toBe(true);
-      expect(isInsideTenantDatabaseScope()).toBe(true);
-      expect(isInsideTenantDatabaseScope(99)).toBe(false);
-
-      await runWithTenantDatabase(defaultTestTenant, async () => {
-        expect(hasActiveDatabaseConnection()).toBe(true);
-        expect(currentTenantId()).toBe(1);
-        expect(isInsideTenantDatabaseScope()).toBe(true);
-      });
-    });
-
-    expect(isInsideTenantDatabaseScope()).toBe(false);
-  });
-
-  test("skips SET LOCAL when TENANCY_DRIVER=none", async () => {
-    const previous = process.env.TENANCY_DRIVER;
-    process.env.TENANCY_DRIVER = "none";
-
-    try {
-      await runWithTenantDatabase(defaultTestTenant, async () => {
-        expect(currentTenant()).toEqual(defaultTestTenant);
-      });
-    } finally {
-      restoreEnvVar("TENANCY_DRIVER", previous);
-    }
-  });
-
-  test("skips SET LOCAL when TENANCY_DRIVER=column", async () => {
-    const previous = process.env.TENANCY_DRIVER;
-    process.env.TENANCY_DRIVER = "column";
-
-    try {
-      await runWithTenantDatabase(defaultTestTenant, async () => {
-        expect(currentTenant()).toEqual(defaultTestTenant);
-      });
-    } finally {
-      restoreEnvVar("TENANCY_DRIVER", previous);
-    }
-  });
-
-  test("throws when RLS is on and the pool has no begin()", async () => {
-    const previous = process.env.TENANCY_DRIVER;
-    process.env.TENANCY_DRIVER = "rls";
-    const restored = currentPoolOrNull();
-    const pool = Object.assign(async () => [] as unknown[], {
-      async close() {},
-      async unsafe<T>() {
-        return [] as T[];
+  test("refuses an unestablished or different tenant before invoking the callback", async () => {
+    let calls = 0;
+    await withPolicyPersistence(
+      {
+        async unsafe() {
+          calls++;
+          return [];
+        },
       },
-    });
-    registerDefaultDatabasePool(pool as SqlDatabaseConnection);
-
-    try {
-      await expect(runWithTenantDatabase(defaultTestTenant, async () => "ok")).rejects.toThrow(
-        /RLS tenant scope requires a pool that supports begin/,
-      );
-    } finally {
-      restorePool(restored);
-      restoreEnvVar("TENANCY_DRIVER", previous);
-    }
+      async ({ database, policy }) => {
+        expect(() =>
+          runWithTenantDatabase(database, policy, { id: 2, slug: "other" }, async () => {
+            calls++;
+          }),
+        ).toThrow("Established tenant identity mismatch");
+      },
+      { envelope: { kind: "command", tenant } },
+    );
+    expect(calls).toBe(0);
   });
+  for (const driver of ["sqlite", "mysql"] as const)
+    test(`requires PostgreSQL for explicit RLS on ${driver}`, async () => {
+      let queries = 0;
+      await withPolicyPersistence(
+        {
+          async unsafe() {
+            queries++;
+            return [];
+          },
+        },
+        async ({ database, policy }) => {
+          expect(() => runWithTenantDatabase(database, policy, tenant, async () => "nope")).toThrow(
+            /requires PostgreSQL/,
+          );
+        },
+        { driver, envelope: { kind: "command", tenant } },
+      );
+      expect(queries).toBe(0);
+    });
 });

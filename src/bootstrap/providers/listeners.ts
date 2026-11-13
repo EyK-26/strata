@@ -1,16 +1,4 @@
-import type { ServiceProvider } from "../contracts";
-import { discoverListeners } from "../discoverListeners";
-import { registerInvalidateCacheOnModelWriteListeners } from "../listeners/invalidateCacheOnModelWrite";
+/** Collect these inert declarations before passing their services/effects into application assembly. */
 
-const listenersProvider: ServiceProvider = {
-  name: "core.listeners",
-  async boot({ onCleanup }) {
-    onCleanup(registerInvalidateCacheOnModelWriteListeners());
-
-    for (const registerListener of await discoverListeners()) {
-      await registerListener();
-    }
-  },
-};
-
-export default listenersProvider;
+export type { DiscoverListenersOptions, ListenerDeclarations } from "../discoverListeners";
+export { discoverListeners } from "../discoverListeners";

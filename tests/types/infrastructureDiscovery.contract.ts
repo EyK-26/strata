@@ -17,8 +17,13 @@ export async function infrastructureContract(): Promise<void> {
     { name: "injected", create: () => new Declared() },
   ];
   const names: string[] = await discoverJobs({ manifest });
-  const registrars = await discoverListeners({ manifest: [async () => {}] });
-  await registrars[0]?.();
+  const declarations = await discoverListeners({
+    manifest: [{ services: [], repositoryEffects: [] }],
+  });
+  const immutableServices: readonly unknown[] = declarations[0]?.services ?? [];
+  void immutableServices;
+  // @ts-expect-error Listener discovery accepts inert declarations, never registrar effects.
+  await discoverListeners({ manifest: [async () => {}] });
   configureModulesManifest([
     { name: "app", providers: [{ name: "service", boot: async () => {} }] },
   ]);

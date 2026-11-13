@@ -2,16 +2,21 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import {
   configureModulesDirectory,
+  discoverModules,
   ensureModulesLoaded,
   resetDiscoverModulesForTests,
 } from "@getstrata/bootstrap/discoverModules";
-import { registerInvalidateCacheOnModelWriteListeners } from "@getstrata/bootstrap/listeners/invalidateCacheOnModelWrite";
+import { createModelCacheInvalidationEffects } from "@getstrata/bootstrap/listeners/invalidateCacheOnModelWrite";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { CACHE_TAGS } from "@getstrata/core/cache/tags";
-import { EventBus } from "@getstrata/core/events";
+import { createServiceToken } from "@getstrata/core/contracts/token";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineRepository } from "@getstrata/core/database/definitions";
 import { InvalidateCacheTagsJob } from "@getstrata/core/jobs/invalidateCacheTagsJob";
+import type { Queue } from "@getstrata/core/queue";
+import type { CacheLike } from "../../src/types/services";
 
 const FIXTURE_MODULES = join(import.meta.dir, "../fixtures/discover-modules");
 
@@ -21,21 +26,24 @@ beforeAll(async () => {
   await ensureModulesLoaded();
 });
 
-describe("registerInvalidateCacheOnModelWriteListeners", () => {
+describe("createModelCacheInvalidationEffects", () => {
   test("registers organization write listeners", () => {
-    const bus = new EventBus();
-    const events: string[] = [];
-    const originalListen = bus.listen.bind(bus);
-
-    bus.listen = (event, handler) => {
-      events.push(event);
-      return originalListen(event, handler);
-    };
-
-    registerInvalidateCacheOnModelWriteListeners(bus);
-
+    const definition = defineRepository({
+      name: "Organization",
+      table: { name: "organization", primaryKey: "id", columns: ["id"] },
+      dependencies: [],
+      create: (binding) => new BaseRepository(binding),
+    });
+    const declarations = createModelCacheInvalidationEffects([definition], discoverModules(), {
+      cache: createServiceToken<CacheLike>("cache"),
+      queue: createServiceToken<Queue>("queue"),
+    });
+    const events = declarations.repositoryEffects.flatMap((value) =>
+      value.effects.map((effect) => `${value.definition.table.name}.${effect.action}`),
+    );
     expect(events).toContain("organization.created");
     expect(events).toContain("organization.updated");
+    expect(Object.isFrozen(declarations.repositoryEffects)).toBe(true);
   });
 
   test("InvalidateCacheTagsJob flushes tagged cache entries", async () => {

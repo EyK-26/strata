@@ -5,8 +5,10 @@ import { join } from "node:path";
 /** Compile unsuppressed negative consumers separately from the valid generated project. */
 async function verifyModelRepositoryRejections(app: string): Promise<void> {
   const cases: { code: string; diagnostic: string }[] = [];
-  for (const generic of ["", "<LeadRecord, 'id'>"]) {
-    const repository = `Lead.repository${generic}()`;
+  for (const repository of [
+    "database.repository(LeadRepository)",
+    "database.model(Lead).repository()",
+  ]) {
     cases.push(
       {
         code: `${repository}.upsert({id:'id',email:'fixture@example.test',attempts:0},['missing'],['email']);`,
@@ -31,12 +33,16 @@ async function verifyModelRepositoryRejections(app: string): Promise<void> {
     );
   }
   cases.push(
-    { code: "Lead.repository().findById(123);", diagnostic: "TS2345" },
-    { code: "Stock.repository().findById(123);", diagnostic: "TS2345" },
-    { code: 'Lead.repository<LeadRecord,"missing">();', diagnostic: "TS2344" },
+    { code: "database.repository(LeadRepository).findById(123);", diagnostic: "TS2345" },
+    { code: "database.repository(StockRepository).findById(123);", diagnostic: "TS2345" },
+    {
+      code: 'database.repository<LeadRecord,"missing",BaseRepository<LeadRecord,"id">>(LeadRepository);',
+      diagnostic: "TS2344",
+    },
   );
   const file = join(app, "src/model-repository-negative.ts");
-  const header = 'import {Lead, Stock, type LeadRecord} from "./model-repository.contract";\n';
+  const header =
+    'import {Lead, LeadRepository, StockRepository, type LeadRecord} from "./model-repository.contract"; import type {BaseRepository} from "@getstrata/core/database/baseRepository"; import type {DatabaseSession} from "@getstrata/core/database/session"; declare const database:DatabaseSession;\n';
   await writeFile(file, `${header}${cases.map((x) => x.code).join("\n")}\n`);
   try {
     const p = Bun.spawn([process.execPath, "x", "--no-install", "tsc", "--noEmit"], {

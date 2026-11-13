@@ -1,8 +1,9 @@
 import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
 import { createLegacyCachedJson } from "./legacyCache";
-import { applyModuleRouteMiddleware } from "./moduleRouteMiddleware";
+import { enterModuleRoutes } from "./moduleRouteMiddleware";
 import { discoverModules } from "./modules";
+import type { BusinessRouteHandler } from "./persistenceContracts";
 import { registerOpenApiRouteMap } from "./routeMetadata";
 import { routeRegistry } from "./routeRegistry";
 
@@ -24,7 +25,7 @@ function buildWebModuleRoutes(
 
   const kernel = createHttpKernel(dependencies);
   const cachedJson = createLegacyCachedJson(dependencies);
-  const middleware = kernel.globalMiddleware("web");
+
   const moduleRoutes: Record<string, unknown> = { ...seedRoutes };
 
   for (const module of modules) {
@@ -42,9 +43,8 @@ function buildWebModuleRoutes(
     );
   }
 
-  return applyModuleRouteMiddleware(
-    registerOpenApiRouteMap(moduleRoutes, ["global", "web"]),
-    middleware,
+  return enterModuleRoutes(registerOpenApiRouteMap(moduleRoutes, ["global", "web"]), (callback) =>
+    kernel.composed(callback as BusinessRouteHandler, "web"),
   ) as AppRouteMap;
 }
 

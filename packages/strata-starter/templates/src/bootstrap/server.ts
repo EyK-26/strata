@@ -3,38 +3,19 @@ import {
   installGracefulShutdownSignals,
   LifecycleCoordinator,
 } from "@getstrata/core/lifecycle/gracefulShutdown";
-import { bootstrapApp, createAppServer } from "./createApp.ts";
-import { closeDatabase } from "./database.ts";
+import { createAppServer } from "./createApp.ts";
 
-const { routes, config, context } = await bootstrapApp();
+// HTTP is declared before start and acquired by this application's journal.
+const app = await createAppServer();
+if (!app.server) throw new Error("HTTP transport did not start.");
+console.log(`Listening on ${app.server.url.origin} (APP_URL ${app.config.appUrl})`);
 const lifecycle = new LifecycleCoordinator();
-let server: ReturnType<typeof createAppServer>;
-try {
-  server = createAppServer(
-    routes,
-    config.port,
-    lifecycle,
-    config.hostname ? { hostname: config.hostname } : undefined,
-  );
-} catch (error) {
-  const failures: unknown[] = [];
-  for (const cleanup of [() => context.dispose(), closeDatabase]) {
-    try {
-      await cleanup();
-    } catch (failure) {
-      failures.push(failure);
-    }
-  }
-  if (failures.length)
-    throw new AggregateError([error, ...failures], "Application startup and cleanup failed.", {
-      cause: error,
-    });
-  throw error;
-}
-console.log(`Listening on ${server.url.origin} (APP_URL ${config.appUrl})`);
-
-lifecycle.register("providers:drain", () => context.drain(), "drain");
-lifecycle.register("providers:flush", () => context.flush(), "flush");
-lifecycle.register("providers:close", () => context.dispose(), "close");
-lifecycle.register("database", closeDatabase, "close");
+lifecycle.register(
+  "application",
+  async () => {
+    const result = await app.application.stop({ reason: "SIGNAL" });
+    if (!result.successful) throw new Error("Application shutdown did not complete cleanly.");
+  },
+  "stop",
+);
 installGracefulShutdownSignals(undefined, lifecycle);

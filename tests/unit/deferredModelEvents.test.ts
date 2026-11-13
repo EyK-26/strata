@@ -1,28 +1,17 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
-import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
-import { bindDatabaseConnection } from "@getstrata/core/database/bindConnection";
-import { resetBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
+import { expect, test } from "bun:test";
+import { valueService } from "@getstrata/core/contracts/services";
+import { createServiceToken } from "@getstrata/core/contracts/token";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { createDatabaseBindings } from "@getstrata/core/database/bindings";
 import {
-  getDefaultDatabasePool,
-  registerDefaultDatabasePool,
-  resetDefaultDatabasePoolForTests,
-} from "@getstrata/core/database/defaultConnection";
+  type AfterCommitRepositoryListener,
+  defineRepository,
+} from "@getstrata/core/database/definitions";
 import { defineTable } from "@getstrata/core/database/table";
-import {
-  afterCommit,
-  hasActiveTransaction,
-  runInTransaction,
-} from "@getstrata/core/database/transaction";
-import { dispatchModelEvent, eventBus, runWithDeferredModelEvents } from "@getstrata/core/events";
-import {
-  currentTenant,
-  runWithTenant,
-  type TenantContext,
-} from "@getstrata/core/tenant/tenantContext";
-import { getDatabase } from "../../src/db/connection";
-import { restoreEnvVar } from "../helpers/restoreEnv";
-import { defaultTestTenant } from "./testHelpers";
+import { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
+import { createApplication } from "@getstrata/core/runtime/application";
+import type { DatabaseConnection } from "../../src/core/database/connectionContracts";
+import { withRepositories } from "../helpers/boundRepositoryHarness";
 
 type Item = { id: number; name: string };
 
@@ -44,327 +33,125 @@ class FakeConnection implements DatabaseConnection {
   }
 }
 
-class ItemRepository extends BaseRepository<Item, "id"> {
-  constructor(connection: DatabaseConnection) {
-    super(items, connection);
-  }
-}
+class ItemRepository extends BaseRepository<Item, "id"> {}
 
-const otherTenant: TenantContext = {
-  id: 2,
-  slug: "beta",
-  plan: "pro",
-  region: "us",
-};
-
-type TransactionCapableConnection = DatabaseConnection & {
-  begin<TValue>(callback: (transaction: DatabaseConnection) => Promise<TValue>): Promise<TValue>;
-};
-
-function bindFakeTransactionConnection(): void {
-  const transactionConnection: DatabaseConnection = {
-    async unsafe() {
-      return [];
-    },
-  };
-
-  bindDatabaseConnection({
-    async unsafe() {
-      return [];
-    },
-    async begin(callback) {
-      return await callback(transactionConnection);
-    },
-  } as TransactionCapableConnection);
-}
-
-function restorePool(previous: SqlDatabaseConnection | null): void {
-  if (previous) {
-    registerDefaultDatabasePool(previous);
-    return;
-  }
-  resetDefaultDatabasePoolForTests();
-  if (process.env.DATABASE_URL) {
-    getDatabase();
-  }
-}
-
-function currentPoolOrNull(): SqlDatabaseConnection | null {
-  try {
-    return getDefaultDatabasePool();
-  } catch {
-    return null;
-  }
-}
-
-function fakePool(calls: string[]): SqlDatabaseConnection {
-  const pool = Object.assign(async () => [] as unknown[], {
-    async begin<T>(callback: (tx: typeof pool) => Promise<T>) {
-      calls.push("begin");
-      return await callback(pool);
-    },
-    async close() {},
-    async unsafe<T>(query: string, params?: readonly unknown[]) {
-      calls.push(`${query} ${JSON.stringify(params ?? [])}`);
-      return [] as T[];
-    },
+test("keeps repository create events until an explicit transaction commits", async () => {
+  const connection = new FakeConnection();
+  const seen: string[] = [];
+  const listener = createServiceToken<AfterCommitRepositoryListener<Item>>("orders.created");
+  const definition = defineRepository({
+    name: "Items",
+    table: items,
+    dependencies: [],
+    create: (binding) => new ItemRepository(binding),
+    effects: [{ action: "created", afterCommit: listener }],
   });
-  return pool as SqlDatabaseConnection;
-}
-
-describe("commit-aware model events", () => {
-  afterEach(() => {
-    resetBoundDatabaseConnection();
-  });
-
-  test("dispatches immediately when no transaction is open", async () => {
-    const seen: unknown[] = [];
-    const unsubscribe = eventBus.listen("orders.created", (payload) => {
-      seen.push(payload);
-    });
-
-    await dispatchModelEvent("orders.created", { id: 1 });
-    unsubscribe();
-
-    expect(seen).toEqual([{ id: 1 }]);
-  });
-
-  test("defers listeners until the surrounding transaction callback returns", async () => {
-    const order: string[] = [];
-    const unsubscribe = eventBus.listen("orders.created", () => {
-      order.push("listener");
-    });
-
-    await runWithDeferredModelEvents(async () => {
-      await dispatchModelEvent("orders.created", { id: 1 });
-      order.push("inside");
-      expect(order).toEqual(["inside"]);
-    });
-    unsubscribe();
-
-    expect(order).toEqual(["inside", "listener"]);
-  });
-
-  test("discards deferred listeners when the transaction throws", async () => {
-    let calls = 0;
-    const unsubscribe = eventBus.listen("orders.created", () => {
-      calls += 1;
-    });
-
-    await expect(
-      runWithDeferredModelEvents(async () => {
-        await dispatchModelEvent("orders.created", { id: 1 });
-        throw new Error("checkout failed");
-      }),
-    ).rejects.toThrow("checkout failed");
-    unsubscribe();
-
-    expect(calls).toBe(0);
-  });
-
-  test("does not dispatch when a transaction commits with no model events", async () => {
-    await expect(runWithDeferredModelEvents(async () => "ok")).resolves.toBe("ok");
-  });
-
-  test("promotes nested transaction events to the outer commit", async () => {
-    const seen: number[] = [];
-    const unsubscribe = eventBus.listen("orders.created", (payload) => {
-      seen.push((payload as { id: number }).id);
-    });
-
-    await runWithDeferredModelEvents(async () => {
-      await dispatchModelEvent("orders.created", { id: 1 });
-      await runWithDeferredModelEvents(async () => {
-        await dispatchModelEvent("orders.created", { id: 2 });
+  connection.queue([{ id: 1, name: "pending" }]);
+  connection.queue([{ id: 2, name: "committed" }]);
+  await withRepositories(
+    connection,
+    [definition] as const,
+    async ([_repository], database) => {
+      await database.transaction(async (tx) => {
+        await tx.repository(definition).create({ id: 1, name: "pending" });
         expect(seen).toEqual([]);
       });
-      expect(seen).toEqual([]);
-    });
-    unsubscribe();
-
-    expect(seen).toEqual([1, 2]);
-  });
-
-  test("discards nested events when the inner transaction rolls back", async () => {
-    const seen: number[] = [];
-    const unsubscribe = eventBus.listen("orders.created", (payload) => {
-      seen.push((payload as { id: number }).id);
-    });
-
-    await runWithDeferredModelEvents(async () => {
-      await dispatchModelEvent("orders.created", { id: 1 });
       await expect(
-        runWithDeferredModelEvents(async () => {
-          await dispatchModelEvent("orders.created", { id: 2 });
-          throw new Error("inner");
-        }),
-      ).rejects.toThrow("inner");
-    });
-    unsubscribe();
-
-    expect(seen).toEqual([1]);
-  });
-
-  test("discards every deferred event when the outer transaction rolls back", async () => {
-    let calls = 0;
-    const unsubscribe = eventBus.listen("orders.created", () => {
-      calls += 1;
-    });
-
-    await expect(
-      runWithDeferredModelEvents(async () => {
-        await dispatchModelEvent("orders.created", { id: 1 });
-        await runWithDeferredModelEvents(async () => {
-          await dispatchModelEvent("orders.created", { id: 2 });
-        });
-        throw new Error("outer");
-      }),
-    ).rejects.toThrow("outer");
-    unsubscribe();
-
-    expect(calls).toBe(0);
-  });
-
-  test("restores tenant context when deferred listeners run", async () => {
-    const previous = process.env.TENANCY_DRIVER;
-    process.env.TENANCY_DRIVER = "none";
-    const tenants: Array<number | null> = [];
-    const unsubscribe = eventBus.listen("orders.created", () => {
-      tenants.push(currentTenant()?.id ?? null);
-    });
-
-    try {
-      await runWithTenant(defaultTestTenant, async () => {
-        await runWithDeferredModelEvents(async () => {
-          await dispatchModelEvent("orders.created", { id: 1 });
-          await dispatchModelEvent("orders.created", { id: 2 });
-        });
-      });
-    } finally {
-      unsubscribe();
-      restoreEnvVar("TENANCY_DRIVER", previous);
-    }
-
-    expect(tenants).toEqual([1, 1]);
-    expect(currentTenant()).toBeNull();
-  });
-
-  test("restores RLS tenant scope when flushing after commit", async () => {
-    const previous = process.env.TENANCY_DRIVER;
-    process.env.TENANCY_DRIVER = "rls";
-    const restored = currentPoolOrNull();
-    const calls: string[] = [];
-    registerDefaultDatabasePool(fakePool(calls));
-    const tenants: Array<number | null> = [];
-    const unsubscribe = eventBus.listen("orders.created", () => {
-      tenants.push(currentTenant()?.id ?? null);
-    });
-
-    try {
-      await runWithTenant(defaultTestTenant, async () => {
-        await runWithDeferredModelEvents(async () => {
-          await dispatchModelEvent("orders.created", { id: 1 });
-        });
-      });
-    } finally {
-      unsubscribe();
-      restorePool(restored);
-      restoreEnvVar("TENANCY_DRIVER", previous);
-    }
-
-    expect(tenants).toEqual([1]);
-    expect(calls[0]).toBe("begin");
-    expect(calls.some((line) => line.includes("set_config('app.tenant_id'"))).toBe(true);
-  });
-
-  test("RLS commit callbacks retain tenant identity without opening a transaction across external I/O", async () => {
-    const previous = process.env.TENANCY_DRIVER;
-    process.env.TENANCY_DRIVER = "rls";
-    const restored = currentPoolOrNull();
-    const calls: string[] = [];
-    registerDefaultDatabasePool(fakePool(calls));
-    const order: string[] = [];
-    const unsubscribe = eventBus.listen("orders.committed", () => {
-      expect(hasActiveTransaction()).toBe(true);
-      order.push("model");
-    });
-    try {
-      await runWithDeferredModelEvents(async () => {
-        await runWithTenant(defaultTestTenant, async () => {
-          await dispatchModelEvent("orders.committed", {});
-          await afterCommit(async () => {
-            expect(currentTenant()?.id).toBe(defaultTestTenant.id);
-            expect(hasActiveTransaction()).toBe(false);
-            await Promise.resolve();
-            order.push("mail");
-          });
-          await dispatchModelEvent("orders.committed", {});
-        });
-      });
-      expect(order).toEqual(["model", "mail", "model"]);
-      expect(calls.filter((call) => call === "begin")).toHaveLength(2);
-      expect(currentTenant()).toBeNull();
-    } finally {
-      unsubscribe();
-      restorePool(restored);
-      restoreEnvVar("TENANCY_DRIVER", previous);
-    }
-  });
-
-  test("flushes mixed-tenant events in separate tenant batches", async () => {
-    const previous = process.env.TENANCY_DRIVER;
-    process.env.TENANCY_DRIVER = "none";
-    const tenants: Array<number | null> = [];
-    const unsubscribe = eventBus.listen("orders.created", () => {
-      tenants.push(currentTenant()?.id ?? null);
-    });
-
-    try {
-      await runWithDeferredModelEvents(async () => {
-        await runWithTenant(defaultTestTenant, async () => {
-          await dispatchModelEvent("orders.created", { id: 1 });
-        });
-        await dispatchModelEvent("orders.created", { id: 2 });
-        await runWithTenant(otherTenant, async () => {
-          await dispatchModelEvent("orders.created", { id: 3 });
-        });
-      });
-    } finally {
-      unsubscribe();
-      restoreEnvVar("TENANCY_DRIVER", previous);
-    }
-
-    expect(tenants).toEqual([1, null, 2]);
-  });
-
-  test("keeps repository create events until runInTransaction commits", async () => {
-    bindFakeTransactionConnection();
-    const connection = new FakeConnection();
-    const repository = new ItemRepository(connection);
-    const seen: string[] = [];
-    const unsubscribe = eventBus.listen("orders.created", () => {
-      seen.push("created");
-    });
-
-    connection.queue([{ id: 1, name: "pending" }]);
-    connection.queue([{ id: 2, name: "committed" }]);
-
-    try {
-      await runInTransaction(async () => {
-        await repository.create({ id: 1, name: "pending" });
-        expect(seen).toEqual([]);
-      });
-
-      await expect(
-        runInTransaction(async () => {
-          await repository.create({ id: 2, name: "committed" });
+        database.transaction(async (tx) => {
+          await tx.repository(definition).create({ id: 2, name: "committed" });
           throw new Error("rolled back");
         }),
       ).rejects.toThrow("rolled back");
-    } finally {
-      unsubscribe();
-    }
+      expect(seen).toEqual(["created"]);
+    },
+    "pgsql",
+    [
+      valueService(listener, () => {
+        seen.push("created");
+      }),
+    ],
+  );
+});
 
-    expect(seen).toEqual(["created"]);
+test("repository effects promote successful children in order and discard failed child or outer publications", async () => {
+  const seen: number[] = [];
+  const listener = createServiceToken<AfterCommitRepositoryListener<Item>>("owned.orders.created");
+  const definition = defineRepository({
+    name: "OwnedOrders",
+    table: items,
+    dependencies: [],
+    create: (binding) => new ItemRepository(binding),
+    effects: [{ action: "created", afterCommit: listener }],
   });
+  const app = createApplication({
+    providers: [],
+    services: [
+      valueService(listener, (row) => {
+        seen.push(row.id);
+      }),
+      ...createDatabaseBindings({
+        default: "main",
+        connections: { main: { driver: "sqlite", filename: ":memory:" } },
+        repositories: [definition],
+      }),
+    ],
+  });
+  const failures: unknown[] = [];
+  try {
+    await app.start();
+    await app.run(async (scope) => {
+      const database = scope.resolve(DATABASE_SESSION_TOKEN);
+      await database.execute({
+        text: "CREATE TABLE orders(id INTEGER PRIMARY KEY,name TEXT)",
+        params: [],
+      });
+      await database.transaction(() => "empty");
+      expect(seen).toEqual([]);
+      await database.transaction(async (parent) => {
+        await parent.repository(definition).create({ id: 1, name: "parent" });
+        await parent.transaction(async (child) => {
+          await child.repository(definition).create({ id: 2, name: "promoted" });
+        });
+        const result = await parent.transaction(async (child) => {
+          await child.repository(definition).create({ id: 3, name: "discarded" });
+          child.requestRollback();
+          return false;
+        });
+        expect(result).toBe(false);
+        expect(seen).toEqual([]);
+        await parent.repository(definition).create({ id: 4, name: "parent-last" });
+      });
+      expect(seen).toEqual([1, 2, 4]);
+      expect(
+        await database.execute({ text: "SELECT id FROM orders ORDER BY id", params: [] }),
+      ).toEqual([{ id: 1 }, { id: 2 }, { id: 4 }]);
+      await expect(
+        database.transaction(async (parent) => {
+          await parent.repository(definition).create({ id: 5, name: "outer-failure" });
+          await parent.transaction(async (child) => {
+            await child.repository(definition).create({ id: 6, name: "promoted-then-failed" });
+          });
+          expect(seen).toEqual([1, 2, 4]);
+          throw new Error("outer rollback");
+        }),
+      ).rejects.toThrow("outer rollback");
+      expect(seen).toEqual([1, 2, 4]);
+      expect(
+        await database.execute({ text: "SELECT id FROM orders ORDER BY id", params: [] }),
+      ).toEqual([{ id: 1 }, { id: 2 }, { id: 4 }]);
+    });
+  } catch (error) {
+    failures.push(error);
+  } finally {
+    try {
+      const stopped = await app.stop();
+      if (!stopped.successful)
+        failures.push(new Error("Repository composition cleanup failed", { cause: stopped }));
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length)
+    throw new AggregateError(failures, "Repository composition and cleanup failed");
 });

@@ -1,13 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { Job, type JobContext } from "@getstrata/core/queue";
-import {
-  createAppQueue,
-  createFailedJobService,
-  createQueueWorker,
-} from "@getstrata/core/queue/createAppQueue";
+import { createAppQueue, createQueueWorker } from "@getstrata/core/queue/createAppQueue";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 import { readRedisQueueDepth } from "@getstrata/core/queue/queueMetrics";
+import type { QueueServices } from "@getstrata/core/queue/queueServices";
 import {
   migrateLegacyQueueToStreams,
   queueKeyForPriority,
@@ -27,6 +24,7 @@ import {
   streamControlKey,
   streamRetryKey,
 } from "../../src/core/queue/redisStreams";
+import { createQueuePersistenceFixture, overrideQueueRecorder } from "../helpers/queuePersistence";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 const redisUrl = process.env.REDIS_URL?.trim() ?? "";
@@ -34,9 +32,13 @@ function required<T>(value: T | undefined): T {
   if (value === undefined) throw new Error("Missing test fixture value");
   return value;
 }
-const failedJobs = { recordFailure: async () => {} };
 async function fixture(
-  run: (client: RedisClient, keys: [string, string, string]) => Promise<void>,
+  run: (
+    client: RedisClient,
+    keys: [string, string, string],
+    failedJobs: QueueServices,
+    persistence: Awaited<ReturnType<typeof createQueuePersistenceFixture>>,
+  ) => Promise<void>,
 ) {
   const previousPrefix = process.env.APP_KEY_PREFIX;
   const previousVisibility = process.env.QUEUE_VISIBILITY_MS;
@@ -49,8 +51,9 @@ async function fixture(
     queueKeyForPriority("low"),
   ];
   const client = new RedisClient(redisUrl);
+  const persistence = await createQueuePersistenceFixture();
   try {
-    await run(client, keys);
+    await run(client, keys, persistence.services, persistence);
   } finally {
     for (const key of keys)
       await client.del(
@@ -77,6 +80,8 @@ async function fixture(
       } while (cursor !== "0");
     }
     client.close();
+    const result = await persistence.application.stop();
+    expect(result.successful).toBe(true);
     restoreEnvVar("APP_KEY_PREFIX", previousPrefix);
     restoreEnvVar("QUEUE_VISIBILITY_MS", previousVisibility);
     restoreEnvVar("QUEUE_REDIS_TRANSPORT", previousTransport);
@@ -117,8 +122,8 @@ async function agePending(client: RedisClient, key: string) {
 
 describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
   test("SQL failed-job replay preserves identity, resets controls, and retains recovery on rejected admission", async () => {
-    await fixture(async (client, keys) => {
-      const service = createFailedJobService();
+    await fixture(async (client, keys, failedJobs, _persistence) => {
+      const service = failedJobs;
       const seen: string[] = [];
       let shouldFail = true;
       const job = new (class extends Job {
@@ -194,8 +199,8 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("cancelled and deadline failures retain logical identity in SQL", async () => {
-    await fixture(async (_client, keys) => {
-      const service = createFailedJobService();
+    await fixture(async (_client, keys, failedJobs, _persistence) => {
+      const service = failedJobs;
       const job = new (class extends Job {
         async handle() {
           throw new Error("Must not execute");
@@ -228,7 +233,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("cancellation survives queue close and SQL failure until a recovered worker acknowledges", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, _failedJobs, persistence) => {
       let calls = 0;
       let failures = 0;
       const job = new (class extends Job {
@@ -244,7 +249,12 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
           if (++failures === 1) throw new Error("SQL unavailable");
         },
       };
-      const first = new RedisStreamsWorker(redisUrl, failed as never, 0, keys);
+      const first = new RedisStreamsWorker(
+        redisUrl,
+        overrideQueueRecorder(persistence, failed as never),
+        0,
+        keys,
+      );
       try {
         const id = await queue.enqueue(job, {}, { cancellable: true });
         expect(await queue.cancel(id)).toBe(true);
@@ -256,7 +266,12 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
           "cancelled",
         );
         await agePending(client, keys[1]);
-        const next = new RedisStreamsWorker(redisUrl, failed as never, 0, keys);
+        const next = new RedisStreamsWorker(
+          redisUrl,
+          overrideQueueRecorder(persistence, failed as never),
+          0,
+          keys,
+        );
         try {
           expect(await next.processNext()).toBe(true);
         } finally {
@@ -278,7 +293,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("cancelled retries wake promptly without resetting the job identity or calling its handler again", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, _failedJobs, persistence) => {
       let calls = 0;
       let failures = 0;
       const job = new (class extends Job {
@@ -292,11 +307,11 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
       const queue = new RedisStreamsQueue(redisUrl);
       const worker = new RedisStreamsWorker(
         redisUrl,
-        {
+        overrideQueueRecorder(persistence, {
           recordFailure: async () => {
             failures++;
           },
-        } as never,
+        } as never),
         0,
         keys,
       );
@@ -326,7 +341,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("running cancellation aborts cooperative I/O and retains ownership while ignored", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, failedJobs, persistence) => {
       for (const cooperative of [true, false]) {
         let started: () => void = () => {};
         const entered = new Promise<void>((resolve) => {
@@ -353,12 +368,12 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
         const queue = new RedisStreamsQueue(redisUrl);
         const worker = new RedisStreamsWorker(
           redisUrl,
-          {
+          overrideQueueRecorder(persistence, {
             recordFailure: async (failure: { exception: string }) => {
               expect(failure.exception).toBe("Streams job cancelled");
               failures++;
             },
-          } as never,
+          } as never),
           0,
           keys,
         );
@@ -386,7 +401,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("cancellation fences retry scheduling and stale owners cannot erase the control record", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, failedJobs, _persistence) => {
       const queue = new RedisStreamsQueue(redisUrl);
       const job = new (class extends Job {
         async handle() {}
@@ -431,7 +446,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("control corruption fails closed and cannot acknowledge business work", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, failedJobs, _persistence) => {
       let calls = 0;
       const job = new (class extends Job {
         async handle() {
@@ -482,7 +497,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("a lost cancellation reply remains durable and retrying cannot re-admit a promoted job", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, failedJobs, _persistence) => {
       let calls = 0;
       const job = new (class extends Job {
         override readonly backoffMs = 3600000;
@@ -519,7 +534,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("cancellation during a failing handler blocks its deferred retry", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, _failedJobs, persistence) => {
       const queue = new RedisStreamsQueue(redisUrl);
       let failures = 0;
       const job = new (class extends Job {
@@ -531,12 +546,12 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
       const name = tracked(job);
       const worker = new RedisStreamsWorker(
         redisUrl,
-        {
+        overrideQueueRecorder(persistence, {
           recordFailure: async (failure: { exception: string }) => {
             expect(failure.exception).toBe("Streams job cancelled");
             failures++;
           },
-        } as never,
+        } as never),
         0,
         keys,
       );
@@ -562,7 +577,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("only opted-in identities in this queue namespace can be cancelled", async () => {
-    await fixture(async (_client, keys) => {
+    await fixture(async (_client, keys, _failedJobs, _persistence) => {
       const job = new (class extends Job {
         async handle() {}
       })();
@@ -586,7 +601,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("expired queued jobs never invoke handlers and retain recovery state if SQL recording fails", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, _failedJobs, persistence) => {
       let calls = 0;
       let records = 0;
       const job = new (class extends Job {
@@ -598,12 +613,12 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
       const queue = new RedisStreamsQueue(redisUrl);
       const worker = new RedisStreamsWorker(
         redisUrl,
-        {
+        overrideQueueRecorder(persistence, {
           recordFailure: async (failure: { exception: string }) => {
             expect(failure.exception).toBe("Streams job deadline exceeded");
             if (++records === 1) throw new Error("SQL unavailable");
           },
-        } as never,
+        } as never),
         0,
         keys,
       );
@@ -627,7 +642,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("live deadlines abort cooperative handlers without retrying them", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, _failedJobs, persistence) => {
       let aborted = false;
       let failures = 0;
       const job = new (class extends Job {
@@ -650,11 +665,11 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
       const queue = new RedisStreamsQueue(redisUrl);
       const worker = new RedisStreamsWorker(
         redisUrl,
-        {
+        overrideQueueRecorder(persistence, {
           recordFailure: async () => {
             failures++;
           },
-        } as never,
+        } as never),
         0,
         keys,
       );
@@ -673,7 +688,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("deadline persists across retry admission and restart and caps the retry due time", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, _failedJobs, persistence) => {
       let calls = 0;
       let failures = 0;
       const job = new (class extends Job {
@@ -690,7 +705,12 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
           failures++;
         },
       };
-      const first = new RedisStreamsWorker(redisUrl, failed as never, 0, keys);
+      const first = new RedisStreamsWorker(
+        redisUrl,
+        overrideQueueRecorder(persistence, failed as never),
+        0,
+        keys,
+      );
       try {
         await first.processNext();
         await queue.enqueue(job, {}, { timeoutMs: 300 });
@@ -707,7 +727,12 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
           Number(await client.send("ZSCORE", [streamRetryKey(keys[1]), required(scheduled[0])])),
         ).toBe(original.deadlineAtMs);
         await Bun.sleep(320);
-        const second = new RedisStreamsWorker(redisUrl, failed as never, 0, keys);
+        const second = new RedisStreamsWorker(
+          redisUrl,
+          overrideQueueRecorder(persistence, failed as never),
+          0,
+          keys,
+        );
         try {
           expect(await second.processNext()).toBe(true);
         } finally {
@@ -723,7 +748,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("deadline does not release ownership while a handler ignores its aborted signal", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, _failedJobs, persistence) => {
       let returned = false;
       let failures = 0;
       const job = new (class extends Job {
@@ -737,12 +762,12 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
       const queue = new RedisStreamsQueue(redisUrl);
       const worker = new RedisStreamsWorker(
         redisUrl,
-        {
+        overrideQueueRecorder(persistence, {
           recordFailure: async () => {
             expect(returned).toBe(true);
             failures++;
           },
-        } as never,
+        } as never),
         0,
         keys,
       );
@@ -763,7 +788,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("invalid admission timeouts cannot enqueue work", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, _failedJobs, _persistence) => {
       const job = new (class extends Job {
         async handle() {}
       })();
@@ -779,7 +804,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("persisted backoff frees workers and resumes attempts and identity after restart", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, _failedJobs, persistence) => {
       process.env.QUEUE_REDIS_TRANSPORT = "streams";
       const identities: string[] = [];
       let failures = 0;
@@ -802,7 +827,12 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
       try {
         await queue.dispatch(job, {});
         for (let attempt = 0; attempt < 3; attempt++) {
-          const worker = new RedisStreamsWorker(redisUrl, failed as never, 0, keys);
+          const worker = new RedisStreamsWorker(
+            redisUrl,
+            overrideQueueRecorder(persistence, failed as never),
+            0,
+            keys,
+          );
           try {
             expect(await worker.processNext()).toBe(true);
             expect(identities.length).toBe(attempt + 1);
@@ -831,7 +861,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("retry scheduling fences expired owners and validates destinations before acknowledgement", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, failedJobs, _persistence) => {
       const key = keys[1];
       const job = new (class extends Job {
         async handle() {}
@@ -873,7 +903,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("lost schedule and promotion replies retain exactly one admitted retry", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, failedJobs, _persistence) => {
       const key = keys[1];
       const job = new (class extends Job {
         async handle() {}
@@ -911,7 +941,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("concurrent bounded promotion preserves every distinct envelope and priority", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, _failedJobs, _persistence) => {
       const key = keys[0];
       for (let i = 0; i < 205; i++)
         await client.send("ZADD", [streamRetryKey(key), "0", JSON.stringify({ jobId: String(i) })]);
@@ -937,7 +967,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("dispatch and consumer groups preserve priority and delete only acknowledged entries", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, failedJobs, _persistence) => {
       const seen: string[] = [];
       class Echo extends Job<{ marker: string }> {
         constructor(override readonly priority: "high" | "default" | "low") {
@@ -977,7 +1007,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
   });
 
   test("opt-in factories use Streams and unknown transport values fail closed", async () => {
-    await fixture(async () => {
+    await fixture(async (_client, _keys, failedJobs, _persistence) => {
       process.env.QUEUE_REDIS_TRANSPORT = "streams";
       const queue = createAppQueue("redis", redisUrl, failedJobs as never);
       const worker = createQueueWorker(redisUrl, failedJobs as never);
@@ -999,7 +1029,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
   });
 
   test("maintenance conversion is bounded, FIFO, repeatable, and refuses processing reservations", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, _failedJobs, _persistence) => {
       const key = keys[1];
       for (const payload of ["first", "second", "third"]) await client.lpush(key, payload);
       await client.lpush(`${key}:processing`, "owned");
@@ -1051,7 +1081,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
   });
 
   test("Streams producers and workers refuse activation while old queue data remains", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, failedJobs, _persistence) => {
       class Echo extends Job {
         async handle() {}
       }
@@ -1072,7 +1102,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
   });
 
   test("expired and stale owners cannot renew or acknowledge another consumer's work", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, failedJobs, _persistence) => {
       const key = keys[1];
       const worker = new RedisStreamsWorker(redisUrl, failedJobs as never, 0, [key]);
       try {
@@ -1114,7 +1144,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
   });
 
   test("failed SQL recording retains the pending entry and recovery preserves transport identity", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, _failedJobs, persistence) => {
       const key = keys[1];
       const identities: string[] = [];
       class Failure extends Job {
@@ -1130,11 +1160,11 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
       const queue = new RedisStreamsQueue(redisUrl);
       const worker = new RedisStreamsWorker(
         redisUrl,
-        {
+        overrideQueueRecorder(persistence, {
           recordFailure: async () => {
             if (++records === 1) throw new Error("SQL unavailable");
           },
-        } as never,
+        } as never),
         0,
         [key],
       );
@@ -1159,7 +1189,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
   });
 
   test("malformed envelopes are quarantined atomically; invalid destination types retain recovery state", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, failedJobs, _persistence) => {
       const key = keys[1];
       const worker = new RedisStreamsWorker(redisUrl, failedJobs as never, 0, [key]);
       try {
@@ -1185,7 +1215,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
   });
 
   test("slow healthy jobs renew; graceful stopping drains the admitted job and excludes its successor", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, failedJobs, _persistence) => {
       const key = keys[1];
       let enter!: () => void;
       let release!: () => void;
@@ -1233,7 +1263,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
   });
 
   test("ownership loss aborts the handler signal and prevents stale acknowledgement or failure recording", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, _failedJobs, persistence) => {
       const key = keys[1];
       let entered!: () => void;
       const started = new Promise<void>((resolve) => {
@@ -1256,11 +1286,11 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
       const queue = new RedisStreamsQueue(redisUrl);
       const worker = new RedisStreamsWorker(
         redisUrl,
-        {
+        overrideQueueRecorder(persistence, {
           recordFailure: async () => {
             recorded++;
           },
-        } as never,
+        } as never),
         0,
         [key],
       );
@@ -1289,7 +1319,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
   });
 
   test("idle polling does not retain consumers after repeated worker restarts", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, failedJobs, _persistence) => {
       for (let i = 0; i < 20; i++) {
         const worker = new RedisStreamsWorker(redisUrl, failedJobs as never, 0, keys);
         try {
@@ -1305,7 +1335,7 @@ describe.skipIf(!redisUrl)("Redis Streams queue recovery", () => {
     });
   });
   test("SIGKILL leaves a recoverable pending entry with the same job identity", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, failedJobs, _persistence) => {
       const key = keys[1];
       const name = `test.killed.stream.${crypto.randomUUID()}`;
       const source = join(import.meta.dir, "../../src/core/queue");
@@ -1321,7 +1351,9 @@ import { promoteStreamRetries, reserveStreamJob, scheduleStreamRetry, streamRetr
           await new Promise(() => {});
         } }
         jobRegistry.register(${JSON.stringify(name)}, () => new Blocked());
-        await new RedisStreamsWorker(process.env.REDIS_URL, {}, 0, [${JSON.stringify(key)}]).processNext();
+        const {createQueuePersistenceFixture}=await import(${JSON.stringify(join(import.meta.dir, "../helpers/queuePersistence.ts"))});
+        const persistence=await createQueuePersistenceFixture();
+        await new RedisStreamsWorker(process.env.REDIS_URL, persistence.services, 0, [${JSON.stringify(key)}]).processNext();
       `;
       await client.send("XADD", [
         streamQueueKey(key),
@@ -1376,7 +1408,7 @@ import { promoteStreamRetries, reserveStreamJob, scheduleStreamRetry, streamRetr
   }, 6000);
 
   test("bounded reclaim cursors eventually reach an abandoned entry beyond healthy pending jobs", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, failedJobs, _persistence) => {
       process.env.QUEUE_VISIBILITY_MS = "10000";
       const key = keys[1];
       const worker = new RedisStreamsWorker(redisUrl, failedJobs as never, 0, [key]);
@@ -1437,7 +1469,7 @@ import { promoteStreamRetries, reserveStreamJob, scheduleStreamRetry, streamRetr
   });
 
   test("lost acknowledgement and migration replies leave their atomic transitions complete", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, failedJobs, _persistence) => {
       const key = keys[1];
       await client.lpush(key, "retained");
       const lostReply = new Proxy(client, {
@@ -1486,7 +1518,7 @@ import { promoteStreamRetries, reserveStreamJob, scheduleStreamRetry, streamRetr
     });
   });
   test("running workers stop idle polling and reset running state after startup errors", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, failedJobs, _persistence) => {
       const worker = new RedisStreamsWorker(redisUrl, failedJobs as never, 1, keys);
       try {
         expect(worker.isRunning()).toBe(false);
@@ -1511,7 +1543,7 @@ import { promoteStreamRetries, reserveStreamJob, scheduleStreamRetry, streamRetr
   });
 
   test("forced close aborts active handlers while retaining pending work for recovery", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, failedJobs, _persistence) => {
       const key = keys[1];
       let entered!: () => void;
       const started = new Promise<void>((resolve) => {
@@ -1545,7 +1577,7 @@ import { promoteStreamRetries, reserveStreamJob, scheduleStreamRetry, streamRetr
     });
   });
   test("Redis renewal permission failure aborts ownership without acknowledging the pending entry", async () => {
-    await fixture(async (client, keys) => {
+    await fixture(async (client, keys, _failedJobs, persistence) => {
       const key = keys[1];
       const user = `stream-test-${crypto.randomUUID()}`;
       const password = crypto.randomUUID();
@@ -1575,11 +1607,11 @@ import { promoteStreamRetries, reserveStreamJob, scheduleStreamRetry, streamRetr
       let recorded = 0;
       const worker = new RedisStreamsWorker(
         url.toString(),
-        {
+        overrideQueueRecorder(persistence, {
           recordFailure: async () => {
             recorded++;
           },
-        } as never,
+        } as never),
         0,
         [key],
       );

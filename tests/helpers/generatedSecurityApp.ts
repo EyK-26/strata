@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,6 +14,7 @@ import {
   parseCreateStrataArgs,
 } from "../../packages/strata-starter/src/parseArgs.ts";
 import { candidatePackage } from "../../scripts/candidate-packages";
+import { GeneratedSecurityAppOwner } from "./generatedSecurityAppOwner";
 
 const repoRoot = join(import.meta.dir, "../..");
 
@@ -32,92 +33,75 @@ export async function createGeneratedSecurityApp(
   const mysqlUrl = process.env.MYSQL_OBSERVABILITY_ADMIN_URL;
   if (database === "mysql" && !mysqlUrl?.trim())
     throw new Error("Generated MySQL acceptance requires MYSQL_OBSERVABILITY_ADMIN_URL.");
-  const root = await mkdtemp(join(options.parentDirectory ?? tmpdir(), "strata-security-"));
-  const app = join(root, "app");
+  if (!["postgres", "sqlite", "mysql"].includes(database))
+    throw new Error("Invalid generated fixture database.");
+  if (options.publishedVersion !== undefined && !/^\d+\.\d+\.\d+$/.test(options.publishedVersion))
+    throw new Error("Exact published version required.");
+  if (
+    options.parentDirectory !== undefined &&
+    (typeof options.parentDirectory !== "string" || !options.parentDirectory.trim())
+  )
+    throw new Error("Invalid generated fixture parent directory.");
+  const admin =
+    database === "postgres"
+      ? new URL(migrationUrl as string)
+      : database === "mysql"
+        ? new URL(mysqlUrl as string)
+        : undefined;
+  const runtime = database === "postgres" ? new URL(runtimeUrl as string) : undefined;
+  if (
+    admin &&
+    !(database === "postgres" ? ["postgres:", "postgresql:"] : ["mysql:"]).includes(admin.protocol)
+  )
+    throw new Error("Invalid generated fixture admin URL protocol.");
+  if (runtime && !["postgres:", "postgresql:"].includes(runtime.protocol))
+    throw new Error("Invalid generated fixture runtime URL protocol.");
+  const flags = [
+    "--frontend=server-htmx",
+    `--database=${database}`,
+    database === "postgres" ? "--tenancy=rls" : "--tenancy=column",
+    "--auth=cookie-token-jwt",
+    "--mfa",
+    "--email-verification",
+    "--scim",
+    "--metrics",
+    ...extraFlags,
+    "--yes",
+  ];
+  const layers = layersFromFlags(parseCreateStrataArgs(["security-acceptance", ...flags]));
   const databaseName = `generated_security_${crypto.randomUUID().replaceAll("-", "")}`;
-  const controlUrl = database === "postgres" && migrationUrl ? new URL(migrationUrl) : null;
-  if (controlUrl) controlUrl.pathname = "/postgres";
-  const control = controlUrl ? new SQL(controlUrl.href) : null;
-  let mysqlControl: Awaited<ReturnType<typeof createConnection>> | undefined;
   const mysqlUser = `q01_${crypto.randomUUID().replaceAll("-", "").slice(0, 18)}`;
-  let mysqlUserCreated = false;
-  let created = false;
-  let closed = false;
-  async function close() {
-    if (closed) return;
-    closed = true;
-    try {
-      if (created && control) {
-        await control.unsafe(`DROP DATABASE ${databaseName} WITH (FORCE)`);
-        created = false;
-      }
-      if (mysqlControl) {
-        try {
-          if (mysqlUserCreated) await mysqlControl.query(`DROP USER '${mysqlUser}'@'%'`);
-        } finally {
-          if (created) await mysqlControl.query(`DROP DATABASE ${databaseName}`);
-        }
-      }
-    } finally {
-      try {
-        try {
-          await control?.close();
-        } finally {
-          await mysqlControl?.end();
-        }
-      } finally {
-        await rm(root, { recursive: true, force: true });
-      }
+  const owner = new GeneratedSecurityAppOwner(databaseName, mysqlUser);
+  const setup = (async () => {
+    owner.admit();
+    const root = await mkdtemp(join(options.parentDirectory ?? tmpdir(), "strata-security-"));
+    owner.root = root;
+    owner.admit();
+    const app = join(root, "app");
+    if (database === "postgres") {
+      const controlUrl = new URL(admin as URL);
+      controlUrl.pathname = "/postgres";
+      owner.connectionAttempted = true;
+      owner.postgres = new SQL(controlUrl.href);
     }
-  }
-  try {
-    const flags = [
-      "--frontend=server-htmx",
-      `--database=${database}`,
-      database === "postgres" ? "--tenancy=rls" : "--tenancy=column",
-      "--auth=cookie-token-jwt",
-      "--mfa",
-      "--email-verification",
-      "--scim",
-      "--metrics",
-      ...extraFlags,
-      "--yes",
-    ];
     if (options.publishedVersion) {
       if (!/^\d+\.\d+\.\d+$/.test(options.publishedVersion))
         throw new Error("Exact published version required.");
-      const generate = Bun.spawnSync(
+      await owner.runChild(
         ["bun", "x", "--bun", `create-strata@${options.publishedVersion}`, "app", ...flags],
-        {
-          cwd: root,
-          stdout: "pipe",
-          stderr: "pipe",
-          timeout: 60000,
-          killSignal: "SIGKILL",
-        },
+        root,
+        60000,
       );
-      if (generate.exitCode !== 0)
-        throw new Error(
-          `Published generation failed: ${new TextDecoder().decode(generate.stderr)}`,
-        );
       // Registry qualification pins the requested release rather than allowing
       // an older generator's caret ranges to install a newer runtime silently.
+      owner.admit();
       const manifestPath = join(app, "package.json");
       const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
       for (const part of ["core", "bootstrap", "cli"])
         manifest.dependencies[`@getstrata/${part}`] = options.publishedVersion;
+      owner.admit();
       await writeFile(manifestPath, JSON.stringify(manifest));
-      const install = Bun.spawnSync(["bun", "install"], {
-        cwd: app,
-        stdout: "pipe",
-        stderr: "pipe",
-        timeout: 60000,
-        killSignal: "SIGKILL",
-      });
-      if (install.exitCode !== 0)
-        throw new Error(
-          `Published installation failed: ${new TextDecoder().decode(install.stderr)}`,
-        );
+      await owner.runChild(["bun", "install"], app, 60000);
       for (const part of ["core", "bootstrap", "cli"] as const) {
         const manifest = JSON.parse(
           await readFile(join(app, `node_modules/@getstrata/${part}/package.json`), "utf8"),
@@ -126,13 +110,15 @@ export async function createGeneratedSecurityApp(
           throw new Error(`Unexpected published ${part} version: ${manifest.version}`);
       }
     } else {
+      owner.admit();
       generateProject({
         projectName: "security-acceptance",
         targetDir: app,
-        layers: layersFromFlags(parseCreateStrataArgs(["security-acceptance", ...flags])),
+        layers,
         templateRoot: resolveTemplateRoot(),
         overlayRoot: resolveOverlayRoot(),
       });
+      owner.admit();
       const manifestPath = join(app, "package.json");
       const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
       const samlPeer = JSON.parse(
@@ -141,46 +127,45 @@ export async function createGeneratedSecurityApp(
       // This suite enables SAML at runtime; an external app must install its optional peer.
       manifest.dependencies["@node-saml/node-saml"] = samlPeer.version;
       for (const part of ["core", "bootstrap", "cli"] as const) {
+        owner.admit();
         manifest.dependencies[`@getstrata/${part}`] = `file:${await candidatePackage(part, root)}`;
       }
+      owner.admit();
       await writeFile(manifestPath, JSON.stringify(manifest));
-      const install = Bun.spawnSync(["bun", "install", "--prefer-offline"], {
-        cwd: app,
-        stdout: "pipe",
-        stderr: "pipe",
-        timeout: 30000,
-        killSignal: "SIGKILL",
-      });
-      if (install.exitCode !== 0)
-        throw new Error(
-          `Generated security installation failed: ${new TextDecoder().decode(install.stderr)}`,
-        );
+      await owner.runChild(["bun", "install", "--prefer-offline"], app, 30000);
     }
     let adminUrl: string;
     let appUrl: string;
+    owner.admit();
     if (database === "postgres") {
-      if (!control || !migrationUrl || !runtimeUrl)
-        throw new Error("Missing Postgres fixture credentials.");
+      const control = owner.postgres;
+      if (!control || !admin || !runtime) throw new Error("Missing Postgres fixture credentials.");
+      owner.database = "attempted";
       await control.unsafe(`CREATE DATABASE ${databaseName}`);
-      created = true;
-      const admin = new URL(migrationUrl),
-        runtime = new URL(runtimeUrl);
+      owner.database = "acquired";
+      owner.admit();
       admin.pathname = runtime.pathname = `/${databaseName}`;
       adminUrl = admin.href;
       appUrl = runtime.href;
     } else if (database === "mysql") {
-      if (!mysqlUrl) throw new Error("Missing MySQL fixture credentials.");
-      mysqlControl = await createConnection(mysqlUrl);
-      // Owned ASCII UUID identifiers/credentials only; never application/request data.
+      if (!mysqlUrl || !admin) throw new Error("Missing MySQL fixture credentials.");
+      owner.connectionAttempted = true;
+      const mysqlControl = await createConnection(mysqlUrl);
+      owner.mysql = mysqlControl;
+      owner.admit();
+      owner.database = "attempted";
       await mysqlControl.query(`CREATE DATABASE ${databaseName}`);
-      created = true;
+      owner.database = "acquired";
+      owner.admit();
       const password = crypto.randomUUID().replaceAll("-", "");
+      owner.user = "attempted";
       await mysqlControl.query(`CREATE USER '${mysqlUser}'@'%' IDENTIFIED BY '${password}'`);
-      mysqlUserCreated = true;
+      owner.user = "acquired";
+      owner.admit();
       await mysqlControl.query(
         `GRANT SELECT, INSERT, UPDATE, DELETE ON ${databaseName}.* TO '${mysqlUser}'@'%'`,
       );
-      const admin = new URL(mysqlUrl);
+      owner.admit();
       admin.pathname = `/${databaseName}`;
       const runtime = new URL(admin);
       runtime.username = mysqlUser;
@@ -195,10 +180,14 @@ export async function createGeneratedSecurityApp(
       migrationUrl: adminUrl,
       runtimeUrl: appUrl,
       resolve: createRequire(join(app, "package.json")).resolve,
-      close,
+      close: owner.close,
     };
+  })();
+  try {
+    const fixture = await owner.observeSetup(setup);
+    owner.handoff();
+    return fixture;
   } catch (error) {
-    await close();
-    throw error;
+    return owner.failSetup(error);
   }
 }
