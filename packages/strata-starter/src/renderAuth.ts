@@ -218,6 +218,7 @@ export interface StarterAuthRuntime {
   readonly jwtTtlSeconds: number;
   readonly jwtSecret: string;
   readonly signatureSecret: string;
+  readonly sessionCookie:Readonly<{cookieName:string;production:boolean}>;
   readonly oauth: OAuthStateOptions;
   readonly passwordConfirmation: PasswordConfirmWriteOptions;
 }
@@ -237,6 +238,7 @@ export function createStarterAuthServices(options: StarterAuthServicesOptions): 
   const configuredAppUrl = env.APP_URL ?? "http://localhost:3000";
   const appUrl = configuredAppUrl.endsWith("/") ? configuredAppUrl.slice(0, -1) : configuredAppUrl;
   const config: StarterAuthRuntime = Object.freeze({
+    sessionCookie:Object.freeze({cookieName:env.SESSION_COOKIE_NAME?.trim() || (env.APP_KEY_PREFIX?.trim() || "strata") + "_session",production:snapshot.production}),
     registrationEnabled: (env.FEATURE_REGISTRATION ?? "true") !== "false",
     scimEnabled: (env.FEATURE_SCIM ?? "false") === "true", redisUrl:env.REDIS_URL,
     samlEnabled: env.FEATURE_SAML === "true",
@@ -253,7 +255,7 @@ export function createStarterAuthServices(options: StarterAuthServicesOptions): 
     oauth: Object.freeze({secret:${cookie ? 'options.oauthStateSecret ?? requireConfiguredSecret(["OAUTH_STATE_SECRET","SESSION_SECRET"],"oauth-state-secret",secretsEnv)' : "options.oauthStateSecret ?? snapshot.jwtSecret"},production:snapshot.production}),
     passwordConfirmation: Object.freeze(options.passwordConfirmation ? {...options.passwordConfirmation} : {secret:${cookie ? 'requireConfiguredSecret(["SESSION_SECRET","OAUTH_STATE_SECRET"],"session-secret",secretsEnv)' : "snapshot.jwtSecret"},cookieName:${cookie ? "passwordConfirmCookieName(env)" : JSON.stringify("strata_password_confirmed")},ttlSeconds:${cookie ? "passwordConfirmTtlSeconds(env)" : "10800"},production:snapshot.production}),
   });
-  ${cookie ? `if (!snapshot.sessionSecret?.trim()) throw new TypeError("SESSION_SECRET is required for cookie authentication.");\n  const session = (ports: StarterAuthPersistence) => createCookieSessionAuthManager({ selected: ports.database, policy: ports.policy, secret: snapshot.sessionSecret!, production: snapshot.production, rls: ${String(plan.decisions.rls)}, cookieName: "strata_session", mapUser: user => ({ id: user.id, name: user.name, email: user.email, authVersion: user.auth_version, isActive: user.is_active, role: user.is_admin ? "admin" : "member", ...(user.email_verified_at !== undefined ? {emailVerifiedAt:user.email_verified_at} : {}) }) });` : ""}
+  ${cookie ? `if (!snapshot.sessionSecret?.trim()) throw new TypeError("SESSION_SECRET is required for cookie authentication.");\n  const session = (ports: StarterAuthPersistence) => createCookieSessionAuthManager({ selected: ports.database, policy: ports.policy, secret: snapshot.sessionSecret!, production: snapshot.production, rls: ${String(plan.decisions.rls)}, cookieName: config.sessionCookie.cookieName, mapUser: user => ({ id: user.id, name: user.name, email: user.email, authVersion: user.auth_version, isActive: user.is_active, role: user.is_admin ? "admin" : "member", ...(user.email_verified_at !== undefined ? {emailVerifiedAt:user.email_verified_at} : {}) }) });` : ""}
   ${users ? "const fieldEncryption=createFieldEncryptionCodec(env), mfaSecrets=createMfaSecretCodec(env);" : ""}
   const metadata: MetadataFactory = (${users || plan.decisions.tenantTable ? "ports" : "_ports"}: ExecutionPersistence) => {
     ${
