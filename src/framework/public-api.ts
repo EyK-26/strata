@@ -144,15 +144,23 @@ export type {
   AuthCredentialVerifier,
   AuthEmailLookup,
   AuthSessionValidity,
-} from "../core/contracts/authUserDirectory.ts";
+} from "@getstrata/core/contracts/authUserDirectory";
+export { AuthAccountNotFoundError } from "@getstrata/core/contracts/authUserDirectory";
+export type { AuthOutcome } from "../core/auth/guard.ts";
 export type { AuthGuard } from "../core/auth/guard.ts";
 export {
   ApiTokenGuard,
+  absentAuth,
+  authenticatedAuth,
+  authenticateProof,
   AuthManager,
+  authUserFromOutcome,
   CompositeGuard,
   DatabaseTokenGuard,
   GuestGuard,
+  invalidAuth,
   requireAuthCapability,
+  validatedAuthOutcome,
 } from "../core/auth/guard.ts";
 export type { JwtPayload } from "../core/auth/jwt.ts";
 export { jwtTtlSeconds, signJwt, verifyJwt } from "../core/auth/jwt.ts";
