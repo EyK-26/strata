@@ -140,11 +140,6 @@ jobs:
           node-version: "24"
           package-manager-cache: false
 
-      - name: Require successful CI for the exact release commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bun scripts/verify-release-ci.ts
-
       - name: Install npm CLI for trusted publishing
         run: npm install -g "npm@$(cat .npm-version)"
 

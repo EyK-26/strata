@@ -19,10 +19,9 @@ CI, creates the tag and initiates publication.
    Run readiness with the selected tag and authoritative npm lookup; an existing
    version requires a new version, never changed contents at the same version.
 3. Complete the full required local gate, independent review and exact-head PR CI.
-   Merge the reviewed result into actual `main`. Wait for successful `CI` from the
-   `push` event at the exact merged SHA. A prior PR green run or earlier main SHA
-   does not qualify. The release workflow checks this API evidence itself once;
-   it fails immediately if no successful run exists and does not wait for CI.
+   Merge the reviewed result into actual `main`. Tagging does not require waiting
+   for a separate main-push CI run. The release workflow validates the tagged
+   source through its own mandatory quality gate before publication.
 4. The maintainer tags that exact SHA with `v` followed by the package version and
    pushes the tag, or dispatches `Release`
    with an already verified existing tag and the workflow ref set to that tag.
@@ -44,16 +43,14 @@ CI, creates the tag and initiates publication.
    URLs and publication run ID. A container failure can coexist with successful
    npm and GitHub publication; report each outcome independently.
 
-## Tag created before main CI passed
+## Older tags with the previous CI prerequisite
 
-`No successful main CI run for <commit>` means release admission failed before
-dependency installation, package packing or npm publication. Wait for successful
-main-push CI at that exact commit, then rerun the failed release job or dispatch
-`Release` with both its workflow ref and `tag` input set to the existing tag. Do
-not supply `recovery_run_id`: this early failure did not upload release archives.
-The same tag can be retried once its commit qualifies; moving the tag is unnecessary.
-If additional source changes are needed, merge them with a new package version and
-wait for that commit's main CI before creating a new tag.
+Current releases do not query or wait for a separate CI run. Older immutable tags
+still contain their original workflow. On those tags, `No successful main CI run
+for <commit>` means the old admission check failed before packing or publication.
+Retrying such a tag still requires successful main-push CI at that exact commit;
+it does not acquire this workflow change. Tags created from the updated main
+source use the release's own quality gate. Keep existing tags unchanged.
 
 ## Partial publication and recovery
 
@@ -70,8 +67,8 @@ with `EALLOWGIT`: npm interpreted the bare relative tarball path as GitHub
 repository shorthand. No package was published by that attempt. Version `3.0.3`
 resolves archive paths absolutely and adds publication dry-runs. Preserve the
 `v3.0.2` tag; retrying it or restoring its archives still executes the old code
-and cannot apply this source fix. Merge the fix, wait for successful main CI,
-then tag the new commit `v3.0.3`. Do not pass the v3.0.2 run as a recovery source
+and cannot apply this source fix. Merge the fix,
+then tag the reviewed main commit `v3.0.3`. Do not pass the v3.0.2 run as a recovery source
 for v3.0.3: recovery requires the same source commit and archive identities.
 
 Publication is not atomic across registries or packages. If any step fails, first
@@ -93,7 +90,7 @@ so npm provenance cannot identify a newer default-branch commit as its source. I
 requires the source run to be this workflow at the exact tagged SHA, downloads its
 immutable `release-archives` artifact, and verifies its manifest and every archive
 hash. Already published package versions must have matching registry integrity;
-only missing versions publish. The quality and exact-head CI gates still apply.
+only missing versions publish. The release's own quality gate still applies.
 If the registry is temporarily unavailable, retry recovery after it is healthy.
 A registry archive mismatch requires investigation and a new reviewed version;
 it cannot be bypassed through recovery.
