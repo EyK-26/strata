@@ -83,9 +83,12 @@ describe("createJsonErrorMiddleware", () => {
 
 test("API error context overrides HTML negotiation in nested legacy wrappers", async () => {
   process.env.FRONTEND_MODE = "hybrid";
-  const handler = withErrorHandling(async (_request: Request) => {
-    throw new ForbiddenError("Signature rejected.");
-  });
+  const handler = withErrorHandling(
+    async (_request: Request) => {
+      throw new ForbiddenError("Signature rejected.");
+    },
+    { enabled: true },
+  );
   const response = await createJsonErrorMiddleware()(
     new Request("http://app.test/billing/webhooks/stripe", { headers: { accept: "text/html" } }),
     () => handler(new Request("http://app.test/billing/webhooks/stripe")),

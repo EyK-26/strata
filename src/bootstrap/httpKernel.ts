@@ -263,6 +263,11 @@ class HttpKernel {
         ? createJsonErrorMiddleware()
         : createWebErrorMiddleware({
             enabled: this.viewsEnabled,
+            production: this.dependencies.container.has(HTTP_PERSISTENCE_OPTIONS)
+              ? (this.dependencies.container.resolve<HttpPersistenceOptions>(
+                  HTTP_PERSISTENCE_OPTIONS,
+                ).production ?? true)
+              : true,
             render: this.dependencies.container.has(CORE_WEB_ERROR_VIEW_TOKEN)
               ? this.dependencies.container.resolve(CORE_WEB_ERROR_VIEW_TOKEN)
               : undefined,

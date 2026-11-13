@@ -16,6 +16,7 @@ type RequestMeta = {
   /** Captured owner policy; carried only within this request. */
   webErrorView?: WebErrorView;
   viewsEnabled?: boolean;
+  webErrorsProduction?: boolean;
   flash?: { level: string; message: string } | null;
   csrfToken?: string;
   cspNonce?: string;

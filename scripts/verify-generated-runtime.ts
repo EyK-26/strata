@@ -269,7 +269,7 @@ await runWithRequestMeta({ipAddress:null,userAgent:null,webErrorView:render,view
   assert.ok(api.headers.get('content-type')?.includes('application/json'));
   assert.deepEqual(await api.json(),{error:'first',details:{name:['required']}});
 });
-const fallback=await withErrorHandling(()=>{throw new ValidationError('fallback');})(request);
+const fallback=await withErrorHandling(()=>{throw new ValidationError('fallback');},{enabled:true,production:true})(request);
 assert.equal(fallback.status,422);
 assert.equal(fallback.headers.get('cache-control'),'no-store');
 const custom404=await notFoundHtmlResponse('private-synthetic-not-found');
@@ -279,7 +279,7 @@ assert.equal(await custom404.text(),'private-synthetic-not-found');
 const html=await fallback.text();
 assert.ok(html.includes('fallback'));
 assert.ok(!html.includes(marker));
-console.log('Packed error wrapper respects configured HTML, concurrent inputs, API JSON precedence and default reset.');
+console.log('Packed error wrapper respects configured HTML, concurrent inputs, API JSON precedence and safe ownerless fallback.');
 `,
   );
   await run([errorViewProbe]);
