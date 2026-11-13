@@ -1,12 +1,8 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { createSign, generateKeyPairSync } from "node:crypto";
 import { signJwt } from "@getstrata/core/auth/jwt";
-import { loadOidcDiscovery, oidcAccessTokenHash } from "@getstrata/core/auth/oauth/oidcIdToken";
-import {
-  createOidcHandshake,
-  OidcProvider,
-  resetOidcDiscoveryCacheForTests,
-} from "@getstrata/core/auth/oauth/oidcProvider";
+import { oidcAccessTokenHash } from "@getstrata/core/auth/oauth/oidcIdToken";
+import { createOidcHandshake, OidcProvider } from "@getstrata/core/auth/oauth/oidcProvider";
 import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/security/safeUrl";
 
 const originalFetch = globalThis.fetch;
@@ -68,7 +64,6 @@ function mockOidcNetwork(idToken?: string, tokenBody?: Record<string, unknown>) 
 afterEach(() => {
   globalThis.fetch = originalFetch;
   resetDnsLookupForTests();
-  resetOidcDiscoveryCacheForTests();
 });
 
 describe("OidcProvider", () => {
@@ -528,19 +523,24 @@ test("OIDC token exchange rejects a response with no access token", async () => 
   );
 });
 
-test("an invalidated cached discovery endpoint cannot construct an authorization URL", async () => {
+test("provider discovery caches are private to their owner", async () => {
   mockPublicDns();
   mockOidcNetwork();
-  const discovery = await loadOidcDiscovery("https://issuer.example.com");
-  discovery.authorization_endpoint = "";
-  const provider = new OidcProvider({
-    name: "invalidated",
+  const options = {
+    name: "isolated",
     issuer: "https://issuer.example.com",
     clientId: "client",
     clientSecret: "secret",
     redirectUri: "https://app.example.com/callback",
-  });
-  await expect(provider.createAuthorization("state")).rejects.toThrow(
-    "did not include authorization_endpoint",
+  };
+  const first = new OidcProvider(options);
+  await first.createAuthorization("state");
+  globalThis.fetch = Object.assign(
+    mock(() => Promise.resolve(Response.json({ issuer: options.issuer }))),
+    { preconnect: originalFetch.preconnect },
+  );
+  await first.createAuthorization("state");
+  await expect(new OidcProvider(options).createAuthorization("state")).rejects.toThrow(
+    "did not include",
   );
 });

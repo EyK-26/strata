@@ -398,7 +398,7 @@ ${renderMfaChallengeRoutes()}
             }
             const redirectUri = authServices.config.oidc.redirectUri;
             const issued = createOAuthState(authServices.config.oauth);
-            const provider = new OidcProvider({ name: "oidc", issuer, clientId, clientSecret, redirectUri });
+            const provider = new OidcProvider({ name: "oidc", issuer, clientId, clientSecret, redirectUri, networkPolicy: authServices.config.oidc.networkPolicy });
             const { url, handshake } = await provider.createAuthorization(issued.state);
             const redirect = new Response(null, { status: 302, headers: { location: url } });
             redirect.headers.append(
@@ -429,7 +429,7 @@ ${renderMfaChallengeRoutes()}
               return denied;
             }
             const redirectUri = authServices.config.oidc.redirectUri;
-            const profile = await new OidcProvider({ name: "oidc", issuer, clientId, clientSecret, redirectUri })
+            const profile = await new OidcProvider({ name: "oidc", issuer, clientId, clientSecret, redirectUri, networkPolicy: authServices.config.oidc.networkPolicy })
               .exchangeCode(code, redirectUri, pkce)
               .catch(() => null);
             if (!profile) {
