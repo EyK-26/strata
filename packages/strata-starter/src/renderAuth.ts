@@ -254,11 +254,12 @@ export function createStarterAuthServices(options: StarterAuthServicesOptions): 
     passwordConfirmation: Object.freeze(options.passwordConfirmation ? {...options.passwordConfirmation} : {secret:${cookie ? 'requireConfiguredSecret(["SESSION_SECRET","OAUTH_STATE_SECRET"],"session-secret",secretsEnv)' : "snapshot.jwtSecret"},cookieName:${cookie ? "passwordConfirmCookieName(env)" : JSON.stringify("strata_password_confirmed")},ttlSeconds:${cookie ? "passwordConfirmTtlSeconds(env)" : "10800"},production:snapshot.production}),
   });
   ${cookie ? `if (!snapshot.sessionSecret?.trim()) throw new TypeError("SESSION_SECRET is required for cookie authentication.");\n  const session = (ports: StarterAuthPersistence) => createCookieSessionAuthManager({ selected: ports.database, policy: ports.policy, secret: snapshot.sessionSecret!, production: snapshot.production, rls: ${String(plan.decisions.rls)}, cookieName: "strata_session", mapUser: user => ({ id: user.id, name: user.name, email: user.email, authVersion: user.auth_version, isActive: user.is_active, role: user.is_admin ? "admin" : "member", ...(user.email_verified_at !== undefined ? {emailVerifiedAt:user.email_verified_at} : {}) }) });` : ""}
+  ${users ? "const fieldEncryption=createFieldEncryptionCodec(env), mfaSecrets=createMfaSecretCodec(env);" : ""}
   const metadata: MetadataFactory = (${users || plan.decisions.tenantTable ? "ports" : "_ports"}: ExecutionPersistence) => {
     ${
       users
         ? `const directory = createStarterAuthDirectory(ports);
-    const auth = createMetadataAuthManager(directory, { ...snapshot, mechanisms: ${JSON.stringify(mechanisms)}${cookie ? ", sessionGuard: session(ports)" : ""} }, async (record, hash) => {
+    const auth = createMetadataAuthManager(directory, { ...snapshot, mfaSecrets, mechanisms: ${JSON.stringify(mechanisms)}${cookie ? ", sessionGuard: session(ports)" : ""} }, async (record, hash) => {
       await withAuthIdentifier(ports, record.id, database => persistConsumedRecoveryHash(database, record.id, record.mfa_recovery_codes, hash));
       return true;
     });`
@@ -281,7 +282,7 @@ export function createStarterAuthServices(options: StarterAuthServicesOptions): 
       tenant: ${plan.decisions.tenantTable ? "id => resolveTenant(ports.database, id)" : 'async id => ({id,slug:"default"})'},
     };
   };
-  return Object.freeze({ config, metadata, csrf:csrfTokenOptionsFromEnvironment(env), intendedUrl:intendedUrlCookieOptionsFromEnvironment(env),flash:flashSessionOptionsFromEnvironment(env)${users ? ",fieldEncryption:createFieldEncryptionCodec(env),mfaSecrets:createMfaSecretCodec(env)" : ""}${users ? ", mail: new Mailer(createMailDriver(env))" : ""}${cookie ? ', saml: (ports:StarterAuthPersistence) => { if(!config.saml) throw new Error("SAML is not configured.");return createSamlServiceProvider({...config.saml,replayStore:createSqlSamlAssertionReplayStore(ports.database)}); }' : ""}${plan.decisions.pendingMfa ? ", pendingMfa: createPendingMfaHelpers({secret:snapshot.sessionSecret!,production:snapshot.production})" : ""}${users ? ", directory: createStarterAuthDirectory" : ""}${cookie ? ", session" : ""} });
+  return Object.freeze({ config, metadata, csrf:csrfTokenOptionsFromEnvironment(env), intendedUrl:intendedUrlCookieOptionsFromEnvironment(env),flash:flashSessionOptionsFromEnvironment(env)${users ? ",fieldEncryption,mfaSecrets" : ""}${users ? ", mail: new Mailer(createMailDriver(env))" : ""}${cookie ? ', saml: (ports:StarterAuthPersistence) => { if(!config.saml) throw new Error("SAML is not configured.");return createSamlServiceProvider({...config.saml,replayStore:createSqlSamlAssertionReplayStore(ports.database)}); }' : ""}${plan.decisions.pendingMfa ? ", pendingMfa: createPendingMfaHelpers({secret:snapshot.sessionSecret!,production:snapshot.production})" : ""}${users ? ", directory: createStarterAuthDirectory" : ""}${cookie ? ", session" : ""} });
 }
 export function createStarterAuthProvider(services: StarterAuthServices): ServiceProvider {
   return {
