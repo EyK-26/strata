@@ -116,7 +116,10 @@ test("private JSON preserves payload, status and multiple cookies without changi
 test("API context keeps throttle errors JSON inside HTML owners on custom prefixes and HTMX", async () => {
   const { createWebErrorMiddleware } = await import("@getstrata/core/http/response");
   const { tooManyRequestsResponse } = await import("@getstrata/core/http/throttleResponse");
-  const variants: Record<string, string>[] = [{ accept: "text/html" }, { accept: "text/html", "hx-request": "true" }];
+  const variants: Record<string, string>[] = [
+    { accept: "text/html" },
+    { accept: "text/html", "hx-request": "true" },
+  ];
   for (const headers of variants) {
     const request = new Request("https://app.test/service/limits", { headers });
     const response = await createWebErrorMiddleware({ enabled: true })(request, () =>
