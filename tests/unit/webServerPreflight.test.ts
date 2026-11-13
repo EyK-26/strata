@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
 import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
+import { getRouteInventory } from "@getstrata/bootstrap/routePlan";
 import { convertAppRoutesToBunRoutes, createWebServer } from "@getstrata/bootstrap/web/server";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
@@ -23,7 +23,6 @@ afterEach(() => {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   });
-  routeRegistry.clear();
 });
 function preflight(origin = "https://client.example") {
   return {
@@ -85,9 +84,9 @@ describe("native registered-route preflights", () => {
       expect(actual.status).toBe(403);
       expect(await actual.json()).toHaveProperty("error");
       expect(writes).toBe(0);
-      const spec = generateOpenApiSpec(routeRegistry.list());
+      const spec = generateOpenApiSpec(getRouteInventory(routes));
       expect(Object.keys(spec.paths["/api/v1/orders"] ?? {})).toEqual(["post"]);
-      expect(routeRegistry.list().some((route) => route.method === "OPTIONS")).toBe(false);
+      expect(getRouteInventory(routes).some((route) => route.method === "OPTIONS")).toBe(false);
       expect(routes["/api/v1/orders"]).not.toHaveProperty("OPTIONS");
       expect((await fetch(`http://127.0.0.1:${server.port}/unknown`, preflight())).status).toBe(
         404,

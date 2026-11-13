@@ -1,11 +1,9 @@
-import { afterEach, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { compileRoutePlan, getRouteInventory } from "../../src/bootstrap/routeCompiler";
 import { publishRoutePlan } from "../../src/bootstrap/routeMetadata";
-import { routeRegistry } from "../../src/bootstrap/routeRegistry";
 import { generateOpenApiSpec } from "../../src/core/openapi/generator";
 import { validateOpenApiSpec } from "../../src/core/openapi/validate";
 
-afterEach(() => routeRegistry.clear());
 const handler = () => new Response("ok");
 
 test("normalizes prefix, path and methods and merges disjoint operations in declaration order", () => {
@@ -29,7 +27,7 @@ test("rejects duplicate aliases, method aliases, parameter shapes, invalid handl
   const published = publishRoutePlan(
     compileRoutePlan([{ name: "existing", routes: { "/kept": handler } }]),
   );
-  const before = routeRegistry.list();
+  const before = getRouteInventory(published);
   for (const sources of [
     [{ name: "duplicate", routes: { items: handler, "/items": handler } }],
     [{ name: "duplicate method", routes: { "/items": { get: handler, GET: handler } } }],
@@ -56,7 +54,6 @@ test("rejects duplicate aliases, method aliases, parameter shapes, invalid handl
     ],
   ]) {
     expect(() => publishRoutePlan(compileRoutePlan(sources))).toThrow();
-    expect(routeRegistry.list()).toEqual(before);
     expect(getRouteInventory(published)).toEqual(before);
   }
 });
@@ -87,7 +84,7 @@ test("copies and deeply freezes inventory without freezing caller-owned metadata
   expect(Object.isFrozen(storedSchema)).toBe(true);
   expect(Object.isFrozen(plan.inventory)).toBe(true);
   expect(Object.isFrozen(plan.inventory[0]?.openApi?.tags)).toBe(true);
-  expect(Object.isFrozen(routeRegistry.list()[0]?.middleware)).toBe(true);
+  expect(Object.isFrozen(getRouteInventory(plan.routes)[0]?.middleware)).toBe(true);
   expect(Object.isFrozen(plan.routes["/items"])).toBe(true);
 });
 

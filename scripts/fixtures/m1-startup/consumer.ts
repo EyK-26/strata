@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
+import { compileRouteMap, getRouteInventory } from "@getstrata/bootstrap/routePlan";
 import { type Attempt, attempts, begin, captureOwner } from "./state.ts";
 import type { ProbeCase } from "./types.ts";
 
@@ -92,6 +92,7 @@ try {
     application: import("@getstrata/core/contracts/application").Application;
     context: { dispose(): Promise<void>; drain(): Promise<void> };
     server?: ReturnType<typeof Bun.serve>;
+    routes: Record<string, unknown>;
   };
   type Options = {
     migrate: false;
@@ -107,8 +108,8 @@ try {
     onConstructed: captureOwner,
     server: { port: 0, native: { hostname: "127.0.0.1" } },
   };
-  routeRegistry.register({ method: "GET", path: "/previous-snapshot", middleware: [] });
-  report.registryBefore = routeRegistry.list();
+  const previousRoutes = compileRouteMap({ "/previous-snapshot": { GET: () => new Response() } });
+  report.registryBefore = getRouteInventory(previousRoutes);
   let error: unknown;
   const callerCleanup = false;
   if (spec.mode.startsWith("native-bind")) {
@@ -184,7 +185,7 @@ try {
   };
   report.fixtureStartupMarkerRetained = leaves(error).includes(first.startupError);
   report.errors = describe(error);
-  report.registryAfter = routeRegistry.list();
+  report.registryAfter = getRouteInventory(previousRoutes);
   report.callerCleanupAfterTransportRejection = callerCleanup;
   assert.equal(first.factoryCalls, spec.expectedFactoryCalls);
   if (
@@ -312,7 +313,7 @@ try {
     context = app.context;
     assert.equal(retry.factoryCalls, 1);
     assert.equal(retry.handlers, 0);
-    const registered = routeRegistry.list().filter((r) => r.path === "/startup-probe");
+    const registered = getRouteInventory(app.routes).filter((r) => r.path === "/startup-probe");
     assert.equal(registered.length, 1);
     assert.equal(registered[0]?.openApi?.summary, "owned-startup-probe");
     server = app.server;

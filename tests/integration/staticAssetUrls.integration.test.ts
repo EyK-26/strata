@@ -9,7 +9,6 @@ import {
 } from "@getstrata/bootstrap/contracts";
 import { createSpaRoutes } from "@getstrata/bootstrap/createSpaRoutes";
 import { createWebRoutes } from "@getstrata/bootstrap/createWebRoutes";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
@@ -111,7 +110,6 @@ for (const surface of ["server fallback", "web routes", "SPA routes"] as const) 
     } finally {
       await server.stop(true);
       if (surface === "web routes") {
-        routeRegistry.clear();
         await rm(directory, { recursive: true, force: true });
       }
       await rm(owned, { recursive: true, force: true });

@@ -11,7 +11,6 @@ const SPA_DIST_DIRECTORY = join(process.cwd(), "frontend/dist");
 
 type SpaRouteOptions = {
   prefix?: string;
-  register?: boolean;
   distDirectory?: string;
   wrap?: (handler: RouteHandler) => RouteHandler;
 };
@@ -84,7 +83,7 @@ function createSpaRoutes(
   }
 
   const plan = compileRoutePlan([{ name: "SPA", routes }]);
-  return publishRoutePlan(plan, plan.routes, { register: options.register }) as AppRouteMap;
+  return publishRoutePlan(plan, plan.routes) as AppRouteMap;
 }
 
 function mergeSpaRoutes(
@@ -96,15 +95,12 @@ function mergeSpaRoutes(
     return routes;
   }
 
-  const spaRoutes = createSpaRoutes(dependencies, { ...options, register: false });
+  const spaRoutes = createSpaRoutes(dependencies, options);
   const plan = compileRoutePlan([
     { name: "SPA", routes: spaRoutes },
     { name: "application", routes },
   ]);
-  return publishRoutePlan(plan, plan.routes, {
-    clearRegistry: true,
-    register: options?.register,
-  }) as AppRouteMap;
+  return publishRoutePlan(plan, plan.routes) as AppRouteMap;
 }
 
 export type { SpaRouteOptions };

@@ -9,7 +9,7 @@ import {
 import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createWebRoutes, mergeWebRoutes } from "@getstrata/bootstrap/createWebRoutes";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
+import { getRouteInventory } from "@getstrata/bootstrap/routePlan";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { PolicyGate } from "@getstrata/core/auth/policy";
 import { CacheRepository } from "@getstrata/core/cache/repository";
@@ -46,7 +46,6 @@ describe("createWebRoutes", () => {
   const previousFrontendMode = process.env.FRONTEND_MODE;
 
   beforeEach(async () => {
-    routeRegistry.clear();
     process.env.FRONTEND_MODE = "server-htmx";
     await mkdir(PUBLIC_ASSETS_DIR, { recursive: true });
   });
@@ -71,9 +70,9 @@ describe("createWebRoutes", () => {
       throw new Error("Expected /assets/* route handler");
     }
 
-    const before = routeRegistry.list();
+    const before = getRouteInventory(routes);
     const response = await handler(new Request("http://localhost/assets/coverage-test.css"));
-    expect(routeRegistry.list()).toEqual(before);
+    expect(getRouteInventory(routes)).toEqual(before);
     expect(before).toEqual([{ method: "*", path: "/assets/*", middleware: [] }]);
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("body { color: black; }");
@@ -153,12 +152,12 @@ test("fallback handlers never mutate their construction-time route inventory", a
   process.env.FRONTEND_MODE = "api";
   try {
     const routes = createRoutes(createTestDependencies());
-    const before = routeRegistry.list();
+    const before = getRouteInventory(routes);
     for (const path of ["/api/*", "/*"]) {
       expect((await routes[path](new Request("http://localhost/missing"))).status).toBe(404);
       expect((await routes[path](new Request("http://localhost/missing"))).status).toBe(404);
     }
-    expect(routeRegistry.list()).toEqual(before);
+    expect(getRouteInventory(routes)).toEqual(before);
     expect(before.filter((route) => route.path === "/").map((route) => route.method)).toEqual([
       "GET",
       "HEAD",

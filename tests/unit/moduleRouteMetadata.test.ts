@@ -1,25 +1,31 @@
-import { afterEach, expect, test } from "bun:test";
-import { registerOpenApiRouteMap } from "@getstrata/bootstrap/buildModuleRoutes";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
-import { registerOpenApiRouteMap as internalRegistration } from "../../src/bootstrap/routeMetadata";
+import { expect, test } from "bun:test";
+import {
+  compileRouteMap,
+  composeRouteMaps,
+  getRouteInventory,
+} from "@getstrata/bootstrap/routePlan";
 
-afterEach(() => routeRegistry.clear());
-
-test("metadata registration preserves plain handlers and normalizes executable method maps", () => {
+test("route plans preserve plain handlers and normalize executable method maps", () => {
   const plain = () => Response.json({ plain: true });
   const methods = {
     get: () => new Response("read"),
     POST: () => new Response("write", { status: 201 }),
   };
   const middleware = ["global", "api"];
-  const result = registerOpenApiRouteMap({ "/plain": plain, "/methods": methods }, middleware, {
-    "/plain": { GET: { summary: "Plain contract" } },
-    "/methods": { GET: { summary: "Read contract" }, POST: { summary: "Write contract" } },
-  });
+  const result = compileRouteMap(
+    { "/plain": plain, "/methods": methods },
+    {
+      middleware,
+      metadata: {
+        "/plain": { GET: { summary: "Plain contract" } },
+        "/methods": { GET: { summary: "Read contract" }, POST: { summary: "Write contract" } },
+      },
+    },
+  );
   expect(result["/plain"]).toBe(plain);
   expect(result["/methods"]).toEqual({ GET: methods.get, POST: methods.POST });
   expect(Object.keys(methods)).toEqual(["get", "POST"]);
-  expect(routeRegistry.list()).toEqual([
+  expect(getRouteInventory(result)).toEqual([
     { method: "GET", path: "/methods", middleware, openApi: { summary: "Read contract" } },
     { method: "POST", path: "/methods", middleware, openApi: { summary: "Write contract" } },
     { method: "HEAD", path: "/methods", middleware },
@@ -28,19 +34,25 @@ test("metadata registration preserves plain handlers and normalizes executable m
   ]);
 });
 
-test("metadata registration appends with no implicit registry clearing or fabricated metadata", () => {
-  registerOpenApiRouteMap({ "/first": () => new Response() }, ["global", "api"]);
-  registerOpenApiRouteMap({ "/second": { GET: () => new Response() } }, ["global", "web"]);
-  expect(routeRegistry.list()).toEqual([
-    { method: "*", path: "/first", middleware: ["global", "api"] },
-    { method: "GET", path: "/second", middleware: ["global", "web"] },
-    { method: "HEAD", path: "/second", middleware: ["global", "web"] },
+test("independent route maps cannot overwrite another application's metadata", () => {
+  const first = compileRouteMap({ "/shared": () => new Response("one") }, { middleware: ["api"] });
+  const before = getRouteInventory(first);
+  const second = compileRouteMap(
+    { "/shared": { GET: () => new Response("two") } },
+    { middleware: ["web"] },
+  );
+  expect(getRouteInventory(first)).toBe(before);
+  expect(getRouteInventory(second)).toEqual([
+    { method: "GET", path: "/shared", middleware: ["web"] },
+    { method: "HEAD", path: "/shared", middleware: ["web"] },
   ]);
+  expect(() => composeRouteMaps(first, second)).toThrow("Duplicate route");
+  expect(getRouteInventory(first)).toBe(before);
 });
 
-test("metadata registration lowers static responses to the supported explicit methods", () => {
+test("route plans lower static responses to supported methods", () => {
   const response = new Response("static");
-  const result = registerOpenApiRouteMap({ "/static": response }, ["global"]);
+  const result = compileRouteMap({ "/static": response }, { middleware: ["global"] });
   expect(Object.keys(result["/static"] as object)).toEqual([
     "GET",
     "HEAD",
@@ -50,7 +62,7 @@ test("metadata registration lowers static responses to the supported explicit me
     "PATCH",
     "OPTIONS",
   ]);
-  expect(routeRegistry.list().map((route) => route.method)).toEqual([
+  expect(getRouteInventory(result).map((route) => route.method)).toEqual([
     "GET",
     "HEAD",
     "POST",
@@ -61,6 +73,23 @@ test("metadata registration lowers static responses to the supported explicit me
   ]);
 });
 
-test("the existing API builder export retains the shared metadata function identity", () => {
-  expect(registerOpenApiRouteMap).toBe(internalRegistration);
+test("route-plan metadata is hidden on an immutable owned map and input maps remain unmodified", () => {
+  const input = { "/plain": () => new Response("ok") };
+  const result = compileRouteMap(input);
+  expect(Object.getOwnPropertySymbols(input)).toHaveLength(0);
+  const symbols = Object.getOwnPropertySymbols(result);
+  expect(symbols).toHaveLength(1);
+  const [symbol] = symbols;
+  if (!symbol) throw new Error("Missing route inventory symbol");
+  const descriptor = Object.getOwnPropertyDescriptor(result, symbol);
+  expect(descriptor?.enumerable).toBe(false);
+  expect(descriptor?.writable).toBe(false);
+  expect(descriptor?.configurable).toBe(false);
+  expect(Object.keys(result)).toEqual(["/plain"]);
+  expect(Object.isFrozen(result)).toBe(true);
+  expect(getRouteInventory(compileRouteMap(result))).toEqual(getRouteInventory(result));
+  expect(() => compileRouteMap(result, { middleware: ["web"] })).toThrow("already compiled");
+  expect(() =>
+    compileRouteMap(result, { metadata: { "/plain": { GET: { summary: "replacement" } } } }),
+  ).toThrow("already compiled");
 });

@@ -94,7 +94,7 @@ export { type CacheBindingOptions, createCacheBindings } from "./providers/cache
 export { coreProviders } from "./providers/index.ts";
 export { default as tracingProvider } from "./providers/tracing.ts";
 export { registerDefaultJobs } from "./queue/defaultJobs.ts";
-export { RouteRegistry, routeRegistry } from "./routeRegistry.ts";
+export { compileRouteMap, composeRouteMaps, getRouteInventory } from "./routePlan.ts";
 export { assertProductionSecrets } from "./secretsGuard.ts";
 export {
   CookieSessionAuthManager,

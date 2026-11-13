@@ -8,21 +8,18 @@ import { discoverModules } from "./modules";
 import type { BusinessRouteHandler } from "./persistenceContracts";
 import type { RouteSource } from "./routeCompiler";
 import { compileRoutePlan } from "./routeCompiler";
-import { publishRoutePlan, registerOpenApiRouteMap } from "./routeMetadata";
+import { publishRoutePlan } from "./routeMetadata";
 
 interface BuildModuleRoutesOptions {
   apiPrefix?: string;
   modules?: AppModule[];
-  clearRegistry?: boolean;
-  /** Defer registry publication while composing a larger route plan. */
-  register?: boolean;
 }
 
 function buildModuleRoutes(
   dependencies: AppDependencies,
   options: BuildModuleRoutesOptions = {},
 ): AppRouteMap {
-  const { apiPrefix = "", modules = discoverModules(), clearRegistry = true } = options;
+  const { apiPrefix = "", modules = discoverModules() } = options;
 
   const kernel = createHttpKernel(dependencies);
   const middleware = kernel.group("api");
@@ -51,11 +48,8 @@ function buildModuleRoutes(
       scimMiddleware(callback),
     ),
   );
-  return publishRoutePlan(plan, routes, {
-    clearRegistry,
-    register: options.register,
-  }) as AppRouteMap;
+  return publishRoutePlan(plan, routes) as AppRouteMap;
 }
 
 export type { BuildModuleRoutesOptions };
-export { buildModuleRoutes, registerOpenApiRouteMap };
+export { buildModuleRoutes };

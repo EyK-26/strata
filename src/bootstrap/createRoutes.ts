@@ -16,8 +16,6 @@ function createRoutes(dependencies: AppDependencies): AppRouteMap {
   const apiPrefix = "";
   const wrappedModuleRoutes = buildModuleRoutes(dependencies, {
     apiPrefix,
-    clearRegistry: true,
-    register: false,
     modules: [],
   });
 
@@ -51,11 +49,10 @@ function createRoutes(dependencies: AppDependencies): AppRouteMap {
   ]);
   const merged = mergeSpaRoutes(
     dependencies,
-    mergeWebRoutes(dependencies, basePlan.routes as AppRouteMap, { register: false }),
-    { register: false },
+    mergeWebRoutes(dependencies, basePlan.routes as AppRouteMap),
   );
   const plan = compileRoutePlan([{ name: "application", routes: merged }]);
-  return publishRoutePlan(plan, plan.routes, { clearRegistry: true }) as AppRouteMap;
+  return publishRoutePlan(plan, plan.routes) as AppRouteMap;
 }
 
 export { createRoutes };

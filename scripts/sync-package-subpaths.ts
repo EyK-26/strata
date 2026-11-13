@@ -254,7 +254,7 @@ const BOOTSTRAP_SUBPATHS = [
   "providers/cache",
   "providers/events",
   "providers/auth",
-  "routeRegistry",
+  "routePlan",
   "schedule",
   "secretsGuard",
   "web/forms",

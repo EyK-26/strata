@@ -7,7 +7,6 @@ import {
   mergeSpaRoutes,
   SPA_DIST_DIRECTORY,
 } from "@getstrata/bootstrap/createSpaRoutes";
-import { routeRegistry } from "../../src/bootstrap/routeRegistry";
 import { createMockDependencies } from "./testHelpers";
 
 const DIST_DIR = join(process.cwd(), "frontend/dist");
@@ -29,7 +28,6 @@ describe("createSpaRoutes", () => {
   const previousPrefix = process.env.SPA_PREFIX;
 
   beforeEach(async () => {
-    routeRegistry.clear();
     await mkdir(DIST_DIR, { recursive: true });
     delete process.env.SPA_PREFIX;
   });

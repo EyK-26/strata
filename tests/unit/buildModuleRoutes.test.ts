@@ -7,7 +7,7 @@ import {
 } from "@getstrata/bootstrap/config";
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
+import { getRouteInventory } from "@getstrata/bootstrap/routePlan";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { PolicyGate } from "@getstrata/core/auth/policy";
 import { CacheRepository } from "@getstrata/core/cache/repository";
@@ -125,7 +125,7 @@ describe("buildModuleRoutes", () => {
     expect(typeof routes["/api/reports/summary"]).toBe("function");
   });
 
-  test("can append routes without clearing the OpenAPI registry", () => {
+  test("creates independent inventories for separate route maps", () => {
     const dependencies = createTestDependencies();
     const firstCount = buildModuleRoutes(dependencies, {
       apiPrefix: "/api",
@@ -134,7 +134,6 @@ describe("buildModuleRoutes", () => {
     const secondCount = buildModuleRoutes(dependencies, {
       apiPrefix: "/api",
       modules: [{ name: "more", routes: () => ({ "/more": () => new Response() }) }],
-      clearRegistry: false,
     });
 
     expect(Object.keys(firstCount).length).toBeGreaterThan(0);
@@ -145,12 +144,14 @@ describe("buildModuleRoutes", () => {
       ...fixtureModule,
       openApi: { "/reports/summary": { GET: { summary: "Summary contract" } } },
     };
-    buildModuleRoutes(createTestDependencies(), { apiPrefix: "/api", modules: [module] });
+    const routes = buildModuleRoutes(createTestDependencies(), {
+      apiPrefix: "/api",
+      modules: [module],
+    });
     expect(
-      routeRegistry
-        .list()
-        .find((route) => route.path === "/api/reports/summary" && route.method === "GET")?.openApi
-        ?.summary,
+      getRouteInventory(routes).find(
+        (route) => route.path === "/api/reports/summary" && route.method === "GET",
+      )?.openApi?.summary,
     ).toBe("Summary contract");
     expect(() =>
       buildModuleRoutes(createTestDependencies(), {
@@ -188,16 +189,15 @@ describe("buildModuleRoutes", () => {
     });
     expect(Object.keys(routes["/api/shared"])).toEqual(["GET", "POST"]);
     expect(
-      routeRegistry
-        .list()
+      getRouteInventory(routes)
         .filter((route) => route.method !== "HEAD")
         .map((route) => route.openApi?.summary),
     ).toEqual(["Read", "Write"]);
   });
 
-  test("rejects duplicate paths and normalized aliases before changing registry", () => {
-    buildModuleRoutes(createTestDependencies(), { modules: [fixtureModule] });
-    const before = routeRegistry.list();
+  test("rejects duplicate paths and normalized aliases without changing existing inventories", () => {
+    const routes = buildModuleRoutes(createTestDependencies(), { modules: [fixtureModule] });
+    const before = getRouteInventory(routes);
     for (const path of ["/shared", "shared"]) {
       expect(() =>
         buildModuleRoutes(createTestDependencies(), {
@@ -212,7 +212,7 @@ describe("buildModuleRoutes", () => {
           ],
         }),
       ).toThrow("Duplicate route");
-      expect(routeRegistry.list()).toEqual(before);
+      expect(getRouteInventory(routes)).toEqual(before);
     }
   });
 });

@@ -387,20 +387,19 @@ console.log('Packed admission errors preserve exact contracts, no-store, denial 
         }
       : {},
   );
-  // Independent runtime inventory: metadata plus unregistered transport handlers,
-  // using the same public map registrar that the former adapter used.
+  // Independent runtime inventory from the owned executable route map.
+  // Keep the route baseline assertion separate from OpenAPI rendering below.
   const probe = join(fixture.app, "acceptance-routes.ts");
   await Bun.write(
     probe,
     `import assert from 'node:assert/strict';
 import {bootstrapApp} from './src/bootstrap/createApp.ts';
-import {routeRegistry} from '@getstrata/bootstrap/routeRegistry';
-import {registerOpenApiRouteMap} from '@getstrata/bootstrap/buildModuleRoutes';
+import {compileRouteMap,getRouteInventory} from '@getstrata/bootstrap/routePlan';
 let app:Awaited<ReturnType<typeof bootstrapApp>>|undefined;const failures:unknown[]=[];
 try{
   app=await bootstrapApp({migrate:false,mode:'command'});
-  registerOpenApiRouteMap(app.routes,[]);
-  const routes=[...new Set(routeRegistry.list().filter(r=>!r.path.includes('*')).map(r=>r.method+' '+r.path.replace(/:([A-Za-z0-9_]+)/g,'{$1}')))].sort();
+  const inventory=getRouteInventory(compileRouteMap(app.routes));
+  const routes=[...new Set(inventory.filter(r=>!r.path.includes('*')).map(r=>r.method+' '+r.path.replace(/:([A-Za-z0-9_]+)/g,'{$1}')))].sort();
   await Bun.write('acceptance-routes.json',JSON.stringify(routes));
 }catch(error){failures.push(error);}
 if(app)try{const stopped=await app.application.stop({reason:'runtime inventory complete'});if(!stopped.successful)throw new Error('Runtime inventory owner did not stop cleanly',{cause:stopped});}catch(error){failures.push(error);}

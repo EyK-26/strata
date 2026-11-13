@@ -2,7 +2,12 @@ import type { OpenApiRouteMap, RegisteredRoute } from "@getstrata/core/openapi/r
 
 const ROUTE_METHODS = ["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"] as const;
 const OPENAPI_METHODS = new Set<string>([...ROUTE_METHODS, "TRACE"]);
-const inventories = new WeakMap<object, readonly RegisteredRoute[]>();
+// The symbol identifies a property on an owned route map. It holds no process-level state.
+// Symbol.for preserves identity across independently bundled bootstrap entrypoints.
+const inventoryKey = Symbol.for("@getstrata/owned-route-inventory");
+function readRouteInventory(routes: object): readonly RegisteredRoute[] | undefined {
+  return Object.getOwnPropertyDescriptor(routes, inventoryKey)?.value;
+}
 
 interface RouteSource {
   name: string;
@@ -161,7 +166,9 @@ function compileRoutePlan(sources: readonly RouteSource[], prefix = ""): Compile
         }
       }
       // Preserve per-route middleware/contracts when an already compiled map is composed.
-      const inherited = inventories.get(source.routes)?.filter((entry) => entry.path === rawPath);
+      const inherited = readRouteInventory(source.routes)?.filter(
+        (entry) => entry.path === rawPath,
+      );
       if (inherited) {
         inventory.push(
           ...inherited
@@ -226,12 +233,10 @@ function compileRoutePlan(sources: readonly RouteSource[], prefix = ""): Compile
     if (!inventory.some((entry) => entry.path === path && entry.method === "HEAD"))
       inventory.push(head);
   }
-  const plan = Object.freeze({
-    routes: Object.freeze(routes),
-    inventory: immutableCopy(inventory),
-  });
-  inventories.set(plan.routes, plan.inventory);
-  return plan;
+  const snapshot = immutableCopy(
+    inventory.sort((left, right) => left.path.localeCompare(right.path)),
+  );
+  return Object.freeze({ routes: attachRouteInventory(routes, snapshot), inventory: snapshot });
 }
 
 function attachRouteInventory(
@@ -250,12 +255,12 @@ function attachRouteInventory(
       Object.freeze(value);
     }
   }
-  inventories.set(routes, inventory);
+  Object.defineProperty(routes, inventoryKey, { value: inventory, enumerable: false });
   return Object.freeze(routes);
 }
 
 function getRouteInventory(routes: Record<string, unknown>): readonly RegisteredRoute[] {
-  const inventory = inventories.get(routes);
+  const inventory = readRouteInventory(routes);
   if (!inventory) throw new Error("Route map has not been compiled");
   return inventory;
 }

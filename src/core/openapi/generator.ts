@@ -182,7 +182,7 @@ const DEFAULT_RESPONSES = {
   "422": { description: "Validation Error" },
 };
 
-function generateOpenApiSpec(routes: RegisteredRoute[]): OpenApiSpec {
+function generateOpenApiSpec(routes: readonly RegisteredRoute[]): OpenApiSpec {
   const paths: Record<string, Record<string, unknown>> = {};
 
   // Bun direct/native handlers accept every method. OpenAPI describes only its standard

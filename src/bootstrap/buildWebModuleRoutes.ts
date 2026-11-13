@@ -10,17 +10,14 @@ import { publishRoutePlan } from "./routeMetadata";
 
 interface BuildWebModuleRoutesOptions {
   modules?: AppModule[];
-  clearRegistry?: boolean;
   seedRoutes?: Record<string, unknown>;
-  /** Defer registry publication while composing a larger route plan. */
-  register?: boolean;
 }
 
 function buildWebModuleRoutes(
   dependencies: AppDependencies,
   options: BuildWebModuleRoutesOptions = {},
 ): AppRouteMap {
-  const { modules = discoverModules(), clearRegistry = true, seedRoutes = {} } = options;
+  const { modules = discoverModules(), seedRoutes = {} } = options;
 
   const kernel = createHttpKernel(dependencies);
   const cachedJson = createLegacyCachedJson(dependencies);
@@ -45,10 +42,7 @@ function buildWebModuleRoutes(
   const routes = enterModuleRoutes(plan.routes, (callback) =>
     kernel.composed(callback as BusinessRouteHandler, "web"),
   );
-  return publishRoutePlan(plan, routes, {
-    clearRegistry,
-    register: options.register,
-  }) as AppRouteMap;
+  return publishRoutePlan(plan, routes) as AppRouteMap;
 }
 
 export type { BuildWebModuleRoutesOptions };

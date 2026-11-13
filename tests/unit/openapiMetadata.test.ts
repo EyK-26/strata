@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { registerOpenApiRouteMap } from "@getstrata/bootstrap/buildModuleRoutes";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
+import { compileRouteMap, getRouteInventory } from "@getstrata/bootstrap/routePlan";
 import { generateOpenApiSpec, renderTypeScriptSdk } from "@getstrata/core/openapi/generator";
 import type { OpenApiOperation } from "@getstrata/core/openapi/registeredRoute";
 import { validateOpenApiSpec } from "@getstrata/core/openapi/validate";
@@ -35,15 +34,13 @@ const metadata: OpenApiOperation = {
 };
 describe("application OpenAPI metadata", () => {
   test("registration preserves operation metadata without changing runtime handlers", () => {
-    routeRegistry.clear();
     const handler = () => new Response("ok");
-    const routes = registerOpenApiRouteMap(
+    const routes = compileRouteMap(
       { "/api/v1/orders": { GET: handler, POST: handler } },
-      ["api"],
-      { "/api/v1/orders": { POST: metadata } },
+      { middleware: ["api"], metadata: { "/api/v1/orders": { POST: metadata } } },
     );
     expect((routes["/api/v1/orders"] as Record<string, unknown>).POST).toBe(handler);
-    const spec = generateOpenApiSpec(routeRegistry.list());
+    const spec = generateOpenApiSpec(getRouteInventory(routes));
     expect(spec.paths["/api/v1/orders"]?.post).toMatchObject(metadata);
     expect(spec.paths["/api/v1/orders"]?.get).not.toHaveProperty("parameters");
     expect(validateOpenApiSpec(spec)).toEqual([]);
@@ -51,7 +48,6 @@ describe("application OpenAPI metadata", () => {
     expect(sdk).toContain('operationHeaders: { "Idempotency-Key": string }');
     expect(sdk).toContain('headers.set("Idempotency-Key"');
     expect(sdk).toContain("async getOrders(init: RequestInit = {})");
-    routeRegistry.clear();
   });
   test("reports invalid path and duplicate header parameters", () => {
     const spec = generateOpenApiSpec([

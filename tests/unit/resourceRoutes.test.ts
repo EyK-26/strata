@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
-import { registerOpenApiRouteMap } from "@getstrata/bootstrap/buildModuleRoutes";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
+import { compileRouteMap, getRouteInventory } from "@getstrata/bootstrap/routePlan";
 import { composeMiddleware } from "@getstrata/core/http/middleware";
 import { mergeRouteMaps, type RouteRequest, resourceRoutes } from "@getstrata/core/http/route";
 import { generateOpenApiSpec } from "@getstrata/core/openapi/generator";
@@ -107,19 +106,20 @@ test("native Bun resource dispatch preserves methods, static precedence and type
 });
 
 test("expanded API resource routes retain explicit operation metadata", () => {
-  routeRegistry.clear();
   try {
     const routes = resourceRoutes("/api/orders", {
       index: () => Response.json([]),
       show: (request) => Response.json({ id: request.params.id }),
     });
-    registerOpenApiRouteMap(routes, ["api"], {
-      "/api/orders/:id": { GET: { summary: "Read order" } },
+    const planned = compileRouteMap(routes, {
+      middleware: ["api"],
+      metadata: {
+        "/api/orders/:id": { GET: { summary: "Read order" } },
+      },
     });
-    const spec = generateOpenApiSpec(routeRegistry.list());
+    const spec = generateOpenApiSpec(getRouteInventory(planned));
     expect(spec.paths["/api/orders/{id}"]?.get).toMatchObject({ summary: "Read order" });
     expect(Object.keys(spec.paths)).toHaveLength(2);
   } finally {
-    routeRegistry.clear();
   }
 });

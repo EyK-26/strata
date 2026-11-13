@@ -7,7 +7,7 @@ import {
 } from "@getstrata/bootstrap/config";
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
+import { getRouteInventory } from "@getstrata/bootstrap/routePlan";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { PolicyGate } from "@getstrata/core/auth/policy";
 import { CacheRepository } from "@getstrata/core/cache/repository";
@@ -49,7 +49,6 @@ describe("buildWebModuleRoutes", () => {
   test("builds web routes from supplied module webRoutes hooks", () => {
     const dependencies = createTestDependencies();
     const routes = buildWebModuleRoutes(dependencies, {
-      clearRegistry: true,
       modules: [fixtureModule],
     });
 
@@ -71,7 +70,7 @@ describe("buildWebModuleRoutes", () => {
     });
     expect(Object.keys(routes["/shared"])).toEqual(["DELETE", "GET", "POST"]);
     expect(typeof routes["/kept"]).toBe("function");
-    expect(routeRegistry.list()).toEqual([
+    expect(getRouteInventory(routes)).toEqual([
       { method: "*", path: "/kept", middleware: ["global", "web"] },
       { method: "DELETE", path: "/shared", middleware: ["global", "web"] },
       { method: "GET", path: "/shared", middleware: ["global", "web"] },
