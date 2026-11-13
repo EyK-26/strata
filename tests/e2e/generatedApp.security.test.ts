@@ -910,7 +910,7 @@ describe("Generated application security", () => {
     expect(loginAgainPage.status).toBe(200);
     const loginAgainHtml = await loginAgainPage.text();
     const loginAgainCsrf = /name="_token" value="([^"]+)"/.exec(loginAgainHtml)?.[1] ?? "";
-    let freshCookies = cookieHeader(loginAgainPage);
+    let freshCookies = cookieHeader(loginAgainPage, cookies);
     const signedInAgain = await fetch(`${origin}/login`, {
       method: "POST",
       headers: {
