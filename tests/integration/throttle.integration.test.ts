@@ -11,7 +11,7 @@ import {
   createThrottleMiddleware,
   redisThrottleKey,
 } from "@getstrata/core/http/throttleMiddleware";
-import { runWithTenant } from "@getstrata/core/tenant/tenantContext";
+import { currentTenant, runWithTenant } from "@getstrata/core/tenant/tenantContext";
 import { RedisClient } from "bun";
 
 const redisUrl = process.env.REDIS_URL?.trim() ?? "";
@@ -209,6 +209,9 @@ describeRedis("SCIM atomic ownership", () => {
         keyPrefix: prefix,
         maxAttempts: 7,
         decaySeconds: 60,
+        // Explicit trusted adapter: the test establishes each tenant scope before admission.
+        resolveTenant: (token) =>
+          token === "private-scim-key" ? (currentTenant()?.id ?? null) : null,
       }),
     );
     try {

@@ -76,7 +76,7 @@ test("fixture owner rejects non-PostgreSQL targets before acquisition", () => {
   expect(() => fixtureDatabaseUrl({ databaseUrl: "not a URL" })).toThrow("PostgreSQL");
 });
 
-test("private PostgreSQL commands retain 38 migrations, 3 seeders, command rollback and restricted RLS", async () => {
+test("private PostgreSQL commands retain 39 migrations, 3 seeders, command rollback and restricted RLS", async () => {
   if (!process.env.MIGRATION_DATABASE_URL) throw new Error("MIGRATION_DATABASE_URL required");
   const control = new SQL({ url: process.env.MIGRATION_DATABASE_URL, max: 1 });
   const name = `owned_fixture_${crypto.randomUUID().replaceAll("-", "")}`;
@@ -122,9 +122,9 @@ test("private PostgreSQL commands retain 38 migrations, 3 seeders, command rollb
     await db.unsafe("DROP EVENT TRIGGER fixture_fail");
     await command(
       url.href,
-      "await m.migrateDatabase(); const status=await m.getMigrationStatus(); if(status.length!==38||status.some(s=>s.status!=='up')) throw Error('Expected 38 up')",
+      "await m.migrateDatabase(); const status=await m.getMigrationStatus(); if(status.length!==39||status.some(s=>s.status!=='up')) throw Error('Expected 39 up')",
     );
-    expect((await db.unsafe("SELECT count(*)::int AS n FROM framework_migrations"))[0].n).toBe(38);
+    expect((await db.unsafe("SELECT count(*)::int AS n FROM framework_migrations"))[0].n).toBe(39);
     await command(
       url.href,
       "process.env.DATABASE_URL=process.env.FIXTURE_DECOY_TARGET; await m.freshDatabase({seed:true,databaseUrl:process.env.FIXTURE_EXPLICIT_TARGET})",
@@ -156,7 +156,7 @@ test("private PostgreSQL commands retain 38 migrations, 3 seeders, command rollb
     expect((await db.unsafe("SELECT name FROM organization WHERE id=1"))[0].name).toBe(
       "Retained before fresh",
     );
-    expect((await db.unsafe("SELECT count(*)::int AS n FROM framework_migrations"))[0].n).toBe(38);
+    expect((await db.unsafe("SELECT count(*)::int AS n FROM framework_migrations"))[0].n).toBe(39);
     expect((await db.unsafe("SELECT count(*)::int AS n FROM notification"))[0].n).toBe(2);
     await db.unsafe("DROP EVENT TRIGGER fixture_fail");
     // Attach the failure to the NEW notification table during fresh, after all schema work.
@@ -175,7 +175,7 @@ test("private PostgreSQL commands retain 38 migrations, 3 seeders, command rollb
     expect((await db.unsafe("SELECT name FROM organization WHERE id=1"))[0].name).toBe(
       "Retained before fresh",
     );
-    expect((await db.unsafe("SELECT count(*)::int AS n FROM framework_migrations"))[0].n).toBe(38);
+    expect((await db.unsafe("SELECT count(*)::int AS n FROM framework_migrations"))[0].n).toBe(39);
     expect((await db.unsafe("SELECT count(*)::int AS n FROM users"))[0].n).toBe(2);
     expect((await db.unsafe("SELECT count(*)::int AS n FROM notification"))[0].n).toBe(2);
     await db.unsafe("DROP EVENT TRIGGER fixture_attach");
@@ -197,7 +197,7 @@ test("private PostgreSQL commands retain 38 migrations, 3 seeders, command rollb
     // Public core semantics are tested elsewhere; this private latest-batch command is atomic.
     await command(
       url.href,
-      "await m.rollbackDatabase(); await m.migrateDatabase(); const status=await m.getMigrationStatus(); if(status.length!==38||status.some(s=>s.status!=='up')) throw Error('Expected 38 up')",
+      "await m.rollbackDatabase(); await m.migrateDatabase(); const status=await m.getMigrationStatus(); if(status.length!==39||status.some(s=>s.status!=='up')) throw Error('Expected 39 up')",
     );
     await command(url.href, "await s.seedDatabase()");
     // Successful setval calls leave serials usable; rollback never promises counter restoration.
@@ -296,7 +296,7 @@ test("two real fixture processes contend on the selected transaction advisory lo
   try {
     await control.unsafe(`CREATE DATABASE ${name}`);
     created = true;
-    const code = `const {withFixtureSchema}=await import(${JSON.stringify(owner)}); const core=await import(${JSON.stringify(`${root}src/core/database/migrations/runner.ts`)}); const {seedSelectedDatabase}=await import(${JSON.stringify(seeder)}); await withFixtureSchema(async db=>{const pid=(await db.unsafe('SELECT pg_backend_pid() AS pid'))[0].pid; console.log('LOCKED '+pid); for await(const input of Bun.stdin.stream()){break;} await core.migrateDatabase(db,await core.loadMigrationsFromDirectory(${JSON.stringify(`${root}src/db/migrations`)})); const schemaPid=(await db.unsafe('SELECT pg_backend_pid() AS pid'))[0].pid; await seedSelectedDatabase(db);const rows=await db.unsafe('SELECT pg_backend_pid() AS pid,count(*)::int AS n FROM framework_migrations');if(pid!==schemaPid||pid!==rows[0].pid||rows[0].n!==38)throw Error('Pin changed');console.log('PIN '+pid);});`;
+    const code = `const {withFixtureSchema}=await import(${JSON.stringify(owner)}); const core=await import(${JSON.stringify(`${root}src/core/database/migrations/runner.ts`)}); const {seedSelectedDatabase}=await import(${JSON.stringify(seeder)}); await withFixtureSchema(async db=>{const pid=(await db.unsafe('SELECT pg_backend_pid() AS pid'))[0].pid; console.log('LOCKED '+pid); for await(const input of Bun.stdin.stream()){break;} await core.migrateDatabase(db,await core.loadMigrationsFromDirectory(${JSON.stringify(`${root}src/db/migrations`)})); const schemaPid=(await db.unsafe('SELECT pg_backend_pid() AS pid'))[0].pid; await seedSelectedDatabase(db);const rows=await db.unsafe('SELECT pg_backend_pid() AS pid,count(*)::int AS n FROM framework_migrations');if(pid!==schemaPid||pid!==rows[0].pid||rows[0].n!==39)throw Error('Pin changed');console.log('PIN '+pid);});`;
     const firstChild = child(url.href, code);
     children.push(firstChild);
     const first = await until(
