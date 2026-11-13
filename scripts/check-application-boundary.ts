@@ -106,7 +106,8 @@ const neutralEdges: Readonly<
     types: ["runtime/application"],
   },
   [PATH("../bootstrap/cachedJson")]: {
-    values: ["http/conditionalResponse"],
+    // Adapter assembly selects its captured response policy by a canonical token.
+    values: ["http/conditionalResponse", "contracts/serviceTokens"],
     types: ["../bootstrap/contracts", "../types/services", "cache/tokens"],
   },
   [PATH("http/conditionalResponse")]: { values: ["http/etag"], types: [] },
@@ -404,6 +405,9 @@ const neutralEdges: Readonly<
       "auth/authReader",
       "auth/policy",
       "events/eventBusClass",
+      "mail/mailer",
+      "storage/storage",
+      "tracing/otel",
       "queue/index",
       "queue/queueServices",
       "http/throttleMiddleware",
