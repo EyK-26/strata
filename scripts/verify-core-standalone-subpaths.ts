@@ -66,6 +66,10 @@ for (const subpath of canonical) {
     // importing the public root shim would cycle through root queue exports.
     if (subpath === "queue/failedJobRepository" && dependency.path === "#strata-orm-runtime")
       continue;
+    // Handoff authentication uses the runtime's cryptographic primitives. Bun
+    // normalizes node:crypto to crypto in the emitted standalone bundle.
+    if (subpath === "queue/queueHandoff" && ["crypto", "node:crypto"].includes(dependency.path))
+      continue;
     assert(
       dependency.path.startsWith(prefix),
       `${subpath} depends on a root shim or noncanonical module: ${dependency.path}`,
