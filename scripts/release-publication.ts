@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { checkReleaseReadiness } from "./release-readiness.ts";
 
 export const releasePackages = [
@@ -100,7 +100,9 @@ async function registry(archive: Archive): Promise<unknown> {
   return response.json();
 }
 async function main() {
-  const [mode, directory = "release-archives"] = process.argv.slice(2);
+  const [mode, inputDirectory = "release-archives"] = process.argv.slice(2);
+  // Bare relative tarball paths can be parsed by npm as GitHub repository shorthand.
+  const directory = resolve(inputDirectory);
   const tag = process.env.RELEASE_TAG ?? "";
   const commit = await command(["git", "rev-parse", "HEAD"]);
   assertReleaseProvenanceSource(commit, process.env);
@@ -136,8 +138,9 @@ async function main() {
     );
     return;
   }
-  if (mode !== "publish")
-    throw new Error("Usage: release-publication.ts pack|publish [archive-directory]");
+  const dryRun = mode === "dry-run";
+  if (mode !== "publish" && !dryRun)
+    throw new Error("Usage: release-publication.ts pack|dry-run|publish [archive-directory]");
   const manifest = JSON.parse(await readFile(join(directory, "manifest.json"), "utf8")) as Manifest;
   if (
     manifest.commit !== commit ||
@@ -156,7 +159,7 @@ async function main() {
       throw new Error("Unexpected archive identity");
     if (archiveIntegrity(await readFile(join(directory, archive.file))) !== archive.integrity)
       throw new Error(`Archive hash mismatch: ${archive.file}`);
-    actions.push(registryDisposition(await registry(archive), archive));
+    actions.push(dryRun ? "publish" : registryDisposition(await registry(archive), archive));
   }
   for (const [index, archive] of manifest.archives.entries()) {
     if (actions[index] === "publish")
@@ -169,7 +172,12 @@ async function main() {
         "--tag",
         "latest",
         "--provenance",
+        ...(dryRun ? ["--dry-run", "--ignore-scripts"] : []),
       ]);
+    if (dryRun) {
+      console.log(`Dry-run accepted ${archive.name}@${archive.version}: ${archive.integrity}`);
+      continue;
+    }
     // Verify after every publication; a failure leaves recoverable immutable artifacts.
     if (registryDisposition(await registry(archive), archive) !== "verified")
       throw new Error(`Publication not visible: ${archive.name}`);

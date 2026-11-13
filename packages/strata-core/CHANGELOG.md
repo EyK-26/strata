@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 3.0.3
+
+Fix npm publication of local release archives by resolving paths absolutely, avoiding GitHub shorthand interpretation. Exercise archive publication dry-runs in CI and before live publication. Preserve the failed v3.0.2 tag; its first publish failed before any package was published.
+
 ## 3.0.2
 
 Complete the SOLID contract audit: storage deletion is idempotent `Promise<void>` across local and S3 drivers; model misses and required authentication use transport-neutral errors with HTTP 404/401 translation. Middleware accepts only the authentication capability it calls. These API changes and migration steps are documented in `docs/architecture/target-api-migration.md`.

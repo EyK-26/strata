@@ -239,5 +239,8 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Verify archive publication dry-run
+        run: bun scripts/release-publication.ts dry-run
+
       - name: Publish verified archives to npm
         run: bun scripts/release-publication.ts publish

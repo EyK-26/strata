@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 3.0.3
+
+Fix npm publication of local release archives by resolving paths absolutely, avoiding GitHub shorthand interpretation. Exercise archive publication dry-runs in CI and before live publication. Preserve the failed v3.0.2 tag; its first publish failed before any package was published.
+
 ## 3.0.2
 
 Reconcile completed framework ownership and retirement documentation. Clarify the exact-commit main CI prerequisite, early-tag retry procedure, and maintainer release handoff; improve the release admission diagnostic without changing its checks.
