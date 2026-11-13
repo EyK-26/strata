@@ -13,7 +13,7 @@ import {
   resolveCsrfTokenForRequest,
   verifyCsrfToken,
 } from "@getstrata/core/http/csrfToken";
-import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { currentRequestMeta, runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { appCookieName } from "@getstrata/core/runtime/appKeyPrefix";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
@@ -441,5 +441,44 @@ describe("createCsrfMiddleware", () => {
         ),
       ),
     ).rejects.toThrow(ForbiddenError);
+  });
+});
+
+test("GET CSRF scopes the explicit request without mutating or relabeling another request's metadata", async () => {
+  const options = csrfMiddlewareOptionsFromEnvironment(process.env);
+  const middleware = createCsrfMiddleware(options);
+  const policy = csrfTokenOptionsFromEnvironment(process.env);
+  const first = createCsrfTokenCookie(policy);
+  const second = createCsrfTokenCookie(policy);
+  const requestA = new Request("https://app.test/a", {
+    headers: { cookie: first.cookie.split(";")[0] ?? "" },
+  });
+  const requestB = new Request("https://app.test/b");
+  const outer = {
+    ipAddress: null,
+    userAgent: null,
+    request: requestB,
+    csrfToken: second.token,
+    cspNonce: "nonce-b",
+    flash: { level: "info", message: "flash-b" },
+  };
+  await runWithRequestMeta(outer, async () => {
+    const response = await middleware(requestA, async () => {
+      expect(currentRequestMeta().request).toBe(requestA);
+      expect(currentRequestMeta().csrfToken).toBe(first.token);
+      expect(currentRequestMeta().cspNonce).toBeUndefined();
+      expect(currentRequestMeta().flash).toBeUndefined();
+      return middleware(requestA, async () => {
+        expect(currentRequestMeta().request).toBe(requestA);
+        expect(currentRequestMeta().csrfToken).toBe(first.token);
+        return new Response("ok");
+      });
+    });
+    expect(await response.text()).toBe("ok");
+    expect(response.headers.getSetCookie()).toHaveLength(0);
+    expect(currentRequestMeta()).toBe(outer);
+    expect(outer.csrfToken).toBe(second.token);
+    expect(outer.cspNonce).toBe("nonce-b");
+    expect(outer.flash.message).toBe("flash-b");
   });
 });

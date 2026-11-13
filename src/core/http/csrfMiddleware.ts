@@ -11,7 +11,7 @@ import {
   verifyCsrfTokenValue,
 } from "./csrfToken";
 import type { Middleware } from "./middleware";
-import { currentRequestMeta } from "./requestMetaContext";
+import { currentRequestMeta, runWithRequestMeta } from "./requestMetaContext";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -97,11 +97,26 @@ function createCsrfMiddleware(options: CsrfOptions): Middleware {
     if (!MUTATING_METHODS.has(method)) {
       const meta = currentRequestMeta();
       const csrf =
-        meta.csrfToken && verifyCsrfTokenValue(meta.csrfToken, capturedToken())
+        meta.request === request &&
+        meta.csrfToken &&
+        verifyCsrfTokenValue(meta.csrfToken, capturedToken())
           ? { token: meta.csrfToken }
           : resolveCsrfToken(request, capturedToken());
-      meta.csrfToken = csrf.token;
-      const response = await next();
+      const scopedMeta =
+        meta.request === request
+          ? meta
+          : {
+              ipAddress: null,
+              userAgent: request.headers.get("user-agent"),
+              errorFormat: meta.errorFormat,
+              webErrorView: meta.webErrorView,
+              viewsEnabled: meta.viewsEnabled,
+              webErrorsProduction: meta.webErrorsProduction,
+            };
+      const response = await runWithRequestMeta(
+        { ...scopedMeta, request, csrfToken: csrf.token },
+        next,
+      );
 
       if (!csrf.cookie) {
         return response;
