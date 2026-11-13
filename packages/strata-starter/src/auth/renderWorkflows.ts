@@ -42,7 +42,7 @@ type StarterPasswordLoginResult =
   | { ok: false; error: "invalid_credentials" }
   | (PasswordLoginResult & { user: StarterAuthUserRecord });
 
-async function authenticatePasswordUser(ports: BusinessRequestPorts,
+async function authenticatePasswordUser(ports: BusinessRequestPorts, services: StarterAuthServices,
   user: StarterAuthUserRecord | null,
   password: string,
   mfaCode: string | undefined,
@@ -50,7 +50,7 @@ async function authenticatePasswordUser(ports: BusinessRequestPorts,
   if (!user?.password || !(await verifyPassword(password, user.password))) {
     return { ok: false, error: "invalid_credentials" };
   }
-  const result = completePasswordLogin(user, { mfaCode });
+  const result = completePasswordLogin(user, { mfaCode }, services.mfaSecrets);
   if (!result.ok) return { ...result, user };
   await persistAuthRecovery(ports, user.id, user.mfa_recovery_codes, result.consumedRecoveryHash);
   return { ...result, user };
@@ -270,9 +270,9 @@ async function completeBrowserSsoLogin(
 export function renderMfaEnrollment(mfa: boolean): string {
   return mfa
     ? `
-async function enrollMfa(ports: BusinessRequestPorts, user: { id: string | number; authVersion?: number }, secret: string) {
+async function enrollMfa(ports: BusinessRequestPorts, services: StarterAuthServices, user: { id: string | number; authVersion?: number }, secret: string) {
   const recoveryCodes = generateRecoveryCodes();
-  const stored = protectMfaSecret(secret);
+  const stored = services.mfaSecrets.protectMfaSecret(secret);
   const previous = await runAuthWrite(ports, Number(user.id), (ports) => ports.database.model(User).find(Number(user.id)));
   if (!previous || previous.get("auth_version") !== user.authVersion || !(previous.get("is_active") === true || previous.get("is_active") === 1)) throw new ConflictError("MFA configuration changed. Reload and confirm again.");
   await runAuthTransaction(ports, async (ports) => {

@@ -10,6 +10,7 @@ import type {
 } from "@getstrata/core/contracts/authUserDirectory";
 import { ServiceContainer } from "@getstrata/core/contracts/container";
 import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
+import { createMfaSecretCodec } from "@getstrata/core/crypto/mfaSecret";
 import { createDatabaseBindings } from "@getstrata/core/database/bindings";
 import { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
 import { ForbiddenError } from "@getstrata/core/errors/http";
@@ -80,6 +81,7 @@ test("BP7 actual API and web wrappers roll back writes before error conversion a
         directory,
         {
           mechanisms: ["api", "jwt", "basic", "session"],
+          mfaSecrets: createMfaSecretCodec({ APP_ENV: "test" }),
           production: false,
           allowDevHeaders: true,
           jwtSecret: "app-specific-signing-secret",

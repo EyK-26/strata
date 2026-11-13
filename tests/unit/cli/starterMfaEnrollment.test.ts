@@ -8,7 +8,7 @@ import type {
   ScopedPolicy,
   SelectedSession,
 } from "@getstrata/core/contracts/persistence";
-import { revealMfaSecret } from "@getstrata/core/crypto/mfaSecret";
+import { createMfaSecretCodec, revealMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import type { Model } from "@getstrata/core/database/model";
 import { hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
 import { generateTotp } from "@getstrata/core/security/totp";
@@ -347,7 +347,9 @@ test(
         expect(status).toBe(200);
         expect(hasCodes).toBe(true);
         const committed = await run(async (database) => selectedUsers(database).findOrFail(id));
-        expect(revealMfaSecret(committed.get("mfa_secret"))).toBe(secret);
+        expect(
+          revealMfaSecret(committed.get("mfa_secret"), createMfaSecretCodec(process.env)),
+        ).toBe(secret);
         abort.abort();
         expect(await outcome).toBe("aborted");
         release();
@@ -370,7 +372,9 @@ test(
         expect(replacement.status).toBe(200);
         const codes = recoveryCodes(await replacement.text());
         const final = await run(async (database) => selectedUsers(database).findOrFail(id));
-        expect(revealMfaSecret(final.get("mfa_secret"))).toBe(replacementSecret);
+        expect(revealMfaSecret(final.get("mfa_secret"), createMfaSecretCodec(process.env))).toBe(
+          replacementSecret,
+        );
         expect(JSON.parse(final.get("mfa_recovery_codes"))).toEqual(codes.map(hashRecoveryCode));
         expect(final.get("mfa_recovery_codes")).not.toBe(committed.get("mfa_recovery_codes"));
         expect(await fresh.statuses()).toEqual([401, 401, 401]);
@@ -533,7 +537,9 @@ test.skipIf(!adminSource || !runtimeSource)(
           const codes = recoveryCodes(winningBody);
           const row = await run((database) => selectedUsers(database).findOrFail(id));
           expect(row.get("tenant_id")).toBe(replacement ? 4 : 2);
-          expect(revealMfaSecret(row.get("mfa_secret"))).toBe(winningSecret);
+          expect(revealMfaSecret(row.get("mfa_secret"), createMfaSecretCodec(process.env))).toBe(
+            winningSecret,
+          );
           expect(JSON.parse(row.get("mfa_recovery_codes"))).toEqual(codes.map(hashRecoveryCode));
           for (const actor of actors) expect(await actor.statuses()).toEqual([401, 401, 401]);
           expect(await other.statuses()).toEqual([200, 200, 200]);

@@ -11,6 +11,7 @@ import {
 } from "@getstrata/core/auth/sessionCookie";
 import { hashApiToken } from "@getstrata/core/auth/tokenHash";
 import {
+  createFieldEncryptionCodec,
   isFieldEncryptionEnabled,
   normalizeEmail,
   protectEmail,
@@ -173,9 +174,11 @@ describe("coverage gap helpers", () => {
     expect(parseScimTenantTokens("   ")).toEqual(new Map());
     expect(normalizeEmail("  A@B.COM ")).toBe("a@b.com");
     expect(hashApiToken("token")).toMatch(/^[a-f0-9]{64}$/);
-    expect(isFieldEncryptionEnabled()).toBeTypeOf("boolean");
-    expect(resolveEncryptionKey()).toBeNull();
-    expect(protectEmail("plain@example.com").storedEmail).toBe("plain@example.com");
+    expect(isFieldEncryptionEnabled(createFieldEncryptionCodec(process.env))).toBeTypeOf("boolean");
+    expect(resolveEncryptionKey(process.env)).toBeNull();
+    expect(
+      protectEmail("plain@example.com", createFieldEncryptionCodec(process.env)).storedEmail,
+    ).toBe("plain@example.com");
   });
 
   test("covers validation rule branches and query null equality", () => {
@@ -305,6 +308,6 @@ describe("coverage gap helpers", () => {
     expect(isBlockedHostname("127.0.0.2")).toBe(true);
 
     process.env.FEATURE_FIELD_ENCRYPTION = "true";
-    expect(isFieldEncryptionEnabled()).toBe(true);
+    expect(isFieldEncryptionEnabled(createFieldEncryptionCodec(process.env))).toBe(true);
   });
 });

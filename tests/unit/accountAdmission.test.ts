@@ -30,6 +30,7 @@ import type {
   AuthUserRecord,
 } from "@getstrata/core/contracts/authUserDirectory";
 import type { ScopedPolicy } from "@getstrata/core/contracts/persistence";
+import { createMfaSecretCodec } from "@getstrata/core/crypto/mfaSecret";
 import type { DatabaseSession } from "@getstrata/core/database/session";
 import { authFixtureOutcome } from "../helpers/authOutcome";
 import { withBoundDatabase } from "../helpers/boundRepositoryHarness";
@@ -64,8 +65,15 @@ function basic(directory: AuthUserDirectory) {
     ? (directory as AuthCredentialVerifier)
     : undefined;
   return emailLookup
-    ? new BasicAuthGuard({ accounts: directory, emailLookup, credentials, persistRecovery })
+    ? new BasicAuthGuard({
+        mfaSecrets: createMfaSecretCodec(process.env),
+        accounts: directory,
+        emailLookup,
+        credentials,
+        persistRecovery,
+      })
     : new BasicAuthGuard({
+        mfaSecrets: createMfaSecretCodec(process.env),
         accounts: directory,
         credentials: credentials as AuthCredentialVerifier,
         persistRecovery,
@@ -166,7 +174,10 @@ test("disabled password and Basic paths deny before accepting MFA or consuming r
     mfa_secret: null,
     mfa_recovery_codes: "[]",
   };
-  expect(completePasswordLogin(record)).toEqual({ ok: false, error: "account_inactive" });
+  expect(completePasswordLogin(record, {}, createMfaSecretCodec(process.env))).toEqual({
+    ok: false,
+    error: "account_inactive",
+  });
   const request = new Request("http://localhost/account", {
     headers: { authorization: `Basic ${btoa("fixture@example.test:Fixture!Password123")}` },
   });
@@ -181,11 +192,19 @@ test("disabled password and Basic paths deny before accepting MFA or consuming r
   };
   expect(await basic(fallback).resolve(request)).toBeNull();
   expect(fallbackCalls).toBe(1);
-  expect(completePasswordLogin({ is_active: false, mfa_enabled: false })).toEqual({
+  expect(
+    completePasswordLogin(
+      { is_active: false, mfa_enabled: false },
+      {},
+      createMfaSecretCodec(process.env),
+    ),
+  ).toEqual({
     ok: false,
     error: "account_inactive",
   });
-  expect(completePasswordLogin({ mfa_enabled: false })).toEqual({ ok: true });
+  expect(
+    completePasswordLogin({ mfa_enabled: false }, {}, createMfaSecretCodec(process.env)),
+  ).toEqual({ ok: true });
 });
 
 test("opaque and static guards reject explicitly inactive principals and AuthManager enforces custom guard results", async () => {

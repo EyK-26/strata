@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  createFieldEncryptionCodec,
   createFieldEncryptionKeyring,
   emailLookupForQuery,
   encryptField,
@@ -14,7 +15,7 @@ import {
   fieldEncryptionRotationRepository,
   runFieldEncryptionRotationBatch,
 } from "@getstrata/core/crypto/fieldEncryptionRotation";
-import { revealMfaSecret } from "@getstrata/core/crypto/mfaSecret";
+import { createMfaSecretCodec, revealMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import { defineRepository } from "@getstrata/core/database/definitions";
 import { runWithSqlDialect } from "@getstrata/core/database/dialect";
@@ -205,9 +206,18 @@ test("bounded committed batches resume, preserve nulls/soft-deleted accounts and
         writeVersion: 2,
       });
       for (const row of await repo.query().withTrashed().get()) {
-        expect(revealEmail(row.email ?? "")).toBe(`user${row.id}@example.test`);
-        expect(row.lookup).toBe(emailLookupForQuery(`USER${row.id}@example.test`));
-        expect(revealMfaSecret(row.mfa)).toBe(row.mfa === null ? null : "JBSWY3DPEHPK3PXP");
+        expect(revealEmail(row.email ?? "", createFieldEncryptionCodec(process.env))).toBe(
+          `user${row.id}@example.test`,
+        );
+        expect(row.lookup).toBe(
+          emailLookupForQuery(
+            `USER${row.id}@example.test`,
+            createFieldEncryptionCodec(process.env),
+          ),
+        );
+        expect(revealMfaSecret(row.mfa, createMfaSecretCodec(process.env))).toBe(
+          row.mfa === null ? null : "JBSWY3DPEHPK3PXP",
+        );
       }
     } finally {
       names.forEach((name, index) => {

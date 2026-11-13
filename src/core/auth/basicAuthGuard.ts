@@ -5,6 +5,7 @@ import type {
   AuthEmailLookup,
   AuthUserRecord,
 } from "../contracts/authUserDirectory";
+import type { MfaSecretCodec } from "../crypto/mfaSecret";
 import { authorizationScheme, readBasicCredentials } from "../http/statelessAuth";
 import { isAccountActive, isAuthUserActive } from "./accountState";
 import type { AuthUser } from "./authContext";
@@ -16,6 +17,7 @@ import { requireAuthCapability } from "./requireAuthCapability";
 
 type BasicAuthGuardOptions = {
   accounts: AuthAccountLookup;
+  mfaSecrets: MfaSecretCodec;
   persistRecovery(record: AuthUserRecord, hash: string): Promise<boolean>;
 } & (
   | { emailLookup: AuthEmailLookup; credentials?: AuthCredentialVerifier }
@@ -33,6 +35,11 @@ class BasicAuthGuard implements AuthGuard {
       options,
       ["persistRecovery"],
       "Basic recovery",
+    );
+    requireAuthCapability<MfaSecretCodec>(
+      options.mfaSecrets,
+      ["revealMfaSecret"],
+      "Basic MFA codec",
     );
     if (options.emailLookup !== undefined) {
       requireAuthCapability<AuthEmailLookup>(
@@ -88,9 +95,13 @@ class BasicAuthGuard implements AuthGuard {
         return null;
       }
 
-      const mfa = completePasswordLogin(record, {
-        mfaCode: request.headers.get("x-mfa-code"),
-      });
+      const mfa = completePasswordLogin(
+        record,
+        {
+          mfaCode: request.headers.get("x-mfa-code"),
+        },
+        this.options.mfaSecrets,
+      );
       if (!mfa.ok) {
         return null;
       }
@@ -129,9 +140,13 @@ class BasicAuthGuard implements AuthGuard {
 
       if (record.id !== userId) return null;
 
-      const mfa = completePasswordLogin(record, {
-        mfaCode: request.headers.get("x-mfa-code"),
-      });
+      const mfa = completePasswordLogin(
+        record,
+        {
+          mfaCode: request.headers.get("x-mfa-code"),
+        },
+        this.options.mfaSecrets,
+      );
       if (!mfa.ok) {
         return null;
       }

@@ -13,6 +13,7 @@ import type {
   AuthUserRecord,
 } from "@getstrata/core/contracts/authUserDirectory";
 import { AuthAccountNotFoundError } from "@getstrata/core/contracts/authUserDirectory";
+import { createMfaSecretCodec } from "@getstrata/core/crypto/mfaSecret";
 import { generateRecoveryCodes, hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
 import { authFixtureOutcome } from "../helpers/authOutcome";
 import { withBoundDatabase } from "../helpers/boundRepositoryHarness";
@@ -28,8 +29,15 @@ function basic(
     ? (directory as AuthCredentialVerifier)
     : undefined;
   return emailLookup
-    ? new BasicAuthGuard({ accounts, emailLookup, credentials, persistRecovery })
+    ? new BasicAuthGuard({
+        mfaSecrets: createMfaSecretCodec(process.env),
+        accounts,
+        emailLookup,
+        credentials,
+        persistRecovery,
+      })
     : new BasicAuthGuard({
+        mfaSecrets: createMfaSecretCodec(process.env),
         accounts,
         credentials: credentials as AuthCredentialVerifier,
         persistRecovery,

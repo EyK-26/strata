@@ -14,6 +14,7 @@ import { signJwt } from "@getstrata/core/auth/jwt";
 import { JwtGuard } from "@getstrata/core/auth/jwtGuard";
 import { SessionGuard } from "@getstrata/core/auth/sessionGuard";
 import { AuthAccountNotFoundError } from "@getstrata/core/contracts/authUserDirectory";
+import { createMfaSecretCodec } from "@getstrata/core/crypto/mfaSecret";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
 import { withJsonErrorHandling } from "@getstrata/core/http/response";
@@ -216,6 +217,7 @@ test("session and recovery adapters must return exact true before authentication
   const { hashRecoveryCode } = await import("@getstrata/core/security/recoveryCodes");
   const code = "1111-2222-3333-4444-5555-6666-7777-8888";
   const basic = new BasicAuthGuard({
+    mfaSecrets: createMfaSecretCodec(process.env),
     accounts: {
       findByIdOrThrow: async () => ({
         id: 1,

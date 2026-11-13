@@ -5,7 +5,7 @@ import {
   resolveFieldEncryptionKeyring,
 } from "@getstrata/core/crypto/fieldEncryption";
 export function fieldEncryptionKeyringContract(options: FieldEncryptionKeyringOptions): string {
-  const configured = resolveFieldEncryptionKeyring();
+  const configured = resolveFieldEncryptionKeyring(process.env);
   const version: 1 | 2 | undefined = configured?.writeVersion;
   if (version) configured?.encrypt("example", "email");
   const ring: FieldEncryptionKeyring = createFieldEncryptionKeyring(options);

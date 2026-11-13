@@ -24,7 +24,7 @@ export function renderMfaChallengeRoutes(): string {
               failed.headers.append("set-cookie", authServices.pendingMfa.clearCookie());
               return failed;
             }
-            const mfaResult = completePasswordLogin(record, { mfaCode: submitted });
+            const mfaResult = completePasswordLogin(record, { mfaCode: submitted }, authServices.mfaSecrets);
             if (!mfaResult.ok) {
               return views.render("mfa-challenge.eta", { layout: { title: "MFA" }, errors: { code: "That code is not valid." }, code: "" }, { request });
             }
@@ -61,12 +61,12 @@ export function renderBrowserAuthRoutes({
 
   const registerSuccessExisting = `return flashResponse(
                 redirectTo("/login"),
-                { level: "success", message: "If that email is available, continue from the sign-in page." },
+                { level: "success", message: "If that email is available, continue from the sign-in page." }, authServices.flash,
               );`;
 
   const verifyRegisterBranch = `return flashResponse(
                 redirectTo("/login"),
-                { level: "success", message: "If that email is available, continue from the sign-in page." },
+                { level: "success", message: "If that email is available, continue from the sign-in page." }, authServices.flash,
               );`;
 
   const cookieRoutes = cookie
@@ -85,7 +85,7 @@ export function renderBrowserAuthRoutes({
               const { fields } = await parseFormBody(request);
               const { email, password, mfa_code } = parseLoginCredentials(fields);
               return runWithLoginUser(_ports, email, async (candidate, _ports) => {
-              const mfaResult = await authenticatePasswordUser(_ports, candidate, password, mfa_code);
+              const mfaResult = await authenticatePasswordUser(_ports, authServices, candidate, password, mfa_code);
               ${mfaLoginBranch}
               const user = mfaResult.user;
               return authServices.session(_ports).signInRedirect(sessionUser(user), "/");
@@ -138,7 +138,7 @@ export function renderBrowserAuthRoutes({
             return flashResponse(redirectTo("/forgot-password"), {
               level: "success",
               message: "If that account exists, a reset link is on its way.",
-            });
+            }, authServices.flash);
           }),
         },
         "/reset-password": {
@@ -153,7 +153,7 @@ export function renderBrowserAuthRoutes({
             if (!email || !(await completeSignedPasswordReset(_ports, request, password))) {
               return views.render("reset-password.eta", { layout: { title: "Reset password" }, errors: { password: "Invalid or expired reset link." }, password: "", email, action: \`\${new URL(request.url).pathname}\${new URL(request.url).search}\` }, { request });
             }
-            return flashResponse(redirectTo("/login"), { level: "success", message: "Password updated. Sign in." });
+            return flashResponse(redirectTo("/login"), { level: "success", message: "Password updated. Sign in." }, authServices.flash);
           })),
         },
         "/logout": {
@@ -169,12 +169,12 @@ export function renderBrowserAuthRoutes({
               if (await completeSignedEmailVerification(_ports, request)) {
                 return flashResponse(
                   redirectTo("/login"),
-                  { level: "success", message: "Email verified. Sign in." },
+                  { level: "success", message: "Email verified. Sign in." }, authServices.flash,
                 );
               }
               return flashResponse(
                 redirectTo("/login"),
-                { level: "error", message: "Invalid or expired verification link." },
+                { level: "error", message: "Invalid or expired verification link." }, authServices.flash,
               );
             }
             return views.render("verify-email.eta", { layout: { title: "Verify email" } }, { request });
@@ -187,7 +187,7 @@ export function renderBrowserAuthRoutes({
               const record = await authServices.directory(_ports).findByIdOrThrow(Number(user.id));
               await issueSignedAuthMail(_ports, authServices, record.email ?? "", "Verify your email", "/email/verify", AUTH_ONE_TIME_PURPOSES.emailVerify, Number(record.id), { id: String(record.id) });
             }
-            return flashResponse(redirectTo("/email/verify"), { level: "info", message: "Verification link sent." });
+            return flashResponse(redirectTo("/email/verify"), { level: "info", message: "Verification link sent." }, authServices.flash);
           }),
         },`
             : ""
@@ -246,7 +246,7 @@ ${renderMfaChallengeRoutes()}        "/confirm-password": {
                   otpauth: buildOtpauthUrl({ secret, account: "user", issuer: authServices.config.appName }),
                 }, { request });
             }
-            const recoveryCodes = await enrollMfa(_ports, user, secret);
+            const recoveryCodes = await enrollMfa(_ports, authServices, user, secret);
             return views.render("mfa-setup.eta", {
                 layout: { title: "MFA" },
                 errors: {},

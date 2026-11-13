@@ -2,13 +2,18 @@ import { afterEach, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
 import {
+  createFieldEncryptionCodec,
   emailLookupForQuery,
   isFieldEncryptionEnabled,
   protectEmail,
   resolveFieldEncryptionKeyring,
   revealEmail,
 } from "@getstrata/core/crypto/fieldEncryption";
-import { protectMfaSecret, revealMfaSecret } from "@getstrata/core/crypto/mfaSecret";
+import {
+  createMfaSecretCodec,
+  protectMfaSecret,
+  revealMfaSecret,
+} from "@getstrata/core/crypto/mfaSecret";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 const names = [
@@ -40,59 +45,105 @@ test("reader-first adoption preserves existing email lookups and MFA, then enabl
   delete process.env.KMS_ENCRYPTION_KEYRING;
   process.env.KMS_ENCRYPTION_KEY = original;
   process.env.FEATURE_FIELD_ENCRYPTION = "true";
-  const previousEmail = protectEmail(" User@Example.test ");
-  const previousMfa = protectMfaSecret("JBSWY3DPEHPK3PXP");
+  const previousEmail = protectEmail(
+    " User@Example.test ",
+    createFieldEncryptionCodec(process.env),
+  );
+  const previousMfa = protectMfaSecret("JBSWY3DPEHPK3PXP", createMfaSecretCodec(process.env));
   configure(1);
-  expect(resolveFieldEncryptionKeyring()?.writeVersion).toBe(1);
-  expect(isFieldEncryptionEnabled()).toBe(true);
-  expect(revealEmail(previousEmail.storedEmail)).toBe("user@example.test");
-  expect(revealMfaSecret(previousMfa)).toBe("JBSWY3DPEHPK3PXP");
-  expect(protectEmail("USER@example.test").storedEmail.startsWith("enc:v1:")).toBe(true);
-  expect(protectMfaSecret("secret").startsWith("enc:v1:")).toBe(true);
-  expect(emailLookupForQuery(" user@example.test ")).toBe(previousEmail.emailLookup);
+  expect(resolveFieldEncryptionKeyring(process.env)?.writeVersion).toBe(1);
+  expect(isFieldEncryptionEnabled(createFieldEncryptionCodec(process.env))).toBe(true);
+  expect(revealEmail(previousEmail.storedEmail, createFieldEncryptionCodec(process.env))).toBe(
+    "user@example.test",
+  );
+  expect(revealMfaSecret(previousMfa, createMfaSecretCodec(process.env))).toBe("JBSWY3DPEHPK3PXP");
+  expect(
+    protectEmail(
+      "USER@example.test",
+      createFieldEncryptionCodec(process.env),
+    ).storedEmail.startsWith("enc:v1:"),
+  ).toBe(true);
+  expect(protectMfaSecret("secret", createMfaSecretCodec(process.env)).startsWith("enc:v1:")).toBe(
+    true,
+  );
+  expect(emailLookupForQuery(" user@example.test ", createFieldEncryptionCodec(process.env))).toBe(
+    previousEmail.emailLookup,
+  );
   configure(2);
-  const current = protectEmail("User@example.test");
-  const mfa = protectMfaSecret("secret");
+  const current = protectEmail("User@example.test", createFieldEncryptionCodec(process.env));
+  const mfa = protectMfaSecret("secret", createMfaSecretCodec(process.env));
   expect(current.storedEmail.startsWith("enc:v2:next:")).toBe(true);
   expect(mfa.startsWith("enc:v2:next:")).toBe(true);
   expect(current.emailLookup).toBe(previousEmail.emailLookup);
-  expect(emailLookupForQuery("USER@example.test")).toBe(current.emailLookup);
-  expect(revealEmail(current.storedEmail)).toBe("user@example.test");
-  expect(revealMfaSecret(mfa)).toBe("secret");
-  expect(() => revealMfaSecret(current.storedEmail)).toThrow("Unable to decrypt");
-  expect(() => revealEmail(mfa)).toThrow("Unable to decrypt");
+  expect(emailLookupForQuery("USER@example.test", createFieldEncryptionCodec(process.env))).toBe(
+    current.emailLookup,
+  );
+  expect(revealEmail(current.storedEmail, createFieldEncryptionCodec(process.env))).toBe(
+    "user@example.test",
+  );
+  expect(revealMfaSecret(mfa, createMfaSecretCodec(process.env))).toBe("secret");
+  expect(() => revealMfaSecret(current.storedEmail, createMfaSecretCodec(process.env))).toThrow(
+    "Unable to decrypt",
+  );
+  expect(() => revealEmail(mfa, createFieldEncryptionCodec(process.env))).toThrow(
+    "Unable to decrypt",
+  );
   configure(1);
-  expect(revealEmail(current.storedEmail)).toBe("user@example.test");
-  expect(revealMfaSecret(mfa)).toBe("secret");
+  expect(revealEmail(current.storedEmail, createFieldEncryptionCodec(process.env))).toBe(
+    "user@example.test",
+  );
+  expect(revealMfaSecret(mfa, createMfaSecretCodec(process.env))).toBe("secret");
 });
 test("keyring reads ignore write flag and MFA remains encrypted with email encryption disabled", () => {
   configure();
-  const email = protectEmail("user@example.test");
-  const mfa = protectMfaSecret("secret");
+  const email = protectEmail("user@example.test", createFieldEncryptionCodec(process.env));
+  const mfa = protectMfaSecret("secret", createMfaSecretCodec(process.env));
   process.env.FEATURE_FIELD_ENCRYPTION = "false";
-  expect(isFieldEncryptionEnabled()).toBe(false);
-  expect(protectEmail("User@example.test")).toEqual({
+  expect(isFieldEncryptionEnabled(createFieldEncryptionCodec(process.env))).toBe(false);
+  expect(protectEmail("User@example.test", createFieldEncryptionCodec(process.env))).toEqual({
     storedEmail: "user@example.test",
     emailLookup: "user@example.test",
   });
-  expect(emailLookupForQuery("User@example.test")).toBe("user@example.test");
-  expect(revealEmail(email.storedEmail)).toBe("user@example.test");
-  expect(revealMfaSecret(mfa)).toBe("secret");
-  expect(protectMfaSecret("secret").startsWith("enc:v2:")).toBe(true);
-  expect(revealMfaSecret(null)).toBeNull();
-  expect(revealEmail("plain@example.test")).toBe("plain@example.test");
-  expect(() => revealMfaSecret("plaintext")).toThrow("must be encrypted");
+  expect(emailLookupForQuery("User@example.test", createFieldEncryptionCodec(process.env))).toBe(
+    "user@example.test",
+  );
+  expect(revealEmail(email.storedEmail, createFieldEncryptionCodec(process.env))).toBe(
+    "user@example.test",
+  );
+  expect(revealMfaSecret(mfa, createMfaSecretCodec(process.env))).toBe("secret");
+  expect(protectMfaSecret("secret", createMfaSecretCodec(process.env)).startsWith("enc:v2:")).toBe(
+    true,
+  );
+  expect(revealMfaSecret(null, createMfaSecretCodec(process.env))).toBeNull();
+  expect(revealEmail("plain@example.test", createFieldEncryptionCodec(process.env))).toBe(
+    "plain@example.test",
+  );
+  expect(() => revealMfaSecret("plaintext", createMfaSecretCodec(process.env))).toThrow(
+    "must be encrypted",
+  );
   process.env.FEATURE_FIELD_ENCRYPTION = "true";
-  expect(protectEmail("user@example.test").storedEmail.startsWith("enc:v2:")).toBe(true);
+  expect(
+    protectEmail(
+      "user@example.test",
+      createFieldEncryptionCodec(process.env),
+    ).storedEmail.startsWith("enc:v2:"),
+  ).toBe(true);
 });
 test("missing or malformed configuration never treats identified ciphertext as plaintext", () => {
   configure();
-  const email = protectEmail("user@example.test").storedEmail;
-  const mfa = protectMfaSecret("secret");
+  const email = protectEmail(
+    "user@example.test",
+    createFieldEncryptionCodec(process.env),
+  ).storedEmail;
+  const mfa = protectMfaSecret("secret", createMfaSecretCodec(process.env));
   delete process.env.KMS_ENCRYPTION_KEYRING;
   delete process.env.KMS_ENCRYPTION_KEY;
-  expect(() => revealEmail(email)).toThrow("KMS_ENCRYPTION_KEYRING");
-  expect(() => revealMfaSecret(mfa)).toThrow("KMS_ENCRYPTION_KEYRING");
+  expect(() => revealEmail(email, createFieldEncryptionCodec(process.env))).toThrow(
+    "KMS_ENCRYPTION_KEYRING",
+  );
+  expect(() => revealMfaSecret(mfa, createMfaSecretCodec(process.env))).toThrow(
+    "KMS_ENCRYPTION_KEYRING",
+  );
   for (const config of [
     "",
     " ",
@@ -111,16 +162,16 @@ test("missing or malformed configuration never treats identified ciphertext as p
     JSON.stringify({ ...configuration(1), legacyV1Key: undefined }),
   ]) {
     process.env.KMS_ENCRYPTION_KEYRING = config;
-    expect(() => protectEmail("private@example.test")).toThrow(
-      "Invalid KMS_ENCRYPTION_KEYRING configuration.",
-    );
-    expect(() => protectMfaSecret("private")).toThrow(
+    expect(() =>
+      protectEmail("private@example.test", createFieldEncryptionCodec(process.env)),
+    ).toThrow("Invalid KMS_ENCRYPTION_KEYRING configuration.");
+    expect(() => protectMfaSecret("private", createMfaSecretCodec(process.env))).toThrow(
       "Invalid KMS_ENCRYPTION_KEYRING configuration.",
     );
   }
   configure();
   process.env.KMS_ENCRYPTION_KEY = original;
-  expect(() => resolveFieldEncryptionKeyring()).toThrow(
+  expect(() => resolveFieldEncryptionKeyring(process.env)).toThrow(
     "Invalid KMS_ENCRYPTION_KEYRING configuration.",
   );
   configure();
@@ -128,17 +179,19 @@ test("missing or malformed configuration never treats identified ciphertext as p
     ...configuration(),
     encryptionKeys: { next: Buffer.from(next, "hex").toString("base64") },
   });
-  expect(protectMfaSecret("secret").startsWith("enc:v2:")).toBe(true);
+  expect(protectMfaSecret("secret", createMfaSecretCodec(process.env)).startsWith("enc:v2:")).toBe(
+    true,
+  );
   process.env.KMS_ENCRYPTION_KEYRING = JSON.stringify({
     ...configuration(),
     legacyV1Key: undefined,
   });
-  expect(resolveFieldEncryptionKeyring()?.writeVersion).toBe(2);
+  expect(resolveFieldEncryptionKeyring(process.env)?.writeVersion).toBe(2);
 });
 test("separately bundled email and MFA entrypoints use the same configuration in three processes", async () => {
   configure();
   const config = process.env.KMS_ENCRYPTION_KEYRING;
-  const program = `import {protectEmail,emailLookupForQuery,revealEmail} from ${JSON.stringify(resolve("packages/strata-core/dist/entries/crypto/fieldEncryption.js"))};import{protectMfaSecret,revealMfaSecret}from ${JSON.stringify(resolve("packages/strata-core/dist/entries/crypto/mfaSecret.js"))};const email=protectEmail('User@example.test');const mfa=protectMfaSecret('secret');console.log(JSON.stringify({email:revealEmail(email.storedEmail),lookup:emailLookupForQuery('user@example.test'),storedLookup:email.emailLookup,mfa:revealMfaSecret(mfa),version:email.storedEmail.split(':').slice(0,3)}));`;
+  const program = `import {createFieldEncryptionCodec} from ${JSON.stringify(resolve("packages/strata-core/dist/entries/crypto/fieldEncryption.js"))};import{createMfaSecretCodec}from ${JSON.stringify(resolve("packages/strata-core/dist/entries/crypto/mfaSecret.js"))};const fields=createFieldEncryptionCodec(process.env);const secrets=createMfaSecretCodec(process.env);process.env.KMS_ENCRYPTION_KEYRING="invalid-after-assembly";const email=fields.protectEmail('User@example.test');const mfa=secrets.protectMfaSecret('secret');console.log(JSON.stringify({email:fields.revealEmail(email.storedEmail),lookup:fields.emailLookupForQuery('user@example.test'),storedLookup:email.emailLookup,mfa:secrets.revealMfaSecret(mfa),version:email.storedEmail.split(':').slice(0,3)}));`;
   const snapshots = await Promise.all(
     Array.from({ length: 3 }, async () => {
       const child = Bun.spawn([process.execPath, "--no-env-file", "-e", program], {

@@ -7,6 +7,7 @@ import { BasicAuthGuard } from "@getstrata/core/auth/basicAuthGuard";
 import { DatabaseTokenGuard } from "@getstrata/core/auth/guard";
 import { JwtGuard } from "@getstrata/core/auth/jwtGuard";
 import { SessionGuard } from "@getstrata/core/auth/sessionGuard";
+import { createMfaSecretCodec } from "@getstrata/core/crypto/mfaSecret";
 import { authFixtureOutcome } from "../helpers/authOutcome";
 
 const accounts = { findByIdOrThrow: async (id: number) => ({ id, role: "member" }) };
@@ -16,6 +17,7 @@ const secret = "capability-fixture-signing-key-at-least-32-characters";
 function options(mechanisms: MetadataAuthOptions["mechanisms"]): MetadataAuthOptions {
   return {
     mechanisms,
+    mfaSecrets: createMfaSecretCodec({ APP_ENV: "test" }),
     production: true,
     allowDevHeaders: false,
     jwtSecret: secret,
@@ -168,8 +170,14 @@ describe("selected authentication capabilities", () => {
       consumed++;
       return true;
     };
-    const byId = new BasicAuthGuard({ accounts, credentials, persistRecovery });
+    const byId = new BasicAuthGuard({
+      mfaSecrets: createMfaSecretCodec(process.env),
+      accounts,
+      credentials,
+      persistRecovery,
+    });
     const byEmail = new BasicAuthGuard({
+      mfaSecrets: createMfaSecretCodec(process.env),
       accounts,
       credentials,
       emailLookup: { findByEmail: async () => record },
@@ -181,6 +189,7 @@ describe("selected authentication capabilities", () => {
     for (const id of ["invalid", "", 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
       let lookups = 0;
       const guard = new BasicAuthGuard({
+        mfaSecrets: createMfaSecretCodec(process.env),
         accounts: {
           findByIdOrThrow: async () => {
             lookups++;
@@ -196,6 +205,16 @@ describe("selected authentication capabilities", () => {
   });
 
   test("direct guards reject missing or malformed explicitly selected ports before requests", () => {
+    expect(
+      () =>
+        new BasicAuthGuard({
+          accounts,
+          credentials: { verifyCredentials: async () => null },
+          persistRecovery: recover,
+          mfaSecrets: undefined as never,
+        }),
+    ).toThrow("Basic MFA codec");
+
     for (const tokens of [undefined, {}, { resolveUserFromToken: true }]) {
       expect(() => new DatabaseTokenGuard(tokens as never)).toThrow(TypeError);
     }
@@ -207,14 +226,31 @@ describe("selected authentication capabilities", () => {
     expect(() => new SessionGuard(accounts, { ...session, validity: {} as never })).toThrow(
       TypeError,
     );
-    expect(() => new BasicAuthGuard({ accounts, persistRecovery: recover } as never)).toThrow(
-      TypeError,
-    );
     expect(
-      () => new BasicAuthGuard({ accounts, emailLookup: {} as never, persistRecovery: recover }),
+      () =>
+        new BasicAuthGuard({
+          mfaSecrets: createMfaSecretCodec(process.env),
+          accounts,
+          persistRecovery: recover,
+        } as never),
     ).toThrow(TypeError);
     expect(
-      () => new BasicAuthGuard({ accounts, credentials: {} as never, persistRecovery: recover }),
+      () =>
+        new BasicAuthGuard({
+          mfaSecrets: createMfaSecretCodec(process.env),
+          accounts,
+          emailLookup: {} as never,
+          persistRecovery: recover,
+        }),
+    ).toThrow(TypeError);
+    expect(
+      () =>
+        new BasicAuthGuard({
+          mfaSecrets: createMfaSecretCodec(process.env),
+          accounts,
+          credentials: {} as never,
+          persistRecovery: recover,
+        }),
     ).toThrow(TypeError);
   });
 });

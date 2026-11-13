@@ -20,6 +20,7 @@ import type {
   AuthUserDirectory,
   AuthUserRecord,
 } from "@getstrata/core/contracts/authUserDirectory";
+import type { MfaSecretCodec } from "@getstrata/core/crypto/mfaSecret";
 import { CORE_AUTH_TOKEN } from "../config";
 import type { ServiceProvider } from "../contracts";
 
@@ -29,6 +30,7 @@ export interface MetadataAuthOptions {
   readonly production: boolean;
   readonly allowDevHeaders: boolean;
   readonly jwtSecret: string;
+  readonly mfaSecrets: MfaSecretCodec;
   readonly hasSessionCredential?: (request: Request) => boolean;
   readonly readSession: (request: Request) => ReturnType<typeof readSession>;
   readonly abilities: { readonly admin: readonly string[]; readonly member: readonly string[] };
@@ -88,8 +90,16 @@ export function createMetadataAuthManager(
             "Basic credentials",
           );
     let basic: BasicAuthGuardOptions;
-    if (emailLookup) basic = { accounts, emailLookup, credentials, persistRecovery };
-    else if (credentials) basic = { accounts, credentials, persistRecovery };
+    if (emailLookup)
+      basic = {
+        accounts,
+        emailLookup,
+        credentials,
+        persistRecovery,
+        mfaSecrets: options.mfaSecrets,
+      };
+    else if (credentials)
+      basic = { accounts, credentials, persistRecovery, mfaSecrets: options.mfaSecrets };
     else
       throw new TypeError("Basic authentication requires an email lookup or credential verifier.");
     add("basic", new BasicAuthGuard(basic));

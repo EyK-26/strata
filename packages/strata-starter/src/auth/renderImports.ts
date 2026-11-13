@@ -60,7 +60,6 @@ export function renderAuthImports({
     imports.push(`import { hashApiToken } from "@getstrata/core/auth/tokenHash";`);
   }
   if (mfa) {
-    imports.push(`import { protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";`);
   }
   if (cookie) {
     imports.push(`import { flashResponse } from "@getstrata/core/http/flashSession";`);

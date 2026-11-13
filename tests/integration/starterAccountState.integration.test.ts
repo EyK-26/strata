@@ -11,7 +11,7 @@ import type {
   ScopedPolicy,
   SelectedSession,
 } from "@getstrata/core/contracts/persistence";
-import { protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";
+import { createMfaSecretCodec, protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import type { Model } from "@getstrata/core/database/model";
 
 import { generateTotp } from "@getstrata/core/security/totp";
@@ -328,7 +328,7 @@ for (const driver of ["sqlite", "postgres"] as const) {
               is_admin: false,
               tenant_id: 2,
               mfa_enabled: true,
-              mfa_secret: protectMfaSecret(secret),
+              mfa_secret: protectMfaSecret(secret, createMfaSecretCodec(process.env)),
             });
             const neighbor = await selectedUsers(database).create({
               name: "Neighbor",

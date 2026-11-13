@@ -3,7 +3,7 @@ import { get as httpGet } from "node:http";
 import { generateOneTimeToken } from "@getstrata/core/auth/oneTimeToken";
 import type { Application } from "@getstrata/core/contracts/application";
 import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
-import { protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";
+import { createMfaSecretCodec, protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import { absoluteTemporarySignedUrl } from "@getstrata/core/http/signedUrl";
 import { generateTotp, generateTotpSecret } from "@getstrata/core/security/totp";
 import { createGeneratedSecurityApp } from "../helpers/generatedSecurityApp";
@@ -561,7 +561,7 @@ describe("Generated application security", () => {
   test("API login requires CSRF and MFA when enabled", async () => {
     const secret = generateTotpSecret();
     await sql.unsafe("UPDATE users SET mfa_enabled = true, mfa_secret = $1 WHERE email = $2", [
-      protectMfaSecret(secret),
+      protectMfaSecret(secret, createMfaSecretCodec(process.env)),
       "demo@example.com",
     ]);
     try {
@@ -1145,7 +1145,7 @@ describe("Generated application security", () => {
           const secret = generateTotpSecret();
           await sql.unsafe(
             "UPDATE users SET mfa_enabled = true, mfa_secret = $1 WHERE email = $2",
-            [protectMfaSecret(secret), "demo@example.com"],
+            [protectMfaSecret(secret, createMfaSecretCodec(process.env)), "demo@example.com"],
           );
           const mfaStart = await fetch(`${origin}/auth/saml`, { redirect: "manual" });
           const mfaRelay =
