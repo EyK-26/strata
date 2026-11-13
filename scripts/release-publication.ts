@@ -34,6 +34,36 @@ export function assertReleaseProvenanceSource(
 export function archiveIntegrity(bytes: Uint8Array): string {
   return `sha512-${createHash("sha512").update(bytes).digest("base64")}`;
 }
+export function packedArchive(
+  result: unknown,
+  expected: { name: string; version: string },
+): Archive {
+  // npm 11 emits an array; npm 12 emits an object keyed by package name.
+  const entries = Array.isArray(result)
+    ? result
+    : result && typeof result === "object" && Object.keys(result).length === 1
+      ? [Object.hasOwn(result, expected.name) ? Reflect.get(result, expected.name) : null]
+      : [];
+  if (entries.length !== 1) throw new Error("Expected exactly one packed archive");
+  const entry = entries[0];
+  if (
+    !entry ||
+    typeof entry !== "object" ||
+    entry.name !== expected.name ||
+    entry.version !== expected.version ||
+    typeof entry.filename !== "string" ||
+    !/^[a-zA-Z0-9_.-]+\.tgz$/.test(entry.filename) ||
+    typeof entry.integrity !== "string" ||
+    !/^sha512-[A-Za-z0-9+/]{86}==$/.test(entry.integrity)
+  )
+    throw new Error(`Unexpected packed archive identity: ${expected.name}@${expected.version}`);
+  return {
+    name: entry.name,
+    version: entry.version,
+    file: entry.filename,
+    integrity: entry.integrity,
+  };
+}
 export function registryDisposition(metadata: unknown, archive: Archive): "publish" | "verified" {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
     throw new Error(`Invalid registry metadata: ${archive.name}`);
@@ -95,14 +125,10 @@ async function main() {
           directory,
         ]),
       );
-      if (result.length !== 1) throw new Error("Expected exactly one packed archive");
-      const file = result[0].filename;
-      archives.push({
-        name: packages[index].name,
-        version: packages[index].version,
-        file,
-        integrity: archiveIntegrity(await readFile(join(directory, file))),
-      });
+      const archive = packedArchive(result, packages[index]);
+      if (archiveIntegrity(await readFile(join(directory, archive.file))) !== archive.integrity)
+        throw new Error(`Packed archive hash mismatch: ${archive.file}`);
+      archives.push(archive);
     }
     await writeFile(
       join(directory, "manifest.json"),

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   archiveIntegrity,
   assertReleaseProvenanceSource,
+  packedArchive,
   registryDisposition,
 } from "../../scripts/release-publication.ts";
 import { type CIRun, hasAcceptedCI } from "../../scripts/verify-release-ci.ts";
@@ -12,6 +13,34 @@ const archive = {
   file: "core.tgz",
   integrity: archiveIntegrity(new TextEncoder().encode("immutable")),
 };
+describe("npm pack output", () => {
+  const entry = { ...archive, filename: archive.file };
+  test("accepts npm 11 arrays and npm 12 package-keyed records", () => {
+    expect(packedArchive([entry], archive)).toEqual(archive);
+    expect(packedArchive({ [archive.name]: entry }, archive)).toEqual(archive);
+  });
+  test("rejects ambiguous, missing, mismatched or unsafe archive identities", () => {
+    for (const invalid of [
+      null,
+      {},
+      [],
+      [entry, entry],
+      { [archive.name]: entry, other: entry },
+      { other: entry },
+      [null],
+      [{ ...entry, name: "other" }],
+      [{ ...entry, version: "0.0.0" }],
+      [{ ...entry, filename: "../outside.tgz" }],
+      [{ ...entry, filename: "/outside.tgz" }],
+      [{ ...entry, filename: "archive.zip" }],
+      [{ ...entry, filename: null }],
+      [{ ...entry, integrity: undefined }],
+      [{ ...entry, integrity: "sha512-invalid" }],
+    ]) {
+      expect(() => packedArchive(invalid, archive)).toThrow();
+    }
+  });
+});
 describe("immutable publication recovery", () => {
   test("only authoritative absence allows publication", () => {
     expect(registryDisposition({ name: archive.name, versions: {} }, archive)).toBe("publish");
