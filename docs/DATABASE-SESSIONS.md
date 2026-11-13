@@ -71,9 +71,9 @@ it never selects a connection or reads an ambient dialect. Existing argument
 order after the dialect, SQL validation and parameter ordering are unchanged.
 `parseQualifiedColumn`, `resolveSoftDeleteColumn` and
 `assertSafeProjectionExpression` remain independent of dialect and keep their
-existing signatures. Legacy repositories still choose their dialect at the
-calling boundary; this change alone does not migrate their ownership or snapshot
-mutable query plans across asynchronous operations.
+existing signatures. Bound repositories select their dialect through the owned
+session. An explicit compiler remains a SQL-description API; it does not acquire
+a connection or confer execution authority.
 
 ## Transaction work and outcomes
 
@@ -133,7 +133,9 @@ no automatic COMMIT retry or transaction replay.
 
 ## Refactor scope
 
-This establishes explicit SQL sessions and native transaction ownership. Existing
-model and repository globals, tenancy/RLS composition and event/outbox integration
-move to these owners in the following persistence milestones. Existing starter
-and HTTP/worker composition are not yet claimed to use this API end to end.
+SQL sessions, native transactions, bound models/repositories, tenancy/RLS and
+event/outbox integration now use explicit ownership. Generated HTTP and worker
+composition uses the same contracts. The
+[completion ledger](architecture/refactor-completion-ledger.md) maps native and
+installed-consumer acceptance; the [migration guide](architecture/target-api-migration.md)
+lists removed global connection and model APIs.

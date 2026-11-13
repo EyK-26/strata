@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { MEMBER_ABILITIES } from "@getstrata/core/auth/abilityCatalog";
 import { currentAuthUser, currentCredentialSource } from "@getstrata/core/auth/authContext";
+import { authenticatedAuth } from "@getstrata/core/auth/authOutcome";
 import { ApiTokenGuard, AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
 import { composeMiddleware } from "@getstrata/core/http/middleware";
@@ -62,4 +63,20 @@ describe("createAuthMiddleware", () => {
     expect(response.headers.get("x-authenticated-user-id")).toBeNull();
     expect(await response.json()).toEqual({ id: 42, source: "bearer" });
   });
+});
+
+test("authentication middleware accepts an authenticate-only adapter", async () => {
+  const request = new Request("http://example.test");
+  const middleware = createAuthMiddleware({
+    authenticate: async (received) => {
+      expect(received).toBe(request);
+      return authenticatedAuth({ id: "custom" }, "session");
+    },
+  });
+  const response = await middleware(request, async () => {
+    expect(currentAuthUser()?.id).toBe("custom");
+    expect(currentCredentialSource()).toBe("session");
+    return new Response("ok");
+  });
+  expect(response.status).toBe(200);
 });

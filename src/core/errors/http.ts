@@ -1,4 +1,6 @@
+import { AuthenticationRequiredError } from "@getstrata/core/auth/authOutcome";
 import { PolicyDeniedError } from "@getstrata/core/auth/policy";
+import { RecordNotFoundError } from "@getstrata/core/database/errors";
 
 class HttpError extends Error {
   readonly status: number;
@@ -98,6 +100,8 @@ function isHttpErrorLike(error: unknown): error is HttpErrorLike {
 }
 
 function toHttpError(error: unknown): HttpError | null {
+  if (error instanceof AuthenticationRequiredError) return new UnauthorizedError(error.message);
+  if (error instanceof RecordNotFoundError) return new NotFoundError(error.message);
   if (error instanceof PolicyDeniedError) {
     return new ForbiddenError();
   }

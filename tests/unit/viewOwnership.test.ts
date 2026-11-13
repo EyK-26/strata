@@ -53,7 +53,7 @@ async function owner(name: string) {
       createStorageProvider({
         put: async (path) => path,
         get: async () => null,
-        delete: async () => false,
+        delete: async () => {},
       }),
       provider,
     ],

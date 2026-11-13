@@ -1,5 +1,11 @@
 # @getstrata/bootstrap changelog
 
+## 3.0.2
+
+Reconcile completed framework ownership and retirement documentation. Clarify the exact-commit main CI prerequisite, early-tag retry procedure, and maintainer release handoff; improve the release admission diagnostic without changing its checks.
+
+Remove unused internal renderer/build compatibility helpers and migrate their test imports. Refresh v3 application, auth, discovery, queue, tracing and lifecycle guidance; clearly label retained 2.x qualification evidence.
+
 ## 3.0.1
 
 Fix release archive packing for npm 12 package-keyed JSON output while retaining npm 11 compatibility. Validate archive identity and integrity, pin the publication toolchain, and exercise actual release packing in CI. The v3.0.0 tag remains unchanged; its failed workflow published no npm packages.

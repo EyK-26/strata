@@ -24,6 +24,8 @@ For an explicit runtime, pass it to the middleware and register its ownership yo
 
 ```ts
 import { createTracingMiddleware, createTracingRuntime } from "@getstrata/core/tracing/tracingMiddleware";
+import { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
+const lifecycle = new LifecycleCoordinator();
 const runtime = createTracingRuntime({ sampleRatio: 0.1, maxQueueSize: 1024 });
 const middleware = createTracingMiddleware(runtime);
 // Register after stopping/draining admitted work:
@@ -31,7 +33,7 @@ lifecycle.register("traces", () => runtime.forceFlush(), "flush");
 lifecycle.register("traces-close", () => runtime.shutdown(), "close");
 ```
 
-The runtime installs a shared asynchronous API context manager only if the application has not installed one. It does not register or replace the global tracer provider or propagator. `trace.getSpan(context.active())` exposes the active server span to existing instrumentation. Use `getTracingRuntime().tracer` (or your explicit runtime's tracer) for manually instrumented child spans exported with this provider, ending each span in `finally`. An application with its own global SDK retains ownership of that SDK's exports and shutdown. No automatic SQL, queue, scheduler or outbound-fetch spans are claimed by this integration. The compatibility `runWithTraceContext` helper still supplies framework log correlation; it does not create OpenTelemetry spans.
+The runtime installs a shared asynchronous API context manager only if the application has not installed one. It does not register or replace the global tracer provider or propagator. `trace.getSpan(context.active())` exposes the active server span to existing instrumentation. Use your owned `runtime.tracer` for manually instrumented child spans exported with this provider, ending each span in `finally`. When using the provider, resolve its runtime through `container.resolve(CORE_TRACING_RUNTIME_TOKEN)`; import the token from `@getstrata/core/contracts/serviceTokens`. An application with its own global SDK retains ownership of that SDK's exports and shutdown. No automatic SQL, queue, scheduler or outbound-fetch spans are claimed by this integration. The compatibility `runWithTraceContext` helper still supplies framework log correlation; it does not create OpenTelemetry spans.
 
 The Bun regression suite verifies actual HTTP/JSON collector output, timestamps/parent IDs, concurrent context, sampling, child spans, request-secret redaction, bounded backlog, real collector timeout and lifecycle flushing. Additional Node instrumentation must be qualified separately on Bun.
 

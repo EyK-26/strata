@@ -5,10 +5,10 @@ import {
   defineModel,
   defineRepository,
 } from "@getstrata/core/database/definitions";
+import { RecordNotFoundError } from "@getstrata/core/database/errors";
 import { filterMassAssignable, hydrateValue, Model } from "@getstrata/core/database/model";
 import { belongsTo, hasMany } from "@getstrata/core/database/relationships";
 import { defineTable } from "@getstrata/core/database/table";
-import { NotFoundError } from "@getstrata/core/errors/http";
 import { withBoundDatabase } from "../../helpers/boundRepositoryHarness";
 
 interface Article {
@@ -276,14 +276,14 @@ describe("Model persistence", () => {
 });
 
 describe("Model queries", () => {
-  test("findOrFail throws NotFoundError by default", async () => {
+  test("findOrFail throws RecordNotFoundError by default", async () => {
     const connection = new FakeConnection();
     connection.queue([]);
     await expect(
       withArticles(connection, async ({ ModelClass }) => {
         await ModelClass.findOrFail(404);
       }),
-    ).rejects.toThrow(NotFoundError);
+    ).rejects.toThrow(RecordNotFoundError);
   });
 
   test("global scopes apply to query()", async () => {

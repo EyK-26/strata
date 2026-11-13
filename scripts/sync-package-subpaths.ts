@@ -24,6 +24,7 @@ const CORE_SUBPATHS = [
   "auth/abilityChecker",
   "auth/authContext",
   "auth/authReader",
+  "auth/authOutcome",
   "auth/abilityCatalog",
   "auth/emailVerification",
   "auth/guard",

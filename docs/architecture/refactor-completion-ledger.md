@@ -63,9 +63,10 @@ Additional removed tests are accounted for explicitly:
 - `tests/unit/transactionScopeBoundaries.test.ts` asserted the retired rollback-frame
   helpers. Caught nested failure and savepoint-local rollback now have behavioral
   replacements in `transactionComposition.test.ts` and `transactionRollback.test.ts`.
-- Scaffold delta/hash fixtures and their two artifact-delta helpers were historical
-  template comparisons. Generated installed security/auth and combination workflows
-  remain the behavioral contract; deleting those fixtures does not waive those flows.
+- The two scaffold artifact-delta helpers were retired. Original hash fixtures
+  remain as profile/inventory references; current rendering tests compare emitted
+  bytes against reviewed canonical fixtures. Generated installed security/auth and
+  combination workflows remain the behavioral contract.
 - The `abilityCatalog` test that mutated the process-wide catalog is retired with
   `configureAbilityCatalog`/`abilityCatalog`. Default role constants/resolution remain;
   application-specific authorization is supplied through explicit policy/ability ports.

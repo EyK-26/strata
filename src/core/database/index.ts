@@ -18,7 +18,11 @@ export {
   defineRepository,
   repositoryEffects,
 } from "@getstrata/core/database/definitions";
-export { mapDatabaseError, withDatabaseErrorHandling } from "@getstrata/core/database/errors";
+export {
+  mapDatabaseError,
+  RecordNotFoundError,
+  withDatabaseErrorHandling,
+} from "@getstrata/core/database/errors";
 export type {
   FactoryBehavior,
   FactoryConstruction,

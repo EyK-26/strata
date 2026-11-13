@@ -221,8 +221,32 @@ const neutralEdges: Readonly<
   [PATH("runtime/optionalPeer")]: { values: [], types: [] },
   [PATH("http/databaseError")]: { values: ["database/errors", "errors/http"], types: [] },
   [PATH("auth/policy")]: { values: [], types: [] },
+  [PATH("auth/authReader")]: {
+    values: ["auth/authOutcome", "runtime/asyncContextStore", "auth/authContext"],
+    types: [],
+  },
+  [PATH("auth/guard")]: {
+    values: [
+      "auth/authOutcome",
+      "http/statelessAuth",
+      "security/timingSafeCompare",
+      "auth/accountState",
+      "auth/authContext",
+      "auth/basicAuthGuard",
+      "auth/jwtGuard",
+      "auth/requireAuthCapability",
+    ],
+    types: ["contracts/authUserDirectory"],
+  },
   [PATH("contracts/authUserDirectory")]: { values: [], types: ["auth/authContext"] },
-  [PATH("errors/http")]: { values: ["auth/policy"], types: [] },
+  [PATH("errors/http")]: {
+    values: ["auth/authOutcome", "auth/policy", "database/errors"],
+    types: [],
+  },
+  [PATH("auth/authOutcome")]: {
+    values: ["contracts/authUserDirectory", "auth/accountState"],
+    types: ["auth/authContext"],
+  },
 
   // M3b2 immutable definitions and the single private ORM runtime closure.
   [PATH("database/definitions")]: {
@@ -316,7 +340,6 @@ const neutralEdges: Readonly<
   [PATH("database/model")]: {
     values: [
       "database/errors",
-      "errors/http",
       "database/ormInternal",
       "database/baseRepository",
       "database/inflection",
@@ -334,7 +357,7 @@ const neutralEdges: Readonly<
   [PATH("database/modelAttributes")]: { values: ["auth/password"], types: [] },
   [PATH("database/modelQuery")]: {
     values: [
-      "errors/http",
+      "database/errors",
       "database/ormInternal",
       "database/model",
       "database/modelAttributes",
@@ -419,6 +442,7 @@ const neutralEdges: Readonly<
 };
 const canonicalValues = new Set(
   [
+    "auth/authOutcome",
     "auth/policy",
     "contracts/authUserDirectory",
     "database/definitions",

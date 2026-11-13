@@ -1,5 +1,10 @@
 # Strata and strata-shop production audit
 
+> Historical 2.x record. Preserve its dated evidence and original conclusions;
+> it does not describe the current 3.x API or certify a current release. See the
+> [refactor completion ledger](architecture/refactor-completion-ledger.md) and
+> [current migration guide](architecture/target-api-migration.md).
+
 Date: 2026-10-03. Published packages: `@getstrata/bootstrap`, `@getstrata/cli`, `@getstrata/core` 1.1.9. Local framework source: commit `179a8b6`. Runtime for local reproductions: Bun 1.4.2 on macOS. Postgres and Redis are local Docker services.
 
 ## Judgment

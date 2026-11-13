@@ -168,7 +168,7 @@ try {
             dependencies.storage = new Storage.StorageManager({
               put: async (path) => path,
               get: async () => null,
-              delete: async () => false,
+              delete: async () => {},
             });
           },
         },
@@ -294,7 +294,7 @@ const app = createApplication({
           return objects.get(path) ?? null;
         },
         async delete(path) {
-          return objects.delete(path);
+          objects.delete(path);
         },
       },
     }),
@@ -412,7 +412,7 @@ try {
       new TextDecoder().decode((await storage.get("identity.txt")) ?? undefined),
       "owned storage",
     );
-    assert.equal(await storage.delete("identity.txt"), true);
+    assert.equal(await storage.delete("identity.txt"), undefined);
     const executionHandle = scope.resolve(ExecutionResourceAlias);
     assert.equal(scope.resolve(ExecutionResource), executionHandle);
     await scope.acquire(packedTaskResource("root"));

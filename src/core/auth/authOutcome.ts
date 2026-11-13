@@ -2,6 +2,14 @@ import { AuthAccountNotFoundError } from "@getstrata/core/contracts/authUserDire
 import { isAuthUserActive } from "./accountState";
 import type { AuthUser, CredentialSource } from "./authContext";
 
+/** Authentication is required, independent of the transport enforcing it. */
+class AuthenticationRequiredError extends Error {
+  constructor(message = "Unauthorized") {
+    super(message);
+    this.name = new.target.name;
+  }
+}
+
 type AuthOutcome =
   | Readonly<{ status: "absent"; user: null; credentialSource: null }>
   | Readonly<{ status: "invalid"; user: null; credentialSource: CredentialSource }>
@@ -73,6 +81,7 @@ async function authenticateProof(
 
 export type { AuthOutcome };
 export {
+  AuthenticationRequiredError,
   absentAuth,
   authenticatedAuth,
   authenticateProof,

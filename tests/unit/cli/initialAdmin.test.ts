@@ -5,11 +5,11 @@ import {
   layersFromFlags,
   parseCreateStrataArgs,
 } from "../../../packages/strata-starter/src/parseArgs.ts";
+import { renderCliRegisterTs } from "../../../packages/strata-starter/src/renderCli.ts";
 import {
   renderInitialAdminCommand,
   renderInitialAdminMigration,
 } from "../../../packages/strata-starter/src/renderInitialAdmin.ts";
-import { renderCliRegisterTs } from "../../../packages/strata-starter/src/renderRuntime.ts";
 
 const args = [
   "--email",

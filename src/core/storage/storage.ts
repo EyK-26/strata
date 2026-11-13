@@ -5,11 +5,11 @@ import { S3Client } from "bun";
 import { copyApplicationConfig } from "../config/configSnapshot";
 import { assertPathUnderRoot } from "../security/safePath";
 
-/** Missing objects are null/false; all other failures reject. */
+/** Missing reads return null; deletion is idempotent. All other failures reject. */
 interface StorageDriver {
   put(path: string, contents: string | Uint8Array): Promise<string>;
   get(path: string): Promise<Uint8Array | null>;
-  delete(path: string): Promise<boolean>;
+  delete(path: string): Promise<void>;
 }
 
 interface S3StorageConfig {
@@ -55,12 +55,11 @@ class LocalStorageDriver implements StorageDriver {
     }
   }
 
-  async delete(path: string): Promise<boolean> {
+  async delete(path: string): Promise<void> {
     try {
       await unlink(this.resolvePath(path));
-      return true;
     } catch (error) {
-      if (hasErrorCode(error, "ENOENT")) return false;
+      if (hasErrorCode(error, "ENOENT")) return;
       throw error;
     }
   }
@@ -84,12 +83,11 @@ class S3StorageDriver implements StorageDriver {
     }
   }
 
-  async delete(path: string): Promise<boolean> {
+  async delete(path: string): Promise<void> {
     try {
       await this.client.unlink(path.replace(/^\/+/, ""));
-      return true;
     } catch (error) {
-      if (hasErrorCode(error, "NoSuchKey")) return false;
+      if (hasErrorCode(error, "NoSuchKey")) return;
       throw error;
     }
   }
@@ -106,7 +104,7 @@ class StorageManager {
     return this.driver.get(path);
   }
 
-  delete(path: string): Promise<boolean> {
+  delete(path: string): Promise<void> {
     return this.driver.delete(path);
   }
 }

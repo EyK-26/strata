@@ -50,3 +50,30 @@ describe("createRequireAuthMiddleware", () => {
     expect(response.status).toBe(401);
   });
 });
+
+test("required-auth middleware accepts a check-only adapter and preserves operational failures", async () => {
+  const request = new Request("http://example.test");
+  let calls = 0;
+  const middleware = createRequireAuthMiddleware({
+    check: async (received) => {
+      expect(received).toBe(request);
+      return ++calls === 1;
+    },
+  });
+  let handled = 0;
+  const next = async () => {
+    handled++;
+    return new Response("ok");
+  };
+  expect((await middleware(request, next)).status).toBe(200);
+  expect((await middleware(request, next)).status).toBe(401);
+  expect(handled).toBe(1);
+  const error = new Error("authentication store unavailable");
+  const failing = createRequireAuthMiddleware({
+    check: async () => {
+      throw error;
+    },
+  });
+  await expect(failing(request, next)).rejects.toBe(error);
+  expect(handled).toBe(1);
+});

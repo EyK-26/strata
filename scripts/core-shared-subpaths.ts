@@ -10,6 +10,7 @@
  */
 /** Canonical standalone artifacts: externalize these edges even from the root bundle. */
 export const CORE_STANDALONE_SUBPATHS = [
+  "auth/authOutcome",
   "auth/policy",
   "contracts/authUserDirectory",
   "contracts/token",
@@ -105,9 +106,4 @@ export function bootstrapSubpathExternalFlags(
     flags.push(`--external @getstrata/core/${subpath}`);
   }
   return flags.join(" ");
-}
-
-/** @deprecated Use coreSubpathExternalFlags(CORE_SUBPATHS) from sync-package-subpaths. */
-export function coreSharedSubpathExternalFlags(): string {
-  return coreSubpathExternalFlags(CORE_SHARED_SUBPATHS);
 }

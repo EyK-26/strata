@@ -1,7 +1,11 @@
-import { UnauthorizedError } from "@getstrata/core/errors/http";
+import {
+  AuthenticationRequiredError,
+  type AuthOutcome,
+  absentAuth,
+  authenticatedAuth,
+} from "@getstrata/core/auth/authOutcome";
 import { createAsyncContextStore } from "../runtime/asyncContextStore";
 import { type AuthUser, type CredentialSource, runWithAuthContext } from "./authContext";
-import { type AuthOutcome, absentAuth, authenticatedAuth } from "./authOutcome";
 
 export interface AuthReader {
   authenticate(request?: Request): Promise<AuthOutcome>;
@@ -51,7 +55,7 @@ export const establishedAuthReader: AuthReader = Object.freeze({
   },
   async requireUser(request?: Request) {
     const user = await establishedAuthReader.resolve(request);
-    if (!user) throw new UnauthorizedError();
+    if (!user) throw new AuthenticationRequiredError();
     return user;
   },
 });

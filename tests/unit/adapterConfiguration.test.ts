@@ -171,7 +171,7 @@ test("custom mail and storage capabilities initialize independently of unused in
             return stored.get(path) ?? null;
           },
           async delete(path) {
-            return stored.delete(path);
+            stored.delete(path);
           },
         },
       }),
@@ -186,7 +186,7 @@ test("custom mail and storage capabilities initialize independently of unused in
       expect(new TextDecoder().decode((await storage.get("fixture")) ?? new Uint8Array())).toBe(
         "value",
       );
-      expect(await storage.delete("fixture")).toBe(true);
+      expect(await storage.delete("fixture")).toBeUndefined();
     });
     expect(sent).toBe(1);
   } finally {

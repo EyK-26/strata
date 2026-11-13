@@ -41,20 +41,9 @@ Set `FRONTEND_MODE`. Allowed values live in `@getstrata/core/runtime/frontendMod
 
 ## Cookie HTML apps
 
-```typescript
-import { createCookieSessionAuthManager } from "@getstrata/bootstrap/web/session";
-import { CORE_AUTH_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+Generated `src/bootstrap/providers/auth.ts` constructs cookie authentication from the current execution's explicit database session and scoped policy. `createCookieSessionAuthManager` requires `{ selected, policy, secret, production, rls }`; optional `cookieName`, `loadSessionUser` and `mapUser` customize the application schema and identity. Keep that manager within the execution that supplied its session and policy rather than retaining a request-bound manager as an application singleton.
 
-const auth = createCookieSessionAuthManager({
-  secret: process.env.SESSION_SECRET,
-  cookieName: "myapp_session",
-  loadSessionUser, // your SELECT from sessions + users
-  mapUser: (user) => ({ id: user.id, role: user.is_admin ? "admin" : "member" }),
-});
-container.set(CORE_AUTH_TOKEN, auth);
-```
-
-Pass `loadSessionUser` whenever the default `SELECT u.*` does not match your `users` table. Generated cookie apps map `is_admin` in `src/bootstrap/providers/auth.ts`.
+Set `cookieName` to `"myapp_session"` in the generated auth configuration to rename the cookie. Supply `loadSessionUser` when the default session/user query does not match your schema; its arguments are the selected session, scoped policy, RLS flag and session ID. Preserve live account status and auth-version metadata when mapping users. Generated cookie apps map `is_admin` in `src/bootstrap/providers/auth.ts`.
 
 Use `signIn` / `signOut` (or the redirect helpers). Do not mint cookies in controllers.
 
@@ -64,17 +53,9 @@ Cookie apps from `create-strata` include restyleable welcome, login, register, a
 
 ## Adding API tokens, JWT, or Basic
 
-```typescript
-import { DatabaseTokenGuard } from "@getstrata/core/auth/guard";
-import { JwtGuard } from "@getstrata/core/auth/jwtGuard";
-import { BasicAuthGuard } from "@getstrata/core/auth/basicAuthGuard";
+Compose guards with explicit capabilities in `src/bootstrap/providers/auth.ts`. `DatabaseTokenGuard` takes an `AuthBearerResolver`; `JwtGuard` takes `{ directory, secret }`. `BasicAuthGuard` takes account lookup, an MFA secret codec, recovery-code persistence and email lookup or credential verification. Register the resulting guards with `auth.registerGuard(name, guard)`. A service container is not a guard constructor argument.
 
-auth.registerGuard("api", new DatabaseTokenGuard(container));
-auth.registerGuard("jwt", new JwtGuard(container));
-auth.registerGuard("basic", new BasicAuthGuard(container));
-```
-
-Bind an `AuthUserDirectory` that can `resolveUserFromToken`, `findByEmail`, and `verifyCredentials`. See [AUTH.md](./AUTH.md) and the generated `src/bootstrap/authDirectory.ts`.
+Use the generated auth service composition and `src/bootstrap/authDirectory.ts` to select those capabilities from the owning execution. See [AUTH.md](./AUTH.md).
 
 ## HTTP kernel
 
@@ -84,17 +65,15 @@ Bind an `AuthUserDirectory` that can `resolveUserFromToken`, `findByEmail`, and 
 
 After `const modules = await ensureModulesLoaded({ modulesDir })`, generated apps run each module's `providers` through the same `register` / `boot` phases as `starterProviders`. Module DI (services, policies) therefore works without calling `collectProviders()` (which would swap in the monorepo `coreProviders` auth stack).
 
-Starter apps also call `registerDefaultJobs` and `await discoverJobs()` when wiring the queue and `registerInvalidateCacheOnModelWriteListeners` during provider boot so cache tags flush through the default invalidation job. `src/listeners/*.ts` registrars are loaded via `await discoverListeners()` in the same boot phase (registration-owned cleanup, same pattern as the monorepo `core.listeners` provider). `src/jobs/*.ts` classes with `static jobName` are registered the same way.
+Starter apps call `registerDefaultJobs(registry)` and `await discoverJobs(registry)` with their owned job registry. `await discoverListeners({ directory })` returns listener declarations; generated composition includes their services and repository effects alongside `createModelCacheInvalidationEffects`. The removed `registerInvalidateCacheOnModelWriteListeners` API is not part of v3 startup. See the recoverable cache invalidation section below for durable SQL outbox delivery.
 
-Generated apps combine `starterProviders` and discovered module providers into one ordered list and await the official `createAppContext(providers)` lifecycle. All registrations finish before any boot hook runs; starter providers retain their declared order, followed by module providers. A starter boot hook can therefore resolve a binding from module registration. Modules should register bindings in `register` and consume bindings in `boot`; a registration still cannot depend on a later registration having run. Do not substitute `collectProviders()` in generated apps: its monorepo core providers have different auth/config defaults.
+Generated `bootstrapApp()` discovers modules and listeners before constructing the application. It uses `createApplicationContext(providers, options)` with an explicit application `definition` and selected `connection`, then awaits `handle.start()`. Its `providersFromScope` composes starter providers, module providers and route assembly using application-owned services. All registrations finish before any boot hook runs, preserving the declared provider order. Modules should register bindings in `register` and consume bindings in `boot`; registration cannot depend on a later registration having run. Do not substitute `collectProviders()`: its monorepo defaults differ from the generated auth/config composition.
 
-Provider `register` and `boot` hooks accept synchronous implementations or `Promise<void>`. Register resource cleanup immediately through `context.onCleanup(() => resource.close())`. Cleanup captures the resource owned by that context, runs once in reverse acquisition order, awaits each handler, and continues after failures. Rejected registration, boot or dependency validation invokes cleanup without publishing the candidate context. Combined startup/cleanup failures preserve the startup error as the aggregate error's cause. This is resource cleanup, not rollback of external business effects started by a provider.
+Provider `register` and `boot` hooks accept synchronous implementations or `Promise<void>`. Register cleanup immediately through `context.onCleanup(() => resource.close())`, optionally choosing `"drain"` or `"flush"`. Cleanup captures the owned resource, runs once in reverse acquisition order and awaits each handler. Startup and cleanup failures are reported by the application owner; cleanup cannot roll back external business effects. Application service/resource declarations own pools, cache and queue clients; custom providers must declare or register their own resources.
 
-Successful initialization returns an `InitializedAppContext` with `dispose(): Promise<void>`. Dispose it after stopping application admission/work, then close the database that the app owns. The lifecycle clears only that context's active registry entry; disposing an older context cannot clear a newer one. Redis cache and queue providers register closure of their owned clients; custom providers must register their own resources. Custom listener registrars still own any cleanup they need; async discovery/export validation remains a separate concern.
+**Startup API migration:** prefer the generated async `bootstrapApp()`, `createApp()` and `createAppServer()` entrypoints. Low-level `createAppContext(providers, options)` also requires an explicit definition and connection and must be awaited; `runProviderPhase()` requires a complete `ProviderContext`. The process-wide `appContext` registry and ownerless startup defaults are removed. Keep the returned `application` and `invoke` handles explicitly.
 
-**Startup API migration:** `createAppContext()`, `createAppDependencies()`, `runProviderPhase()` and the monorepo `App.serve()` are now awaited APIs. This is a source compatibility change and must be included in release migration notes. The `appContext` getters stay synchronous and throw before initialization or after disposal; they no longer initiate hidden startup. Prefer existing async `bootstrapApp()` / `createApp()` in generated apps. Those entry points keep their promise contract, await discovery and database readiness, and close providers before their owned database when later migration/route construction fails. The exported generated `createAppContext()` also awaits module discovery. Calls to the low-level `runProviderPhase()` must supply a complete `ProviderContext` and await it; prefer the lifecycle for failure cleanup.
-
-Generated HTTP binds its socket only after bootstrap succeeds, and bind failure disposes the completed context. Queue workers await boot before constructing a worker and close application resources on failed boot or worker termination. Scheduled commands await boot before inspecting tasks and dispose resources after completion/failure. Custom outbox runners must follow the same ordering: await app bootstrap, then start the outbox instance's `work({ signal })`; on exit await the worker and dispose its context before database closure. Generated entrypoints coordinate stop, drain, flush and close through `LifecycleCoordinator`, with a configurable shutdown deadline. Custom entrypoints must adopt that coordinator explicitly; see [lifecycle](LIFECYCLE.md). Deployment-level outage and forced-termination qualification still requires the application's operational tests.
+Declare HTTP and worker transports before application startup. Generated HTTP acquires its socket after provider and route assembly; failed acquisition stays with the same application owner for cleanup. Queue and outbox workers boot their application before starting polling. Scheduled commands await boot before inspecting tasks and stop their application on completion/failure. Shutdown uses `await app.application.stop({ reason: "MANUAL" })` and checks `result.successful`; the owner stops admission, drains work, flushes and closes its resources, including its database. Do not add a separate context-disposal/database-close chain. Custom background runners must register cancellation and drain with that owner before startup. Generated signal handlers use `LifecycleCoordinator` to request application stop; see [lifecycle](LIFECYCLE.md). Deployment outage and forced-termination qualification still requires application operational tests.
 
 ## Database migrations
 
@@ -140,9 +119,9 @@ Do not mix the monorepo fixture runner with a product app’s `src/db/migrations
 
 ## Storage failures
 
-The official storage provider exposes `StorageManager` and the configured local or native Bun S3 driver. `get(path)` returns `null` only for a missing object; `delete(path)` returns `false` only when the provider reports a missing object. Other failures reject: invalid local paths, filesystem errors, denied S3 access, missing buckets and unavailable endpoints must remain visible to HTTP error handling or job retry logic. Do not turn every rejected read into a 404 or mark rejected deletion as successful cleanup.
+The official storage provider exposes `StorageManager` and the configured local or native Bun S3 driver. `get(path)` returns `null` only for a missing object; `delete(path)` returns `Promise<void>` and is idempotent: deleting an existing or missing object resolves without a value. Other failures reject: invalid local paths, filesystem errors, denied S3 access, missing buckets and unavailable endpoints must remain visible to HTTP error handling or job retry logic. Do not turn every rejected read into a 404 or mark rejected deletion as successful cleanup.
 
-S3 deletion follows the provider's acknowledgement semantics: a successful DELETE returns `true`, even when an S3-compatible provider acknowledges deletion of an already absent key. It does not establish prior existence. Reads use one GET, avoiding the old HEAD/GET race and redundant request. Native S3 signing, transport and provider errors remain Bun's responsibility; this contract does not add application retries or exactly-once guarantees. If a response is lost, callers must reconcile the uncertain outcome.
+S3 deletion follows the provider's acknowledgement semantics: a successful DELETE resolves without a value, including when an S3-compatible provider acknowledges deletion of an already absent key. It does not establish prior existence and does not perform an existence check before deleting. Reads use one GET, avoiding the old HEAD/GET race and redundant request. Native S3 signing, transport and provider errors remain Bun's responsibility; this contract does not add application retries or exactly-once guarantees. If a response is lost, callers must reconcile the uncertain outcome.
 
 Applications own the order of file and SQL writes and reconciliation of orphaned uploads; SQL transactions cannot atomically commit S3 effects. Use stable object identities and explicit commerce rules. Local storage is not shared across replicas; production apps should configure shared storage through the official provider.
 
@@ -189,7 +168,7 @@ Use `parseMultipartUpload(request, "file")` when the request is only that one fi
 
 ## Extending the CLI
 
-Generated apps depend on `@getstrata/cli` (lifecycle commands plus whatever `src/cli/register.ts` exports). The starter writes `src/cli/register.ts` with `queue:work`, failed-job commands, `make:*`, `openapi:*`, and `schedule:run`. `queue:work` calls `bootstrapApp({ migrate: false })` / `createApp()` through `@getstrata/cli/queueWorker` so starter and module providers load. Do not copy the monorepo `queue:work` command (`createAppContext()` from `@getstrata/bootstrap/context`, `coreProviders`).
+Generated apps depend on `@getstrata/cli` (lifecycle commands plus whatever `src/cli/register.ts` exports). The starter writes `src/cli/register.ts` with `queue:work`, failed-job commands, `make:*`, `openapi:*`, and `schedule:run`. `queue:work` boots an application with its worker transport declared (`mode: "worker"`) through `@getstrata/cli/queueWorker` so starter and module providers load. Do not copy the monorepo `queue:work` command (its `coreProviders` composition).
 
 To add more commands, extend that file (`commands` or `registerCommands()`). Scaffold commands write under `process.cwd()` (`src/modules`, `src/db/migrations`, `src/jobs`). `openapi:*` uses `createApp()` routes. `schedule:run` loads `src/bootstrap/schedule.ts` after boot.
 
@@ -383,17 +362,17 @@ MySQL upsert uses the engine's native unique-index semantics, which do not targe
 
 ### Recoverable model cache invalidation
 
-The retired 2.x queue listener is not a durability guarantee. Declare durable cache invalidation effects against the application repository/model definitions and owned SQL outbox. Publication participates in the selected business transaction; workers enter fresh trusted tenant/actor executions.
+The generated `createModelCacheInvalidationEffects` declares after-commit queue dispatch; that handoff does not survive process death before dispatch. For recoverable invalidation, declare transactional repository effects against the application definitions and owned SQL outbox. Publication participates in the selected business transaction; workers enter fresh trusted tenant/actor executions.
 
 Use one complete durable listener registry for cache invalidation and business
 listeners. Include the owned outbox services in the application and register effects
 before admitting HTTP/jobs. Do not let a cache-only worker claim the shared table.
 
-Row model events publish versioned cache intents through the active business connection before commit. Publication/schema failure rolls back the business write; cache/Redis availability does not participate in the commit response. Later synchronous hooks retain their normal order. The worker directly invokes the framework cache invalidation job, bypassing the Redis queue handoff, and the SQL outbox provides leases, retry, failed-delivery retention and `replay(eventId, "strata.cache.invalidate-tags.v1")`. Tune retry/attempt policy and alert on failed or aged cache deliveries.
+With those transactional effects installed, row writes publish versioned cache intents through their supplied `TransactionSession` before commit. Publication/schema failure rolls back the business write; cache/Redis availability does not participate in the commit response. Later synchronous hooks retain their normal order. The worker directly invokes the framework cache invalidation job, bypassing the Redis queue handoff, and the SQL outbox provides leases, retry, failed-delivery retention and `replay(eventId, "strata.cache.invalidate-tags.v1")`. Tune retry/attempt policy and alert on failed or aged cache deliveries.
 
 Durable mode requires explicit framework transactions around row writes (including workers and CLI commands). The RLS request scope already supplies one. Standalone writes or repositories bound to an unrelated connection fail **before SQL mutation**; this prevents an outbox record from claiming another connection's write. Direct SQL and bulk/projection APIs remain supported escape hatches: explicitly publish `strata.cache.invalidate-tags` with `{ tags }` inside their business transaction when they bypass row events. Transactional repository effects execute inside the selected transaction; after-commit effects run after durability. Hooks must only persist intents, never perform remote delivery.
 
-Rollout: stop/drain old writers and workers, deploy the outbox file migration with the migration owner, install the complete registry and registrar, and then restart writers and the outbox worker. Preserve old queue jobs and pending SQL deliveries. Use a shared cache for multi-process workers; an array/memory cache belongs to its own process and cannot be invalidated by a different process. Invalidation is eventually consistent: worker lag can expose stale cached values, so use bounded TTLs and bypass cache for authoritative/financial decisions. This fixes recoverability of the handoff. The Redis cache driver also provides shared generation fencing, bounded metadata/LRU eviction and renewable fill leases; see [shared Redis cache](REDIS-CACHE.md) for consistency limits, configuration and the required cold-cache rollout. Existing generated apps must opt in; the legacy 2.x queue mode is not made durable by upgrading packages alone.
+Rollout: stop/drain old writers and workers, deploy the outbox file migration with the migration owner, install the complete listener registry and transactional effect declarations, and then restart writers and the outbox worker. Preserve old queue jobs and pending SQL deliveries. Use a shared cache for multi-process workers; an array/memory cache belongs to its own process and cannot be invalidated by a different process. Invalidation is eventually consistent: worker lag can expose stale cached values, so use bounded TTLs and bypass cache for authoritative/financial decisions. This fixes recoverability of the handoff. The Redis cache driver also provides shared generation fencing, bounded metadata/LRU eviction and renewable fill leases; see [shared Redis cache](REDIS-CACHE.md) for consistency limits, configuration and the required cold-cache rollout. Existing generated apps must opt in; the legacy 2.x queue mode is not made durable by upgrading packages alone.
 
 ### Durable transactional events (opt-in SQL outbox)
 
@@ -413,7 +392,7 @@ The official `runOutboxWorkerCommand` from `@getstrata/cli/outboxWorker` owns st
 
 Generated `outbox:work` wiring supplies the owned application and outbox. Shutdown
 stops admission, drains work, flushes and closes through the application handle.
-Do not combine that handle with retired `context.dispose`/global database cleanup.
+Do not combine that handle with a separate `context.dispose()`/global database cleanup chain.
 
 
 Workers use database time, indexed claim scans, renewable unique ownership tokens and ownership-checked acknowledgement. Expired ownership is reclaimed before new work. Short coordination transactions retry only database deadlock/serialization aborts, with a bounded retry budget; persistent infrastructure errors propagate to the worker supervisor. Delivery is **at least once**. A lease fences acknowledgement, not arbitrary provider effects: a killed worker may have already sent email or charged a provider. Handlers must support replay and observe the abort signal. Cancellation does not delete work. Failed delivery persists a bounded code, not provider exception text; attempts and exponential retry deadlines survive restart. Defaults are a 60-second lease, five attempts, and a one-second initial retry delay capped at five minutes. Provision pool headroom for lease renewal in addition to active listeners. SQLite has one writer per connection; keep application write transactions short.

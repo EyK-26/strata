@@ -1,5 +1,10 @@
 # M1 startup validation and declaration ownership proposal
 
+> Historical 2.x record. Preserve its dated evidence and original conclusions;
+> it does not describe the current 3.x API or certify a current release. See the
+> [refactor completion ledger](architecture/refactor-completion-ledger.md) and
+> [current migration guide](architecture/target-api-migration.md).
+
 Status: design continuation, not an accepted breaking contract. No runtime validator,
 new export, route collector, manifest resolver, provider or generated source is
 implemented here. Use the earlier M1 guarded HTTP declaration fixture and its 43

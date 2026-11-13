@@ -16,6 +16,15 @@ or string service-key fallback is provided.
   guest or another mechanism. Account lookup must match the authenticated identity.
   Custom account adapters throw `AuthAccountNotFoundError` for an expected miss;
   database failures must remain operational failures.
+- Model and model-query `findOrFail` throw `RecordNotFoundError` from
+  `@getstrata/core/database/errors`; authentication `requireUser` throws
+  `AuthenticationRequiredError` from `@getstrata/core/auth/authOutcome`. Both are
+  also root exports and have no HTTP status. HTTP adapters map them to 404 and
+  401 respectively; HTML authentication still redirects to login. Explicit
+  `findOrFail` error factories remain supported.
+- Storage driver and manager `delete(path)` return `Promise<void>`: deleting a
+  missing object succeeds on both local and S3 storage. Do not branch on a
+  deletion boolean. Operational failures still reject.
 - Use `compileRouteMap`, `composeRouteMaps`, and `getRouteInventory` from
   `@getstrata/bootstrap/routePlan`. Object spreads intentionally do not transfer
   the hidden inventory. Collisions reject before publication; inventories are
@@ -38,7 +47,7 @@ to deeper executable acceptance and records intentionally retired assertions. Th
 
 ## Release readiness
 
-Breaking API removals warrant the approved stable `3.0.0` release after qualification.
+Breaking API removals require the stable 3.x release line after qualification.
 This guide does not certify that qualification or publication occurred. Local
 archives must remain tied to their exact source and integrity receipts.
 
