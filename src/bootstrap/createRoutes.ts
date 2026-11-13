@@ -8,11 +8,8 @@ import { mergeSpaRoutes } from "./createSpaRoutes";
 import { mergeWebRoutes } from "./createWebRoutes";
 import { createHealthRoutes } from "./health";
 import { createMetricsRoutes } from "./metricsRoutes";
-import { routeRegistry } from "./routeRegistry";
-
-function registerRoute(method: string, path: string, middleware: string[]): void {
-  routeRegistry.register({ method, path, middleware });
-}
+import { compileRoutePlan } from "./routeCompiler";
+import { publishRoutePlan } from "./routeMetadata";
 
 function createRoutes(dependencies: AppDependencies): AppRouteMap {
   // Preserve the framework fixture route map; product prefixes belong to generated apps.
@@ -20,27 +17,19 @@ function createRoutes(dependencies: AppDependencies): AppRouteMap {
   const wrappedModuleRoutes = buildModuleRoutes(dependencies, {
     apiPrefix,
     clearRegistry: true,
+    register: false,
     modules: [],
   });
 
   const healthRoutes = createHealthRoutes(dependencies);
   const metricsRoutes = createMetricsRoutes();
-  registerRoute("GET", "/health", []);
-  registerRoute("GET", "/ready", []);
-  registerRoute("GET", "/metrics", []);
 
   const notFoundApiPath = `${apiPrefix || "/api"}/*`;
-  const baseRoutes: AppRouteMap = {
-    ...healthRoutes,
-    ...metricsRoutes,
-    ...(isViewsEnabled() || isSpaEnabled() ? {} : { "/": index }),
-    ...wrappedModuleRoutes,
+  const fallbackRoutes: AppRouteMap = {
     [notFoundApiPath]: async () => {
-      registerRoute("GET", notFoundApiPath, ["global", "api"]);
       return jsonResponse({ error: "Not Found" }, { status: 404 });
     },
     "/*": async () => {
-      registerRoute("GET", "/*", []);
       if (isViewsEnabled()) {
         return notFoundHtmlResponse();
       }
@@ -53,7 +42,20 @@ function createRoutes(dependencies: AppDependencies): AppRouteMap {
     },
   };
 
-  return mergeSpaRoutes(dependencies, mergeWebRoutes(dependencies, baseRoutes));
+  const basePlan = compileRoutePlan([
+    { name: "health", routes: healthRoutes },
+    { name: "metrics", routes: metricsRoutes },
+    { name: "index", routes: isViewsEnabled() || isSpaEnabled() ? {} : { "/": index } },
+    { name: "API modules", routes: wrappedModuleRoutes },
+    { name: "fallbacks", routes: fallbackRoutes },
+  ]);
+  const merged = mergeSpaRoutes(
+    dependencies,
+    mergeWebRoutes(dependencies, basePlan.routes as AppRouteMap, { register: false }),
+    { register: false },
+  );
+  const plan = compileRoutePlan([{ name: "application", routes: merged }]);
+  return publishRoutePlan(plan, plan.routes, { clearRegistry: true }) as AppRouteMap;
 }
 
 export { createRoutes };

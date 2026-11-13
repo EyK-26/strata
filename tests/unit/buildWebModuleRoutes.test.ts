@@ -55,7 +55,7 @@ describe("buildWebModuleRoutes", () => {
 
     expect(routes["/home"]).toBeDefined();
   });
-  test("modules replace seed paths and earlier method maps without changing unrelated paths", () => {
+  test("merges seed and module methods without changing unrelated paths", () => {
     const routes = buildWebModuleRoutes(createTestDependencies(), {
       seedRoutes: {
         "/shared": { DELETE: () => new Response("seed") },
@@ -69,11 +69,14 @@ describe("buildWebModuleRoutes", () => {
         },
       ],
     });
-    expect(Object.keys(routes["/shared"])).toEqual(["POST"]);
+    expect(Object.keys(routes["/shared"])).toEqual(["DELETE", "GET", "POST"]);
     expect(typeof routes["/kept"]).toBe("function");
     expect(routeRegistry.list()).toEqual([
-      { method: "GET", path: "/kept", middleware: ["global", "web"] },
+      { method: "*", path: "/kept", middleware: ["global", "web"] },
+      { method: "DELETE", path: "/shared", middleware: ["global", "web"] },
+      { method: "GET", path: "/shared", middleware: ["global", "web"] },
       { method: "POST", path: "/shared", middleware: ["global", "web"] },
+      { method: "HEAD", path: "/shared", middleware: ["global", "web"] },
     ]);
   });
 });

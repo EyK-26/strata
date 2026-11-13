@@ -1,10 +1,11 @@
 import type { RegisteredRoute } from "@getstrata/core/openapi/registeredRoute";
+import { immutableCopy } from "./routeCompiler";
 
 class RouteRegistry {
   private readonly routes: RegisteredRoute[] = [];
 
   register(route: RegisteredRoute): void {
-    this.routes.push(route);
+    this.routes.push(immutableCopy(route));
   }
 
   clear(): void {

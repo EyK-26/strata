@@ -5,7 +5,7 @@ import { registerOpenApiRouteMap as internalRegistration } from "../../src/boots
 
 afterEach(() => routeRegistry.clear());
 
-test("metadata registration preserves plain and method handlers and normalizes only registry methods", () => {
+test("metadata registration preserves plain handlers and normalizes executable method maps", () => {
   const plain = () => Response.json({ plain: true });
   const methods = {
     get: () => new Response("read"),
@@ -17,11 +17,13 @@ test("metadata registration preserves plain and method handlers and normalizes o
     "/methods": { GET: { summary: "Read contract" }, POST: { summary: "Write contract" } },
   });
   expect(result["/plain"]).toBe(plain);
-  expect(result["/methods"]).toBe(methods);
+  expect(result["/methods"]).toEqual({ GET: methods.get, POST: methods.POST });
   expect(Object.keys(methods)).toEqual(["get", "POST"]);
   expect(routeRegistry.list()).toEqual([
     { method: "GET", path: "/methods", middleware, openApi: { summary: "Read contract" } },
     { method: "POST", path: "/methods", middleware, openApi: { summary: "Write contract" } },
+    { method: "HEAD", path: "/methods", middleware },
+    { method: "*", path: "/plain", middleware },
     { method: "GET", path: "/plain", middleware, openApi: { summary: "Plain contract" } },
   ]);
 });
@@ -30,17 +32,33 @@ test("metadata registration appends with no implicit registry clearing or fabric
   registerOpenApiRouteMap({ "/first": () => new Response() }, ["global", "api"]);
   registerOpenApiRouteMap({ "/second": { GET: () => new Response() } }, ["global", "web"]);
   expect(routeRegistry.list()).toEqual([
-    { method: "GET", path: "/first", middleware: ["global", "api"] },
+    { method: "*", path: "/first", middleware: ["global", "api"] },
     { method: "GET", path: "/second", middleware: ["global", "web"] },
+    { method: "HEAD", path: "/second", middleware: ["global", "web"] },
   ]);
 });
 
-test("metadata registration leaves static responses intact and records no invented methods", () => {
+test("metadata registration lowers static responses to the supported explicit methods", () => {
   const response = new Response("static");
-  const result = registerOpenApiRouteMap({ "/static": response, "/empty": {} }, ["global"]);
-  expect(result["/static"]).toBe(response);
-  expect(result["/empty"]).toEqual({});
-  expect(routeRegistry.list()).toEqual([]);
+  const result = registerOpenApiRouteMap({ "/static": response }, ["global"]);
+  expect(Object.keys(result["/static"] as object)).toEqual([
+    "GET",
+    "HEAD",
+    "POST",
+    "PUT",
+    "DELETE",
+    "PATCH",
+    "OPTIONS",
+  ]);
+  expect(routeRegistry.list().map((route) => route.method)).toEqual([
+    "GET",
+    "HEAD",
+    "POST",
+    "PUT",
+    "DELETE",
+    "PATCH",
+    "OPTIONS",
+  ]);
 });
 
 test("the existing API builder export retains the shared metadata function identity", () => {

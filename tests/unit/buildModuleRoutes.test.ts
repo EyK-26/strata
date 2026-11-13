@@ -133,7 +133,7 @@ describe("buildModuleRoutes", () => {
     });
     const secondCount = buildModuleRoutes(dependencies, {
       apiPrefix: "/api",
-      modules: [fixtureModule],
+      modules: [{ name: "more", routes: () => ({ "/more": () => new Response() }) }],
       clearRegistry: false,
     });
 
@@ -147,7 +147,10 @@ describe("buildModuleRoutes", () => {
     };
     buildModuleRoutes(createTestDependencies(), { apiPrefix: "/api", modules: [module] });
     expect(
-      routeRegistry.list().find((route) => route.path === "/api/reports/summary")?.openApi?.summary,
+      routeRegistry
+        .list()
+        .find((route) => route.path === "/api/reports/summary" && route.method === "GET")?.openApi
+        ?.summary,
     ).toBe("Summary contract");
     expect(() =>
       buildModuleRoutes(createTestDependencies(), {
@@ -157,94 +160,59 @@ describe("buildModuleRoutes", () => {
     expect(() =>
       buildModuleRoutes(createTestDependencies(), {
         modules: [
-          { ...fixtureModule, openApi: { "/reports/summary": { POST: { summary: "Invalid" } } } },
+          {
+            ...fixtureModule,
+            routes: () => ({ "/reports/summary": { GET: () => new Response() } }),
+            openApi: { "/reports/summary": { POST: { summary: "Invalid" } } },
+          },
         ],
       }),
     ).toThrow("no API handler");
   });
 
-  test("later modules replace a whole path rather than merging method maps", () => {
+  test("merges disjoint module methods and retains each operation contract", () => {
     const routes = buildModuleRoutes(createTestDependencies(), {
       apiPrefix: "/api/",
       modules: [
         {
-          name: "first",
-          routes: () => ({ "/shared": { GET: () => new Response("first") } }),
-          openApi: { "/shared": { GET: { summary: "Old read" } } },
+          name: "read",
+          routes: () => ({ "/shared": { GET: () => new Response("read") } }),
+          openApi: { "/shared": { GET: { summary: "Read" } } },
         },
         {
-          name: "second",
-          routes: () => ({ "/shared": { POST: () => new Response("second") } }),
-          openApi: { "/shared": { POST: { summary: "Current write" } } },
+          name: "write",
+          routes: () => ({ shared: { POST: () => new Response("write") } }),
+          openApi: { shared: { POST: { summary: "Write" } } },
         },
       ],
     });
-    expect(Object.keys(routes["/api/shared"])).toEqual(["POST"]);
-    expect(routeRegistry.list()).toEqual([
-      {
-        method: "POST",
-        path: "/api/shared",
-        middleware: ["global", "api"],
-        openApi: { summary: "Current write" },
-      },
-    ]);
+    expect(Object.keys(routes["/api/shared"])).toEqual(["GET", "POST"]);
+    expect(
+      routeRegistry
+        .list()
+        .filter((route) => route.method !== "HEAD")
+        .map((route) => route.openApi?.summary),
+    ).toEqual(["Read", "Write"]);
   });
 
-  test("a replacement without metadata removes the previous path contract", () => {
-    buildModuleRoutes(createTestDependencies(), {
-      apiPrefix: "/api/",
-      modules: [
-        {
-          name: "documented",
-          routes: () => ({ "/shared": () => new Response("old") }),
-          openApi: { "/shared": { GET: { summary: "Old response" } } },
-        },
-        { name: "replacement", routes: () => ({ "/shared": () => new Response("new") }) },
-      ],
-    });
-    expect(routeRegistry.list()).toEqual([
-      { method: "GET", path: "/api/shared", middleware: ["global", "api"] },
-    ]);
-  });
-
-  test("normalized path aliases cannot retain metadata from a replaced handler", () => {
-    const routes = buildModuleRoutes(createTestDependencies(), {
-      apiPrefix: "/api/",
-      modules: [
-        {
-          name: "relative",
-          routes: () => ({ shared: () => new Response("old") }),
-          openApi: { shared: { GET: { summary: "Old response" } } },
-        },
-        { name: "absolute", routes: () => ({ "/shared": () => new Response("new") }) },
-      ],
-    });
-    expect(Object.keys(routes)).toEqual(["/api/shared"]);
-    expect(routeRegistry.list()).toEqual([
-      { method: "GET", path: "/api/shared", middleware: ["global", "api"] },
-    ]);
-  });
-  test("normalization preserves existing raw-path insertion precedence", () => {
-    const routes = buildModuleRoutes(createTestDependencies(), {
-      apiPrefix: "/api/",
-      modules: [
-        { name: "first", routes: () => ({ "/shared": { GET: () => new Response("first") } }) },
-        {
-          name: "second",
-          routes: () => ({ shared: { POST: () => new Response("second") } }),
-          openApi: { shared: { POST: { summary: "Second raw path" } } },
-        },
-        { name: "third", routes: () => ({ "/shared": { GET: () => new Response("third") } }) },
-      ],
-    });
-    expect(Object.keys(routes["/api/shared"])).toEqual(["POST"]);
-    expect(routeRegistry.list()).toEqual([
-      {
-        method: "POST",
-        path: "/api/shared",
-        middleware: ["global", "api"],
-        openApi: { summary: "Second raw path" },
-      },
-    ]);
+  test("rejects duplicate paths and normalized aliases before changing registry", () => {
+    buildModuleRoutes(createTestDependencies(), { modules: [fixtureModule] });
+    const before = routeRegistry.list();
+    for (const path of ["/shared", "shared"]) {
+      expect(() =>
+        buildModuleRoutes(createTestDependencies(), {
+          apiPrefix: "/api/",
+          modules: [
+            {
+              name: "first",
+              routes: () => ({ "/shared": () => new Response("first") }),
+              openApi: { "/shared": { GET: { summary: "Original" } } },
+            },
+            { name: "second", routes: () => ({ [path]: () => new Response("second") }) },
+          ],
+        }),
+      ).toThrow("Duplicate route");
+      expect(routeRegistry.list()).toEqual(before);
+    }
   });
 });

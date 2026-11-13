@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
 import type { InitializedAppContext } from "@getstrata/bootstrap/context";
+import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
 import type { Application } from "@getstrata/core/contracts/application";
@@ -22,53 +23,63 @@ try {
       owner = application;
     },
   });
-  const routes = buildModuleRoutes(app.context.dependencies, {
-    apiPrefix: "/contracts/",
-    modules: [
-      {
-        name: "relative",
-        routes: () => ({ shared: () => new Response("old") }),
-        openApi: { shared: { GET: { summary: "Obsolete response" } } },
-      },
-      { name: "absolute", routes: () => ({ "/shared": () => new Response("current") }) },
-    ],
-  });
+  const modules: AppModule[] = [
+    {
+      name: "read",
+      routes: () => ({ shared: { GET: () => new Response("read") } }),
+      openApi: { shared: { GET: { summary: "Read contract" } } },
+    },
+    {
+      name: "write",
+      routes: () => ({ "/shared": { POST: () => new Response("write") } }),
+      openApi: { "/shared": { POST: { summary: "Write contract" } } },
+    },
+  ];
+  const routes = buildModuleRoutes(app.context.dependencies, { apiPrefix: "/contracts/", modules });
   server = createWebServer({ port: 0, native: { hostname: "127.0.0.1" }, routes });
-  const response = await fetch(new URL("/contracts/shared", server.url));
-  assert.equal(await response.text(), "current");
-  assert.ok(response.headers.get("x-request-id"));
-  assert.deepEqual(
-    routeRegistry.list(),
-    [{ method: "GET", path: "/contracts/shared", middleware: ["global", "api"] }],
-    "The winning handler must not inherit a replaced alias's OpenAPI contract.",
-  );
-  await server.stop(true);
-  server = undefined;
-
-  const priority = buildModuleRoutes(app.context.dependencies, {
-    apiPrefix: "/contracts/",
-    modules: [
-      { name: "first", routes: () => ({ "/shared": () => new Response("first") }) },
-      {
-        name: "second",
-        routes: () => ({ shared: () => new Response("second") }),
-        openApi: { shared: { GET: { summary: "Second raw path" } } },
-      },
-      { name: "third", routes: () => ({ "/shared": () => new Response("third") }) },
-    ],
-  });
-  server = createWebServer({ port: 0, native: { hostname: "127.0.0.1" }, routes: priority });
-  assert.equal(await (await fetch(new URL("/contracts/shared", server.url))).text(), "second");
+  for (const [method, body] of [
+    ["GET", "read"],
+    ["POST", "write"],
+  ]) {
+    const response: Response = await fetch(new URL("/contracts/shared", server.url), { method });
+    assert.equal(await response.text(), body);
+    assert.ok(response.headers.get("x-request-id"));
+  }
   assert.deepEqual(routeRegistry.list(), [
     {
       method: "GET",
       path: "/contracts/shared",
       middleware: ["global", "api"],
-      openApi: { summary: "Second raw path" },
+      openApi: { summary: "Read contract" },
     },
+    {
+      method: "POST",
+      path: "/contracts/shared",
+      middleware: ["global", "api"],
+      openApi: { summary: "Write contract" },
+    },
+    { method: "HEAD", path: "/contracts/shared", middleware: ["global", "api"] },
   ]);
+  const before = routeRegistry.list();
+  assert.throws(
+    () =>
+      buildModuleRoutes(app.context.dependencies, {
+        apiPrefix: "/contracts/",
+        modules: [
+          ...modules,
+          {
+            name: "duplicate",
+            routes: () => ({ "/shared": { GET: () => new Response("duplicate") } }),
+          },
+        ],
+      }),
+    /Duplicate route/,
+  );
+  assert.deepEqual(routeRegistry.list(), before, "Invalid plans must not change the registry.");
+  await server.stop(true);
+  server = undefined;
   console.log(
-    "PASS installed route alias metadata and existing raw-path precedence over real HTTP",
+    "PASS installed route normalization, disjoint methods and collision rejection over real HTTP",
   );
 } catch (error) {
   failures.push(error);

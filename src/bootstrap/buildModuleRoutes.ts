@@ -1,5 +1,4 @@
 import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
-import type { OpenApiRouteMap } from "@getstrata/core/openapi/registeredRoute";
 import { identityModes, scimMiddleware } from "#strata-http-route";
 import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
@@ -7,32 +6,16 @@ import { createLegacyCachedJson } from "./legacyCache";
 import { enterModuleRoutes } from "./moduleRouteMiddleware";
 import { discoverModules } from "./modules";
 import type { BusinessRouteHandler } from "./persistenceContracts";
-import { prefixRouteMap } from "./prefixRouteMap";
-import { registerOpenApiRouteMap } from "./routeMetadata";
-import { routeRegistry } from "./routeRegistry";
+import type { RouteSource } from "./routeCompiler";
+import { compileRoutePlan } from "./routeCompiler";
+import { publishRoutePlan, registerOpenApiRouteMap } from "./routeMetadata";
 
 interface BuildModuleRoutesOptions {
   apiPrefix?: string;
   modules?: AppModule[];
   clearRegistry?: boolean;
-}
-
-/** Prefix handlers and their own contracts together so normalized aliases share one winner. */
-function prefixApiModuleRoutes(
-  prefix: string,
-  routes: Record<string, unknown>,
-  metadata: OpenApiRouteMap,
-): { routes: Record<string, unknown>; metadata: OpenApiRouteMap } {
-  const entries = Object.fromEntries(
-    Object.entries(routes).map(([path, handler]) => [path, { handler, openApi: metadata[path] }]),
-  );
-  const prefixedRoutes: Record<string, unknown> = {};
-  const prefixedMetadata: OpenApiRouteMap = {};
-  for (const [path, entry] of Object.entries(prefixRouteMap(prefix, entries))) {
-    prefixedRoutes[path] = entry.handler;
-    if (entry.openApi) prefixedMetadata[path] = entry.openApi;
-  }
-  return { routes: prefixedRoutes, metadata: prefixedMetadata };
+  /** Defer registry publication while composing a larger route plan. */
+  register?: boolean;
 }
 
 function buildModuleRoutes(
@@ -41,52 +24,37 @@ function buildModuleRoutes(
 ): AppRouteMap {
   const { apiPrefix = "", modules = discoverModules(), clearRegistry = true } = options;
 
-  if (clearRegistry) {
-    routeRegistry.clear();
-  }
-
   const kernel = createHttpKernel(dependencies);
   const middleware = kernel.group("api");
   const cachedJson = createLegacyCachedJson(dependencies);
-  const moduleRoutes: Record<string, unknown> = {};
-  const metadata: OpenApiRouteMap = {};
+  const sources: RouteSource[] = [];
 
   for (const module of modules) {
     if (!module.routes) {
       continue;
     }
 
-    const routes = module.routes({ dependencies, cachedJson, kernel });
-    for (const [path, operations] of Object.entries(module.openApi ?? {})) {
-      if (!(path in routes))
-        throw new Error(`OpenAPI metadata has no API route: ${module.name} ${path}`);
-      const methods =
-        typeof routes[path] === "function"
-          ? ["GET"]
-          : Object.keys(routes[path] as object).map((method) => method.toUpperCase());
-      for (const method of Object.keys(operations))
-        if (!methods.includes(method))
-          throw new Error(`OpenAPI metadata has no API handler: ${method} ${path}`);
-    }
-    for (const path of Object.keys(routes)) {
-      delete metadata[path];
-      if (module.openApi?.[path]) metadata[path] = module.openApi[path];
-    }
-    Object.assign(moduleRoutes, routes);
+    sources.push({
+      name: module.name,
+      routes: module.routes({ dependencies, cachedJson, kernel }),
+      metadata: module.openApi,
+      middleware: ["global", "api"],
+    });
   }
 
-  const prefixed = prefixApiModuleRoutes(apiPrefix, moduleRoutes, metadata);
-
-  return enterModuleRoutes(
-    registerOpenApiRouteMap(prefixed.routes, ["global", "api"], prefixed.metadata),
-    (callback) =>
-      kernel.composed(
-        withMiddleware(...middleware)(callback as BusinessRouteHandler),
-        "json",
-        identityModes(callback),
-        scimMiddleware(callback),
-      ),
-  ) as AppRouteMap;
+  const plan = compileRoutePlan(sources, apiPrefix);
+  const routes = enterModuleRoutes(plan.routes, (callback) =>
+    kernel.composed(
+      withMiddleware(...middleware)(callback as BusinessRouteHandler),
+      "json",
+      identityModes(callback),
+      scimMiddleware(callback),
+    ),
+  );
+  return publishRoutePlan(plan, routes, {
+    clearRegistry,
+    register: options.register,
+  }) as AppRouteMap;
 }
 
 export type { BuildModuleRoutesOptions };

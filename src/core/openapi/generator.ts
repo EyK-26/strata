@@ -185,7 +185,18 @@ const DEFAULT_RESPONSES = {
 function generateOpenApiSpec(routes: RegisteredRoute[]): OpenApiSpec {
   const paths: Record<string, Record<string, unknown>> = {};
 
-  for (const route of routes) {
+  // Bun direct/native handlers accept every method. OpenAPI describes only its standard
+  // operations; explicit per-method contracts override the wildcard defaults below.
+  const expanded = routes.flatMap((route) =>
+    route.method === "*"
+      ? ["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "TRACE"].map((method) => ({
+          ...route,
+          method,
+          openApi: undefined,
+        }))
+      : [],
+  );
+  for (const route of [...expanded, ...routes.filter((route) => route.method !== "*")]) {
     const openApiPath = toOpenApiPath(route.path);
     const method = route.method.toLowerCase();
     const description =

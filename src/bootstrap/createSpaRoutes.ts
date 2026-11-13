@@ -4,11 +4,14 @@ import { jsonResponse } from "@getstrata/core/http/response";
 import { isSpaEnabled, isViewsEnabled, readSpaPrefix } from "@getstrata/core/runtime/frontendMode";
 import { assertUrlPathUnderRoot } from "@getstrata/core/security/safePath";
 import type { AppDependencies, AppRouteMap } from "./contracts";
+import { compileRoutePlan } from "./routeCompiler";
+import { publishRoutePlan } from "./routeMetadata";
 
 const SPA_DIST_DIRECTORY = join(process.cwd(), "frontend/dist");
 
 type SpaRouteOptions = {
   prefix?: string;
+  register?: boolean;
   distDirectory?: string;
   wrap?: (handler: RouteHandler) => RouteHandler;
 };
@@ -80,7 +83,8 @@ function createSpaRoutes(
     routes["/"] = async () => Response.redirect(`${prefix}/`, 302);
   }
 
-  return routes;
+  const plan = compileRoutePlan([{ name: "SPA", routes }]);
+  return publishRoutePlan(plan, plan.routes, { register: options.register }) as AppRouteMap;
 }
 
 function mergeSpaRoutes(
@@ -92,10 +96,15 @@ function mergeSpaRoutes(
     return routes;
   }
 
-  return {
-    ...createSpaRoutes(dependencies, options),
-    ...routes,
-  };
+  const spaRoutes = createSpaRoutes(dependencies, { ...options, register: false });
+  const plan = compileRoutePlan([
+    { name: "SPA", routes: spaRoutes },
+    { name: "application", routes },
+  ]);
+  return publishRoutePlan(plan, plan.routes, {
+    clearRegistry: true,
+    register: options?.register,
+  }) as AppRouteMap;
 }
 
 export type { SpaRouteOptions };

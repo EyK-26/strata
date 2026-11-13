@@ -4,14 +4,12 @@ import { assertUrlPathUnderRoot } from "@getstrata/core/security/safePath";
 import { notFoundHtmlResponse } from "@getstrata/core/view";
 import { buildWebModuleRoutes } from "./buildWebModuleRoutes";
 import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
-import { routeRegistry } from "./routeRegistry";
+import { compileRoutePlan } from "./routeCompiler";
+import { publishRoutePlan } from "./routeMetadata";
 
 interface CreateWebRoutesOptions {
   modules?: AppModule[];
-}
-
-function registerRoute(method: string, path: string, middleware: string[]): void {
-  routeRegistry.register({ method, path, middleware });
+  register?: boolean;
 }
 
 function createWebRoutes(
@@ -21,13 +19,10 @@ function createWebRoutes(
   const wrappedRoutes = buildWebModuleRoutes(dependencies, {
     clearRegistry: false,
     modules: options.modules,
+    register: false,
   });
 
-  registerRoute("GET", "/", ["global", "web"]);
-
-  wrappedRoutes["/assets/*"] = async (request: Request) => {
-    registerRoute("GET", "/assets/*", ["global", "web"]);
-
+  const assetHandler = async (request: Request) => {
     const pathname = new URL(request.url).pathname;
     try {
       const filePath = assertUrlPathUnderRoot(join(process.cwd(), "public"), pathname);
@@ -43,9 +38,11 @@ function createWebRoutes(
     }
   };
 
-  registerRoute("GET", "/assets/*", ["global", "web"]);
-
-  return wrappedRoutes;
+  const plan = compileRoutePlan([
+    { name: "web modules", routes: wrappedRoutes },
+    { name: "public assets", routes: { "/assets/*": assetHandler }, middleware: [] },
+  ]);
+  return publishRoutePlan(plan, plan.routes, { register: options.register }) as AppRouteMap;
 }
 
 function mergeWebRoutes(
@@ -57,10 +54,15 @@ function mergeWebRoutes(
     return routes;
   }
 
-  return {
-    ...createWebRoutes(dependencies, options),
-    ...routes,
-  };
+  const webRoutes = createWebRoutes(dependencies, { ...options, register: false });
+  const plan = compileRoutePlan([
+    { name: "web", routes: webRoutes },
+    { name: "application", routes },
+  ]);
+  return publishRoutePlan(plan, plan.routes, {
+    clearRegistry: true,
+    register: options.register,
+  }) as AppRouteMap;
 }
 
 export type { CreateWebRoutesOptions };

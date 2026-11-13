@@ -7,6 +7,7 @@ import {
   mergeSpaRoutes,
   SPA_DIST_DIRECTORY,
 } from "@getstrata/bootstrap/createSpaRoutes";
+import { routeRegistry } from "../../src/bootstrap/routeRegistry";
 import { createMockDependencies } from "./testHelpers";
 
 const DIST_DIR = join(process.cwd(), "frontend/dist");
@@ -28,6 +29,7 @@ describe("createSpaRoutes", () => {
   const previousPrefix = process.env.SPA_PREFIX;
 
   beforeEach(async () => {
+    routeRegistry.clear();
     await mkdir(DIST_DIR, { recursive: true });
     delete process.env.SPA_PREFIX;
   });
@@ -171,11 +173,11 @@ describe("createSpaRoutes", () => {
     expect(merged["/app/*"]).toBeUndefined();
   });
 
-  test("mergeSpaRoutes keeps app routes on top of the SPA prefix", () => {
+  test("mergeSpaRoutes rejects an application handler colliding with the SPA mount", () => {
     process.env.FRONTEND_MODE = "hybrid";
     const existing = { "/apply": async () => new Response("module") };
-    const merged = mergeSpaRoutes(createDependencies(), existing, { prefix: "/apply" });
-    expect(merged["/apply"]).toBe(existing["/apply"]);
-    expect(merged["/apply/*"]).toBeDefined();
+    expect(() => mergeSpaRoutes(createDependencies(), existing, { prefix: "/apply" })).toThrow(
+      "Duplicate route",
+    );
   });
 });
