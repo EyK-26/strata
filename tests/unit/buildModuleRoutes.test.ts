@@ -171,6 +171,23 @@ describe("buildModuleRoutes", () => {
     ).toThrow("no API handler");
   });
 
+  test("rejects metadata on a module with no API route hook", () => {
+    const existing = buildModuleRoutes(createTestDependencies(), { modules: [fixtureModule] });
+    const before = getRouteInventory(existing);
+    expect(() =>
+      buildModuleRoutes(createTestDependencies(), {
+        modules: [
+          { name: "missing-hook", openApi: { "/missing": { GET: { summary: "Orphan" } } } },
+        ],
+      }),
+    ).toThrow("no API route");
+    expect(getRouteInventory(existing)).toBe(before);
+    const empty = buildModuleRoutes(createTestDependencies(), {
+      modules: [{ name: "empty", openApi: {} }],
+    });
+    expect(getRouteInventory(empty)).toEqual([]);
+  });
+
   test("merges disjoint module methods and retains each operation contract", () => {
     const routes = buildModuleRoutes(createTestDependencies(), {
       apiPrefix: "/api/",

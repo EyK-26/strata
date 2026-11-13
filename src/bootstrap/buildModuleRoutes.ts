@@ -27,13 +27,13 @@ function buildModuleRoutes(
   const sources: RouteSource[] = [];
 
   for (const module of modules) {
-    if (!module.routes) {
+    if (!module.routes && !module.openApi) {
       continue;
     }
 
     sources.push({
       name: module.name,
-      routes: module.routes({ dependencies, cachedJson, kernel }),
+      routes: module.routes?.({ dependencies, cachedJson, kernel }) ?? {},
       metadata: module.openApi,
       middleware: ["global", "api"],
     });
