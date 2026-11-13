@@ -6,7 +6,7 @@ import {
   defineRepository,
   type ModelDefinition,
 } from "@getstrata/core/database/definitions";
-import { Factory } from "@getstrata/core/database/factory";
+import { defineFactory, Factory } from "@getstrata/core/database/factory";
 import { Model } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 import { JsonResource } from "@getstrata/core/http/resources";
@@ -169,7 +169,7 @@ async function withGraph(
     ApplicationModel: BoundModel<Application, "id", ApplicationEntity>;
     PositionModel: BoundModel<Position, "id", PositionEntity>;
     NotificationModel: BoundModel<Notification, "id", NotificationEntity>;
-    ApplicationFactory: new () => Factory<Application>;
+    ApplicationFactory: () => Factory<Application>;
   }) => Promise<void>,
 ) {
   await withBoundDatabase(
@@ -183,12 +183,14 @@ async function withGraph(
       connection,
     },
     async (db) => {
-      class ApplicationFactory extends Factory<Application> {
-        protected override model = db.model(ApplicationDefinition);
-        protected override definition(): Application {
-          return { id: 0, user_id: 0, position_id: 0 };
-        }
-      }
+      const model = db.model(ApplicationDefinition);
+      const definition = defineFactory<Application>({
+        construct: () => ({
+          definition: () => ({ id: 0, user_id: 0, position_id: 0 }),
+          persist: async (values) => (await model.create(values)).toObject(),
+        }),
+      });
+      const ApplicationFactory = () => Factory.from(definition);
       await work({
         UserModel: db.model(UserDefinition),
         PositionModel: db.model(PositionDefinition),
@@ -324,10 +326,7 @@ describe("HiroApp-shaped Eloquent parity", () => {
       expect(user.get("role_id")).toBe(2);
 
       connection.queue([{ id: 11, user_id: 7, position_id: 4 }]);
-      const created = await new ApplicationFactory()
-        .for(user)
-        .for({ id: 4 }, "position_id")
-        .create();
+      const created = await ApplicationFactory().for(user).for({ id: 4 }, "position_id").create();
       expect(created.user_id).toBe(7);
       expect(created.position_id).toBe(4);
 

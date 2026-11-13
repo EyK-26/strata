@@ -18,6 +18,7 @@ describe("@getstrata/core/database barrel", () => {
       "Model",
       "ModelQuery",
       "Factory",
+      "defineFactory",
       "Schema",
       "createDatabaseConnection",
       "useSqlDialect",
@@ -30,7 +31,7 @@ describe("@getstrata/core/database barrel", () => {
     }
   });
 
-  test("keeps constructor exports callable as classes", () => {
+  test("keeps constructor and Factory namespace exports callable", () => {
     const exported = new Map<string, unknown>(Object.entries(databaseBarrel));
 
     for (const name of ["BaseRepository", "Model", "Factory"]) {

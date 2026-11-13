@@ -16,7 +16,7 @@ import {
   protectEmail,
   resolveEncryptionKey,
 } from "@getstrata/core/crypto/fieldEncryption";
-import { Factory } from "@getstrata/core/database/factory";
+import { defineFactory, Factory } from "@getstrata/core/database/factory";
 import { buildWhereClause } from "@getstrata/core/database/query";
 import { dialectFor } from "@getstrata/core/database/sqlDialects";
 import { EventBus } from "@getstrata/core/events";
@@ -45,11 +45,12 @@ import {
   stringRule,
 } from "@getstrata/core/validation/rules";
 
-class WidgetFactory extends Factory<{ name: string }> {
-  protected override definition() {
-    return { name: "widget" };
-  }
-}
+const WidgetFactory = () =>
+  Factory.from(
+    defineFactory({
+      construct: () => ({ definition: () => ({ name: "widget" }) }),
+    }),
+  );
 
 class DefaultPolicy extends Policy {}
 
@@ -93,10 +94,13 @@ describe("coverage gap helpers", () => {
     expect(gate.allows("base", "delete")).toBe(false);
     expect(basePolicy.create()).toBe(false);
     expect(basePolicy.delete()).toBe(false);
-    expect(new WidgetFactory().make({ name: "custom" }).name).toBe("custom");
-    expect(() => new (class extends Factory<{ value: number }> {})().make()).toThrow(
-      "Factory definition must be implemented by subclass.",
+    expect(WidgetFactory().make({ name: "custom" }).name).toBe("custom");
+    const missingPersistence = Factory.from(
+      defineFactory({
+        construct: () => ({ definition: () => ({ value: 1 }) }),
+      }),
     );
+    expect(missingPersistence.make()).toEqual({ value: 1 });
   });
 
   test("covers session cookie and oauth state edge branches", () => {

@@ -1,0 +1,200 @@
+/** Runs only after copying into a fresh generated, installed package consumer. */
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { defineFactory as defineRootFactory, Factory as RootFactory } from "@getstrata/core";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { createDatabaseBindings } from "@getstrata/core/database/bindings";
+import { defineModel, defineRepository } from "@getstrata/core/database/definitions";
+import { defineFactory, Factory } from "@getstrata/core/database/factory";
+import { Model } from "@getstrata/core/database/model";
+import type { DatabaseSession, TransactionSession } from "@getstrata/core/database/session";
+import { defineTable } from "@getstrata/core/database/table";
+import { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
+import { createApplication } from "@getstrata/core/runtime/application";
+import { createWidgetFactory, WidgetFactory } from "../modules/widget/factory.ts";
+import type { WidgetRecord } from "../modules/widget/types.ts";
+
+assert.equal(RootFactory, Factory);
+assert.equal(defineRootFactory, defineFactory);
+const complete = (): WidgetRecord => ({ id: 0, name: "complete", parent_id: null });
+assert.deepEqual(RootFactory.from(WidgetFactory, { definition: complete }).make(), complete());
+const rootDefinition = defineRootFactory({ construct: () => ({ definition: complete }) });
+assert.deepEqual(Factory.from(rootDefinition).make(), complete());
+const pure = createWidgetFactory({ definition: complete });
+assert.deepEqual(pure.make(), complete());
+await assert.rejects(
+  () => pure.create(),
+  /WidgetFactory persistence must be supplied to use create/,
+);
+
+// These are compiled by the generated app's actual check, never invoked.
+export function generatedFactoryTypeContracts() {
+  // @ts-expect-error the shipped helper requires explicit dependencies
+  createWidgetFactory();
+  // @ts-expect-error the shipped helper requires a complete definition callback
+  createWidgetFactory({});
+  // @ts-expect-error generated definition returns every required field
+  createWidgetFactory({ definition: () => ({ id: 0 }) });
+  createWidgetFactory({
+    definition: complete,
+    // @ts-expect-error persistence returns complete records
+    persist: async () => ({ id: 1 }),
+  });
+  // @ts-expect-error afterMaking is synchronous
+  pure.afterMaking(async (record) => {
+    record.name = "async";
+  });
+  const rows: WidgetRecord[] = pure.count(1).make();
+  return rows;
+}
+
+const table = defineTable<WidgetRecord, "id">({
+  name: "factory_rows",
+  primaryKey: "id",
+  columns: ["id", "name", "parent_id"],
+});
+const repository = defineRepository({
+  name: "generated-factory",
+  table,
+  dependencies: [],
+  create: (binding) => new BaseRepository(binding),
+});
+class Entity extends Model<WidgetRecord, "id"> {}
+const model = defineModel({
+  name: "GeneratedFactoryEntity",
+  repository,
+  dependencies: [],
+  attributes: { timestamps: false, fillable: ["name", "parent_id"] },
+  construct: (state, binding) => new Entity(state, binding),
+});
+const selected = (session: DatabaseSession | TransactionSession) => {
+  const bound = session.model(model);
+  // Actual emitted helper is used for every selected parent/child write.
+  return createWidgetFactory({
+    definition: complete,
+    persist: async (values) => (await bound.create(values)).toObject(),
+  });
+};
+const directory = await mkdtemp(join(process.cwd(), ".factory-proof-"));
+const application = (name: string) =>
+  createApplication({
+    providers: [],
+    services: createDatabaseBindings({
+      default: "main",
+      connections: { main: { driver: "sqlite", filename: join(directory, `${name}.sqlite`) } },
+      repositories: [repository],
+      models: [model],
+    }),
+  });
+const a = application("a"),
+  b = application("b");
+const applications = [a, b];
+const run = <T>(app: typeof a, work: (db: DatabaseSession) => T | Promise<T>) =>
+  app.run((scope) => work(scope.resolve(DATABASE_SESSION_TOKEN)));
+const names = (app: typeof a) =>
+  run(app, (db) =>
+    db.execute<{ name: string }>({ text: "SELECT name FROM factory_rows ORDER BY id", params: [] }),
+  );
+let oldScope!: Factory<WidgetRecord>,
+  oldTransaction!: Factory<WidgetRecord>,
+  oldOwner!: Factory<WidgetRecord>;
+const scopeExpired = { code: "APPLICATION_SCOPE_EXPIRED" };
+const errors: unknown[] = [];
+let ownersClosed = true;
+try {
+  for (const app of applications) {
+    await app.start();
+    await run(app, (db) =>
+      db.execute({
+        text: "CREATE TABLE factory_rows (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, parent_id INTEGER)",
+        params: [],
+      }),
+    );
+  }
+  await run(a, async (db) => {
+    oldScope = selected(db);
+    await oldScope
+      .has(selected(db).state({ name: "a-child" }), "parent_id")
+      .create({ name: "a-parent" });
+  });
+  await run(b, (db) => selected(db).create({ name: "b-only" }));
+  assert.deepEqual(
+    (await names(a)).map((row) => row.name),
+    ["a-parent", "a-child"],
+  );
+  assert.deepEqual(
+    (await names(b)).map((row) => row.name),
+    ["b-only"],
+  );
+  await assert.rejects(() => oldScope.create({ name: "expired-invocation" }), scopeExpired);
+  const rollback = new Error("generated-factory-rollback");
+  let callbackDone = false;
+  await run(a, async (db) => {
+    await assert.rejects(
+      () =>
+        db.transaction(async (tx) => {
+          oldTransaction = selected(tx);
+          await oldTransaction
+            .has(selected(tx).state({ name: "rollback-child" }), "parent_id")
+            .afterCreating(async () => {
+              await Bun.sleep(0);
+              callbackDone = true;
+            })
+            .create({ name: "rollback-parent" });
+          assert.equal(callbackDone, true, "Factory create must await the selected callback");
+          throw rollback;
+        }),
+      (error) => error === rollback,
+    );
+    await assert.rejects(() => oldTransaction.create({ name: "expired-transaction" }), {
+      name: "PersistenceError",
+      code: "DATABASE_TRANSACTION_SCOPE",
+    });
+    oldOwner = selected(db);
+  });
+  assert.deepEqual(
+    (await names(a)).map((row) => row.name),
+    ["a-parent", "a-child"],
+    "Selected transaction rolls parent and child back",
+  );
+  assert.equal((await a.stop()).successful, true);
+  await assert.rejects(() => oldOwner.create({ name: "expired-owner" }), scopeExpired);
+  assert.deepEqual(
+    (await names(b)).map((row) => row.name),
+    ["b-only"],
+    "Expired A capabilities never fall back to B",
+  );
+} catch (error) {
+  errors.push(error);
+} finally {
+  for (const app of applications) {
+    try {
+      const result = await app.stop();
+      if (!result.successful) {
+        ownersClosed = false;
+        errors.push(
+          new AggregateError(
+            result.snapshot.errors.map((diagnostic) => diagnostic.error),
+            "Generated Factory application cleanup incomplete",
+          ),
+        );
+      }
+    } catch (error) {
+      ownersClosed = false;
+      errors.push(error);
+    }
+  }
+  if (ownersClosed) {
+    try {
+      await rm(directory, { recursive: true, force: true });
+    } catch (error) {
+      errors.push(error);
+    }
+  } else console.error("Retained generated Factory resources", directory);
+}
+if (errors.length === 1) throw errors[0];
+if (errors.length) throw new AggregateError(errors, "Generated Factory proof and cleanup failed");
+console.log(
+  "PASS generated Factory scaffold, public identity and selected SQLite owner/transaction/expiry",
+);

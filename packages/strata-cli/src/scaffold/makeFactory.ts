@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { ensureDirectory, moduleDirectory, toCamelCase, toKebabCase, toPascalCase } from "./utils";
+import { ensureDirectory, moduleDirectory, toKebabCase, toPascalCase } from "./utils";
 
 async function makeFactoryCommand(name?: string): Promise<void> {
   if (!name) {
@@ -8,7 +8,6 @@ async function makeFactoryCommand(name?: string): Promise<void> {
 
   const moduleSlug = toKebabCase(name);
   const modelName = toPascalCase(name);
-  const moduleIdentifier = toCamelCase(name);
   const directory = moduleDirectory(moduleSlug);
   const filePath = join(directory, "factory.ts");
 
@@ -19,26 +18,29 @@ async function makeFactoryCommand(name?: string): Promise<void> {
     throw new Error(`Factory already exists: ${filePath}`);
   }
 
-  const content = `import { Factory } from "@getstrata/core/database/factory";
+  const content = `import { defineFactory, Factory, type FactoryPersist } from "@getstrata/core/database/factory";
 import type { ${modelName}Record } from "./types";
 
-class ${modelName}Factory extends Factory<${modelName}Record> {
-  protected definition(): ${modelName}Record {
-    const now = new Date();
-
-    return {
-      id: 0,
-    } satisfies Partial<${modelName}Record> as ${modelName}Record;
-  }
-
-  protected persist(values: Partial<${modelName}Record>): Promise<${modelName}Record> {
-    throw new Error("${modelName}Factory.persist() is not implemented.");
-  }
+export interface ${modelName}FactoryDependencies {
+  definition: () => ${modelName}Record;
+  persist?: FactoryPersist<${modelName}Record>;
 }
 
-const ${moduleIdentifier}Factory = new ${modelName}Factory();
+const ${modelName}Factory = defineFactory<${modelName}Record, ${modelName}FactoryDependencies>({
+  construct: dependencies => ({
+    definition: () => dependencies.definition(),
+    persist: values => {
+      if (!dependencies.persist) throw new Error("${modelName}Factory persistence must be supplied to use create().");
+      return dependencies.persist(values);
+    },
+  }),
+});
 
-export { ${modelName}Factory, ${moduleIdentifier}Factory };
+function create${modelName}Factory(dependencies: ${modelName}FactoryDependencies) {
+  return Factory.from(${modelName}Factory, dependencies);
+}
+
+export { ${modelName}Factory, create${modelName}Factory };
 `;
 
   await Bun.write(filePath, content);

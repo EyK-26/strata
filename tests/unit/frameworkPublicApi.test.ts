@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineFactory, Factory } from "@getstrata/core/database/factory";
 import * as core from "../../src/framework/public-api.ts";
 
 describe("@getstrata/core public API", () => {
@@ -28,6 +29,8 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.BelongsToRelationQuery).toBe("function");
     expect(typeof core.BelongsToManyRelationQuery).toBe("function");
     expect(typeof core.Factory).toBe("function");
+    expect(core.Factory).toBe(Factory);
+    expect(core.defineFactory).toBe(defineFactory);
     expect(typeof core.singularize).toBe("function");
   });
 
@@ -121,4 +124,15 @@ test("root API excludes ambient owners while retaining canonical bindings and ev
   expect(typeof core.createDatabaseBindings).toBe("function");
   expect(typeof core.EventBus).toBe("function");
   expect(core.modelEventName("orders", "created")).toBe("orders.created");
+});
+
+test("root and Factory subpath definitions bind through either public export", () => {
+  const fromRoot = core.defineFactory({
+    construct: () => ({ definition: () => ({ name: "root" }) }),
+  });
+  const fromSubpath = defineFactory({
+    construct: () => ({ definition: () => ({ name: "subpath" }) }),
+  });
+  expect(Factory.from(fromRoot).make()).toEqual({ name: "root" });
+  expect(core.Factory.from(fromSubpath).make()).toEqual({ name: "subpath" });
 });

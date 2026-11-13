@@ -70,6 +70,16 @@ export {
   PersistenceError,
   withDatabaseErrorHandling,
 } from "@getstrata/core/database/errors";
+export type {
+  FactoryBehavior,
+  FactoryConstruction,
+  FactoryDefinition,
+  FactoryMakeResult,
+  FactoryParent,
+  FactoryPersist,
+  StatelessFactoryConstruction,
+} from "@getstrata/core/database/factory";
+export { defineFactory, Factory } from "@getstrata/core/database/factory";
 export { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
 export {
   BadRequestError,
@@ -239,7 +249,6 @@ export {
   sqlTimestamp,
   useSqlDialect,
 } from "../core/database/dialect.ts";
-export { Factory } from "../core/database/factory.ts";
 export { foreignKeyFromTable, pivotTableName, singularize } from "../core/database/inflection.ts";
 export { withMigrationLock } from "../core/database/migrations/advisoryLock.ts";
 export {

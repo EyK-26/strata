@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { RedisClient } from "bun";
-import RedisCacheStore from "../../src/core/cache/redisCacheStore";
+import RedisCacheStore, { type RedisCacheOptions } from "../../src/core/cache/redisCacheStore";
 import { CacheRepository } from "../../src/core/cache/repository";
 
 const redisUrl = process.env.REDIS_URL?.trim() ?? "";
@@ -12,15 +12,15 @@ const options = {
   metadataTtlMs: 5000,
   metadataLimit: 66,
   pollMs: 20,
-};
+} satisfies RedisCacheOptions;
 
-function fixture(ttlMs = 10_000, capacity = 10) {
+function fixture(ttlMs = 10_000, capacity = 10, coordination: RedisCacheOptions = options) {
   const prefix = `cache-coordination-${crypto.randomUUID()}`;
   const namespace = `${prefix}:cache:v3:`;
   const stores: [RedisCacheStore, RedisCacheStore, RedisCacheStore] = [
-    new RedisCacheStore(redisUrl, ttlMs, capacity, options, namespace),
-    new RedisCacheStore(redisUrl, ttlMs, capacity, options, namespace),
-    new RedisCacheStore(redisUrl, ttlMs, capacity, options, namespace),
+    new RedisCacheStore(redisUrl, ttlMs, capacity, coordination, namespace),
+    new RedisCacheStore(redisUrl, ttlMs, capacity, coordination, namespace),
+    new RedisCacheStore(redisUrl, ttlMs, capacity, coordination, namespace),
   ];
   const slot = new Bun.CryptoHasher("sha256").update(namespace).digest("hex");
   const keys = ["entries", "expiry", "order", "metadata", "metadata-expiry"].map(
@@ -69,7 +69,14 @@ function fixture(ttlMs = 10_000, capacity = 10) {
   };
 }
 
-function spawn(prefix: string, control: string, value: string, delay = 0, blocked = false) {
+function spawn(
+  prefix: string,
+  control: string,
+  value: string,
+  delay = 0,
+  blocked = false,
+  coordination: RedisCacheOptions = options,
+) {
   const script = `
 import { RedisClient } from 'bun';
 import RedisCacheStore from ${JSON.stringify(new URL("../../src/core/cache/redisCacheStore.ts", import.meta.url).href)};
@@ -94,7 +101,7 @@ try {
       ...process.env,
       CACHE_NAMESPACE: `${prefix}:cache:v3:`,
       CACHE_CONTROL: control,
-      CACHE_OPTIONS: JSON.stringify(options),
+      CACHE_OPTIONS: JSON.stringify(coordination),
       CACHE_VALUE: value,
       CACHE_DELAY: String(delay),
       CACHE_BLOCKED: String(blocked),
@@ -258,10 +265,21 @@ describeRedis("bounded shared Redis cache coordination", () => {
   });
 
   test("three processes share one renewable fill", async () => {
-    const f = fixture();
+    // Healthy renewal spans more than three leases with room for a busy test
+    // scheduler. Paused/expired owners are covered separately at the short bounds.
+    const coordination: RedisCacheOptions = {
+      ...options,
+      leaseMs: 1600,
+      fillTimeoutMs: 16_000,
+      waitTimeoutMs: 24_000,
+      metadataTtlMs: 20_000,
+    };
+    const f = fixture(10_000, 10, coordination);
     try {
       f.children.push(
-        ...Array.from({ length: 3 }, () => spawn(f.prefix, f.control, "shared", 1300)),
+        ...Array.from({ length: 3 }, () =>
+          spawn(f.prefix, f.control, "shared", 5200, false, coordination),
+        ),
       );
       await until(async () => Number(await f.client.get(`${f.control}:ready`)) === 3);
       await f.client.set(`${f.control}:start`, "1");
@@ -270,7 +288,7 @@ describeRedis("bounded shared Redis cache coordination", () => {
     } finally {
       await f.close();
     }
-  }, 15_000);
+  }, 30_000);
 
   test("tag invalidation reaches a pending owner and two waiters in separate processes", async () => {
     const f = fixture();
