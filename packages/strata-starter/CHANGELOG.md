@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 3.0.4
+
+Restore workspace-based npm publication and remove custom archive packing/recovery. Skip confirmed existing versions, stop on registry lookup failures, and accept successful npm uploads without requiring immediate registry visibility. Retain release quality gates, pinned npm, provenance and publication dry-runs. The v3.0.3 attempt published only @getstrata/core before its visibility check failed.
+
 ## 3.0.3
 
 Remove the separate successful-main-CI prerequisite; the release workflow still requires its own full quality gate before publication.

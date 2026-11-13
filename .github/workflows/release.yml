@@ -10,10 +10,6 @@ on:
         description: Git tag to release (example v1.0.0)
         required: true
         type: string
-      recovery_run_id:
-        description: Prior Release run containing the exact immutable release archives (optional)
-        required: false
-        type: string
 
 concurrency:
   group: release-${{ inputs.tag || github.ref_name }}
@@ -22,7 +18,6 @@ concurrency:
 permissions:
   contents: write
   packages: write
-  actions: read
 
 env:
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
@@ -31,7 +26,7 @@ jobs:
   # Notes and the GitHub Release must not wait on Docker Hub. v0.7.3 timed out
   # pulling moby/buildkit:buildx-stable-1 during setup-buildx, so the release
   # notes never ran even though npm had already published. They do wait on
-  # npm: do not cut a GitHub Release for a version that is not on the registry.
+  # successful npm upload commands; registry processing may still be pending.
   github-release:
     needs: [publish-framework]
     runs-on: ubuntu-latest
@@ -41,18 +36,11 @@ jobs:
         with:
           ref: ${{ env.RELEASE_TAG }}
 
-      - name: Download publication evidence
-        uses: actions/download-artifact@v7
-        with:
-          name: release-archives
-          path: release-archives
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           generate_release_notes: true
-          files: release-archives/*
 
   container:
     needs: [publish-framework]
@@ -110,8 +98,8 @@ jobs:
 
   # npm publish must not wait on GHCR: an earlier image failure blocked publication.
   # Keep every framework package manifest in the Docker install stage.
-  # Recovery reuses retained archives and accepts existing versions only when
-  # registry integrity matches those exact bytes. Unknown registry state aborts.
+  # Retry skips confirmed existing versions. Unknown registry state aborts
+  # before the first workspace publication.
   # npm trusted publishing (GitHub OIDC). Job permissions replace workflow
   # permissions: id-token: write is required; do not set NODE_AUTH_TOKEN.
   # setup-node registry-url writes an empty _authToken that blocks OIDC.
@@ -120,7 +108,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: read
       id-token: write
 
     steps:
@@ -197,45 +184,8 @@ jobs:
           bun run --filter @getstrata/starter build
           bun run --filter create-strata build
 
-      - name: Pack immutable release archives
-        if: ${{ inputs.recovery_run_id == '' }}
-        run: bun scripts/release-publication.ts pack
-
-      - name: Validate recovery source
-        if: ${{ inputs.recovery_run_id != '' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RECOVERY_RUN_ID: ${{ inputs.recovery_run_id }}
-        run: |
-          bun -e '
-            const id = process.env.RECOVERY_RUN_ID;
-            if (!/^[1-9][0-9]*$/.test(id ?? "")) throw new Error("Invalid recovery run ID");
-            const result = Bun.spawnSync(["gh", "api", `repos/${process.env.GITHUB_REPOSITORY}/actions/runs/${id}`]);
-            if (result.exitCode !== 0) throw new Error("Cannot verify recovery source");
-            const run = JSON.parse(result.stdout.toString());
-            const sha = Bun.spawnSync(["git", "rev-parse", "HEAD"]).stdout.toString().trim();
-            if (run.path !== ".github/workflows/release.yml" || run.head_sha !== sha) throw new Error("Recovery source must be a Release run at the exact commit");
-          '
-
-      - name: Restore immutable release archives
-        if: ${{ inputs.recovery_run_id != '' }}
-        uses: actions/download-artifact@v7
-        with:
-          name: release-archives
-          path: release-archives
-          run-id: ${{ inputs.recovery_run_id }}
-          github-token: ${{ github.token }}
-
-      - name: Preserve release archives before publication
-        uses: actions/upload-artifact@v6
-        with:
-          name: release-archives
-          path: release-archives/
-          if-no-files-found: error
-          retention-days: 90
-
-      - name: Verify archive publication dry-run
+      - name: Verify workspace publication dry-run
         run: bun scripts/release-publication.ts dry-run
 
-      - name: Publish verified archives to npm
+      - name: Publish workspaces to npm
         run: bun scripts/release-publication.ts publish

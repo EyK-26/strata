@@ -59,6 +59,8 @@ test("publication depends on its own mandatory quality gate, not a separate CI r
     expect(steps[index]?.if).toBeUndefined();
     expect(steps[index]?.["continue-on-error"]).not.toBe(true);
   }
+  expect(source).not.toContain("recovery_run_id");
+  expect(source).not.toContain("release-archives");
   expect(source).not.toContain("verify-release-ci");
   expect(source).not.toContain("actions/workflows/ci.yml/runs");
 });
