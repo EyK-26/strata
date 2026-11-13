@@ -302,7 +302,7 @@ test("JWT guard rejects an explicitly empty bearer without consulting account st
     directory: {
       findByIdOrThrow: async (id) => {
         lookups++;
-        return { id };
+        return { id, role: "member" };
       },
     },
   });
