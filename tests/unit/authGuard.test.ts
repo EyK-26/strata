@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { AuthenticationRequiredError } from "@getstrata/core/auth/authOutcome";
+import { establishedAuthReader, runWithEstablishedAuth } from "@getstrata/core/auth/authReader";
 import { ApiTokenGuard, AuthManager, CompositeGuard, GuestGuard } from "@getstrata/core/auth/guard";
-import { UnauthorizedError } from "@getstrata/core/errors/http";
+import { toHttpError, UnauthorizedError } from "@getstrata/core/errors/http";
 import { authFixtureOutcome } from "../helpers/authOutcome";
 import { guestGuardOptions } from "../helpers/devAuthHeaders";
 import { restoreEnvVar } from "../helpers/restoreEnv";
@@ -41,10 +43,15 @@ describe("AuthManager", () => {
     ).toBe(false);
   });
 
-  test("requireUser throws UnauthorizedError for guests", async () => {
+  test("requireUser throws a transport-neutral failure that HTTP maps to 401", async () => {
     const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
 
-    await expect(auth.requireUser()).rejects.toThrow(UnauthorizedError);
+    const error = await auth.requireUser().catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(AuthenticationRequiredError);
+    expect(error).not.toBeInstanceOf(UnauthorizedError);
+    expect(error).not.toHaveProperty("status");
+    expect(toHttpError(error)).toBeInstanceOf(UnauthorizedError);
+    expect(toHttpError(error)?.status).toBe(401);
   });
 
   test("GuestGuard ignores identity headers unless AUTH_DEV_HEADERS is exactly true", () => {
@@ -244,4 +251,22 @@ describe("Basic request resolution", () => {
     expect(await auth.user(req)).toEqual({ id: 8 });
     expect(calls).toBe(2);
   });
+});
+
+test("established reader requires identity with the same neutral authentication failure", async () => {
+  const request = new Request("http://example.test");
+  await runWithEstablishedAuth(request, { user: null, credentialSource: null }, async () => {
+    const error = await establishedAuthReader.requireUser(request).catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(AuthenticationRequiredError);
+    expect(error).not.toHaveProperty("status");
+    expect(toHttpError(error)?.status).toBe(401);
+  });
+});
+
+test("requireUser preserves operational authentication failures", async () => {
+  const error = new Error("directory unavailable");
+  const auth = new AuthManager({
+    authenticate: () => ({ status: "error", user: null, credentialSource: "session", error }),
+  });
+  await expect(auth.requireUser(new Request("http://example.test"))).rejects.toBe(error);
 });

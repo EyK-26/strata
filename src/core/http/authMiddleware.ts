@@ -1,9 +1,9 @@
 import { type AuthUser, authContext, runWithAuthContext } from "@getstrata/core/auth/authContext";
+import { validatedAuthOutcome } from "@getstrata/core/auth/authOutcome";
 import { InternalServerError, InvalidCredentialsError } from "@getstrata/core/errors/http";
-import { validatedAuthOutcome } from "../auth/authOutcome";
 import type { AuthReader } from "../auth/authReader";
 
-function createAuthMiddleware(auth: AuthReader) {
+function createAuthMiddleware(auth: Pick<AuthReader, "authenticate">) {
   return async (request: Request, next: () => Promise<Response>) => {
     const resolved = validatedAuthOutcome(await auth.authenticate(request));
     if (resolved.status === "error")

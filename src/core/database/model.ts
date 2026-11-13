@@ -7,8 +7,7 @@ import type {
   ModelState,
   RepositoryDefinition,
 } from "@getstrata/core/database/definitions";
-import { isUniqueConstraintError } from "@getstrata/core/database/errors";
-import { NotFoundError } from "@getstrata/core/errors/http";
+import { isUniqueConstraintError, RecordNotFoundError } from "@getstrata/core/database/errors";
 import { getBindingPorts } from "#strata-orm-internal";
 import type { KeysetOptions } from "../pagination/index.ts";
 import type BaseRepository from "./baseRepository.ts";
@@ -1308,7 +1307,9 @@ class BoundModelFacade<R extends object, K extends keyof R & string, M extends M
 
         throw (
           input.errorFactory?.(input.id) ??
-          new NotFoundError(`${(facade as { name: string }).name} ${String(input.id)} not found.`)
+          new RecordNotFoundError(
+            `${(facade as { name: string }).name} ${String(input.id)} not found.`,
+          )
         );
       },
       { id, errorFactory },

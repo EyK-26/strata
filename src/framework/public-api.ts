@@ -3,6 +3,7 @@
  * Import from `@getstrata/core` (workspace) or `src/framework/public-api`.
  */
 
+export { AuthenticationRequiredError } from "@getstrata/core/auth/authOutcome";
 export type { PolicyAction, PolicyDecision } from "@getstrata/core/auth/policy";
 export { Policy, PolicyDeniedError, PolicyGate } from "@getstrata/core/auth/policy";
 export { CORE_CACHE_TOKEN } from "@getstrata/core/cache/tokens";
@@ -84,6 +85,7 @@ export type {
 export {
   mapDatabaseError,
   PersistenceError,
+  RecordNotFoundError,
   withDatabaseErrorHandling,
 } from "@getstrata/core/database/errors";
 export type {

@@ -5,11 +5,11 @@ import {
   defineModel,
   defineRepository,
 } from "@getstrata/core/database/definitions";
+import { RecordNotFoundError } from "@getstrata/core/database/errors";
 import { Model } from "@getstrata/core/database/model";
 import { belongsTo, hasMany } from "@getstrata/core/database/relationships";
 import type { DatabaseSession } from "@getstrata/core/database/session";
 import { defineTable } from "@getstrata/core/database/table";
-import { NotFoundError } from "@getstrata/core/errors/http";
 import { withBoundDatabase } from "../helpers/boundRepositoryHarness";
 
 interface Widget {
@@ -157,12 +157,37 @@ describe("Model", () => {
     });
   });
 
-  test("findOrFail throws NotFoundError when a record is missing", async () => {
+  test("findOrFail throws RecordNotFoundError when a record is missing", async () => {
     await expect(
       withModels(async ({ WidgetModel }) => {
         await WidgetModel.findOrFail(99);
       }),
-    ).rejects.toThrow(NotFoundError);
+    ).rejects.toThrow(RecordNotFoundError);
+  });
+
+  test("both findOrFail entry points expose neutral misses and preserve custom errors", async () => {
+    await withModels(async ({ WidgetModel }) => {
+      for (const model of [WidgetModel, WidgetModel.query()]) {
+        let missing: unknown;
+        try {
+          await model.findOrFail(99);
+        } catch (error) {
+          missing = error;
+        }
+        expect(missing).toBeInstanceOf(RecordNotFoundError);
+        expect(missing).not.toHaveProperty("status");
+        expect((missing as Error).message).toContain("99 not found.");
+        const custom = new Error("custom absence");
+        let received: unknown;
+        await expect(
+          model.findOrFail(99, (id) => {
+            received = id;
+            return custom;
+          }),
+        ).rejects.toBe(custom);
+        expect(received).toBe(99);
+      }
+    });
   });
 
   test("all maps repository rows to model instances", async () => {

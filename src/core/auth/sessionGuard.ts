@@ -1,7 +1,11 @@
+import {
+  type AuthOutcome,
+  authenticateProof,
+  authUserFromOutcome,
+} from "@getstrata/core/auth/authOutcome";
 import type { AuthAccountLookup, AuthSessionValidity } from "../contracts/authUserDirectory";
 import { isAccountActive, matchesAuthVersion } from "./accountState";
 import type { AuthUser } from "./authContext";
-import { type AuthOutcome, authenticateProof, authUserFromOutcome } from "./authOutcome";
 import type { AuthGuard } from "./guard";
 import { requireAuthCapability } from "./requireAuthCapability";
 import { isSessionInvalidated, type readSession } from "./sessionCookie";

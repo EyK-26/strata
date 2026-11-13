@@ -1,3 +1,11 @@
+/** A requested record does not exist, independent of its transport. */
+class RecordNotFoundError extends Error {
+  constructor(message = "Record not found.") {
+    super(message);
+    this.name = new.target.name;
+  }
+}
+
 /** Neutral persistence failures. Transport adapters choose response status and shape. */
 const PERSISTENCE_MESSAGES = {
   DATABASE_CONFIG_INVALID: "Database configuration is invalid.",
@@ -192,5 +200,6 @@ export {
   isUniqueConstraintError,
   mapDatabaseError,
   PersistenceError,
+  RecordNotFoundError,
   withDatabaseErrorHandling,
 };

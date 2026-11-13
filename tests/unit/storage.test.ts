@@ -18,7 +18,8 @@ describe("storage", () => {
     const storage = new StorageManager(new LocalStorageDriver(directory));
     try {
       expect(await storage.get("missing.txt")).toBeNull();
-      expect(await storage.delete("missing.txt")).toBe(false);
+      expect(await storage.delete("missing.txt")).toBeUndefined();
+      expect(await storage.delete("missing.txt")).toBeUndefined();
       await mkdir(join(directory, "folder"));
       await expect(storage.get("folder")).rejects.toThrow();
       await expect(storage.delete("folder")).rejects.toThrow();
@@ -79,6 +80,10 @@ describe("storage", () => {
       ),
     );
     try {
+      // S3 returns 204 even for a key that never existed. No preceding read is needed.
+      expect(await storage.delete("never-created.jpg")).toBeUndefined();
+      expect(methods).toEqual(["DELETE"]);
+      methods.length = 0;
       await storage.put("/image.jpg", "image bytes");
       expect(new TextDecoder().decode((await storage.get("/image.jpg")) ?? new Uint8Array())).toBe(
         "image bytes",
@@ -87,7 +92,7 @@ describe("storage", () => {
       errorCode = "NoSuchKey";
       status = 404;
       expect(await storage.get("image.jpg")).toBeNull();
-      expect(await storage.delete("image.jpg")).toBe(false);
+      expect(await storage.delete("image.jpg")).toBeUndefined();
       for (const [code, httpStatus] of [
         ["NoSuchBucket", 404],
         ["AccessDenied", 403],
@@ -104,8 +109,11 @@ describe("storage", () => {
       expect(new TextDecoder().decode((await storage.get("image.jpg")) ?? new Uint8Array())).toBe(
         "image bytes",
       );
-      expect(await storage.delete("image.jpg")).toBe(true);
+      expect(await storage.delete("image.jpg")).toBeUndefined();
       expect(stored).toBeUndefined();
+      methods.length = 0;
+      expect(await storage.delete("image.jpg")).toBeUndefined();
+      expect(methods).toEqual(["DELETE"]);
       await server.stop(true);
       for (const operation of ["get", "delete"] as const) {
         await expect(storage[operation]("image.jpg")).rejects.toThrow();
@@ -124,7 +132,9 @@ describe("storage", () => {
       await storage.put("reports/summary.txt", "hello");
       const contents = await storage.get("reports/summary.txt");
       expect(new TextDecoder().decode(contents ?? new Uint8Array())).toBe("hello");
-      expect(await storage.delete("reports/summary.txt")).toBe(true);
+      expect(await storage.delete("reports/summary.txt")).toBeUndefined();
+      expect(await storage.get("reports/summary.txt")).toBeNull();
+      expect(await storage.delete("reports/summary.txt")).toBeUndefined();
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -143,7 +153,7 @@ describe("storage", () => {
     await driver.put("/reports/summary.txt", "hello");
     const contents = await driver.get("/reports/summary.txt");
     expect(new TextDecoder().decode(contents ?? new Uint8Array())).toBe("remote");
-    expect(await driver.delete("/reports/summary.txt")).toBe(true);
+    expect(await driver.delete("/reports/summary.txt")).toBeUndefined();
   });
 
   test("resolveS3Config reads AWS environment variables", () => {

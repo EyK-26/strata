@@ -2,6 +2,8 @@
 
 ## 3.0.2
 
+Complete the SOLID contract audit: storage deletion is idempotent `Promise<void>` across local and S3 drivers; model misses and required authentication use transport-neutral errors with HTTP 404/401 translation. Middleware accepts only the authentication capability it calls. These API changes and migration steps are documented in `docs/architecture/target-api-migration.md`.
+
 Reconcile completed framework ownership and retirement documentation. Clarify the exact-commit main CI prerequisite, early-tag retry procedure, and maintainer release handoff; improve the release admission diagnostic without changing its checks.
 
 Remove unused internal renderer/build compatibility helpers and migrate their test imports. Refresh v3 application, auth, discovery, queue, tracing and lifecycle guidance; clearly label retained 2.x qualification evidence.

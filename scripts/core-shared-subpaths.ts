@@ -10,6 +10,7 @@
  */
 /** Canonical standalone artifacts: externalize these edges even from the root bundle. */
 export const CORE_STANDALONE_SUBPATHS = [
+  "auth/authOutcome",
   "auth/policy",
   "contracts/authUserDirectory",
   "contracts/token",

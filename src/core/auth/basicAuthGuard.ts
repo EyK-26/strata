@@ -1,3 +1,8 @@
+import {
+  type AuthOutcome,
+  authenticateProof,
+  authUserFromOutcome,
+} from "@getstrata/core/auth/authOutcome";
 import { UnprocessableEntityError } from "@getstrata/core/errors/http";
 import type {
   AuthAccountLookup,
@@ -9,7 +14,6 @@ import type { MfaSecretCodec } from "../crypto/mfaSecret";
 import { authorizationScheme, readBasicCredentials } from "../http/statelessAuth";
 import { isAccountActive, isAuthUserActive } from "./accountState";
 import type { AuthUser } from "./authContext";
-import { type AuthOutcome, authenticateProof, authUserFromOutcome } from "./authOutcome";
 import type { AuthGuard } from "./guard";
 import { verifyPassword } from "./password";
 import { completePasswordLogin } from "./passwordLogin";

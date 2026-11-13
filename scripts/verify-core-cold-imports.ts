@@ -70,6 +70,16 @@ const [root,base,model,definitions,errors,jobs]=await Promise.all([
  import('@getstrata/core/database/model'),import('@getstrata/core/database/definitions'),
  import('@getstrata/core/errors/http'),import('@getstrata/core/queue/failedJobRepository'),
 ]);
+const authOutcome = await import('@getstrata/core/auth/authOutcome');
+const persistence = await import('@getstrata/core/database/errors');
+assert.strictEqual(root.AuthenticationRequiredError, authOutcome.AuthenticationRequiredError);
+assert.strictEqual(root.RecordNotFoundError, persistence.RecordNotFoundError);
+for (const [ErrorType, status] of [[authOutcome.AuthenticationRequiredError,401],[persistence.RecordNotFoundError,404]]) {
+ const failure = new ErrorType('neutral failure');
+ assert.equal('status' in failure, false);
+ assert.equal(errors.toHttpError(failure).status,status);
+ assert.equal(errors.toHttpError(failure).message,'neutral failure');
+}
 assert.strictEqual(root.BaseRepository,base.BaseRepository);
 assert.strictEqual(base.default,base.BaseRepository);
 assert.strictEqual(root.Model,model.Model);
@@ -104,8 +114,8 @@ assert.throws(()=>normalizeTenantHostname('user@host'),error=>{
 const {runWithEstablishedAuth,establishedAuthReader}=await import('@getstrata/core/auth/authReader');
 const request=new Request('https://cold-import.example.test');
 await assert.rejects(()=>runWithEstablishedAuth(request,{user:null,credentialSource:null},()=>establishedAuthReader.requireUser(request)),error=>{
- assert.ok(error instanceof root.UnauthorizedError);assert.equal(error.status,401);
- assert.strictEqual(errors.toHttpError(error),error);return true;
+ assert.ok(error instanceof root.AuthenticationRequiredError);assert.equal("status" in error,false);
+ const mapped=errors.toHttpError(error);assert.ok(mapped instanceof root.UnauthorizedError);assert.equal(mapped.status,401);return true;
 });
 console.log('PASS cold public imports '+${JSON.stringify(name)});
 `,

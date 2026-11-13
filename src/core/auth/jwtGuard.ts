@@ -1,8 +1,12 @@
+import {
+  type AuthOutcome,
+  authenticateProof,
+  authUserFromOutcome,
+} from "@getstrata/core/auth/authOutcome";
 import type { AuthAccountLookup } from "../contracts/authUserDirectory";
 import { authorizationScheme, readBearerToken } from "../http/statelessAuth";
 import { isAccountActive, matchesAuthVersion } from "./accountState";
 import type { AuthUser } from "./authContext";
-import { type AuthOutcome, authenticateProof, authUserFromOutcome } from "./authOutcome";
 import type { AuthGuard } from "./guard";
 import { type JwtPayload, verifyJwt } from "./jwt";
 import { requireAuthCapability } from "./requireAuthCapability";

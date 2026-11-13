@@ -1,4 +1,4 @@
-import { NotFoundError } from "@getstrata/core/errors/http";
+import { RecordNotFoundError } from "@getstrata/core/database/errors";
 import { getBindingPorts } from "#strata-orm-internal";
 import type { CursorPaginatedResult, KeysetCursor, KeysetOptions } from "../pagination/index.ts";
 import type BaseRepository from "./baseRepository.ts";
@@ -794,7 +794,7 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
 
         throw (
           captured.errorFactory?.(captured.id) ??
-          new NotFoundError(
+          new RecordNotFoundError(
             `${(plan.modelClass as { name: string }).name} ${String(captured.id)} not found.`,
           )
         );

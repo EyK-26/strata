@@ -1,11 +1,5 @@
-import { UnauthorizedError } from "@getstrata/core/errors/http";
-import type { AuthBearerResolver } from "../contracts/authUserDirectory";
-import { authorizationScheme, readBearerToken } from "../http/statelessAuth";
-import { timingSafeCompareString } from "../security/timingSafeCompare";
-import { isAuthUserActive } from "./accountState";
-import type { AuthUser, CredentialSource } from "./authContext";
-import { currentAuthUser, currentCredentialSource } from "./authContext";
 import {
+  AuthenticationRequiredError,
   type AuthOutcome,
   absentAuth,
   authenticatedAuth,
@@ -13,7 +7,13 @@ import {
   authUserFromOutcome,
   invalidAuth,
   validatedAuthOutcome,
-} from "./authOutcome";
+} from "@getstrata/core/auth/authOutcome";
+import type { AuthBearerResolver } from "../contracts/authUserDirectory";
+import { authorizationScheme, readBearerToken } from "../http/statelessAuth";
+import { timingSafeCompareString } from "../security/timingSafeCompare";
+import { isAuthUserActive } from "./accountState";
+import type { AuthUser, CredentialSource } from "./authContext";
+import { currentAuthUser, currentCredentialSource } from "./authContext";
 import { BasicAuthGuard } from "./basicAuthGuard";
 import { JwtGuard } from "./jwtGuard";
 import { requireAuthCapability } from "./requireAuthCapability";
@@ -219,7 +219,7 @@ class AuthManager {
   }
   async requireUser(request?: Request): Promise<AuthUser> {
     const user = await this.resolve(request);
-    if (!user) throw new UnauthorizedError();
+    if (!user) throw new AuthenticationRequiredError();
     return user;
   }
   private async resolveGuard(guard: AuthGuard, request: Request): Promise<AuthOutcome> {

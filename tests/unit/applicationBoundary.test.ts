@@ -688,3 +688,20 @@ describe("explicit after-commit policy graph", () => {
     expect(inspectModule(file, source).some((issue) => issue.rule === "dependency")).toBe(true);
   });
 });
+
+describe("neutral failure boundary", () => {
+  test.each([
+    "database/model",
+    "database/modelQuery",
+    "database/errors",
+    "auth/authOutcome",
+    "auth/authReader",
+    "auth/guard",
+  ])("%s rejects HTTP dependencies", (module) => {
+    const issues = inspectModule(
+      `src/core/${module}.ts`,
+      'import { NotFoundError } from "@getstrata/core/errors/http";',
+    );
+    expect(issues.some((issue) => issue.rule === "dependency")).toBe(true);
+  });
+});
