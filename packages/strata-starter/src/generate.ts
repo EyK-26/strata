@@ -1,8 +1,16 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
-import { validateSpaPrefix } from "@getstrata/core/runtime/frontendMode";
+import {
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { copyOverlayTree, copyTree, removeIfExists, writeText } from "./copy.ts";
 import { usesComposePostgres } from "./databaseDefaults.ts";
+import { compileStarterFeatures, type StarterFeaturePlan } from "./featurePlan.ts";
 import type { ParsedFlags } from "./parseArgs.ts";
 import { parseCreateStrataArgs, usage } from "./parseArgs.ts";
 import { resolveStarterPlan } from "./prompt.ts";
@@ -88,14 +96,10 @@ import {
 import { renderScimModule } from "./renderScim.ts";
 import type { GenerateOptions, StarterLayers } from "./types.ts";
 import {
-  authNeedsUsers,
-  authUsesToken,
   dockerComposeUpCommand,
-  htmlAuthKit,
   neededDockerServices,
   needsFrontendBuild,
   selectedDockerServices,
-  usesTenantTable,
 } from "./types.ts";
 
 const PROJECT_NAME_PATTERN = /^[a-z0-9][a-z0-9-_]*$/i;
@@ -164,11 +168,12 @@ function applyFrontendOverlays(
   }
 }
 
-function writeGeneratedFiles(options: GenerateOptions): void {
+function writeGeneratedFiles(options: GenerateOptions, plan: StarterFeaturePlan): void {
+  const { decisions } = plan;
   const { targetDir, projectName, layers } = options;
   const src = join(targetDir, "src");
-  if (needsFrontendBuild(layers.frontend)) {
-    const transport = layers.auth.startsWith("cookie") ? "cookie" : layers.auth;
+  if (decisions.frontendBuild) {
+    const transport = decisions.browserTransport;
     const mfa = transport === "cookie" && layers.extras.mfa;
     writeText(
       join(targetDir, "frontend/src/auth/config.ts"),
@@ -181,7 +186,7 @@ function writeGeneratedFiles(options: GenerateOptions): void {
 
 // Generated scripts supply only this public value before Bun starts.
 export const SPA_PREFIX = validateSpaPrefix(process.env.BUN_PUBLIC_SPA_PREFIX);
-export const TENANCY_ENABLED = ${usesTenantTable(layers.tenancy)};
+export const TENANCY_ENABLED = ${decisions.tenantTable};
 `,
     );
     const manifestPath = join(targetDir, "frontend/package.json");
@@ -274,14 +279,14 @@ export const TENANCY_ENABLED = ${usesTenantTable(layers.tenancy)};
   writeText(join(src, "bootstrap/providers/index.ts"), renderProvidersIndex());
   writeText(join(src, "bootstrap/providers/auth.ts"), renderAuthProvider(layers));
   writeText(join(src, "models/Note.ts"), renderNoteModel(layers));
-  if (authNeedsUsers(layers.auth)) {
+  if (decisions.users) {
     writeText(join(src, "models/User.ts"), renderUserModel(layers));
     writeText(join(src, "models/AuthOneTimeToken.ts"), renderAuthOneTimeTokenModel());
   } else {
     removeIfExists(join(src, "models/User.ts"));
     removeIfExists(join(src, "models/AuthOneTimeToken.ts"));
   }
-  if (authUsesToken(layers.auth)) {
+  if (decisions.token) {
     writeText(join(src, "models/ApiToken.ts"), renderApiTokenModel());
   } else {
     removeIfExists(join(src, "models/ApiToken.ts"));
@@ -294,7 +299,7 @@ export const TENANCY_ENABLED = ${usesTenantTable(layers.tenancy)};
     renderStarterSchemaMigration(layers),
   );
   writeText(join(src, "db/migrations/0005_outbox.ts"), renderOutboxMigration(layers));
-  if (authNeedsUsers(layers.auth)) {
+  if (decisions.users) {
     writeText(
       join(src, "db/migrations/0006_account_state.ts"),
       renderAccountStateMigration(layers),
@@ -365,7 +370,7 @@ export const TENANCY_ENABLED = ${usesTenantTable(layers.tenancy)};
     removeIfExists(join(src, "listeners/noteCreatedWebhookListener.ts"));
   }
 
-  if (layers.extras.mfa && htmlAuthKit(layers.auth)) {
+  if (decisions.pendingMfa) {
     writeText(join(src, "bootstrap/pendingMfa.ts"), renderPendingMfaTs());
   } else {
     removeIfExists(join(src, "bootstrap/pendingMfa.ts"));
@@ -389,7 +394,7 @@ export const TENANCY_ENABLED = ${usesTenantTable(layers.tenancy)};
   }
   writeText(join(targetDir, "views/home.eta"), renderHomeView(projectName, layers));
   writeText(join(targetDir, "views/layouts/app.eta"), renderLayout(layers, projectName));
-  if (htmlAuthKit(layers.auth)) {
+  if (decisions.htmlAuth) {
     writeText(join(targetDir, "views/auth/login.eta"), renderLoginView(layers));
     writeText(join(targetDir, "views/auth/register.eta"), renderRegisterView());
     writeText(join(targetDir, "views/auth/forgot-password.eta"), renderForgotPasswordView());
@@ -448,17 +453,65 @@ function printNextSteps(
 
 function generateProject(options: GenerateOptions): void {
   assertProjectName(options.projectName);
-  const layers = { ...options.layers, spaPrefix: validateSpaPrefix(options.layers.spaPrefix) };
-  if (existsSync(options.targetDir)) {
-    if (!options.force) {
-      throw new Error(`Directory already exists: ${options.targetDir}`);
+  const plan = compileStarterFeatures(options.layers);
+  mkdirSync(dirname(options.targetDir), { recursive: true });
+  // mkdir is the ownership boundary: it refuses files, directories and dangling symlinks.
+  // --force never authorizes deleting an existing application's data.
+  try {
+    mkdirSync(options.targetDir);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new Error(
+        `Output path already exists: ${options.targetDir}. Choose a new path; --force does not overwrite existing projects.`,
+      );
     }
-    rmSync(options.targetDir, { recursive: true, force: true });
+    throw error;
   }
-
-  copyTree(options.templateRoot, options.targetDir, options.projectName, new Set(["overlays"]));
-  applyFrontendOverlays(options.overlayRoot, options.targetDir, layers);
-  writeGeneratedFiles({ ...options, layers });
+  const owned = lstatSync(options.targetDir);
+  try {
+    copyTree(options.templateRoot, options.targetDir, options.projectName, new Set(["overlays"]));
+    applyFrontendOverlays(options.overlayRoot, options.targetDir, plan.layers);
+    writeGeneratedFiles({ ...options, layers: plan.layers }, plan);
+    for (const artifact of plan.artifacts) {
+      if (!lstatSync(join(options.targetDir, artifact)).isFile()) {
+        throw new Error(`Feature plan artifact was not rendered: ${artifact}`);
+      }
+    }
+    const inventory = (directory: string, prefix = ""): string[] =>
+      readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+        const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+        return entry.isDirectory() ? inventory(join(directory, entry.name), path) : [path];
+      });
+    writeText(
+      join(options.targetDir, "strata.features.json"),
+      JSON.stringify(
+        {
+          ...plan,
+          emittedArtifacts: [
+            ...new Set([...inventory(options.targetDir), "strata.features.json"]),
+          ].sort(),
+        },
+        null,
+        2,
+      ),
+    );
+  } catch (error) {
+    // Never remove a path replaced by another owner while rendering.
+    try {
+      const current = lstatSync(options.targetDir);
+      if (current.dev === owned.dev && current.ino === owned.ino) {
+        rmSync(options.targetDir, { recursive: true, force: true });
+      }
+    } catch (cleanupError) {
+      if ((cleanupError as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw new AggregateError(
+          [error, cleanupError],
+          "Starter generation and owned-output cleanup failed.",
+        );
+      }
+    }
+    throw error;
+  }
 }
 
 async function runCreateStrata(argv: string[], cwd = process.cwd()): Promise<number> {

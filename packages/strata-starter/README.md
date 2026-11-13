@@ -14,6 +14,12 @@ This package ships the same generator at the same version and also works directl
 bunx @getstrata/starter my-app
 ```
 
+## Generation safety and feature plan
+
+Generation validates a frozen feature plan before creating output. Unsupported raw combinations (such as RLS with SQLite or MFA without cookie authentication) fail before files are emitted. Interactive and CLI choices normalize through the installer first. The generated `strata.features.json` records requirements, derived capabilities, required feature artifacts, and a complete emitted file inventory.
+
+Existing output paths are always rejected, including with `--force`; choose a new path. A failed generation removes only the output directory acquired by that attempt so it can be retried.
+
 ## Usage
 
 ```bash
