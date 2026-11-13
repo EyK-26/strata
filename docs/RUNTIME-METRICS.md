@@ -97,10 +97,11 @@ Three independent restricted-role processes, SQL table-lock, saturated-pool, can
 
 ```ts
 import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
-import { getTracingRuntime } from "@getstrata/core/tracing/tracingMiddleware";
+import { CORE_TRACING_RUNTIME_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 
 // After tracing initialization, use the existing provider-owned runtime.
-const metrics = createMetricsRoutes({ tracing: getTracingRuntime() });
+const tracing = appContext.container.resolve(CORE_TRACING_RUNTIME_TOKEN);
+const metrics = createMetricsRoutes({ tracing });
 ```
 
 The route reads `runtime.metrics()` after bearer authorization. It never initializes a runtime, flushes spans, contacts a collector or takes ownership of shutdown. Default routes remain HTTP-only. Observation failures emit `strata_tracing_collector_success 0`, omit tracing observations and preserve other metrics. Success emits 1. An explicit runtime also exposes the same typed snapshot and `renderTracingMetrics(snapshot)` through root and tracing subpath exports.

@@ -5,7 +5,10 @@ import {
   isEmailVerificationRequired,
 } from "@getstrata/core/auth/emailVerification";
 import type { Policy } from "@getstrata/core/auth/policy";
-import { resolveAbilityChecker } from "@getstrata/core/contracts/serviceTokens";
+import {
+  CORE_TRACING_RUNTIME_TOKEN,
+  resolveAbilityChecker,
+} from "@getstrata/core/contracts/serviceTokens";
 import { createAuthorizeMiddleware } from "@getstrata/core/http/authorizeMiddleware";
 import { createBodySizeLimitMiddleware } from "@getstrata/core/http/bodySizeLimitMiddleware";
 import { createCorsMiddleware } from "@getstrata/core/http/corsMiddleware";
@@ -233,7 +236,9 @@ class HttpKernel {
       createCorsMiddleware(),
       createSecurityHeadersMiddleware(),
       createBodySizeLimitMiddleware(),
-      createTracingMiddleware(),
+      ...(this.dependencies.container.has(CORE_TRACING_RUNTIME_TOKEN)
+        ? [createTracingMiddleware(this.dependencies.container.resolve(CORE_TRACING_RUNTIME_TOKEN))]
+        : []),
       createMetricsMiddleware(),
       createRequestLoggingMiddleware(),
       requestIdMiddleware,

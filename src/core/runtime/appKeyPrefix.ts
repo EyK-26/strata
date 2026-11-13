@@ -57,8 +57,8 @@ function appUserAgent(): string {
   return process.env.APP_USER_AGENT?.trim() || appKeyPrefix();
 }
 
-function otelServiceName(): string {
-  return process.env.OTEL_SERVICE_NAME?.trim() || `${appKeyPrefix()}-api`;
+function otelServiceName(env: EnvRecord = process.env): string {
+  return env.OTEL_SERVICE_NAME?.trim() || `${appKeyPrefix(env)}-api`;
 }
 
 function webhookSignatureHeader(): string {

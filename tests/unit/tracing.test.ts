@@ -1,18 +1,17 @@
 import { afterEach, expect, test } from "bun:test";
+import { CORE_TRACING_RUNTIME_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
 import { currentTraceId } from "@getstrata/core/tracing/traceContext";
 import {
-  acquireTracingRuntime,
   createTracingMiddleware,
   createTracingRuntime,
-  getTracingRuntime,
   type TracingRuntime,
 } from "@getstrata/core/tracing/tracingMiddleware";
 import { context, SpanStatusCode, trace } from "@opentelemetry/api";
 import { InMemorySpanExporter, type SpanExporter } from "@opentelemetry/sdk-trace-base";
 import { ConfigStore, type ProviderContext, ServiceContainer } from "../../src/bootstrap/contracts";
-import tracingProvider from "../../src/bootstrap/providers/tracing";
+import { createTracingProvider } from "../../src/bootstrap/providers/tracing";
 
 const runtimes: TracingRuntime[] = [];
 afterEach(async () => {
@@ -209,36 +208,140 @@ test("shutdown flushes queued spans before resource close through the lifecycle 
   expect((await lifecycle.shutdown()).successful).toBe(true);
 });
 
-test("core provider owns shared runtime flush and idempotent final release", async () => {
-  const handlers: Array<{ callback: () => void | Promise<void>; phase: string }> = [];
-  const otherOwner = acquireTracingRuntime();
-  const runtime = getTracingRuntime();
-  // Exercise the provider's cleanup contract directly without booting unrelated infrastructure.
-  const container = new ServiceContainer();
-  const registration: ProviderContext = {
-    container,
-    config: new ConfigStore(),
-    dependencies: { container },
-    invoke: () => {
-      throw new Error("This structural provider test must not invoke persistence.");
+test("interleaved application tracing providers own exporters, config, flush and shutdown", async () => {
+  const exporterA = new InMemorySpanExporter();
+  const exporterB = new InMemorySpanExporter();
+  const env = { OTEL_SERVICE_NAME: "app-a", OTEL_SDK_DISABLED: "false" };
+  const providerA = createTracingProvider({
+    exporter: exporterA,
+    env,
+    scheduledDelayMillis: 60_000,
+  });
+  env.OTEL_SERVICE_NAME = "app-b";
+  const providerB = createTracingProvider({
+    exporter: exporterB,
+    env,
+    scheduledDelayMillis: 60_000,
+  });
+  env.OTEL_SDK_DISABLED = "true";
+  function registration() {
+    const handlers: Array<{ callback: () => void | Promise<void>; phase: string }> = [];
+    const container = new ServiceContainer();
+    const context: ProviderContext = {
+      container,
+      config: new ConfigStore(),
+      dependencies: { container },
+      invoke: () => {
+        throw new Error("No persistence in telemetry test.");
+      },
+      onCleanup(callback, phase = "close") {
+        handlers.push({ callback, phase });
+      },
+    };
+    return { container, context, handlers };
+  }
+  const appA = registration();
+  const appB = registration();
+  await providerA.register?.(appA.context);
+  await providerB.register?.(appB.context);
+  const runtimeA = appA.container.resolve(CORE_TRACING_RUNTIME_TOKEN);
+  const runtimeB = appB.container.resolve(CORE_TRACING_RUNTIME_TOKEN);
+  runtimes.push(runtimeA, runtimeB);
+  expect(runtimeA).not.toBe(runtimeB);
+  expect(() => providerA.register?.(appB.context)).toThrow("one application context");
+  expect(appB.container.resolve(CORE_TRACING_RUNTIME_TOKEN)).toBe(runtimeB);
+  const middlewareA = createTracingMiddleware(runtimeA);
+  const middlewareB = createTracingMiddleware(runtimeB);
+  await Promise.all([
+    middlewareA(new Request("http://app-a/private?secret=a"), async () => new Response()),
+    middlewareB(new Request("http://app-b/private?secret=b"), async () => new Response()),
+  ]);
+  const flushA = appA.handlers.find((handler) => handler.phase === "flush");
+  const closeA = appA.handlers.find((handler) => handler.phase === "close");
+  if (!flushA || !closeA) throw new Error("Missing telemetry lifecycle hooks.");
+  await flushA.callback();
+  expect(exporterA.getFinishedSpans()).toHaveLength(1);
+  expect(exporterB.getFinishedSpans()).toHaveLength(0);
+  expect(exporterA.getFinishedSpans()[0]?.resource.attributes["service.name"]).toBe("app-a");
+  await closeA.callback();
+  await closeA.callback();
+  expect(runtimeA.metrics().active).toBe(false);
+  expect(runtimeB.metrics().active).toBe(true);
+  await middlewareB(new Request("http://app-b/still-live"), async () => new Response());
+  await runtimeB.forceFlush();
+  expect(exporterB.getFinishedSpans()).toHaveLength(2);
+  expect(
+    exporterB
+      .getFinishedSpans()
+      .every((span) => span.resource.attributes["service.name"] === "app-b"),
+  ).toBe(true);
+});
+
+test("declared application collectors retain their own endpoint and SDK credentials before delayed startup", async () => {
+  const received: Array<{ path: string; authorization: string | null }> = [];
+  const collector = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      received.push({
+        path: new URL(request.url).pathname,
+        authorization: request.headers.get("authorization"),
+      });
+      await request.arrayBuffer();
+      return Response.json({});
     },
-    onCleanup(callback, phase = "close") {
-      handlers.push({ callback, phase });
-    },
-  };
-  await tracingProvider.register?.(registration);
-  expect(handlers.map((handler) => handler.phase)).toEqual(["flush", "close"]);
-  const [flush, close] = handlers;
-  if (!flush || !close) throw new Error("Provider did not register telemetry cleanup.");
-  await flush.callback();
-  await close.callback();
-  await close.callback();
-  expect(getTracingRuntime()).toBe(runtime);
-  await otherOwner.release();
-  await otherOwner.release();
-  const next = acquireTracingRuntime();
-  expect(getTracingRuntime()).not.toBe(runtime);
-  await next.release();
+  });
+  const previous = process.env.OTEL_EXPORTER_OTLP_TRACES_HEADERS;
+  const owned: TracingRuntime[] = [];
+  try {
+    const env = { OTEL_SDK_DISABLED: "false" };
+    process.env.OTEL_EXPORTER_OTLP_TRACES_HEADERS = "authorization=Bearer%20app-a";
+    const appA = createTracingProvider({
+      env,
+      endpoint: `http://127.0.0.1:${collector.port}/app-a`,
+      scheduledDelayMillis: 60_000,
+    });
+    process.env.OTEL_EXPORTER_OTLP_TRACES_HEADERS = "authorization=Bearer%20app-b";
+    const appB = createTracingProvider({
+      env,
+      endpoint: `http://127.0.0.1:${collector.port}/app-b`,
+      scheduledDelayMillis: 60_000,
+    });
+    process.env.OTEL_EXPORTER_OTLP_TRACES_HEADERS = "authorization=Bearer%20later-app";
+    async function start(provider: ReturnType<typeof createTracingProvider>) {
+      const container = new ServiceContainer();
+      await provider.register?.({
+        container,
+        config: new ConfigStore(),
+        dependencies: { container },
+        invoke: () => {
+          throw new Error("No persistence.");
+        },
+        onCleanup() {},
+      });
+      const runtime = container.resolve(CORE_TRACING_RUNTIME_TOKEN);
+      owned.push(runtime);
+      return runtime;
+    }
+    const [runtimeA, runtimeB] = await Promise.all([start(appA), start(appB)]);
+    await Promise.all([
+      createTracingMiddleware(runtimeA)(new Request("http://a"), async () => new Response()),
+      createTracingMiddleware(runtimeB)(new Request("http://b"), async () => new Response()),
+    ]);
+    await runtimeA.forceFlush();
+    await runtimeA.shutdown();
+    await runtimeB.forceFlush();
+    expect(received.sort((left, right) => left.path.localeCompare(right.path))).toEqual([
+      { path: "/app-a", authorization: "Bearer app-a" },
+      { path: "/app-b", authorization: "Bearer app-b" },
+    ]);
+    expect(runtimeB.metrics().active).toBe(true);
+  } finally {
+    if (previous === undefined) delete process.env.OTEL_EXPORTER_OTLP_TRACES_HEADERS;
+    else process.env.OTEL_EXPORTER_OTLP_TRACES_HEADERS = previous;
+    await Promise.allSettled(owned.map((runtime) => runtime.shutdown()));
+    collector.stop(true);
+  }
 });
 
 test("invalid operational tracing configuration fails visibly", () => {

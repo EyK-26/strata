@@ -7,6 +7,7 @@ import type { ThrottleQuotaPolicy } from "../http/throttleMiddleware";
 import type { Queue } from "../queue/index";
 import type { QueueServices } from "../queue/queueServices";
 import type { PublicTenancyOptions, TenantResolver } from "../tenant/tenantMiddleware";
+import type { TracingRuntime } from "../tracing/otel";
 import type { AuthAccountLookup } from "./authUserDirectory";
 import type { ConfigStoreLike, ServiceContainerLike } from "./container";
 
@@ -20,6 +21,8 @@ const CORE_TENANT_RESOLVER_TOKEN = createServiceToken<TenantResolver>("core.tena
 
 const CORE_HTTP_CLEANUP_TOKEN =
   createServiceToken<(cleanup: () => void) => void>("core.httpCleanup");
+
+const CORE_TRACING_RUNTIME_TOKEN = createServiceToken<TracingRuntime>("core.tracingRuntime");
 
 const CORE_CONFIG_TOKEN = createServiceToken<ConfigStoreLike>("core.config");
 const FAILED_JOB_SERVICE_TOKEN = createServiceToken<QueueServices>("core.failedJobs");
@@ -74,6 +77,7 @@ export {
   CORE_QUEUE_TOKEN,
   CORE_TENANT_RESOLVER_TOKEN,
   CORE_THROTTLE_QUOTA_POLICY_TOKEN,
+  CORE_TRACING_RUNTIME_TOKEN,
   FAILED_JOB_SERVICE_TOKEN,
   isAbilityChecker,
   isAuthUserDirectory,

@@ -773,10 +773,8 @@ export {
 } from "../core/tracing/traceContext.ts";
 export type { TracingOptions, TracingRuntime } from "../core/tracing/tracingMiddleware.ts";
 export {
-  acquireTracingRuntime,
   createTracingMiddleware,
   createTracingRuntime,
-  getTracingRuntime,
 } from "../core/tracing/tracingMiddleware.ts";
 export type { ValidationRule, ValidationSchema } from "../core/validation/rules.ts";
 export {

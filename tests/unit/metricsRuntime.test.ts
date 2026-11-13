@@ -7,7 +7,7 @@ const observeReadOnly: FailedJobObservation = async () => {
 import { expect, test } from "bun:test";
 import { createMetricsRoutes, createMetricsRuntime } from "@getstrata/bootstrap/metricsRoutes";
 import { createTransactionAcquisitionMetrics } from "@getstrata/core/database/acquisitionMetrics";
-import { getTracingRuntime } from "@getstrata/core/tracing/tracingMiddleware";
+import { createTracingRuntime } from "@getstrata/core/tracing/tracingMiddleware";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 test("metrics runtime defaults remain HTTP-only and closing is idempotent", async () => {
@@ -22,8 +22,8 @@ test("metrics runtime defaults remain HTTP-only and closing is idempotent", asyn
 test("metrics runtime owns only lazy SQL collectors and borrows tracing/acquisition", async () => {
   const previous = process.env.METRICS_TOKEN;
   process.env.METRICS_TOKEN = "runtime-fixture";
+  const tracing = createTracingRuntime();
   try {
-    const tracing = getTracingRuntime();
     const acquisition = createTransactionAcquisitionMetrics();
     const queue = { redisUrl: "redis://127.0.0.1:1", transport: "streams" as const, timeoutMs: 1 };
     const runtime = createMetricsRuntime({
@@ -54,6 +54,7 @@ test("metrics runtime owns only lazy SQL collectors and borrows tracing/acquisit
     expect(body).toContain("strata_database_acquisition_collector_success 1");
     expect(body).not.toContain(queue.redisUrl);
   } finally {
+    await tracing.shutdown();
     restoreEnvVar("METRICS_TOKEN", previous);
   }
 });

@@ -93,7 +93,7 @@ export {
   createStorageProvider,
   type StorageBindingOptions,
 } from "./providers/storage.ts";
-export { default as tracingProvider } from "./providers/tracing.ts";
+export { createTracingProvider } from "./providers/tracing.ts";
 export { registerDefaultJobs } from "./queue/defaultJobs.ts";
 export { compileRouteMap, composeRouteMaps, getRouteInventory } from "./routePlan.ts";
 export { assertProductionSecrets } from "./secretsGuard.ts";

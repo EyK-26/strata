@@ -1,7 +1,7 @@
 import type { Middleware } from "@getstrata/core/http/middleware";
 import { ROOT_CONTEXT, SpanKind, SpanStatusCode, trace } from "@opentelemetry/api";
 import { currentRequestMeta } from "../http/requestMetaContext";
-import { getTracingRuntime, type TracingRuntime } from "./otel";
+import type { TracingRuntime } from "./otel";
 import { runWithTraceContext } from "./traceContext";
 
 const headerGetter = {
@@ -19,9 +19,9 @@ const methods = new Set([
   "CONNECT",
   "TRACE",
 ]);
-function createTracingMiddleware(runtime?: TracingRuntime): Middleware {
+function createTracingMiddleware(runtime: TracingRuntime): Middleware {
   return async (request, next) => {
-    const telemetry = runtime ?? getTracingRuntime();
+    const telemetry = runtime;
     const method = methods.has(request.method) ? request.method : "_OTHER";
     const route = currentRequestMeta().routeTemplate ?? "__unmatched__";
     const parent = telemetry.propagator.extract(ROOT_CONTEXT, request.headers, headerGetter);
@@ -70,5 +70,5 @@ function createTracingMiddleware(runtime?: TracingRuntime): Middleware {
 export type { TracingMetricsSnapshot } from "./health";
 export { renderTracingMetrics } from "./health";
 export type { TracingOptions, TracingRuntime } from "./otel";
-export { acquireTracingRuntime, createTracingRuntime, getTracingRuntime } from "./otel";
+export { captureTracingOptions, createTracingRuntime } from "./otel";
 export { createTracingMiddleware };

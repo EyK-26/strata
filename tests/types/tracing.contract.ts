@@ -1,5 +1,5 @@
 /** Compiled against source and packed public exports; never executed. */
-import { type ServiceProvider, tracingProvider } from "@getstrata/bootstrap";
+import { createTracingProvider, type ServiceProvider } from "@getstrata/bootstrap";
 import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
 import {
   createTracingRuntime,
@@ -18,7 +18,9 @@ export async function tracingContracts(): Promise<void> {
   };
   const runtime: TracingRuntime = createTracingRuntime(options);
   createMetricsRoutes({ tracing: runtime });
-  const provider: ServiceProvider = tracingProvider;
+  const provider: ServiceProvider = createTracingProvider();
+  // @ts-expect-error Middleware requires an application-owned runtime.
+  createTracingMiddleware();
   const response: Response = await createTracingMiddleware(runtime)(
     new Request("http://shop"),
     async () => new Response(),

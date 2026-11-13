@@ -14,7 +14,11 @@ Set `OTEL_EXPORTER_OTLP_ENDPOINT` to the trusted collector's base HTTP(S) URL (S
 
 ## Lifecycle and application instrumentation
 
-Current generated provider lists include the public `tracingProvider` from `@getstrata/bootstrap`. The default core provider list uses the same provider. It acquires the process-shared default runtime, registers `forceFlush` in the provider flush phase and releases it in close. The last release shuts down the provider/exporter; release and shutdown are idempotent. HTTP/workers drain before flushing. Set `SHUTDOWN_TIMEOUT_MS` above your intended flush budget. Applications with older generated lists can add `tracingProvider` after configuration and before admission; do not create a second exporter in a custom cleanup hook.
+Current generated provider lists call `createTracingProvider({ env })` from `@getstrata/bootstrap`; the default core provider factory does the same. Each context receives its own runtime/exporter and registers `forceFlush` in the flush phase and idempotent shutdown in close. Stopping one context never shuts down another context’s tracing. HTTP/workers drain before flushing. Set `SHUTDOWN_TIMEOUT_MS` above your intended flush budget.
+
+Each returned provider is single-use; create a fresh provider for every context. Reusing a provider rejects before it can attach or close another context’s exporter. An explicitly supplied exporter also belongs to that one context and must not be shared with another provider.
+
+The factory captures environment configuration when the application declares its providers. Default OTLP exporter transport configuration (including SDK environment credentials and TLS settings) is prepared then; batch processing and runtime acquisition begin during provider registration. The exporter makes no network requests until spans are exported. Supply an application-owned `exporter` when using a transport configuration independent of the current process environment. The provider publishes its runtime as `CORE_TRACING_RUNTIME_TOKEN` in that context’s container. HttpKernel traces only when this provider is installed; custom contexts without it explicitly run untraced. Middleware callers must supply their owned runtime; there is no global default runtime or owner counter.
 
 For an explicit runtime, pass it to the middleware and register its ownership yourself:
 
