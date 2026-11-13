@@ -10,13 +10,13 @@ contents. The release maintainer checks the required acceptance results and owns
 tag creation and publication.
 
 PR #378 (`adca50c36a93ea9d20cd79049f7d1ac7581cb261`) was closed without merging.
-The reconciled release workflow now builds an immutable archive set before any npm
-mutation, retains it as an Actions artifact, and publishes those archive bytes with
-OIDC provenance. A registry version is reusable only when its `dist.integrity`
-exactly matches the archived SHA-512. Registry errors or malformed metadata abort
-before publication; they never establish that a version is unused. The workflow
-runs its own mandatory release quality gate before publication; it does not query
-or wait for a separate main-branch CI run. See [release operator procedure](release-operator.md).
+The release workflow publishes the five workspaces with the pinned npm CLI and
+OIDC provenance. All registry version lookups must succeed before the first
+upload; confirmed existing versions are skipped. Registry errors never establish
+that a version is unused. A successful npm command means upload acceptance, while
+public availability may follow after npm processing. The workflow runs its own
+mandatory quality gate and publication dry-run; it does not query or wait for a
+separate main-branch CI run. See [release operator procedure](release-operator.md).
 
 Local acceptance must identify the source commit, package manifests, archive hashes,
 commands and fixture cleanup. Build fresh core/bootstrap/starter packages, verify public

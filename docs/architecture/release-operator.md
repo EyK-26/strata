@@ -1,108 +1,70 @@
 # Stable release operator procedure
 
-The release version is the shared version in the five package manifests. The
-publisher selects it only after the required acceptance inventory passes. A failed
-or incomplete gate blocks merge/publication. Local fixtures do not qualify hosted
-providers or authorize provisioning/deployment. The release maintainer monitors
-CI, creates the tag and initiates publication.
+The release version is shared by all five package manifests. The maintainer owns
+merge, tag creation and publication. Local validation does not authorize hosted
+provisioning or deployment.
 
-## Admission and publication
+## Release
 
-1. Reconcile the final capability inventory, migration instructions and local
-   acceptance receipt. Record exact source SHA, commands/results, fresh packed
-   consumer tests, fixture cleanup and remaining limits. Prepare release notes
-   describing breaking application composition, runtime ownership, capability and
-   request-context changes, and the supported starter profiles. Link migration and
-   starter qualification documents from those notes.
-2. Bump all five packages together through the repository version tool. Regenerate
-   required manifests/export metadata and lockfile through their owning tooling.
-   Run readiness with the selected tag and authoritative npm lookup; an existing
-   version requires a new version, never changed contents at the same version.
-3. Complete the full required local gate, independent review and exact-head PR CI.
-   Merge the reviewed result into actual `main`. Tagging does not require waiting
-   for a separate main-push CI run. The release workflow validates the tagged
-   source through its own mandatory quality gate before publication.
-4. The maintainer tags that exact SHA with `v` followed by the package version and
-   pushes the tag, or dispatches `Release`
-   with an already verified existing tag and the workflow ref set to that tag.
-   Tag pushes trigger publication. The
-   workflow repeats the release quality gate, packs each package once, records the
-   source commit/tag/archive identity in `manifest.json`, then uploads the entire
-   archive set before its first registry mutation. The pinned npm CLI dry-runs
-   publication of every archive before live publication; CI exercises the same
-   pack and dry-run commands. A dry-run validates local archive handling, not
-   trusted-publisher permissions or live provenance issuance.
-5. All registry metadata and archive hashes are validated before the first npm
-   publish. Missing HTTP responses, 404, 429, server failures and malformed package
-   records abort. Existing matching versions are verified, not republished. New
-   archives publish publicly to npm `latest` with trusted-publishing provenance.
-6. After all five archive integrities are confirmed on npm, GitHub Release and
-   container jobs run independently. GitHub Release retains the archives and
-   manifest as assets. Confirm all package versions, npm `latest` pointers,
-   provenance, GitHub assets, image version/latest pointers and SBOM. Record their
-   URLs and publication run ID. A container failure can coexist with successful
-   npm and GitHub publication; report each outcome independently.
+1. Review the source, migration notes and acceptance results. Bump all five
+   packages together through the repository version tool and regenerate the
+   lockfile. Run readiness with authoritative npm lookup before selecting a new
+   version; never overwrite an existing version or move an existing release tag.
+2. Merge the reviewed change into `main`. Tag the intended main commit with `v`
+   followed by its package version. A separate main-CI result is not a release
+   prerequisite: the release workflow runs its own mandatory quality gate.
+3. Push the tag, or dispatch `Release` with both its workflow ref and `tag` input
+   set to that tag. The workflow checks version matching, installs the pinned
+   toolchain, runs the full release quality gate, builds the packages and
+   dry-runs workspace publication. A failed check stops publication.
+4. Before publishing anything, the publisher reads metadata for all five existing
+   npm packages. It skips versions confirmed present and publishes missing
+   versions with `npm publish --workspace <name> --access public --tag latest
+   --provenance`. Network errors, HTTP errors (including 404 for an existing
+   package) and malformed metadata stop the run before the first upload.
+5. A successful npm command means the upload was accepted. npm may still be
+   processing it; registry metadata and installation can lag by several minutes.
+   The publisher does not fail or upload again merely because the new version is
+   not immediately visible. Once all commands succeed, the GitHub Release and
+   container jobs run independently. Their success is reported separately.
+6. Confirm all five versions and `latest` pointers become visible on npm, then
+   check provenance, GitHub release, image tags and SBOM. Dry-run checks cannot
+   establish trusted-publisher authorization, live provenance issuance or registry
+   processing completion. Investigate a version that stays unavailable; do not
+   replace it with different bytes at the same version.
 
-## Older tags with the previous CI prerequisite
+## Retry and partial publication
 
-Current releases do not query or wait for a separate CI run. Older immutable tags
-still contain their original workflow. On those tags, `No successful main CI run
-for <commit>` means the old admission check failed before packing or publication.
-Retrying such a tag still requires successful main-push CI at that exact commit;
-it does not acquire this workflow change. Tags created from the updated main
-source use the release's own quality gate. Keep existing tags unchanged.
-
-## Partial publication and recovery
-
-The `v3.0.0` attempt passed its quality gate and builds, then failed before archive
-upload or npm publication: npm 12 changed `npm pack --json` from an array to a
-package-keyed object. Preserve that tag. The `3.0.1` patch accepts both formats and
-checks the reported identity and integrity against each archive. `.npm-version`
-pins the CLI used by publication and CI's real packing/publication dry-run checks.
-Upgrade that pin through a reviewed change with both checks passing.
-
-The `v3.0.2` attempt passed exact-commit CI admission and the quality gate, and
-retained all archives in Release run `43495727684`. The first npm publish failed
-with `EALLOWGIT`: npm interpreted the bare relative tarball path as GitHub
-repository shorthand. No package was published by that attempt. Version `3.0.3`
-resolves archive paths absolutely and adds publication dry-runs. Preserve the
-`v3.0.2` tag; retrying it or restoring its archives still executes the old code
-and cannot apply this source fix. Merge the fix,
-then tag the reviewed main commit `v3.0.3`. Do not pass the v3.0.2 run as a recovery source
-for v3.0.3: recovery requires the same source commit and archive identities.
-
-Publication is not atomic across registries or packages. If any step fails, first
-record which effects occurred. Do not move a tag, unpublish packages, overwrite a
-version, or create new archive bytes to force progress.
-
-For a transient npm failure after archive upload with an otherwise valid publisher,
-the maintainer dispatches the same `Release` workflow
-with the same tag, workflow ref set to that tag, and `recovery_run_id` set to the original Release run ID:
+Allow npm processing to settle and inspect package versions before retrying a
+failed or interrupted run, especially if npm acknowledged an upload. Retry the
+failed job or dispatch the same tag and workflow ref:
 
 ```sh
-# Set this to the original failed run's tag, not a newer local package version.
+# Replace this with the original failed run's immutable tag.
 RELEASE_TAG=vMAJOR.MINOR.PATCH
-gh workflow run release.yml --ref "$RELEASE_TAG" -f tag="$RELEASE_TAG" -f recovery_run_id=ORIGINAL_RUN_ID
+gh workflow run release.yml --ref "$RELEASE_TAG" -f tag="$RELEASE_TAG"
 ```
 
-The workflow rejects `GITHUB_SHA` differing from the checked-out release commit,
-so npm provenance cannot identify a newer default-branch commit as its source. It
-requires the source run to be this workflow at the exact tagged SHA, downloads its
-immutable `release-archives` artifact, and verifies its manifest and every archive
-hash. Already published package versions must have matching registry integrity;
-only missing versions publish. The release's own quality gate still applies.
-If the registry is temporarily unavailable, retry recovery after it is healthy.
-A registry archive mismatch requires investigation and a new reviewed version;
-it cannot be bypassed through recovery.
+The same source is rebuilt, confirmed existing versions are skipped, and missing
+versions are published. Registry lookup errors never count as version absence.
+This restores workspace publication: retries do not restore saved tarballs or
+compare existing versions against archive hashes. If source changes are required,
+use a new reviewed version and tag. Do not unpublish or move a tag to force a retry.
 
-Use a new workflow dispatch for recovery, rather than re-running the original pack
-job. Actions artifacts are immutable and retained for 90 days; a rerun cannot
-replace an artifact with the same name. Once a GitHub Release exists, its attached
-archives provide durable evidence. If the original artifact expired before full
-publication, this automated recovery path is unavailable: establish a separately
-reviewed exact-byte recovery procedure before further publication. Never silently
-rebuild archives as a replacement for missing publication evidence.
+The workflow source must match the checked-out tag for OIDC provenance. Normal
+quality gates still apply to retries. A container failure can occur after npm
+publication; retry its failed job separately after checking the published state.
 
-The stable workflow updates npm and container `latest`. It deliberately rejects
-prerelease package versions. An RC proposal requires channel isolation and new
-acceptance evidence before any RC tag is pushed.
+## Earlier release attempts
+
+Older immutable tags retain their original workflows, including any removed CI
+prerequisite or archive-recovery input. They do not acquire fixes from `main`.
+The v3.0.0 archive parser and v3.0.2 archive-path failures happened before npm
+publication. The v3.0.3 run `43506462289` successfully published
+`@getstrata/core@3.0.3`, then failed because its immediate metadata check ran before
+npm processing completed. The other four packages were not published by that run.
+Version 3.0.4 restores workspace publication and removes that immediate check.
+Preserve the old tags and the already published core version.
+
+The stable workflow uses npm and container `latest`. Prerelease channels require
+separate isolation and validation; do not send an RC tag to this workflow.
