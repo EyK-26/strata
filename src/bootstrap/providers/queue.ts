@@ -15,45 +15,49 @@ import type { ServiceProvider } from "../contracts";
 import { discoverJobs } from "../discoverJobs";
 import { registerDefaultJobs } from "../queue/defaultJobs";
 
-const queueProvider: ServiceProvider = {
-  name: "core.queue",
-  async register({ container, config, onCleanup, invoke }) {
-    const environment = Object.freeze({ ...process.env });
-    const configuredDriver = environment.QUEUE_DRIVER ?? DEFAULT_QUEUE_DRIVER;
-    const driver =
-      configuredDriver === "async" || configuredDriver === "redis" || configuredDriver === "sync"
-        ? configuredDriver
-        : DEFAULT_QUEUE_DRIVER;
+function createQueueProvider(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): ServiceProvider {
+  const environment = Object.freeze({ ...env });
+  return {
+    name: "core.queue",
+    async register({ container, config, onCleanup, invoke }) {
+      const configuredDriver = environment.QUEUE_DRIVER ?? DEFAULT_QUEUE_DRIVER;
+      const driver =
+        configuredDriver === "async" || configuredDriver === "redis" || configuredDriver === "sync"
+          ? configuredDriver
+          : DEFAULT_QUEUE_DRIVER;
 
-    config.set("queue.driver", driver);
-    const failedJobs = createSystemQueueServices(invoke, {
-      cache: container.resolve(CORE_CACHE_TOKEN),
-      auditExport: createAuditExporter({
-        environment,
-        runSql: (work) =>
-          invoke(
-            { kind: "command", actor: { kind: "system", policy: "audit.export" } },
-            ({ database, policy }) =>
-              environment.TENANCY_DRIVER === "rls"
-                ? policy.run(database, { kind: "bypass" }, work)
-                : database.transaction(work),
-          ),
-      }),
-    });
-    container.set(FAILED_JOB_SERVICE_TOKEN, failedJobs);
-    const registry = new JobRegistry();
-    registerDefaultJobs(registry);
-    await discoverJobs(registry);
-    const queue = createAppQueue(
-      driver,
-      config.get<string>(REDIS_URL_CONFIG_KEY) ?? environment.REDIS_URL,
-      failedJobs,
-      registry,
-    );
-    onCleanup(() => queue.close?.(), driver === "async" ? "drain" : "close");
-    container.set(CORE_QUEUE_TOKEN, queue);
-    container.set(QUEUE_JOB_REGISTRY_TOKEN, registry);
-  },
-};
+      config.set("queue.driver", driver);
+      const failedJobs = createSystemQueueServices(invoke, {
+        cache: container.resolve(CORE_CACHE_TOKEN),
+        auditExport: createAuditExporter({
+          environment,
+          runSql: (work) =>
+            invoke(
+              { kind: "command", actor: { kind: "system", policy: "audit.export" } },
+              ({ database, policy }) =>
+                environment.TENANCY_DRIVER === "rls"
+                  ? policy.run(database, { kind: "bypass" }, work)
+                  : database.transaction(work),
+            ),
+        }),
+      });
+      container.set(FAILED_JOB_SERVICE_TOKEN, failedJobs);
+      const registry = new JobRegistry();
+      registerDefaultJobs(registry);
+      await discoverJobs(registry);
+      const queue = createAppQueue(
+        driver,
+        config.get<string>(REDIS_URL_CONFIG_KEY) ?? environment.REDIS_URL,
+        failedJobs,
+        registry,
+      );
+      onCleanup(() => queue.close?.(), driver === "async" ? "drain" : "close");
+      container.set(CORE_QUEUE_TOKEN, queue);
+      container.set(QUEUE_JOB_REGISTRY_TOKEN, registry);
+    },
+  };
+}
 
-export default queueProvider;
+export { createQueueProvider };
