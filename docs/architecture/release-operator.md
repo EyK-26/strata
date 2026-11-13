@@ -29,7 +29,10 @@ CI, creates the tag and initiates publication.
    Tag pushes trigger publication. The
    workflow repeats the release quality gate, packs each package once, records the
    source commit/tag/archive identity in `manifest.json`, then uploads the entire
-   archive set before its first registry mutation.
+   archive set before its first registry mutation. The pinned npm CLI dry-runs
+   publication of every archive before live publication; CI exercises the same
+   pack and dry-run commands. A dry-run validates local archive handling, not
+   trusted-publisher permissions or live provenance issuance.
 5. All registry metadata and archive hashes are validated before the first npm
    publish. Missing HTTP responses, 404, 429, server failures and malformed package
    records abort. Existing matching versions are verified, not republished. New
@@ -58,19 +61,30 @@ The `v3.0.0` attempt passed its quality gate and builds, then failed before arch
 upload or npm publication: npm 12 changed `npm pack --json` from an array to a
 package-keyed object. Preserve that tag. The `3.0.1` patch accepts both formats and
 checks the reported identity and integrity against each archive. `.npm-version`
-pins the CLI used by both the publication workflow and CI's real packing check.
-Upgrade that pin through a reviewed change with successful packing evidence.
+pins the CLI used by publication and CI's real packing/publication dry-run checks.
+Upgrade that pin through a reviewed change with both checks passing.
+
+The `v3.0.2` attempt passed exact-commit CI admission and the quality gate, and
+retained all archives in Release run `43495727684`. The first npm publish failed
+with `EALLOWGIT`: npm interpreted the bare relative tarball path as GitHub
+repository shorthand. No package was published by that attempt. Version `3.0.3`
+resolves archive paths absolutely and adds publication dry-runs. Preserve the
+`v3.0.2` tag; retrying it or restoring its archives still executes the old code
+and cannot apply this source fix. Merge the fix, wait for successful main CI,
+then tag the new commit `v3.0.3`. Do not pass the v3.0.2 run as a recovery source
+for v3.0.3: recovery requires the same source commit and archive identities.
 
 Publication is not atomic across registries or packages. If any step fails, first
 record which effects occurred. Do not move a tag, unpublish packages, overwrite a
 version, or create new archive bytes to force progress.
 
-For an npm failure after archive upload, the maintainer dispatches the same `Release` workflow
+For a transient npm failure after archive upload with an otherwise valid publisher,
+the maintainer dispatches the same `Release` workflow
 with the same tag, workflow ref set to that tag, and `recovery_run_id` set to the original Release run ID:
 
 ```sh
 # Set this to the original failed run's tag, not a newer local package version.
-RELEASE_TAG=v3.0.2
+RELEASE_TAG=vMAJOR.MINOR.PATCH
 gh workflow run release.yml --ref "$RELEASE_TAG" -f tag="$RELEASE_TAG" -f recovery_run_id=ORIGINAL_RUN_ID
 ```
 
