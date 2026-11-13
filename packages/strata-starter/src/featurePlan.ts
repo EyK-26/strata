@@ -206,6 +206,7 @@ export function compileStarterFeatures(
     );
   if (reference === "work-tracker")
     artifacts.push(
+      "docs/WORK_TRACKER.md",
       "src/domain/workTracker.ts",
       "src/models/workTracker.ts",
       "src/modules/workTracker/index.ts",

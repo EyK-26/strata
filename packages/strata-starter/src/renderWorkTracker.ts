@@ -249,3 +249,41 @@ const module:AppModule={name:"work-tracker",order:5,
 export default module;
 `;
 }
+
+export function renderWorkTrackerGuide(): string {
+  return `# Work tracker reference
+
+Start the generated app and register or sign in through its selected authentication flow.
+Cookie/server applications expose /work: create an organization, create a project as its owner,
+then create and complete tasks. Choose an organization from the navigation to see its projects
+and tasks. Forms include the same CSRF protection used by the starter's account forms.
+
+The same domain is available at GET/POST /api/v1/work. Send the regular Bearer credential for
+an API application, or the authenticated cookie and CSRF token for a cookie application.
+GET without an organization query lists the caller's organizations; GET with
+?organization=<id> lists tasks after checking membership.
+
+POST accepts JSON with one action:
+
+| action | fields | allowed role |
+| --- | --- | --- |
+| organization | name | any authenticated tenant user; becomes owner |
+| member | organization, userId, role (member or viewer) | owner |
+| project | organization, name | owner |
+| task | organization, project, title | owner or member |
+| complete | organization, task | owner or member |
+
+Viewers can list projects/tasks. Only existing users in the same tenant can be added.
+The established request supplies the tenant and actor; payload fields cannot replace either.
+The reference includes creation, listing and task completion, rather than full edit/delete CRUD.
+
+Every accepted mutation commits a work_audit record and a standard SQL outbox event together.
+Run bun run outbox:work to consume events through the included work.notification listener;
+work_notifications records each event once even when the listener receives it again.
+If audit or outbox persistence fails, the organization/project/task mutation rolls back.
+
+PostgreSQL/RLS uses a restricted runtime role and adds RLS policies to every work table.
+Column-tenancy drivers use explicit tenant/organization predicates and composite foreign keys.
+Schema commands use the migration connection; keep privileged credentials out of the runtime.
+`;
+}

@@ -96,6 +96,7 @@ import {
 import { renderScimModule } from "./renderScim.ts";
 import {
   renderWorkTrackerDomain,
+  renderWorkTrackerGuide,
   renderWorkTrackerMigration,
   renderWorkTrackerModels,
   renderWorkTrackerModule,
@@ -425,6 +426,13 @@ export const TENANCY_ENABLED = ${decisions.tenantTable};
   }
 
   if (plan.reference === "work-tracker") {
+    writeText(join(targetDir, "docs/WORK_TRACKER.md"), renderWorkTrackerGuide());
+    const readmePath = join(targetDir, "README.md");
+    writeText(
+      readmePath,
+      readFileSync(readmePath, "utf8") +
+        "\n## Work tracker reference\n\nOpen `/work` after signing in to the server app. See [the reference workflow](docs/WORK_TRACKER.md) for roles, API actions and the durable worker.\n",
+    );
     writeText(join(src, "domain/workTracker.ts"), renderWorkTrackerDomain());
     writeText(join(src, "models/workTracker.ts"), renderWorkTrackerModels());
     writeText(join(src, "modules/workTracker/index.ts"), renderWorkTrackerModule());
