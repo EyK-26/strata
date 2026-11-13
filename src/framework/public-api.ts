@@ -440,10 +440,8 @@ export type {
   ContentSecurityPolicyOptions,
 } from "../core/http/contentSecurityPolicy.ts";
 export {
-  configureContentSecurityPolicy,
   generateCspNonce,
   HTMX_2_0_4_INDICATOR_STYLE_HASH,
-  resetContentSecurityPolicyForTests,
   resolveContentSecurityPolicy,
   resolveHtmlContentSecurityPolicy,
   serverHtmxContentSecurityPolicy,

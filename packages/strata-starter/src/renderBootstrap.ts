@@ -231,7 +231,7 @@ import { CORE_WEB_ERROR_VIEW_TOKEN } from "@getstrata/core/view/tokens";
 import type { WebErrorView } from "@getstrata/core/view";
 import { webServerResource, type NativeServerOptions } from "@getstrata/bootstrap/web/server";
 import type { Server } from "bun";
-import { abilityCatalog } from "@getstrata/core/auth/abilityCatalog";
+import { ADMIN_ABILITIES, MEMBER_ABILITIES, resolveAbilitiesForRole } from "@getstrata/core/auth/abilityCatalog";
 import { clearSessionCookie } from "@getstrata/core/auth/sessionCookie";
 import { intendedUrlCookieOptionsFromEnvironment } from "@getstrata/core/auth/intendedUrlCookie";
 import { flashSessionOptionsFromEnvironment } from "@getstrata/core/http/flashSession";
@@ -289,7 +289,7 @@ export async function bootstrapApp(options:BootstrapOptions={}):Promise<Bootstra
   const cacheEffects=createModelCacheInvalidationEffects(repositoryDefinitions,modules,{cache:STARTER_CACHE_TOKEN,queue:STARTER_QUEUE_TOKEN});
   const catalog=[cacheEffects,...listenerDeclarations];
   const secret=env.SESSION_SECRET?.trim()??"";
-  const abilities=abilityCatalog();
+  const abilities=Object.freeze({admin:ADMIN_ABILITIES,member:MEMBER_ABILITIES,resolveForRole:resolveAbilitiesForRole});
   const auth=createStarterAuthServices({environment:env,production,allowDevHeaders:!production&&env.AUTH_DEV_HEADERS==="true",jwtSecret:env.JWT_SECRET?.trim()||secret,sessionSecret:secret,
     signatureSecret:env.SIGNED_URL_SECRET?.trim()||secret||env.OAUTH_STATE_SECRET?.trim()||"",
     readSession:()=>null,

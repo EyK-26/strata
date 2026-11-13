@@ -28,4 +28,5 @@ function createCoreProviders(
   ];
 }
 
+export { resolveHttpResponsePolicy } from "./config";
 export { createCoreProviders };
