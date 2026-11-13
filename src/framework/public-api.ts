@@ -597,9 +597,6 @@ export { WebFormRequest } from "../core/http/webFormRequest.ts";
 export {
   installGracefulShutdownSignals,
   LifecycleCoordinator,
-  registerShutdownHandler,
-  resetGracefulShutdownForTests,
-  runGracefulShutdown,
   type ShutdownContext,
   type ShutdownResult,
 } from "../core/lifecycle/gracefulShutdown.ts";

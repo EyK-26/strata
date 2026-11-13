@@ -2,94 +2,92 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import {
   installGracefulShutdownSignals,
   LifecycleCoordinator,
-  registerShutdownHandler,
-  resetGracefulShutdownForTests,
-  runGracefulShutdown,
 } from "@getstrata/core/lifecycle/gracefulShutdown";
 
+const signalCleanups: (() => void)[] = [];
 afterEach(() => {
-  resetGracefulShutdownForTests();
+  for (const cleanup of signalCleanups.splice(0)) cleanup();
 });
 
 describe("gracefulShutdown", () => {
   test("runs registered handlers in registration order", async () => {
-    resetGracefulShutdownForTests();
+    const lifecycle = new LifecycleCoordinator();
     const order: string[] = [];
 
-    registerShutdownHandler("first", async () => {
+    lifecycle.register("first", async () => {
       order.push("first");
     });
-    registerShutdownHandler("second", async () => {
+    lifecycle.register("second", async () => {
       order.push("second");
     });
 
-    await runGracefulShutdown("TEST");
+    await lifecycle.shutdown("TEST");
 
     expect(order).toEqual(["first", "second"]);
   });
 
   test("ignores duplicate shutdown requests", async () => {
-    resetGracefulShutdownForTests();
+    const lifecycle = new LifecycleCoordinator();
     let calls = 0;
 
-    registerShutdownHandler("once", async () => {
+    lifecycle.register("once", async () => {
       calls += 1;
     });
 
-    await Promise.all([runGracefulShutdown("TEST"), runGracefulShutdown("TEST")]);
+    await Promise.all([lifecycle.shutdown("TEST"), lifecycle.shutdown("TEST")]);
 
     expect(calls).toBe(1);
   });
 
   test("continues running handlers when one fails", async () => {
-    resetGracefulShutdownForTests();
+    const lifecycle = new LifecycleCoordinator();
     const order: string[] = [];
     const errorSpy = spyOn(console, "error").mockImplementation(() => {});
 
-    registerShutdownHandler("broken", async () => {
+    lifecycle.register("broken", async () => {
       throw new Error("shutdown failed");
     });
-    registerShutdownHandler("after", async () => {
+    lifecycle.register("after", async () => {
       order.push("after");
     });
 
-    await runGracefulShutdown("TEST");
+    await lifecycle.shutdown("TEST");
 
     errorSpy.mockRestore();
     expect(order).toEqual(["after"]);
   });
 
   test("unregister removes a shutdown handler", async () => {
-    resetGracefulShutdownForTests();
+    const lifecycle = new LifecycleCoordinator();
     const order: string[] = [];
 
-    const unregister = registerShutdownHandler("temporary", async () => {
+    const unregister = lifecycle.register("temporary", async () => {
       order.push("temporary");
     });
-    registerShutdownHandler("permanent", async () => {
+    lifecycle.register("permanent", async () => {
       order.push("permanent");
     });
 
     unregister();
-    await runGracefulShutdown("TEST");
+    await lifecycle.shutdown("TEST");
 
     expect(order).toEqual(["permanent"]);
   });
 
   test("installGracefulShutdownSignals is idempotent", () => {
-    resetGracefulShutdownForTests();
+    const lifecycle = new LifecycleCoordinator();
     const before = process.listenerCount("SIGUSR2");
 
-    installGracefulShutdownSignals(["SIGUSR2"]);
+    signalCleanups.push(installGracefulShutdownSignals(["SIGUSR2"], lifecycle));
     const afterFirst = process.listenerCount("SIGUSR2");
-    installGracefulShutdownSignals(["SIGUSR2"]);
+    signalCleanups.push(installGracefulShutdownSignals(["SIGUSR2"], lifecycle));
 
     expect(afterFirst).toBe(before + 1);
     expect(process.listenerCount("SIGUSR2")).toBe(afterFirst);
   });
 
   test("installGracefulShutdownSignals drains handlers before exiting", async () => {
-    resetGracefulShutdownForTests();
+    const lifecycle = new LifecycleCoordinator();
     const order: string[] = [];
     const originalExit = process.exit;
     let exitCode = -1;
@@ -98,11 +96,11 @@ describe("gracefulShutdown", () => {
       exitCode = code ?? 0;
     }) as typeof process.exit;
 
-    registerShutdownHandler("cleanup", async () => {
+    lifecycle.register("cleanup", async () => {
       order.push("cleanup");
     });
 
-    installGracefulShutdownSignals(["SIGUSR2"]);
+    signalCleanups.push(installGracefulShutdownSignals(["SIGUSR2"], lifecycle));
     process.emit("SIGUSR2");
 
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -404,4 +402,32 @@ test("invalid environment timeout and runtime phase fail before registering reso
   ).toThrow("Unknown shutdown phase");
   expect((await coordinator.shutdown()).successful).toBe(true);
   expect(called).toBe(false);
+});
+
+test("independent lifecycle owners cannot drain or unregister one another", async () => {
+  const a = new LifecycleCoordinator();
+  const b = new LifecycleCoordinator();
+  const calls: string[] = [];
+  const removeA = a.register("same-resource", () => {
+    calls.push("A");
+  });
+  b.register("same-resource", () => {
+    calls.push("B");
+  });
+  removeA();
+  a.register("same-resource", () => {
+    calls.push("A2");
+  });
+  await a.shutdown();
+  expect(calls).toEqual(["A2"]);
+  expect(b.isShuttingDown).toBe(false);
+  await b.shutdown();
+  expect(calls).toEqual(["A2", "B"]);
+});
+
+test("signal installation rejects missing ownership before installing listeners", () => {
+  const before = process.listenerCount("SIGUSR2");
+  // @ts-expect-error An explicit lifecycle is required even for a custom signal list.
+  expect(() => installGracefulShutdownSignals(["SIGUSR2"])).toThrow("explicit lifecycle");
+  expect(process.listenerCount("SIGUSR2")).toBe(before);
 });
