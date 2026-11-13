@@ -9,10 +9,6 @@ import {
 } from "@getstrata/core/http/csrfToken";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { CORE_VIEW_RENDERER_TOKEN, EtaViewEngine, ViewRenderer } from "@getstrata/core/view";
-import {
-  configureWebLayoutData,
-  resetWebLayoutDataConfigForTests,
-} from "@getstrata/core/view/webLayoutData";
 import { CORE_VIEW_TOKEN, createViewProvider } from "../../src/bootstrap/providers/view";
 
 let directory: string;
@@ -107,7 +103,6 @@ test("two app providers and interleaved requests retain isolated shared data", a
       });
       expect(container.resolve(CORE_VIEW_TOKEN)).toBeInstanceOf(EtaViewEngine);
     }
-    configureWebLayoutData({ extra: { app: "legacy-global" } });
     const csrf = Array.from({ length: 8 }, () =>
       createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env)),
     );
@@ -142,7 +137,6 @@ test("two app providers and interleaved requests retain isolated shared data", a
       );
     });
   } finally {
-    resetWebLayoutDataConfigForTests();
     if (previousMode === undefined) delete process.env.FRONTEND_MODE;
     else process.env.FRONTEND_MODE = previousMode;
   }

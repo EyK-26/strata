@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   CORE_ABILITY_CHECKER_TOKEN,
   CORE_AUTH_TOKEN,
@@ -12,11 +12,7 @@ import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { ForbiddenError } from "@getstrata/core/errors/http";
-import {
-  configureWebLayoutData,
-  resetWebLayoutDataConfigForTests,
-  resolveWebLayoutData,
-} from "@getstrata/core/view/webLayoutData";
+import { resolveWebLayoutData } from "@getstrata/core/view/webLayoutData";
 import {
   enableDevAuthHeaders,
   guestGuardOptions,
@@ -25,10 +21,6 @@ import {
 import { createMockDependencies } from "./testHelpers";
 
 describe("ability checker vs auth user directory tokens", () => {
-  afterEach(() => {
-    resetWebLayoutDataConfigForTests();
-  });
-
   test("binds AbilityChecker and AuthUserDirectory together without colliding", async () => {
     const directoryCalls: number[] = [];
     const checkerCalls: string[] = [];
@@ -108,9 +100,9 @@ describe("ability checker vs auth user directory tokens", () => {
     });
   });
 
-  test("configureWebLayoutData uses currentUser and a custom loader", async () => {
-    configureWebLayoutData({
-      userKey: "currentUser",
+  test("explicit layout options use currentUser and a custom loader", async () => {
+    const options = {
+      userKey: "currentUser" as const,
       loadUser: async () => ({
         id: 2,
         name: "Ada",
@@ -119,14 +111,18 @@ describe("ability checker vs auth user directory tokens", () => {
         role: "admin",
       }),
       extra: { unreadCount: 4 },
-    });
+    };
 
-    const data = await resolveWebLayoutData({
-      has: () => false,
-      resolve: () => {
-        throw new Error("should not resolve");
+    const data = await resolveWebLayoutData(
+      {
+        has: () => false,
+        resolve: () => {
+          throw new Error("should not resolve");
+        },
       },
-    });
+      undefined,
+      options,
+    );
 
     expect(data.authUser).toBeUndefined();
     expect(data.currentUser).toEqual({

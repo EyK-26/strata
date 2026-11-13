@@ -1,5 +1,6 @@
 import { toHttpError } from "@getstrata/core/errors/http";
 import { logServerError, webErrorResponse } from "@getstrata/core/http/webErrorResponse";
+import type { WebErrorView } from "../view/webErrorView";
 import { mapDatabaseHttpError } from "./databaseError";
 import type { Middleware } from "./middleware";
 import { currentRequestMeta, runWithRequestMeta } from "./requestMetaContext";
@@ -93,9 +94,16 @@ function createJsonErrorMiddleware(): Middleware {
     });
 }
 
-function createWebErrorMiddleware(): Middleware {
+function createWebErrorMiddleware(
+  options: { render?: WebErrorView; enabled?: boolean } = {},
+): Middleware {
+  const render = options.render;
+  const enabled = options.enabled;
   return async (request, next) =>
-    await withErrorHandling(async (_request: Request) => next())(request);
+    await runWithRequestMeta(
+      { ...currentRequestMeta(), webErrorView: render, viewsEnabled: enabled },
+      () => withErrorHandling(async (_request: Request) => next())(request),
+    );
 }
 
 export {

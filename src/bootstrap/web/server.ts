@@ -1,8 +1,10 @@
+import { resolve } from "node:path";
 import { resolveMaxBodyBytes } from "@getstrata/core/http/bodySizeLimitMiddleware";
 import { type CorsOptions, createCorsMiddleware } from "@getstrata/core/http/corsMiddleware";
 import { currentRequestMeta, runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import type { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
 import { assertUrlPathUnderRoot } from "@getstrata/core/security/safePath";
+import type { WebErrorView } from "@getstrata/core/view";
 import { notFoundHtmlResponse } from "@getstrata/core/view";
 import type { BunRequest, Serve, Server } from "bun";
 import { dispatchOwnedRoute } from "#strata-http-route";
@@ -29,6 +31,8 @@ export interface WebServerOptions<T = unknown> {
   lifecycle?: Pick<LifecycleCoordinator, "isShuttingDown" | "register">;
   routes?: AppRouteMap;
   publicDir?: string;
+  /** Owned renderer for transport fallbacks, including missing public assets. */
+  errorView?: WebErrorView;
   /** Additional approved headers for synthesized route preflights; origins still use framework policy. */
   cors?: CorsOptions;
   onRequest?: (
@@ -230,8 +234,9 @@ function openWebServer<T>(
   const maxRequestBodySize = options.native?.maxRequestBodySize ?? resolveMaxBodyBytes();
   if (!Number.isSafeInteger(maxRequestBodySize) || maxRequestBodySize <= 0)
     throw new RangeError("maxRequestBodySize must be a positive safe integer.");
+  const renderError = options.errorView;
   const active = new Set<Promise<unknown>>();
-  const track: TrackRequest = (work) => {
+  const trackOwned: TrackRequest = (work) => {
     if (!options.lifecycle) return work();
     const running = work();
     active.add(running);
@@ -239,7 +244,12 @@ function openWebServer<T>(
       active.delete(running);
     });
   };
-  const publicDir = options.publicDir ?? "./public";
+  const track: TrackRequest = (work) =>
+    trackOwned(
+      async () =>
+        await runWithRequestMeta({ ...currentRequestMeta(), webErrorView: renderError }, work),
+    );
+  const publicDir = resolve(options.publicDir ?? "./public");
   const bunRoutes = options.routes
     ? convertAppRoutesToBunRoutes(
         options.routes,

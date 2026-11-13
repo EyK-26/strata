@@ -90,7 +90,7 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.resetMemoryThrottleForTests).toBe("function");
     expect(typeof core.createCacheStore).toBe("function");
     expect(typeof core.configureContentSecurityPolicy).toBe("function");
-    expect(typeof core.configureWebErrorView).toBe("function");
+    expect(typeof core.createWebErrorView).toBe("function");
     expect(typeof core.isProductionEnv).toBe("function");
     expect(typeof core.envFlagEnabled).toBe("function");
     expect(typeof core.appDisplayName).toBe("function");

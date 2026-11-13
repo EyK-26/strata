@@ -1,13 +1,8 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
-import { resetWebErrorViewForTests } from "@getstrata/core/view/webErrorView";
 
 describe("createWebServer", () => {
-  afterEach(() => {
-    resetWebErrorViewForTests();
-  });
-
   test("unknown routes return styled HTML 404", async () => {
     const server = createWebServer({ port: 0, native: { hostname: "127.0.0.1" } });
     const response = await fetch(`http://127.0.0.1:${server.port}/forum/nope/nope`);

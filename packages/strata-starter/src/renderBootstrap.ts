@@ -226,6 +226,8 @@ import { discoverListeners } from "@getstrata/bootstrap/discoverListeners";
 import { createModelCacheInvalidationEffects } from "@getstrata/bootstrap/listeners/invalidateCacheOnModelWrite";
 import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
 import { assertProductionSecrets } from "@getstrata/bootstrap/secretsGuard";
+import { CORE_WEB_ERROR_VIEW_TOKEN } from "@getstrata/core/view/tokens";
+import type { WebErrorView } from "@getstrata/core/view";
 import { webServerResource, type NativeServerOptions } from "@getstrata/bootstrap/web/server";
 import type { Server } from "bun";
 import { abilityCatalog } from "@getstrata/core/auth/abilityCatalog";
@@ -312,10 +314,12 @@ export async function bootstrapApp(options:BootstrapOptions={}):Promise<Bootstra
   const outboxWorker=mode==="outbox-worker"?createOutboxWorkerTransport(outbox.token):undefined;
   let server:Server<unknown>|undefined;
   let routes:AppRouteMap|undefined;
+  let errorView:WebErrorView|undefined;
   let kernel:ReturnType<typeof createHttpKernel>|undefined;${layers.extras.metrics ? "\n  let metrics:MetricsRuntime|undefined;" : ""}
   const assembly:ServiceProvider={name:"starter.routes",async boot({dependencies,onCleanup}){
     assertAppDependenciesComplete(dependencies);
     kernel=createHttpKernel(dependencies);
+    errorView=dependencies.container.has(CORE_WEB_ERROR_VIEW_TOKEN)?dependencies.container.resolve(CORE_WEB_ERROR_VIEW_TOKEN):undefined;
     ${layers.extras.metrics ? 'const {failedJobs,outbox,...runtime}=options.runtimeMetrics??{};metrics=createMetricsRuntime({...runtime,...(failedJobs?{failedJobs:{...failedJobs,observeReadOnly:createOwnedReadOnlyObservation(handle.application,"main",dbOptions)}}:{}),...(outbox?{outbox:{...outbox,observeReadOnly:createOwnedReadOnlyObservation(handle.application,"main",dbOptions,{postgresPolicy:"bypass"})}}:{})});onCleanup(()=>metrics!.close(),"drain");' : "void onCleanup;"}
     routes=mergeSpaRoutes(dependencies,composeRouteMaps(
       Object.fromEntries(Object.entries(createHealthRoutes(dependencies,{pingOnHealth:true,healthFormat:"text",schemaCheck:()=>dependencies.invoke({kind:"request",actor:{kind:"system",policy:"http.schema-health"}},async({database})=>{try{await database.model(Note).query().limit(1).select("id").get();return true;}catch{return false;}})})).map(([path,handler])=>[path,kernel!.wrapPublicDocument(handler)])),
@@ -334,7 +338,7 @@ export async function bootstrapApp(options:BootstrapOptions={}):Promise<Bootstra
       ...createDatabaseBindings({default:"main",connections:{main:dbOptions},preparation:[outbox.token],repositories:[...repositoryDefinitions,failedJobRepository,...(options.persistence?.repositories??[])],models:[...modelDefinitions,...(options.persistence?.models??[])],repositoryEffects:[...catalog.flatMap(declaration=>declaration.repositoryEffects),...(options.persistence?.repositoryEffects??[])]}),
     ],providers:[],transports:[...(options.transports??[]),...(worker?[worker.transport]:[]),...(outboxWorker?[outboxWorker.transport]:[]),...(mode==="http"?[{name:"starter.http",async setup(scope:import("@getstrata/core/contracts/application").ProviderScope){
       if(!routes||!kernel)throw new Error("Route assembly did not finish before transport setup.");
-      server=await scope.acquire(webServerResource({port:options.server?.port??config.port,native:options.server?.native??(config.hostname?{hostname:config.hostname}:undefined),routes,publicDir:join(import.meta.dir,"../../public"),enter:(request,handler)=>kernel!.run(request,handler)}));
+      server=await scope.acquire(webServerResource({port:options.server?.port??config.port,native:options.server?.native??(config.hostname?{hostname:config.hostname}:undefined),routes,errorView,publicDir:join(import.meta.dir,"../../public"),enter:(request,handler)=>kernel!.run(request,handler)}));
     }}]:[]) ]},
   });
   const context=await handle.start();
@@ -394,8 +398,11 @@ import { createViewProvider } from "@getstrata/bootstrap/providers/view";
 import { establishedAuthReader } from "@getstrata/core/auth/authReader";
 
 export function createStarterViewProvider(env:Readonly<Record<string,string|undefined>>) {
+  const appName = env.APP_NAME?.trim() || "Strata";
   ${layers.extras.oidc ? 'const oidcLogin = env.FEATURE_OAUTH === "true" && Boolean(env.OIDC_CLIENT_ID?.trim() && env.OIDC_CLIENT_SECRET?.trim());' : "void env;"}
-  return createViewProvider({${plan.decisions.mfaViews ? "\n  enabled: true," : ""}
+  return createViewProvider({
+  env,
+  enabled: ${plan.decisions.mfaViews ? "true" : `["server-htmx","hybrid"].includes(env.FRONTEND_MODE??${JSON.stringify(layers.frontend)})`},
   directory: join(import.meta.dir, "../../../views"),
   data: {
     userKey: "currentUser",
@@ -406,9 +413,10 @@ export function createStarterViewProvider(env:Readonly<Record<string,string|unde
       layers.extras.oidc
         ? `
     extra: () => ({
+      appName,
       oidcLogin,
     }),`
-        : ""
+        : "\n    extra: { appName },"
     }
   },
 });

@@ -75,7 +75,7 @@ async function webErrorResponse(error: unknown, request?: Request): Promise<Resp
   if (
     currentRequestMeta().errorFormat === "json" ||
     !request ||
-    !isViewsEnabled() ||
+    !(currentRequestMeta().viewsEnabled ?? isViewsEnabled()) ||
     requestPrefersJson(request)
   ) {
     return null;

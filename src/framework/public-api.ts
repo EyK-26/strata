@@ -117,7 +117,7 @@ export type {
   RouteModelAuthorization,
   RouteModelBindingPorts,
 } from "@getstrata/core/http/securedRouteModelBinding";
-export { CORE_VIEW_RENDERER_TOKEN } from "@getstrata/core/view/tokens";
+export { CORE_VIEW_RENDERER_TOKEN, CORE_WEB_ERROR_VIEW_TOKEN } from "@getstrata/core/view/tokens";
 export {
   BaseRepository,
   BelongsToManyRelationQuery,
@@ -789,8 +789,7 @@ export {
   validateObject,
 } from "../core/validation/rules.ts";
 export {
-  configureWebErrorView,
-  configureWebLayoutData,
+  createWebErrorView,
   createWebLayoutDataResolver,
   DEFAULT_VIEWS_DIRECTORY,
   EtaViewEngine,
@@ -815,6 +814,11 @@ export type {
   ViewNamespaceOptions,
   ViewResponseOptions,
 } from "../core/view/viewRenderer.ts";
+export type {
+  WebErrorView,
+  WebErrorViewInput,
+  WebErrorViewOptions,
+} from "../core/view/webErrorView.ts";
 export type {
   WebLayoutAuthUser,
   WebLayoutData,

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as BootstrapRoot from "@getstrata/bootstrap";
 import * as BootstrapConfig from "@getstrata/bootstrap/config";
@@ -95,6 +95,7 @@ const expectedOpaque = [
   "CORE_TENANT_RESOLVER_TOKEN",
   "CORE_THROTTLE_QUOTA_POLICY_TOKEN",
   "CORE_VIEW_RENDERER_TOKEN",
+  "CORE_WEB_ERROR_VIEW_TOKEN",
 ];
 for (const name of expectedOpaque)
   assert.ok(opaqueConstants.has(name), `${name} missing from public inventory`);
@@ -145,6 +146,71 @@ try {
   }
 } finally {
   await rm(viewsDirectory, { recursive: true, force: true });
+}
+
+// Real Application owners with physical custom templates, through fresh packed exports.
+const errorViewDirectory = await mkdtemp(join(process.cwd(), "owned-error-view-"));
+const viewApplications: Awaited<ReturnType<typeof BootstrapRoot.createAppContext>>[] = [];
+try {
+  for (const label of ["packed-first", "packed-second"]) {
+    const directory = join(errorViewDirectory, label);
+    await mkdir(join(directory, "errors"), { recursive: true });
+    await writeFile(
+      join(directory, "errors/error.eta"),
+      "<p><%= it.label %>:<%= it.message %></p>",
+    );
+    const app = await BootstrapRoot.createAppContext(
+      [
+        {
+          name: "packed.view.dependencies",
+          register({ dependencies }) {
+            dependencies.cache = new Root.CacheRepository(new SimpleCacheStore(new SimpleCache()));
+            dependencies.storage = new Storage.StorageManager({
+              put: async (path) => path,
+              get: async () => null,
+              delete: async () => false,
+            });
+          },
+        },
+        granularViewProvider({
+          enabled: true,
+          rootDir: errorViewDirectory,
+          directory: label,
+          layout: false,
+          data: { extra: { label } },
+        }),
+      ],
+      { connection: "main", definition: { services: [], providers: [] } },
+    );
+    viewApplications.push(app);
+    assert.equal(Root.CORE_WEB_ERROR_VIEW_TOKEN, Views.CORE_WEB_ERROR_VIEW_TOKEN);
+    assert.equal(Root.CORE_WEB_ERROR_VIEW_TOKEN, ViewTokens.CORE_WEB_ERROR_VIEW_TOKEN);
+  }
+  const results = await Promise.all(
+    Array.from({ length: 8 }, async (_, index) => {
+      const app = viewApplications[index % 2];
+      assert.ok(app);
+      const response = await Views.htmlErrorResponse(
+        { status: 422, title: "invalid", message: `message${index}` },
+        app.container.resolve(Root.CORE_WEB_ERROR_VIEW_TOKEN),
+      );
+      assert.equal(response.status, 422);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      return response.text();
+    }),
+  );
+  results.forEach((html, index) => {
+    assert.equal(html, `<p>${index % 2 ? "packed-second" : "packed-first"}:message${index}</p>`);
+  });
+  const safe = await Views.renderWebErrorHtml({ status: 422, title: "safe", message: "<script>" });
+  assert.ok(safe.includes("&lt;script&gt;"));
+  assert.ok(!safe.includes("packed-first") && !safe.includes("packed-second"));
+  assert.equal("configureWebErrorView" in Views, false);
+  assert.equal("configureWebLayoutData" in Views, false);
+  assert.equal("viewProvider" in ProviderView, false);
+} finally {
+  await Promise.all(viewApplications.map((app) => app.dispose()));
+  await rm(errorViewDirectory, { recursive: true, force: true });
 }
 
 const paths = [];

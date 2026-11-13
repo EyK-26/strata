@@ -71,7 +71,7 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
     "isBlockedHostname",
     "isBlockedIpAddress",
   ],
-  view: ["configureWebErrorView", "renderWebErrorHtml"],
+  view: ["createWebErrorView", "renderWebErrorHtml"],
 };
 
 function parseImportNames(specifier: string): string[] {

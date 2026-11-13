@@ -1,4 +1,5 @@
 import { createAsyncContextStore } from "../runtime/asyncContextStore";
+import type { WebErrorView } from "../view/webErrorView";
 
 type RequestMeta = {
   ipAddress: string | null;
@@ -12,6 +13,9 @@ type RequestMeta = {
   routeTemplate?: string;
   /** API error contracts take precedence over client content negotiation. */
   errorFormat?: "json";
+  /** Captured owner policy; carried only within this request. */
+  webErrorView?: WebErrorView;
+  viewsEnabled?: boolean;
   flash?: { level: string; message: string } | null;
   csrfToken?: string;
   cspNonce?: string;

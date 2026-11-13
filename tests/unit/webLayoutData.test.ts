@@ -1,17 +1,10 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import type { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 import { CORE_AUTH_USER_DIRECTORY_TOKEN } from "@getstrata/core/contracts/serviceTokens";
-import {
-  configureWebLayoutData,
-  resetWebLayoutDataConfigForTests,
-  resolveWebLayoutData,
-} from "@getstrata/core/view/webLayoutData";
+import { resolveWebLayoutData } from "@getstrata/core/view/webLayoutData";
 
 describe("resolveWebLayoutData", () => {
-  afterEach(() => {
-    resetWebLayoutDataConfigForTests();
-  });
   test("returns null auth user when there is no session", async () => {
     const container = {
       has: () => false,
@@ -53,13 +46,13 @@ describe("resolveWebLayoutData", () => {
       headers: { cookie: "strata_session=abc" },
     });
     let seen: Request | undefined;
-    configureWebLayoutData({
-      userKey: "currentUser",
-      loadUser: async (_container, incoming) => {
+    const options = {
+      userKey: "currentUser" as const,
+      loadUser: async (_container: unknown, incoming: Request | undefined) => {
         seen = incoming;
         return { id: 3, email: "member@example.test", role: "member" };
       },
-    });
+    };
 
     const container = {
       has: () => false,
@@ -68,7 +61,7 @@ describe("resolveWebLayoutData", () => {
       },
     } as unknown as ServiceContainer;
 
-    const data = await resolveWebLayoutData(container, request);
+    const data = await resolveWebLayoutData(container, request, options);
 
     expect(seen).toBe(request);
     expect(data.currentUser).toEqual({

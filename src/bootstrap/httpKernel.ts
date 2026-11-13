@@ -35,6 +35,7 @@ import { createRequestLoggingMiddleware } from "@getstrata/core/logging/requestL
 import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
 import { isPublicReadsEnabled } from "@getstrata/core/security/publicReads";
 import { createTracingMiddleware } from "@getstrata/core/tracing/tracingMiddleware";
+import { CORE_WEB_ERROR_VIEW_TOKEN } from "@getstrata/core/view/tokens";
 import type { ComposedRouteHandler } from "#strata-http-route";
 import {
   assertHttpHandler,
@@ -258,7 +259,14 @@ class HttpKernel {
       createRequestLoggingMiddleware(),
       requestIdMiddleware,
       // Commit and deferred listeners finish inside this boundary, before telemetry records the result.
-      errorFormat === "json" ? createJsonErrorMiddleware() : createWebErrorMiddleware(),
+      errorFormat === "json"
+        ? createJsonErrorMiddleware()
+        : createWebErrorMiddleware({
+            enabled: this.viewsEnabled,
+            render: this.dependencies.container.has(CORE_WEB_ERROR_VIEW_TOKEN)
+              ? this.dependencies.container.resolve(CORE_WEB_ERROR_VIEW_TOKEN)
+              : undefined,
+          }),
     ];
   }
 

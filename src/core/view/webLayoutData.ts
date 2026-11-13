@@ -35,16 +35,6 @@ interface WebLayoutDataOptions {
       ) => Record<string, unknown> | Promise<Record<string, unknown>>);
 }
 
-let configuredLayoutOptions: WebLayoutDataOptions = {};
-
-function configureWebLayoutData(options: WebLayoutDataOptions): void {
-  configuredLayoutOptions = { ...options };
-}
-
-function resetWebLayoutDataConfigForTests(): void {
-  configuredLayoutOptions = {};
-}
-
 function layoutUserKey(options: WebLayoutDataOptions): WebLayoutUserKey {
   return options.userKey ?? "authUser";
 }
@@ -93,11 +83,10 @@ async function resolveWebLayoutData(
   request?: Request,
   options: WebLayoutDataOptions = {},
 ): Promise<Record<string, unknown>> {
-  const resolved: WebLayoutDataOptions = { ...configuredLayoutOptions, ...options };
-  return loadWebLayoutData(container, request, resolved);
+  return createWebLayoutDataResolver(container, options)(request);
 }
 
-/** Isolated configuration for one app; does not read legacy global defaults. */
+/** Captures layout configuration for one application. */
 function createWebLayoutDataResolver(
   container: ServiceContainerLike,
   options: WebLayoutDataOptions = {},
@@ -132,9 +121,4 @@ async function loadWebLayoutData(
 }
 
 export type { WebLayoutAuthUser, WebLayoutData, WebLayoutDataOptions, WebLayoutUserKey };
-export {
-  configureWebLayoutData,
-  createWebLayoutDataResolver,
-  resetWebLayoutDataConfigForTests,
-  resolveWebLayoutData,
-};
+export { createWebLayoutDataResolver, resolveWebLayoutData };

@@ -240,14 +240,15 @@ console.log('Packed explicit lookup/service injection and immutable pre-establis
   await Bun.write(
     errorViewProbe,
     `import assert from 'node:assert/strict';
-import {configureWebErrorView,htmlErrorResponse,notFoundHtmlResponse} from '@getstrata/core/view';
+import {createWebErrorView,htmlErrorResponse,notFoundHtmlResponse} from '@getstrata/core/view';
 import {webErrorResponse} from '@getstrata/core/http/webErrorResponse';
+import {runWithRequestMeta} from '@getstrata/core/http/requestMetaContext';
 import {withErrorHandling,withJsonErrorHandling} from '@getstrata/core/http/response';
 import {ValidationError} from '@getstrata/core/errors/http';
 const request=new Request('https://app.example.test/profile',{headers:{accept:'text/html'}});
 const marker='configured-application-error-view';
-configureWebErrorView({render:input=>marker+':'+input.message});
-try{
+const render=createWebErrorView({render:input=>marker+':'+input.message});
+await runWithRequestMeta({ipAddress:null,userAgent:null,webErrorView:render,viewsEnabled:true},async()=>{
   const error=new ValidationError('first',{name:['required']});
   const direct=await htmlErrorResponse({status:422,title:'first',message:'first',request});
   assert.equal(await direct.text(),marker+':first');
@@ -267,7 +268,7 @@ try{
   assert.equal(api.headers.get('cache-control'),'no-store');
   assert.ok(api.headers.get('content-type')?.includes('application/json'));
   assert.deepEqual(await api.json(),{error:'first',details:{name:['required']}});
-}finally{configureWebErrorView({});}
+});
 const fallback=await withErrorHandling(()=>{throw new ValidationError('fallback');})(request);
 assert.equal(fallback.status,422);
 assert.equal(fallback.headers.get('cache-control'),'no-store');

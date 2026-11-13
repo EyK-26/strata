@@ -7,7 +7,6 @@ import {
   ValidationError,
 } from "@getstrata/core/errors/http";
 import { normalizeFieldErrors, webErrorResponse } from "@getstrata/core/http/webErrorResponse";
-import { resetWebErrorViewForTests } from "@getstrata/core/view/webErrorView";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("normalizeFieldErrors", () => {
@@ -36,8 +35,6 @@ describe("webErrorResponse", () => {
   const previousFrontendMode = process.env.FRONTEND_MODE;
 
   afterEach(() => {
-    resetWebErrorViewForTests();
-
     if (previousFrontendMode === undefined) {
       delete process.env.FRONTEND_MODE;
     } else {

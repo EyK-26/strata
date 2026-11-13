@@ -101,11 +101,11 @@ describe("@getstrata/core published bundle singletons", () => {
     expect(await Bun.file(join(CORE_DIST, "entries/database/transaction.js")).exists()).toBe(false);
   });
 
-  test("main and view subpath share configureWebErrorView", async () => {
+  test("main and view subpath share createWebErrorView", async () => {
     const main = await import(join(CORE_DIST, "index.js"));
     const subpath = await import(join(CORE_DIST, "entries/view.js"));
 
-    expect(main.configureWebErrorView).toBe(subpath.configureWebErrorView);
+    expect(main.createWebErrorView).toBe(subpath.createWebErrorView);
   });
 
   test("shared shims keep subpath-only helpers reachable at runtime", async () => {

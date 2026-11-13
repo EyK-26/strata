@@ -7,7 +7,7 @@ import policyProvider from "./policy";
 import { createQueueProvider } from "./queue";
 import { createStorageProvider } from "./storage";
 import { createTracingProvider } from "./tracing";
-import { viewProvider } from "./view";
+import { createViewProvider } from "./view";
 
 function createCoreProviders(
   env: Readonly<Record<string, string | undefined>> = process.env,
@@ -24,7 +24,7 @@ function createCoreProviders(
     authProvider,
     policyProvider,
     createQueueProvider(env),
-    viewProvider,
+    createViewProvider({ env }),
   ];
 }
 
