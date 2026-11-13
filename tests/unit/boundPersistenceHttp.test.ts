@@ -14,6 +14,7 @@ import { createMfaSecretCodec } from "@getstrata/core/crypto/mfaSecret";
 import { createDatabaseBindings } from "@getstrata/core/database/bindings";
 import { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
 import { ForbiddenError } from "@getstrata/core/errors/http";
+import { csrfMiddlewareOptionsFromEnvironment } from "@getstrata/core/http/csrfMiddleware";
 import { createApplication } from "@getstrata/core/runtime/application";
 import { hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
 import { createStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
@@ -114,7 +115,10 @@ test("BP7 actual API and web wrappers roll back writes before error conversion a
       };
     },
   };
-  container.set(HTTP_PERSISTENCE_OPTIONS, options);
+  container.set(HTTP_PERSISTENCE_OPTIONS, {
+    csrf: csrfMiddlewareOptionsFromEnvironment(process.env),
+    ...options,
+  });
   const kernel = createHttpKernel({
     invoke,
     container,
@@ -446,7 +450,10 @@ async function compositionFixture(options: HttpPersistenceOptions, afterMetadata
     return value;
   };
   const container = new ServiceContainer();
-  container.set(HTTP_PERSISTENCE_OPTIONS, options);
+  container.set(HTTP_PERSISTENCE_OPTIONS, {
+    csrf: csrfMiddlewareOptionsFromEnvironment(process.env),
+    ...options,
+  });
   const cache = new CacheRepository(new SimpleCacheStore(new SimpleCache()));
   const kernel = createHttpKernel({
     invoke,
@@ -803,6 +810,7 @@ test("owned HTTP business admission carries detached principal claims and never 
   let authentications = 0;
   const container = new ServiceContainer();
   container.set(HTTP_PERSISTENCE_OPTIONS, {
+    csrf: csrfMiddlewareOptionsFromEnvironment(process.env),
     tenancy: "none",
     production: false,
     allowTenantDevHeaders: false,

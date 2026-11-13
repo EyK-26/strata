@@ -147,7 +147,7 @@ function createMockDependencies(
       "signed-url-secret",
     );
     const passwordSecret = secret(["SESSION_SECRET", "OAUTH_STATE_SECRET"], "session-secret");
-    const options: HttpPersistenceOptions = http ?? {
+    const options: HttpPersistenceOptions = {
       responsePolicy: resolveHttpResponsePolicy(environment),
       features: {
         emailVerificationRequired: environment.FEATURE_EMAIL_VERIFICATION === "true",
@@ -185,7 +185,7 @@ function createMockDependencies(
         tenant: async (id) => (id === defaultTestTenant.id ? defaultTestTenant : null),
       }),
     };
-    container.set(HTTP_PERSISTENCE_OPTIONS, Object.freeze(options));
+    container.set(HTTP_PERSISTENCE_OPTIONS, Object.freeze({ ...options, ...http }));
   }
   return { container, cache, storage, invoke };
 }
