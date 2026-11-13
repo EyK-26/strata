@@ -1,12 +1,12 @@
-import { BaseRepository } from "@getstrata/core/database/baseRepository";
-import { currentSqlDialect, sqlTimestamp } from "@getstrata/core/database/dialect";
+import { defineRepository, type RepositoryBinding } from "@getstrata/core/database/definitions";
 import type { MutationValues, QueryOptions } from "@getstrata/core/database/types";
+import { BaseRepository } from "#strata-orm-runtime";
 import { failedJobTable } from "./failedJobTable";
 import type { FailedJobRecord } from "./types";
 
 class FailedJobRepository extends BaseRepository<FailedJobRecord, "id"> {
-  constructor() {
-    super(failedJobTable);
+  constructor(private readonly selected: RepositoryBinding<FailedJobRecord, "id">) {
+    super(selected);
   }
 
   override async create(values: MutationValues<FailedJobRecord>): Promise<FailedJobRecord> {
@@ -20,11 +20,13 @@ class FailedJobRepository extends BaseRepository<FailedJobRecord, "id"> {
             // Bun's PostgreSQL JSONB codec serializes objects itself; a JSON
             // string here becomes a JSONB string rather than the original object.
             payload:
-              currentSqlDialect().driver === "pgsql"
+              this.selected.dialect.driver === "pgsql"
                 ? values.payload
                 : JSON.stringify(values.payload),
           }),
-      ...(values.failed_at === undefined ? {} : { failed_at: sqlTimestamp(values.failed_at) }),
+      ...(values.failed_at === undefined
+        ? {}
+        : { failed_at: this.selected.dialect.timestampValue(values.failed_at) }),
     };
     return hydrateFailure(await super.create(stored as MutationValues<FailedJobRecord>));
   }
@@ -48,5 +50,12 @@ function hydrateFailure(row: FailedJobRecord): FailedJobRecord {
   return result;
 }
 
-export { FailedJobRepository };
+const failedJobRepository = defineRepository({
+  name: "core.failedJobs",
+  table: failedJobTable,
+  dependencies: [] as const,
+  create: (binding) => new FailedJobRepository(binding),
+});
+
+export { FailedJobRepository, failedJobRepository };
 export default FailedJobRepository;

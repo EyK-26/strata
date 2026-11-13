@@ -1,6 +1,7 @@
 import { isUniqueConstraintError } from "@getstrata/core/database/errors";
-import { currentSqlDialect } from "../../database/dialect";
-import { runInTransaction } from "../../database/transaction";
+import type { SqlStatement } from "../../database/driverPorts";
+import type { DatabaseSession, TransactionSession } from "../../database/session";
+import type { SqlDialect } from "../../database/sqlDialects";
 
 interface SamlAssertionReplayStore {
   consume(assertionId: string): Promise<void>;
@@ -40,60 +41,43 @@ class InMemorySamlAssertionReplayStore implements SamlAssertionReplayStore {
   }
 }
 
-class SqlSamlAssertionReplayStore implements SamlAssertionReplayStore {
-  async consume(assertionId: string): Promise<void> {
-    const dialect = currentSqlDialect();
-
-    try {
-      await runInTransaction(async (connection) => {
-        await connection.unsafe(
-          `INSERT INTO auth_saml_assertions (assertion_id, consumed_at) VALUES (${dialect.placeholder(1)}, ${dialect.placeholder(2)})`,
-          [assertionId, dialect.timestampValue(new Date())],
-        );
-        await connection.unsafe(
-          `DELETE FROM auth_saml_assertions WHERE consumed_at < ${dialect.placeholder(1)}`,
-          [dialect.timestampValue(new Date(Date.now() - REPLAY_RETENTION_MS))],
-        );
+type ReplayConnection = Readonly<{
+  dialect: SqlDialect;
+  execute: (statement: SqlStatement) => Promise<unknown>;
+}>;
+type ReplayTransaction = (work: (connection: ReplayConnection) => Promise<void>) => Promise<void>;
+async function consumeSqlAssertion(run: ReplayTransaction, assertionId: string): Promise<void> {
+  try {
+    await run(async ({ dialect, execute }) => {
+      await execute({
+        text: `INSERT INTO auth_saml_assertions (assertion_id, consumed_at) VALUES (${dialect.placeholder(1)}, ${dialect.placeholder(2)})`,
+        params: [assertionId, dialect.timestampValue(new Date())],
       });
-    } catch (error) {
-      if (isUniqueConstraintError(error)) {
-        throw new Error("SAML assertion replay detected.");
-      }
-
-      throw error;
-    }
+      await execute({
+        text: `DELETE FROM auth_saml_assertions WHERE consumed_at < ${dialect.placeholder(1)}`,
+        params: [dialect.timestampValue(new Date(Date.now() - REPLAY_RETENTION_MS))],
+      });
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) throw new Error("SAML assertion replay detected.");
+    throw error;
   }
 }
-
-const sqlReplayStore = new SqlSamlAssertionReplayStore();
-let replayStoreOverride: SamlAssertionReplayStore | null = null;
-
-function samlAssertionReplayStore(): SamlAssertionReplayStore {
-  return replayStoreOverride ?? sqlReplayStore;
-}
-
-function setSamlAssertionReplayStoreForTests(store: SamlAssertionReplayStore | null): void {
-  replayStoreOverride = store;
-}
-
-function resetSamlReplayCacheForTests(): void {
-  if (replayStoreOverride instanceof InMemorySamlAssertionReplayStore) {
-    replayStoreOverride.clear();
-    return;
-  }
-
-  replayStoreOverride = null;
-}
-
-async function consumeSamlAssertion(assertionId: string): Promise<void> {
-  await samlAssertionReplayStore().consume(assertionId);
+/** The canonical path receives its exact live invocation selection. */
+function createSqlSamlAssertionReplayStore(
+  selected: DatabaseSession | TransactionSession,
+): SamlAssertionReplayStore {
+  return Object.freeze({
+    consume: (assertionId: string) =>
+      consumeSqlAssertion(
+        (work) =>
+          selected.transaction((child) =>
+            work({ dialect: child.dialect, execute: (statement) => child.execute(statement) }),
+          ),
+        assertionId,
+      ),
+  });
 }
 
 export type { SamlAssertionReplayStore };
-export {
-  consumeSamlAssertion,
-  InMemorySamlAssertionReplayStore,
-  REPLAY_RETENTION_MS,
-  resetSamlReplayCacheForTests,
-  setSamlAssertionReplayStoreForTests,
-};
+export { createSqlSamlAssertionReplayStore, InMemorySamlAssertionReplayStore, REPLAY_RETENTION_MS };

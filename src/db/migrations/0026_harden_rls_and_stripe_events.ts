@@ -3,7 +3,8 @@ import type { Migration } from "./types";
 const migration: Migration = {
   name: "0026_harden_rls_and_stripe_events",
   async up(db) {
-    await db`
+    await db.unsafe(
+      `
       CREATE OR REPLACE FUNCTION app_bypass_rls()
       RETURNS BOOLEAN AS $$
       BEGIN
@@ -13,9 +14,12 @@ const migration: Migration = {
           RETURN FALSE;
       END;
       $$ LANGUAGE plpgsql STABLE
-    `;
+    `,
+      [],
+    );
 
-    await db`
+    await db.unsafe(
+      `
       CREATE OR REPLACE FUNCTION app_current_tenant_id()
       RETURNS INTEGER AS $$
       BEGIN
@@ -25,7 +29,9 @@ const migration: Migration = {
           RETURN NULL;
       END;
       $$ LANGUAGE plpgsql STABLE
-    `;
+    `,
+      [],
+    );
 
     const tables = ["organization", "users", "audit_log", "project", "task", "comment", "webhook"];
 
@@ -46,29 +52,38 @@ const migration: Migration = {
       `);
     }
 
-    await db`
+    await db.unsafe(
+      `
       CREATE TABLE IF NOT EXISTS stripe_webhook_event (
         id TEXT PRIMARY KEY,
         event_type TEXT NOT NULL,
         tenant_id INTEGER REFERENCES tenant(id),
         processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
-    `;
-    await db`
+    `,
+      [],
+    );
+    await db.unsafe(
+      `
       CREATE INDEX IF NOT EXISTS idx_stripe_webhook_event_processed_at
       ON stripe_webhook_event(processed_at)
-    `;
+    `,
+      [],
+    );
 
-    await db`
+    await db.unsafe(
+      `
       ALTER TABLE webhook_delivery
       ADD COLUMN IF NOT EXISTS attempt INTEGER NOT NULL DEFAULT 1,
       ADD COLUMN IF NOT EXISTS error TEXT
-    `;
+    `,
+      [],
+    );
   },
   async down(db) {
-    await db`DROP TABLE IF EXISTS stripe_webhook_event`;
-    await db`ALTER TABLE webhook_delivery DROP COLUMN IF EXISTS attempt`;
-    await db`ALTER TABLE webhook_delivery DROP COLUMN IF EXISTS error`;
+    await db.unsafe(`DROP TABLE IF EXISTS stripe_webhook_event`, []);
+    await db.unsafe(`ALTER TABLE webhook_delivery DROP COLUMN IF EXISTS attempt`, []);
+    await db.unsafe(`ALTER TABLE webhook_delivery DROP COLUMN IF EXISTS error`, []);
 
     const tables = ["webhook", "comment", "task", "project", "audit_log", "users", "organization"];
 
@@ -76,7 +91,7 @@ const migration: Migration = {
       await db.unsafe(`DROP POLICY IF EXISTS tenant_isolation ON ${tableName}`);
     }
 
-    await db`DROP FUNCTION IF EXISTS app_bypass_rls()`;
+    await db.unsafe(`DROP FUNCTION IF EXISTS app_bypass_rls()`, []);
   },
 };
 

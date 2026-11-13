@@ -1,4 +1,3 @@
-import { resolveMembershipLookup } from "@getstrata/core/auth/membershipContext";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import type { MembershipLookup, OrganizationMemberRole } from "../contracts/membership";
 import { hasMinimumOrgRole, isGlobalAdmin, resolveUserId } from "./accessControl";
@@ -7,7 +6,7 @@ import { type AuthUser, currentAuthUser } from "./authContext";
 type MembershipRepositoryLike = MembershipLookup;
 
 class MembershipService {
-  constructor(private readonly members: MembershipRepositoryLike = resolveMembershipLookup()) {}
+  constructor(private readonly members: MembershipRepositoryLike) {}
 
   async listOrganizationIdsForUser(userId: number): Promise<number[]> {
     const memberships = await this.members.listForUser(userId);

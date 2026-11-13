@@ -61,6 +61,10 @@ for (const subpath of canonical) {
       dependency.kind === "import-statement",
       `${subpath} has unsupported dependency kind ${dependency.kind}`,
     );
+    // This one canonical definition extends the one private ORM runtime class;
+    // importing the public root shim would cycle through root queue exports.
+    if (subpath === "queue/failedJobRepository" && dependency.path === "#strata-orm-runtime")
+      continue;
     assert(
       dependency.path.startsWith(prefix),
       `${subpath} depends on a root shim or noncanonical module: ${dependency.path}`,
@@ -68,7 +72,8 @@ for (const subpath of canonical) {
     const target = dependency.path.slice(prefix.length);
     assert(
       canonical.has(target) ||
-        (subpath === "config/applicationConfig" && target === "config/envSchema"),
+        (subpath === "config/applicationConfig" && target === "config/envSchema") ||
+        (subpath === "queue/failedJobRepository" && target === "database/table"),
       `${subpath} imports unexpected ${target}`,
     );
   }

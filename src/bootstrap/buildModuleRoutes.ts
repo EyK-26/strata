@@ -1,9 +1,12 @@
+import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
 import type { OpenApiRouteMap } from "@getstrata/core/openapi/registeredRoute";
+import { identityModes, scimMiddleware } from "#strata-http-route";
 import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
 import { createLegacyCachedJson } from "./legacyCache";
-import { applyModuleRouteMiddleware } from "./moduleRouteMiddleware";
+import { enterModuleRoutes } from "./moduleRouteMiddleware";
 import { discoverModules } from "./modules";
+import type { BusinessRouteHandler } from "./persistenceContracts";
 import { prefixRouteMap } from "./prefixRouteMap";
 import { registerOpenApiRouteMap } from "./routeMetadata";
 import { routeRegistry } from "./routeRegistry";
@@ -43,7 +46,7 @@ function buildModuleRoutes(
   }
 
   const kernel = createHttpKernel(dependencies);
-  const middleware = [...kernel.globalMiddleware(), ...kernel.group("api")];
+  const middleware = kernel.group("api");
   const cachedJson = createLegacyCachedJson(dependencies);
   const moduleRoutes: Record<string, unknown> = {};
   const metadata: OpenApiRouteMap = {};
@@ -74,9 +77,15 @@ function buildModuleRoutes(
 
   const prefixed = prefixApiModuleRoutes(apiPrefix, moduleRoutes, metadata);
 
-  return applyModuleRouteMiddleware(
+  return enterModuleRoutes(
     registerOpenApiRouteMap(prefixed.routes, ["global", "api"], prefixed.metadata),
-    middleware,
+    (callback) =>
+      kernel.composed(
+        withMiddleware(...middleware)(callback as BusinessRouteHandler),
+        "json",
+        identityModes(callback),
+        scimMiddleware(callback),
+      ),
   ) as AppRouteMap;
 }
 

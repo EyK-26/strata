@@ -1,6 +1,6 @@
-import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
-import { runWithMigrationBypass } from "../tenant/databaseTenantContext";
+import type { SelectedSession } from "../contracts/persistence";
 
+type AuditExportSql = <T>(work: (selected: SelectedSession) => Promise<T>) => Promise<T>;
 type PendingAuditLog = {
   id: number;
   user_id: number | null;
@@ -16,36 +16,35 @@ type PendingAuditLog = {
   created_at: Date;
 };
 
-async function readPendingAuditLogs(batchSize: number): Promise<PendingAuditLog[]> {
-  return await runWithMigrationBypass(async () => {
-    return (await db`
-      SELECT
-        id,
-        user_id,
-        action,
-        subject_type,
-        subject_id,
-        payload,
-        ip_address,
-        user_agent,
-        checksum,
-        tenant_id,
-        trace_id,
-        created_at
-      FROM audit_log
-      WHERE exported_at IS NULL
-      ORDER BY id
-      LIMIT ${batchSize}
-    `) as PendingAuditLog[];
+/** The supplied scope selects the application's connection and trusted SQL policy. */
+async function readPendingAuditLogs(
+  runSql: AuditExportSql,
+  batchSize: number,
+): Promise<PendingAuditLog[]> {
+  return runSql(async (selected) => {
+    const rows = await selected.execute<PendingAuditLog>({
+      text: `SELECT id,user_id,action,subject_type,subject_id,payload,ip_address,user_agent,checksum,tenant_id,trace_id,created_at
+        FROM audit_log WHERE exported_at IS NULL ORDER BY id LIMIT ${selected.dialect.placeholder(1)}`,
+      params: [batchSize],
+    });
+    return rows.map((row) => ({
+      ...row,
+      created_at: new Date(row.created_at),
+      payload: typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload,
+    }));
   });
 }
 
-async function acknowledgeAuditLogs(ids: readonly number[]): Promise<void> {
-  await runWithMigrationBypass(async () => {
+async function acknowledgeAuditLogs(runSql: AuditExportSql, ids: readonly number[]): Promise<void> {
+  await runSql(async (selected) => {
     for (const id of ids) {
-      await db`UPDATE audit_log SET exported_at = NOW() WHERE id = ${id}`;
+      await selected.execute({
+        text: `UPDATE audit_log SET exported_at = ${selected.dialect.nowExpression()} WHERE id = ${selected.dialect.placeholder(1)}`,
+        params: [id],
+      });
     }
   });
 }
 
+export type { AuditExportSql };
 export { acknowledgeAuditLogs, readPendingAuditLogs };

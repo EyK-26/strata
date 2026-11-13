@@ -1,422 +1,216 @@
 import { describe, expect, test } from "bun:test";
-import { runWithAuthUser } from "@getstrata/core/auth/authContext";
-import { repositoryConnection as db } from "@getstrata/core/database/repositoryConnection";
-import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
+import { HttpError } from "@getstrata/core/errors/http";
+import { errorResponse } from "@getstrata/core/http/response";
 import { currentTenant, type TenantContext } from "@getstrata/core/tenant/tenantContext";
-import { restoreEnvVar } from "../helpers/restoreEnv";
+import {
+  auditChecksum,
+  createTenantMiddleware,
+  DEFAULT_TENANT,
+  resolveTenantForRequest,
+  type TenantMiddlewareOptions,
+} from "@getstrata/core/tenant/tenantMiddleware";
 
-async function runTenant(
-  middleware: (request: Request, next: () => Promise<Response>) => Promise<Response>,
-  request: Request,
-): Promise<{ response: Response; tenant: TenantContext | null }> {
-  let tenant: TenantContext | null = null;
-  const response = await middleware(request, async () => {
-    tenant = currentTenant();
-    return Response.json({ ok: true });
-  });
-  return { response, tenant };
+function options(overrides: Partial<TenantMiddlewareOptions> = {}): TenantMiddlewareOptions {
+  return {
+    auth: { user: null, credentialSource: null },
+    config: { enabled: true, production: false, allowDevHeaders: false },
+    resolveTenant: async (id) => (id === 1 ? DEFAULT_TENANT : null),
+    userTenantId: async () => 1,
+    ...overrides,
+  };
 }
-
-describe("createTenantMiddleware", () => {
-  test("DEFAULT_TENANT carries only tenant identity", async () => {
-    const { DEFAULT_TENANT } = await import("@getstrata/core/tenant/tenantMiddleware");
+async function run(
+  configuration: TenantMiddlewareOptions,
+  headers: Record<string, string> = {},
+  path = "/tasks",
+): Promise<{ tenant: TenantContext | null; response: Response }> {
+  let tenant: TenantContext | null = null;
+  const request = new Request(`http://example.test${path}`, { headers });
+  let response: Response;
+  try {
+    response = await createTenantMiddleware(configuration)(request, async () => {
+      tenant = currentTenant();
+      return Response.json({ ok: true });
+    });
+  } catch (error) {
+    if (!(error instanceof HttpError)) throw error;
+    response = errorResponse(error);
+  }
+  return { tenant, response };
+}
+describe("explicit tenant metadata admission", () => {
+  test("default tenant contains only identity and anonymous headers cannot change it", async () => {
     expect(DEFAULT_TENANT).toEqual({ id: 1, slug: "default" });
+    const result = await run(options(), { "x-tenant-id": "999", "x-tenant-plan": "paid" });
+    expect(result.tenant).toEqual(DEFAULT_TENANT);
+    expect(result.response.status).toBe(200);
+    expect(result.response.headers.get("x-tenant-id")).toBeNull();
+    expect(currentTenant()).toBeNull();
   });
-
-  test("loads trusted metadata only for the selected tenant and rejects identity changes", async () => {
-    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
-    const previous = process.env.FEATURE_PUBLIC_READS;
-    process.env.FEATURE_PUBLIC_READS = "false";
-    try {
-      const middleware = createTenantMiddleware({
-        resolveTenant: async (id) => ({ id, slug: "custom", metadata: { entitlement: "campus" } }),
-      });
-      const result = await runTenant(
-        middleware,
-        new Request("http://example.test/", {
-          headers: { "x-tenant-id": "999", "x-entitlement": "other" },
-        }),
-      );
-      expect(result.tenant).toEqual({ id: 1, slug: "custom", metadata: { entitlement: "campus" } });
-      const missing = createTenantMiddleware({ resolveTenant: async () => null });
-      const denied = await runTenant(missing, new Request("http://example.test/"));
-      expect(denied.response.status).toBe(403);
-      expect(denied.tenant).toBeNull();
-      const broken = createTenantMiddleware({
-        resolveTenant: async () => ({ id: 999, slug: "wrong" }),
-      });
-      await expect(runTenant(broken, new Request("http://example.test/"))).rejects.toThrow(
-        "different tenant identity",
-      );
-    } finally {
-      restoreEnvVar("FEATURE_PUBLIC_READS", previous);
-    }
+  test("loads trusted metadata only for selected identity and rejects resolver identity changes", async () => {
+    const selected: number[] = [];
+    const result = await run(
+      options({
+        resolveTenant: async (id) => {
+          selected.push(id);
+          return { id, slug: "custom", metadata: { entitlement: "campus" } };
+        },
+      }),
+      { "x-tenant-id": "999", "x-entitlement": "other" },
+    );
+    expect(selected).toEqual([1]);
+    expect(result.tenant).toEqual({ id: 1, slug: "custom", metadata: { entitlement: "campus" } });
+    await expect(
+      run(options({ resolveTenant: async () => ({ id: 999, slug: "wrong" }) })),
+    ).rejects.toThrow("different tenant identity");
   });
-
-  test("keeps the default anonymous scope without exposing tenant headers", async () => {
-    const previous = process.env.FEATURE_PUBLIC_READS;
-    process.env.FEATURE_PUBLIC_READS = "true";
-    try {
-      const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
-      const middleware = createTenantMiddleware();
-
-      const { response, tenant } = await runTenant(
-        middleware,
-        new Request("http://example.test/tasks", {
-          headers: { "x-tenant-id": "1" },
-        }),
-      );
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get("x-tenant-id")).toBeNull();
-      expect(response.headers.get("x-tenant-region")).toBeNull();
-      expect(tenant?.id).toBe(1);
-      expect(tenant?.metadata).toBeUndefined();
-    } finally {
-      restoreEnvVar("FEATURE_PUBLIC_READS", previous);
-    }
-  });
-
-  test("ignores anonymous x-tenant-id when public reads are disabled", async () => {
-    const previous = process.env.FEATURE_PUBLIC_READS;
-    process.env.FEATURE_PUBLIC_READS = "false";
-
-    try {
-      const { createTenantMiddleware, DEFAULT_TENANT } = await import(
-        "@getstrata/core/tenant/tenantMiddleware"
-      );
-      const middleware = createTenantMiddleware();
-
-      const { response, tenant } = await runTenant(
-        middleware,
-        new Request("http://example.test/tasks", {
-          headers: { "x-tenant-id": "999" },
-        }),
-      );
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get("x-tenant-id")).toBeNull();
-      expect(tenant?.id).toBe(DEFAULT_TENANT.id);
-    } finally {
-      restoreEnvVar("FEATURE_PUBLIC_READS", previous);
-    }
-  });
-
-  test("skips tenant database scoping when TENANCY_DRIVER=none", async () => {
-    const previous = process.env.TENANCY_DRIVER;
-    process.env.TENANCY_DRIVER = "none";
-
-    try {
-      const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
-      const middleware = createTenantMiddleware();
-
-      const response = await middleware(new Request("http://example.test/notes"), async () =>
-        Response.json({ ok: true }),
-      );
-
-      expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ ok: true });
-    } finally {
-      restoreEnvVar("TENANCY_DRIVER", previous);
-    }
-  });
-
-  test("defers SCIM routes to SCIM auth middleware for tenant scoping", async () => {
-    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
-    const middleware = createTenantMiddleware();
-    let nextCalled = false;
-
-    const response = await middleware(
-      new Request("http://example.test/scim/v2/Users"),
-      async () => {
-        nextCalled = true;
-        return Response.json({ ok: true });
+  test("disabled tenancy supplies default identity without database lookups", async () => {
+    const configuration = options({
+      config: { enabled: false, production: false, allowDevHeaders: false },
+      resolveTenant: async () => {
+        throw new Error("must not query");
       },
-    );
-
-    expect(nextCalled).toBe(true);
-    expect(response.status).toBe(200);
-    expect(response.headers.get("x-tenant-id")).toBeNull();
-  });
-
-  test("uses the member account tenant when no header is sent", async () => {
-    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
-    const middleware = createTenantMiddleware();
-
-    await runWithAuthUser({ id: 2, role: "member" }, async () => {
-      const { response, tenant } = await runTenant(
-        middleware,
-        new Request("http://example.test/tasks"),
-      );
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get("x-tenant-id")).toBeNull();
-      expect(tenant?.id).toBe(1);
+      userTenantId: async () => {
+        throw new Error("must not query");
+      },
     });
+    const result = await run(configuration, { "x-tenant-id": "999" });
+    expect(result.response.status).toBe(200);
+    expect(result.tenant).toEqual(DEFAULT_TENANT);
   });
-
-  test("uses the authenticated user tenant and rejects mismatched headers", async () => {
-    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
-    const middleware = createTenantMiddleware();
-
-    await runWithAuthUser({ id: 2, role: "member" }, async () => {
-      const response = await middleware(
-        new Request("http://example.test/tasks", {
-          headers: { "x-tenant-id": "999" },
-        }),
-        async () => Response.json({ ok: true }),
-      );
-
-      expect(response.status).toBe(403);
-      expect(response.headers.get("cache-control")).toBe("private, no-store");
-      expect(await response.json()).toEqual({
-        error: "Tenant header does not match your account.",
-      });
-    });
+  test("SCIM pathname alone does not bypass ordinary tenant admission", async () => {
+    const result = await run(options({ resolveTenant: async () => null }), {}, "/scim/v2/Users");
+    expect(result.response.status).toBe(403);
+    expect(result.tenant).toBeNull();
   });
-
-  test("allows global admins to override tenant via header", async () => {
-    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
-    const middleware = createTenantMiddleware();
-
-    await runWithAuthUser({ id: 1, role: "admin" }, async () => {
-      const { response, tenant } = await runTenant(
-        middleware,
-        new Request("http://example.test/tasks", {
-          headers: { "x-tenant-id": "1" },
+  for (const role of ["member", "admin"] as const) {
+    test(`${role} uses established account tenant without a header`, async () => {
+      const lookedUp: number[] = [];
+      const result = await run(
+        options({
+          auth: { user: { id: 42, role }, credentialSource: "bearer" },
+          userTenantId: async (id) => {
+            lookedUp.push(id);
+            return 7;
+          },
+          resolveTenant: async (id) => ({ id, slug: "account" }),
         }),
       );
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get("x-tenant-id")).toBeNull();
-      expect(tenant?.id).toBe(1);
+      expect(lookedUp).toEqual([42]);
+      expect(result.response.status).toBe(200);
+      expect(result.tenant?.id).toBe(7);
     });
-  });
-
-  test("uses the admin account tenant when no override header is sent", async () => {
-    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
-    const middleware = createTenantMiddleware();
-
-    await runWithAuthUser({ id: 1, role: "admin" }, async () => {
-      const { response, tenant } = await runTenant(
-        middleware,
-        new Request("http://example.test/tasks"),
-      );
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get("x-tenant-id")).toBeNull();
-      expect(tenant?.id).toBe(1);
-    });
-  });
-
-  test("falls back to the default tenant when an admin header tenant is missing", async () => {
-    const { createTenantMiddleware, DEFAULT_TENANT } = await import(
-      "@getstrata/core/tenant/tenantMiddleware"
-    );
-    const middleware = createTenantMiddleware();
-
-    await runWithAuthUser({ id: 1, role: "admin" }, async () => {
-      const { response, tenant } = await runTenant(
-        middleware,
-        new Request("http://example.test/tasks", {
-          headers: { "x-tenant-id": "999" },
+    test(`${role} missing account tenant is denied instead of selecting a different tenant`, async () => {
+      const result = await run(
+        options({
+          auth: { user: { id: 42, role }, credentialSource: "session" },
+          userTenantId: async () => 99999,
         }),
       );
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get("x-tenant-id")).toBeNull();
-      expect(tenant?.id).toBe(DEFAULT_TENANT.id);
+      expect(result.response.status).toBe(403);
+      expect(result.tenant).toBeNull();
     });
-  });
-
-  test("explicit development tenant selection retains the missing-tenant fallback", async () => {
-    const previous = process.env.TENANT_DEV_HEADERS;
-    process.env.TENANT_DEV_HEADERS = "true";
-
-    try {
-      const { createTenantMiddleware, DEFAULT_TENANT } = await import(
-        "@getstrata/core/tenant/tenantMiddleware"
-      );
-      const middleware = createTenantMiddleware();
-
-      const { response, tenant } = await runTenant(
-        middleware,
-        new Request("http://example.test/tasks", {
-          headers: { "x-tenant-id": "999" },
-        }),
-      );
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get("x-tenant-id")).toBeNull();
-      expect(tenant?.id).toBe(DEFAULT_TENANT.id);
-    } finally {
-      restoreEnvVar("TENANT_DEV_HEADERS", previous);
-    }
-  });
-
-  test("falls back to the default tenant when a member account tenant is missing", async () => {
-    const { createTenantMiddleware, DEFAULT_TENANT } = await import(
-      "@getstrata/core/tenant/tenantMiddleware"
+  }
+  test("member mismatched headers return a private denial before handler", async () => {
+    const result = await run(
+      options({ auth: { user: { id: 2, role: "member" }, credentialSource: "bearer" } }),
+      { "x-tenant-id": "999" },
     );
-    const middleware = createTenantMiddleware();
-    const email = `ghost-member-${Date.now()}@strata.test`;
-
-    const userId = await runWithMigrationBypass(async () => {
-      await db`SET session_replication_role = replica`;
-      try {
-        const rows = (await db`
-          INSERT INTO users (name, email, email_lookup, role, tenant_id, password_hash)
-          VALUES ('Ghost Member', ${email}, ${email}, 'member', 99999, 'x')
-          RETURNING id
-        `) as Array<{ id: number }>;
-        return rows[0]?.id;
-      } finally {
-        await db`SET session_replication_role = origin`;
-      }
+    expect(result.tenant).toBeNull();
+    expect(result.response.status).toBe(403);
+    expect(result.response.headers.get("cache-control")).toBe("no-store");
+    expect(await result.response.json()).toEqual({
+      error: "Tenant header does not match your account.",
     });
-
-    if (typeof userId !== "number") {
-      throw new Error("expected inserted member id");
-    }
-
-    try {
-      await runWithAuthUser({ id: userId, role: "member" }, async () => {
-        const { response, tenant } = await runTenant(
-          middleware,
-          new Request("http://example.test/tasks"),
-        );
-
-        expect(response.status).toBe(200);
-        expect(response.headers.get("x-tenant-id")).toBeNull();
-        expect(tenant?.id).toBe(DEFAULT_TENANT.id);
-      });
-    } finally {
-      await runWithMigrationBypass(async () => {
-        await db`DELETE FROM users WHERE id = ${userId}`;
-      });
-    }
   });
-
-  test("falls back to the default tenant when an admin account tenant is missing", async () => {
-    const { createTenantMiddleware, DEFAULT_TENANT } = await import(
-      "@getstrata/core/tenant/tenantMiddleware"
+  test("global admins can select an existing header tenant but cannot fall back from a missing one", async () => {
+    const configuration = options({
+      auth: { user: { id: 1, role: "admin" }, credentialSource: "bearer" },
+      resolveTenant: async (id) => (id === 7 ? { id, slug: "selected" } : null),
+    });
+    expect((await run(configuration, { "x-tenant-id": "7" })).tenant?.id).toBe(7);
+    const missing = await run(configuration, { "x-tenant-id": "999" });
+    expect(missing.response.status).toBe(403);
+    expect(missing.tenant).toBeNull();
+  });
+  test("explicit development headers require an existing tenant", async () => {
+    const configuration = options({
+      config: { enabled: true, production: false, allowDevHeaders: true },
+      resolveTenant: async (id) => (id === 7 ? { id, slug: "dev" } : null),
+    });
+    expect((await run(configuration, { "x-tenant-id": "7" })).tenant?.id).toBe(7);
+    expect((await run(configuration, { "x-tenant-id": "999" })).response.status).toBe(403);
+  });
+  test("guest guard identifiers are never queried as persisted accounts", async () => {
+    const result = await run(
+      options({
+        auth: { user: { id: 777, role: "member" }, credentialSource: "guest" },
+        userTenantId: async () => {
+          throw new Error("must not query");
+        },
+      }),
     );
-    const middleware = createTenantMiddleware();
-    const email = `ghost-admin-${Date.now()}@strata.test`;
-
-    const userId = await runWithMigrationBypass(async () => {
-      await db`SET session_replication_role = replica`;
-      try {
-        const rows = (await db`
-          INSERT INTO users (name, email, email_lookup, role, tenant_id, password_hash)
-          VALUES ('Ghost Admin', ${email}, ${email}, 'admin', 99999, 'x')
-          RETURNING id
-        `) as Array<{ id: number }>;
-        return rows[0]?.id;
-      } finally {
-        await db`SET session_replication_role = origin`;
-      }
-    });
-
-    if (typeof userId !== "number") {
-      throw new Error("expected inserted admin id");
-    }
-
-    try {
-      await runWithAuthUser({ id: userId, role: "admin" }, async () => {
-        const { response, tenant } = await runTenant(
-          middleware,
-          new Request("http://example.test/tasks"),
-        );
-
-        expect(response.status).toBe(200);
-        expect(response.headers.get("x-tenant-id")).toBeNull();
-        expect(tenant?.id).toBe(DEFAULT_TENANT.id);
-      });
-    } finally {
-      await runWithMigrationBypass(async () => {
-        await db`DELETE FROM users WHERE id = ${userId}`;
-      });
-    }
+    expect(result.tenant).toEqual(DEFAULT_TENANT);
   });
-
-  test("falls back to default tenant for invalid user ids", async () => {
-    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
-    const middleware = createTenantMiddleware();
-
-    await runWithAuthUser({ id: "invalid", role: "member" }, async () => {
-      const { response, tenant } = await runTenant(
-        middleware,
-        new Request("http://example.test/tasks"),
-      );
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get("x-tenant-id")).toBeNull();
-      expect(tenant?.id).toBe(1);
-    });
+  test("invalid principal ids never trigger a database lookup", async () => {
+    const result = await run(
+      options({
+        auth: { user: { id: "invalid", role: "member" }, credentialSource: "bearer" },
+        userTenantId: async () => {
+          throw new Error("must not query");
+        },
+      }),
+    );
+    expect(result.tenant).toEqual(DEFAULT_TENANT);
   });
-
-  test("auditChecksum returns a stable sha256 digest", async () => {
-    const { auditChecksum } = await import("@getstrata/core/tenant/tenantMiddleware");
-
+  test("audit checksum is a stable SHA256 digest", () => {
     expect(auditChecksum({ action: "login" })).toMatch(/^[a-f0-9]{64}$/);
     expect(auditChecksum({ action: "login" })).toBe(auditChecksum({ action: "login" }));
   });
-
-  test("resolveUserTenantId skips the users table when TENANCY_DRIVER=none", async () => {
-    const previous = process.env.TENANCY_DRIVER;
-    process.env.TENANCY_DRIVER = "none";
-
-    try {
-      const { resolveUserTenantId, DEFAULT_TENANT } = await import(
-        "@getstrata/core/tenant/tenantMiddleware"
-      );
-
-      await expect(resolveUserTenantId(1)).resolves.toBe(DEFAULT_TENANT.id);
-    } finally {
-      restoreEnvVar("TENANCY_DRIVER", previous);
-    }
-  });
-
-  test("resolveUserTenantId returns the user tenant or default", async () => {
-    const { resolveUserTenantId, DEFAULT_TENANT } = await import(
-      "@getstrata/core/tenant/tenantMiddleware"
-    );
-
-    await expect(resolveUserTenantId(1)).resolves.toBe(1);
-    await expect(resolveUserTenantId(999_999)).resolves.toBe(DEFAULT_TENANT.id);
-  });
-
-  test("maps forbidden errors to json responses", async () => {
-    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
-    const middleware = createTenantMiddleware();
-
-    await runWithAuthUser({ id: 2, role: "member" }, async () => {
-      const response = await middleware(
-        new Request("http://example.test/tasks", {
-          headers: { "x-tenant-id": "999" },
-        }),
-        async () => Response.json({ ok: true }),
-      );
-
-      expect(response.status).toBe(403);
-      expect(response.headers.get("cache-control")).toBe("private, no-store");
-      expect(await response.json()).toEqual({
-        error: "Tenant header does not match your account.",
-      });
-    });
-  });
-});
-
-describe("tenant middleware error propagation", () => {
-  test("rethrows non-http errors from downstream handlers", async () => {
-    const { createTenantMiddleware } = await import("@getstrata/core/tenant/tenantMiddleware");
-    const middleware = createTenantMiddleware();
-
+  test("non-http handler errors propagate to the outer response boundary", async () => {
     await expect(
-      middleware(new Request("http://example.test/tasks"), async () => {
+      createTenantMiddleware(options())(new Request("http://example.test"), async () => {
         throw new Error("handler failed");
       }),
     ).rejects.toThrow("handler failed");
   });
 });
+
+for (const selected of ["member", "admin", "admin-header", "anonymous-default"] as const) {
+  test(`direct tenant resolution refuses missing ${selected} identity without fallback or consumer admission`, async () => {
+    const accountLookups: number[] = [];
+    const resolutions: number[] = [];
+    let consumers = 0;
+    const configuration = options({
+      auth:
+        selected === "anonymous-default"
+          ? { user: null, credentialSource: null }
+          : {
+              user: { id: 42, role: selected === "member" ? "member" : "admin" },
+              credentialSource: "session",
+            },
+      userTenantId: async (id) => {
+        accountLookups.push(id);
+        return 7;
+      },
+    });
+    const request = new Request("http://example.test/tasks", {
+      headers: selected === "admin-header" ? { "x-tenant-id": "9" } : {},
+    });
+    await expect(
+      resolveTenantForRequest(request, configuration, async (id) => {
+        resolutions.push(id);
+        return null;
+      }).then((tenant) => {
+        consumers++;
+        return tenant;
+      }),
+    ).rejects.toThrow("Tenant not found.");
+    expect(resolutions).toEqual([
+      selected === "admin-header" ? 9 : selected === "anonymous-default" ? 1 : 7,
+    ]);
+    expect(accountLookups).toEqual(selected === "anonymous-default" ? [] : [42]);
+    expect(consumers).toBe(0);
+    expect(currentTenant()).toBeNull();
+  });
+}

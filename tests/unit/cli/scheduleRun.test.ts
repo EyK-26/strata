@@ -1,70 +1,31 @@
-import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
-import { configureModulesManifest } from "@getstrata/bootstrap/discoverModules";
-import * as database from "../../../src/db/connection";
+import { describe, expect, test } from "bun:test";
+import { createScheduleRunCommand } from "@getstrata/cli/schedule";
+import { Schedule } from "@getstrata/core/scheduler/schedule";
 import { captureConsole } from "./helpers";
-
-beforeEach(() => {
-  configureModulesManifest([]);
-  spyOn(database, "closeDatabase").mockResolvedValue(undefined);
-});
-
-afterEach(() => {
-  mock.restore();
-});
 
 describe("scheduleRunCommand", () => {
   test("prints a message when no tasks are due", async () => {
-    mock.module("@getstrata/core/scheduler/schedule", () => ({
-      appSchedule: {
-        dueTasks: () => [],
-      },
-      runDueScheduledTasks: async () => undefined,
-    }));
-    mock.module("../../../src/bootstrap/schedule", () => ({}));
-
-    const { scheduleRunCommand } = await import("../../../src/cli/commands/scheduleRun");
+    const schedule = new Schedule();
     const output = captureConsole();
-
     try {
-      await scheduleRunCommand();
+      await createScheduleRunCommand(() => schedule)();
     } finally {
       output.restore();
     }
-
     expect(output.logs).toEqual(["No scheduled tasks due."]);
   });
 
   test("runs due scheduled tasks", async () => {
     let ran = false;
-
-    mock.module("@getstrata/core/scheduler/schedule", () => ({
-      appSchedule: {
-        dueTasks: () => [
-          {
-            name: "heartbeat",
-            run: async () => {
-              ran = true;
-            },
-          },
-        ],
-      },
-      runDueScheduledTasks: async (schedule: {
-        dueTasks: () => Array<{ run: () => Promise<void> }>;
-      }) => {
-        for (const task of schedule.dueTasks()) await task.run();
-      },
-    }));
-    mock.module("../../../src/bootstrap/schedule", () => ({}));
-
-    const { scheduleRunCommand } = await import("../../../src/cli/commands/scheduleRun");
+    const schedule = new Schedule().command("* * * * *", "heartbeat", async () => {
+      ran = true;
+    });
     const output = captureConsole();
-
     try {
-      await scheduleRunCommand();
+      await createScheduleRunCommand(() => schedule)();
     } finally {
       output.restore();
     }
-
     expect(ran).toBe(true);
     expect(output.logs).toEqual(["Running scheduled task: heartbeat"]);
   });
@@ -79,20 +40,20 @@ describe("scheduled app startup", () => {
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
-    mock.module("@getstrata/core/scheduler/schedule", () => ({
-      appSchedule: {
-        dueTasks: () => {
-          inspected++;
-          return [{ name: "probe" }];
-        },
-      },
-      runDueScheduledTasks: async () => {
-        ran++;
-      },
-    }));
-    const { createScheduleRunCommand } = await import("@getstrata/cli/schedule");
+    class OwnedSchedule extends Schedule {
+      override dueTasks(now = new Date()) {
+        inspected++;
+        return super.dueTasks(now);
+      }
+    }
+    const schedule = new OwnedSchedule().command("* * * * *", "probe", async () => {
+      ran++;
+    });
     const running = createScheduleRunCommand(
-      () => gate,
+      async () => {
+        await gate;
+        return schedule;
+      },
       () => {
         closed++;
       },

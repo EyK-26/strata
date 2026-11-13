@@ -1,19 +1,21 @@
 import { describe, expect, test } from "bun:test";
-import { EventBus, eventBus, readSharedEventBus } from "@getstrata/core/events";
+import { EventBus, modelEventName } from "@getstrata/core/events";
 
 describe("EventBus", () => {
   test("dispatches events to registered listeners in registration order", async () => {
     const bus = new EventBus();
     const order: string[] = [];
 
-    bus.listen("task.created", () => {
+    const event = modelEventName("task", "created");
+    expect(event).toBe("task.created");
+    bus.listen(event, () => {
       order.push("first");
     });
-    bus.listen("task.created", () => {
+    bus.listen(event, () => {
       order.push("second");
     });
 
-    await bus.dispatch("task.created", { id: 1 });
+    await bus.dispatch(event, { id: 1 });
 
     expect(order).toEqual(["first", "second"]);
   });
@@ -81,24 +83,58 @@ describe("EventBus", () => {
     await bus.emit("mail.sent", { to: "ada@example.com" });
     expect(seen).toEqual([{ to: "ada@example.com" }]);
   });
+});
 
-  test("supports the shared event bus singleton", async () => {
-    let count = 0;
-    const unsubscribe = eventBus.listen("singleton.event", () => {
-      count += 1;
-    });
-
-    await eventBus.dispatch("singleton.event", { ok: true });
-    unsubscribe();
-
-    expect(count).toBe(1);
-    expect(readSharedEventBus()).toBe(eventBus);
+test("transactional unsubscribe removes the final listener without changing ordinary or unrelated listeners", async () => {
+  const bus = new EventBus();
+  const seen: string[] = [];
+  const first = bus.listenTransactional("row.created", () => {
+    seen.push("first");
   });
-
-  test("src and package eventBus share one process instance", async () => {
-    const src = await import("../../src/core/events/eventBus");
-
-    expect(src.eventBus).toBe(eventBus);
-    expect(src.readSharedEventBus()).toBe(eventBus);
+  const last = bus.listenTransactional("row.created", () => {
+    seen.push("last");
   });
+  bus.listenTransactional("row.updated", () => {
+    seen.push("updated");
+  });
+  bus.listen("row.created", () => {
+    seen.push("ordinary");
+  });
+  await bus.dispatchTransactional("row.created", {});
+  first();
+  expect(bus.hasTransactionalListeners("row.created")).toBe(true);
+  await bus.dispatchTransactional("row.created", {});
+  last();
+  last();
+  expect(bus.hasTransactionalListeners("row.created")).toBe(false);
+  expect(bus.hasTransactionalListeners("row.updated")).toBe(true);
+  await bus.dispatchTransactional("row.created", {});
+  await bus.dispatchTransactional("row.updated", {});
+  await bus.dispatch("row.created", {});
+  expect(seen).toEqual(["first", "last", "last", "updated", "ordinary"]);
+});
+
+test("events public surface retains caller-owned dispatch and excludes ambient ownership", async () => {
+  const surface = await import("@getstrata/core/events");
+  expect(surface.EventBus).toBe(EventBus);
+  expect(surface.modelEventName).toBe(modelEventName);
+  for (const name of [
+    "eventBus",
+    "readSharedEventBus",
+    "dispatchModelEvent",
+    "runWithDeferredModelEvents",
+    "afterCommit",
+    "onDeferredModelRollback",
+  ])
+    expect(name in surface).toBe(false);
+  const first = new EventBus();
+  const second = new EventBus();
+  let count = 0;
+  first.listen(modelEventName("owned", "created"), () => {
+    count++;
+  });
+  await second.dispatch(modelEventName("owned", "created"), {});
+  expect(count).toBe(0);
+  await first.dispatch(modelEventName("owned", "created"), {});
+  expect(count).toBe(1);
 });

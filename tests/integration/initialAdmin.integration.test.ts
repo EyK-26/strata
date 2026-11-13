@@ -1,10 +1,12 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
-import { mkdtemp, rm, symlink } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
 import { SQL } from "bun";
+import type { RowDataPacket } from "mysql2";
 import { createPool } from "mysql2/promise";
 import {
   generateProject,
@@ -17,8 +19,10 @@ import {
 } from "../../packages/strata-starter/src/parseArgs.ts";
 import { renderInitialAdminMigration } from "../../packages/strata-starter/src/renderInitialAdmin.ts";
 import { renderStarterSchemaMigration } from "../../packages/strata-starter/src/renderRuntime.ts";
+import { candidatePackage } from "../../scripts/candidate-packages.ts";
 
-const root = join(import.meta.dir, "../..");
+import { installGeneratedAppDependencies } from "../unit/cli/helpers";
+
 const secret = "independent-private-bootstrap-secret";
 
 async function exercise(
@@ -26,7 +30,7 @@ async function exercise(
   db: MigrationDatabase,
   url: string,
   directory: string,
-  prefix = "",
+  runtimeRole?: string,
 ) {
   const layers = layersFromFlags(
     parseCreateStrataArgs([
@@ -49,51 +53,105 @@ async function exercise(
     templateRoot: resolveTemplateRoot(),
     overlayRoot: resolveOverlayRoot(),
   });
-  await symlink(join(root, "node_modules"), join(app, "node_modules"));
-  const identifiers = [
-    "initial_admin_provisioning",
-    "auth_one_time_tokens",
-    "failed_job",
-    "users",
-    "notes",
-    "sessions",
-    "tenant",
-  ];
-  const rewrite = (text: string) =>
-    prefix
-      ? text.replace(
-          new RegExp(`\\b(${identifiers.join("|")})\\b`, "g"),
-          (value) => `${prefix}${value}`,
-        )
-      : text;
-  await Bun.write(join(app, "schema.ts"), rewrite(renderStarterSchemaMigration(layers)));
-  await Bun.write(join(app, "claim.ts"), rewrite(renderInitialAdminMigration(layers) ?? ""));
-  await Bun.write(
-    join(app, "src/cli/initialAdmin.ts"),
-    rewrite(await Bun.file(join(app, "src/cli/initialAdmin.ts")).text()),
-  );
+  const manifest = await Bun.file(join(app, "package.json")).json();
+  for (const part of ["core", "bootstrap", "cli"] as const)
+    manifest.dependencies[`@getstrata/${part}`] = `file:${await candidatePackage(part, directory)}`;
+  await Bun.write(join(app, "package.json"), JSON.stringify(manifest));
+  installGeneratedAppDependencies(app);
+  const evidence = process.env.STRATA_GENERATED_RUNTIME_EVIDENCE_DIR;
+  const provenance = evidence
+    ? await mkdtemp(join(evidence, "installed-initial-admin-"))
+    : undefined;
+  if (provenance) {
+    await Bun.write(
+      join(provenance, "package.json"),
+      await Bun.file(join(app, "package.json")).text(),
+    );
+    await Bun.write(join(provenance, "bun.lock"), await Bun.file(join(app, "bun.lock")).text());
+    const installed = Object.fromEntries(
+      ["core", "bootstrap", "cli"].map((part) => [
+        part,
+        createRequire(join(app, "package.json")).resolve(`@getstrata/${part}`),
+      ]),
+    );
+    for (const path of Object.values(installed))
+      expect(path.startsWith(join(app, "node_modules/"))).toBe(true);
+    await Bun.write(join(provenance, "resolved.json"), JSON.stringify({ app, installed }, null, 2));
+  }
+  await Bun.write(join(app, "schema.ts"), renderStarterSchemaMigration(layers));
+  await Bun.write(join(app, "claim.ts"), renderInitialAdminMigration(layers) ?? "");
   const schema = (await import(join(app, "schema.ts"))).default;
   const claim = (await import(join(app, "claim.ts"))).default;
   await schema.up(db);
   await claim.up(db);
   if (driver === "postgres") {
-    await db.unsafe("GRANT USAGE ON SCHEMA public TO strata_app");
+    if (!runtimeRole) throw new Error("An owned restricted Postgres role is required");
+    await db.unsafe(`GRANT USAGE ON SCHEMA public TO ${runtimeRole}`);
     await db.unsafe(
-      "GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO strata_app",
+      `GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO ${runtimeRole}`,
     );
-    await db.unsafe("GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO strata_app");
+    await db.unsafe(`GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO ${runtimeRole}`);
     await db.unsafe("INSERT INTO tenant (slug) VALUES ('approved')");
   }
-  const users = `${prefix}users`;
-  const claims = `${prefix}initial_admin_provisioning`;
+  const users = "users";
+  const claims = "initial_admin_provisioning";
+  // Only negative cases observe failures before the real CLI redacts their payloads.
+  const commandSource = await Bun.file(join(app, "src/cli/initialAdmin.ts")).text();
+  if (provenance) await Bun.write(join(provenance, "initialAdmin.original.ts"), commandSource);
+  const observedSource = commandSource
+    .replace('from "@getstrata/cli/initialAdmin"', 'from "../../observeInitialAdmin.ts"')
+    .replace(
+      `await db.execute({text:"INSERT INTO ${claims}`,
+      `console.error("fixture.stage:claim");\n          await db.execute({text:"INSERT INTO ${claims}`,
+    )
+    .replace(
+      `await db.execute({text:"INSERT INTO ${users} (`,
+      `console.error("fixture.stage:user-insert");\n          await db.execute({text:"INSERT INTO ${users} (`,
+    );
+  expect(observedSource).not.toBe(commandSource);
+  if (provenance) await Bun.write(join(provenance, "initialAdmin.observed.ts"), observedSource);
+  await Bun.write(join(app, "src/cli/observedInitialAdmin.ts"), observedSource);
+  await Bun.write(
+    join(app, "observeInitialAdmin.ts"),
+    `
+import { runInitialAdminCommand as realCommand, type InitialAdminOptions } from "@getstrata/cli/initialAdmin";
+export async function runInitialAdminCommand(args:string[],options:InitialAdminOptions) {
+  return realCommand(args,{...options,provision:async input=>{
+    try { await options.provision(input); }
+    catch(error) {
+      const messages:string[]=[];
+      let current:unknown=error;
+      for(let depth=0;depth<8 && current instanceof Error;depth++) {
+        messages.push(current.message);
+        current=current.cause;
+      }
+      const message=messages.join("\\n");
+      const code=message.includes("account already exists")?"duplicate-account":
+        message.includes("admin already exists")?"existing-admin":
+        message.includes("tenant does not exist")?"missing-tenant":
+        message.includes("fixture failure")||message.includes("constraint 'fail'")||message.includes("_fail")?"injected-sql":
+        /UNIQUE constraint failed|duplicate key|Duplicate entry/i.test(message)?"unique-conflict":
+        message.includes("Production startup blocked")?"startup-secrets":"unexpected";
+      console.error("fixture.cause:"+code);
+      throw error;
+    }
+  }});
+}`,
+  );
+  if (provenance)
+    await Bun.write(
+      join(provenance, "observeInitialAdmin.ts"),
+      await Bun.file(join(app, "observeInitialAdmin.ts")).text(),
+    );
   await Bun.write(
     join(app, "run.ts"),
-    'import { initialAdminCommand } from "./src/cli/initialAdmin.ts"; await initialAdminCommand(...process.argv.slice(2));',
+    'const { initialAdminCommand } = await import(process.env.FIXTURE_OBSERVE_FAILURE === "true" ? "./src/cli/observedInitialAdmin.ts" : "./src/cli/initialAdmin.ts"); await initialAdminCommand(...process.argv.slice(2));',
   );
   async function command(
     email: string,
     password = secret,
     tenant = driver === "postgres" ? "1" : undefined,
+    observe = true,
   ) {
     const process = Bun.spawn(
       [
@@ -109,13 +167,24 @@ async function exercise(
       {
         cwd: app,
         env: {
-          ...globalThis.process.env,
+          PATH: globalThis.process.env.PATH,
+          FIXTURE_OBSERVE_FAILURE: String(observe),
+          SESSION_SECRET: `fixture-initial-admin-session-secret-${"x".repeat(32)}`,
+          AUTH_DEV_HEADERS: "false",
+          TENANT_DEV_HEADERS: "false",
+          APP_URL: "https://initial-admin.example.test",
+          FRONTEND_MODE: "api",
+          CACHE_DRIVER: "array",
+          QUEUE_DRIVER: "sync",
+          MAIL_DRIVER: "log",
           DATABASE_URL: url,
           APP_DATABASE_URL: url,
           DB_CONNECTION: driver === "postgres" ? "pgsql" : driver,
           TENANCY_DRIVER: driver === "postgres" ? "rls" : "none",
           APP_ENV: "production",
         },
+        timeout: 10000,
+        killSignal: "SIGKILL",
         stdin: "pipe",
         stdout: "pipe",
         stderr: "pipe",
@@ -137,7 +206,9 @@ async function exercise(
   await db.unsafe(
     `INSERT INTO ${users} (name,email,password,is_admin${driver === "postgres" ? ",tenant_id" : ""}) VALUES ('Member','member@example.test','unchanged',${driver === "postgres" ? "FALSE,1" : "0"})`,
   );
-  expect((await command("MEMBER@example.test")).code).not.toBe(0);
+  const member = await command("MEMBER@example.test");
+  expect(member.code).not.toBe(0);
+  expect(member.stderr).toContain("fixture.cause:duplicate-account");
   expect(await db.unsafe(`SELECT id FROM ${claims}`)).toEqual([]);
   expect(
     (
@@ -147,21 +218,27 @@ async function exercise(
     )[0]?.password,
   ).toBe("unchanged");
   if (driver === "postgres") {
-    expect((await command("first@example.test", secret, "999")).code).not.toBe(0);
+    const missingTenant = await command("first@example.test", secret, "999");
+    expect(missingTenant.code).not.toBe(0);
+    expect(missingTenant.stderr).toContain("fixture.cause:missing-tenant");
     expect(await db.unsafe(`SELECT id FROM ${claims}`)).toEqual([]);
     // An existing admin in another tenant must be visible to trusted provisioning bypass.
     await db.unsafe("INSERT INTO tenant (slug) VALUES ('other')");
     await db.unsafe(
       "INSERT INTO users (name,email,password,is_admin,tenant_id) VALUES ('Other','other@example.test','unchanged',TRUE,2)",
     );
-    expect((await command("first@example.test")).code).not.toBe(0);
+    const existingAdmin = await command("first@example.test");
+    expect(existingAdmin.code).not.toBe(0);
+    expect(existingAdmin.stderr).toContain("fixture.cause:existing-admin");
     expect(await db.unsafe(`SELECT id FROM ${claims}`)).toEqual([]);
     await db.unsafe("DELETE FROM users WHERE email='other@example.test'");
   } else {
     await db.unsafe(
       `INSERT INTO ${users} (name,email,password,is_admin) VALUES ('Other','other@example.test','unchanged',1)`,
     );
-    expect((await command("first@example.test")).code).not.toBe(0);
+    const existingAdmin = await command("first@example.test");
+    expect(existingAdmin.code).not.toBe(0);
+    expect(existingAdmin.stderr).toContain("fixture.cause:existing-admin");
     expect(await db.unsafe(`SELECT id FROM ${claims}`)).toEqual([]);
     await db.unsafe(`DELETE FROM ${users} WHERE email='other@example.test'`);
   }
@@ -179,18 +256,24 @@ async function exercise(
     );
   } else {
     await db.unsafe(
-      `ALTER TABLE ${users} ADD CONSTRAINT ${prefix}fail CHECK (email <> 'fail@example.test')`,
+      `ALTER TABLE ${users} ADD CONSTRAINT fail CHECK (email <> 'fail@example.test')`,
     );
   }
-  expect((await command("fail@example.test")).code).not.toBe(0);
+  const injected = await command("fail@example.test");
+  expect(injected.code).not.toBe(0);
+  expect(injected.stderr).toContain("fixture.stage:user-insert");
+  expect(injected.stderr).toContain("fixture.cause:injected-sql");
   expect(await db.unsafe(`SELECT id FROM ${claims}`)).toEqual([]);
   // A completed claim rejects admission independently of the admin account's existence.
   await db.unsafe(`INSERT INTO ${claims} (id,email) VALUES (1,${ph})`, ["prior@example.test"]);
-  expect((await command("blocked@example.test")).code).not.toBe(0);
+  const completed = await command("blocked@example.test");
+  expect(completed.code).not.toBe(0);
+  expect(completed.stderr).toContain("fixture.stage:claim");
+  expect(completed.stderr).toContain("fixture.cause:unique-conflict");
   await db.unsafe(`DELETE FROM ${claims}`);
   const results = await Promise.all([
-    command("first@example.test"),
-    command("second@example.test"),
+    command("first@example.test", secret, driver === "postgres" ? "1" : undefined, false),
+    command("second@example.test", secret, driver === "postgres" ? "1" : undefined, false),
   ]);
   expect(results.map((result) => result.code === 0).filter(Boolean)).toHaveLength(1);
   const admins = await db.unsafe<{
@@ -209,7 +292,10 @@ async function exercise(
   await expect(claim.down(db)).rejects.toThrow("Cannot discard");
   // Deleting the account does not rearm the one-time provisioning command.
   await db.unsafe(`DELETE FROM ${users} WHERE is_admin=${adminLiteral}`);
-  expect((await command("third@example.test")).code).not.toBe(0);
+  const removedAdmin = await command("third@example.test");
+  expect(removedAdmin.code).not.toBe(0);
+  expect(removedAdmin.stderr).toContain("fixture.stage:claim");
+  expect(removedAdmin.stderr).toContain("fixture.cause:unique-conflict");
   expect(await db.unsafe(`SELECT id FROM ${users} WHERE is_admin=${adminLiteral}`)).toEqual([]);
 }
 
@@ -239,19 +325,38 @@ test.skipIf(!process.env.MIGRATION_DATABASE_URL)(
     const control = new SQL(process.env.MIGRATION_DATABASE_URL ?? "");
     const name = `admin_bootstrap_${crypto.randomUUID().replaceAll("-", "")}`;
     const directory = await mkdtemp(join(tmpdir(), "strata-admin-pg-"));
+    const role = `admin_role_${crypto.randomUUID().replaceAll("-", "")}`;
+    const password = crypto.randomUUID();
+    let roleCreated = false;
     let database: SQL | undefined;
     try {
+      await control.unsafe(
+        `CREATE ROLE ${role} NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS LOGIN PASSWORD '${password}'`,
+      );
+      roleCreated = true;
       await control.unsafe(`CREATE DATABASE ${name}`);
       const ownerUrl = new URL(process.env.MIGRATION_DATABASE_URL ?? "");
       ownerUrl.pathname = `/${name}`;
       database = new SQL(ownerUrl.href);
-      const runtimeUrl = new URL(process.env.APP_DATABASE_URL ?? process.env.DATABASE_URL ?? "");
+      const runtimeUrl = new URL(ownerUrl.href);
+      runtimeUrl.username = role;
+      runtimeUrl.password = password;
       runtimeUrl.pathname = `/${name}`;
-      expect(runtimeUrl.username).toBe("strata_app");
-      await exercise("postgres", database, runtimeUrl.href, directory);
+      await database.unsafe(`GRANT CONNECT ON DATABASE ${name} TO ${role}`);
+      const runtime = new SQL(runtimeUrl.href);
+      try {
+        const [actual] = await runtime.unsafe(
+          "SELECT current_user AS role,rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user",
+        );
+        expect(actual).toMatchObject({ role, rolsuper: false, rolbypassrls: false });
+      } finally {
+        await runtime.close();
+      }
+      await exercise("postgres", database, runtimeUrl.href, directory, role);
     } finally {
       await database?.close();
       await control.unsafe(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
+      if (roleCreated) await control.unsafe(`DROP ROLE ${role}`);
       await control.close();
       await rm(directory, { recursive: true, force: true });
     }
@@ -259,34 +364,57 @@ test.skipIf(!process.env.MIGRATION_DATABASE_URL)(
   25_000,
 );
 
-test.skipIf(!process.env.MYSQL_URL)(
+test.skipIf(!process.env.MYSQL_OBSERVABILITY_ADMIN_URL)(
   "generated initial-admin command enforces atomic one-time provisioning on MySQL",
   async () => {
-    const pool = createPool(process.env.MYSQL_URL ?? "");
-    const prefix = `admin_${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}_`;
+    const control = createPool(process.env.MYSQL_OBSERVABILITY_ADMIN_URL ?? "");
+    const name = `admin_${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
+    const password = crypto.randomUUID();
     const directory = await mkdtemp(join(tmpdir(), "strata-admin-mysql-"));
-    const db: MigrationDatabase = {
-      async unsafe<T>(query: string, params: readonly unknown[] = []) {
-        const [rows] = await pool.query(query, [...params]);
-        return Array.isArray(rows) ? (rows as T[]) : [];
-      },
-    };
+    let owner: ReturnType<typeof createPool> | undefined;
+    let created = false,
+      userCreated = false;
     try {
-      await exercise("mysql", db, process.env.MYSQL_URL ?? "", directory, prefix);
+      await control.query(`CREATE DATABASE ${name}`);
+      created = true;
+      await control.query(`CREATE USER '${name}'@'%' IDENTIFIED BY ?`, [password]);
+      userCreated = true;
+      await control.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON ${name}.* TO '${name}'@'%'`);
+      const ownerUrl = new URL(process.env.MYSQL_OBSERVABILITY_ADMIN_URL ?? "");
+      ownerUrl.pathname = `/${name}`;
+      owner = createPool(ownerUrl.href);
+      const db: MigrationDatabase = {
+        async unsafe<T>(query: string, params: readonly unknown[] = []) {
+          if (!owner) throw new Error("Missing owned MySQL pool");
+          const [rows] = await owner.query(query, [...params]);
+          return Array.isArray(rows) ? (rows as T[]) : [];
+        },
+      };
+      const runtimeUrl = new URL(ownerUrl.href);
+      runtimeUrl.username = name;
+      runtimeUrl.password = password;
+      const runtime = createPool(runtimeUrl.href);
+      try {
+        const [identity] = await runtime.query<(RowDataPacket & { actor: string; db: string })[]>(
+          "SELECT CURRENT_USER() AS actor, DATABASE() AS db",
+        );
+        expect(identity.map(({ actor, db }) => ({ actor, db }))).toEqual([
+          { actor: `${name}@%`, db: name },
+        ]);
+        await expect(
+          runtime.query("CREATE TABLE forbidden_runtime_ddl (id INTEGER)"),
+        ).rejects.toMatchObject({ code: "ER_TABLEACCESS_DENIED_ERROR" });
+      } finally {
+        await runtime.end();
+      }
+      await exercise("mysql", db, runtimeUrl.href, directory);
     } finally {
-      for (const table of [
-        "initial_admin_provisioning",
-        "auth_one_time_tokens",
-        "sessions",
-        "notes",
-        "users",
-        "failed_job",
-        "tenant",
-      ])
-        await pool.query(`DROP TABLE IF EXISTS ${prefix}${table}`);
-      await pool.end();
+      await owner?.end();
+      if (created) await control.query(`DROP DATABASE ${name}`);
+      if (userCreated) await control.query(`DROP USER '${name}'@'%'`);
+      await control.end();
       await rm(directory, { recursive: true, force: true });
     }
   },
-  25_000,
+  25000,
 );

@@ -40,6 +40,26 @@ export {
   renderTransactionAcquisitionMetrics,
 } from "@getstrata/core/database/acquisitionMetrics";
 export type {
+  AfterCommitRepositoryContext,
+  AfterCommitRepositoryListener,
+  BoundModel,
+  ModelBinding,
+  ModelDefinition,
+  ModelObserver,
+  ModelState,
+  RepositoryBinding,
+  RepositoryDefinition,
+  RepositoryEffectsDeclaration,
+  RepositoryHooks,
+  TransactionalRepositoryListener,
+  TypedRepositoryEffect,
+} from "@getstrata/core/database/definitions";
+export {
+  defineModel,
+  defineRepository,
+  repositoryEffects,
+} from "@getstrata/core/database/definitions";
+export type {
   PersistenceErrorCode,
   PersistenceErrorOptions,
   PersistenceResult,
@@ -51,7 +71,40 @@ export {
   withDatabaseErrorHandling,
 } from "@getstrata/core/database/errors";
 export { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
+export {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  HttpError,
+  InternalServerError,
+  isHttpErrorLike,
+  NotFoundError,
+  PayloadTooLargeError,
+  PreconditionFailedError,
+  toHttpError,
+  UnauthorizedError,
+  UnprocessableEntityError,
+  ValidationError,
+} from "@getstrata/core/errors/http";
+export type {
+  RouteModelAuthorization,
+  RouteModelBindingPorts,
+} from "@getstrata/core/http/securedRouteModelBinding";
 export { CORE_VIEW_RENDERER_TOKEN } from "@getstrata/core/view/tokens";
+export {
+  BaseRepository,
+  BelongsToManyRelationQuery,
+  BelongsToRelationQuery,
+  HasManyRelationQuery,
+  HasManyThroughRelationQuery,
+  HasOneRelationQuery,
+  Model,
+  ModelQuery,
+  MorphManyRelationQuery,
+  MorphOneRelationQuery,
+  MorphToRelationQuery,
+  RepositoryQuery,
+} from "#strata-orm-runtime";
 export type {
   AdminColumn,
   AdminColumnType,
@@ -86,16 +139,14 @@ export type { JwtPayload } from "../core/auth/jwt.ts";
 export { jwtTtlSeconds, signJwt, verifyJwt } from "../core/auth/jwt.ts";
 export { JwtGuard } from "../core/auth/jwtGuard.ts";
 export {
-  configureMembershipLookup,
   currentOrganizationIds,
   currentOrgRole,
   hasMinimumOrgRole,
   hasOrgMembership,
+  loadMembershipSnapshot,
   membershipContext,
-  membershipRepository,
-  resetMembershipLookupForTests,
-  resolveMembershipLookup,
   runWithMembershipContext,
+  runWithMembershipSnapshot,
 } from "../core/auth/membershipContext.ts";
 export { createMembershipMiddleware } from "../core/auth/membershipMiddleware.ts";
 export {
@@ -120,15 +171,17 @@ export {
 } from "../core/auth/oneTimeToken.ts";
 export { completePasswordLogin } from "../core/auth/passwordLogin.ts";
 export { Policy, PolicyGate } from "../core/auth/policy.ts";
+export type {
+  SamlAssertionReplayStore,
+  SamlServiceProviderConfig,
+  SamlServiceProviderOptions,
+} from "../core/auth/saml/samlServiceProvider.ts";
 export {
-  consumeSamlAssertion,
   createSamlServiceProvider,
   InMemorySamlAssertionReplayStore,
   readSamlEnvOptions,
-  resetSamlReplayCacheForTests,
   SamlServiceProvider,
   setNodeSamlLoaderForTests,
-  setSamlAssertionReplayStoreForTests,
 } from "../core/auth/saml/samlServiceProvider.ts";
 export { createScimAuthMiddleware } from "../core/auth/scimAuthMiddleware.ts";
 export { createTokenAbilityChecker } from "../core/auth/tokenAbilityChecker.ts";
@@ -153,9 +206,9 @@ export type {
 } from "../core/crypto/fieldEncryptionRotation";
 export {
   createFieldEncryptionRotationMigration,
+  fieldEncryptionRotationRepository,
   runFieldEncryptionRotationBatch,
 } from "../core/crypto/fieldEncryptionRotation";
-export { default as BaseRepository } from "../core/database/baseRepository.ts";
 export {
   bindDatabaseConnection,
   getBoundDatabaseConnection,
@@ -203,31 +256,15 @@ export type {
 } from "../core/database/migrations/types.ts";
 export type {
   CastType,
-  GlobalScopeFn,
   ModelAttributes,
-  ModelConstructor,
   ModelProjection,
 } from "../core/database/model.ts";
 export {
   applyCasts,
-  BelongsToManyRelationQuery,
-  BelongsToRelationQuery,
-  bootModels,
-  defineModel,
   dehydrateValue,
   filterMassAssignable,
-  HasManyRelationQuery,
-  HasManyThroughRelationQuery,
-  HasOneRelationQuery,
   hydrateValue,
-  Model,
-  ModelQuery,
-  MorphManyRelationQuery,
-  MorphOneRelationQuery,
-  MorphToRelationQuery,
-  registerModelClass,
-  registerModelRepository,
-} from "../core/database/model.ts";
+} from "../core/database/modelAttributes.ts";
 export type {
   MysqlConnection,
   MysqlExecutable,
@@ -303,7 +340,6 @@ export {
 } from "../core/database/repositoryConnection.ts";
 export {
   projectPluck,
-  RepositoryQuery,
   uniqueColumnSelect,
 } from "../core/database/repositoryQuery.ts";
 export type {
@@ -349,13 +385,6 @@ export type {
 } from "../core/database/session";
 export { createSqliteConnection } from "../core/database/sqliteConnection.ts";
 export { defineTable } from "../core/database/table.ts";
-export {
-  afterCommit,
-  hasActiveTransaction,
-  isActiveTransactionConnection,
-  requestTransactionRollback,
-  runInTransaction,
-} from "../core/database/transaction.ts";
 export type {
   ModelWhere,
   ModelWriteValues,
@@ -368,40 +397,28 @@ export type {
 } from "../core/database/types.ts";
 export type { WhereNode } from "../core/database/whereBuilder.ts";
 export { WhereBuilder } from "../core/database/whereBuilder.ts";
-export {
-  BadRequestError,
-  ConflictError,
-  ForbiddenError,
-  HttpError,
-  InternalServerError,
-  isHttpErrorLike,
-  NotFoundError,
-  PayloadTooLargeError,
-  PreconditionFailedError,
-  toHttpError,
-  UnauthorizedError,
-  UnprocessableEntityError,
-  ValidationError,
-} from "../core/errors/http.ts";
-export type { EventListener } from "../core/events/eventBus.ts";
-export { EventBus, eventBus, readSharedEventBus } from "../core/events/eventBus.ts";
-export {
-  dispatchModelEvent,
-  modelEventName,
-  runWithDeferredModelEvents,
-} from "../core/events/index.ts";
+export type { EventListener } from "../core/events/eventBusClass";
+export { EventBus } from "../core/events/eventBusClass";
+export { modelEventName } from "../core/events/index.ts";
 export type {
   DurableEvent,
   DurableListener,
+  OutboxDeliverySnapshot,
+  OutboxDeliveryStatus,
   OutboxMetricState,
   OutboxMetricsCollector,
   OutboxMetricsOptions,
   OutboxMetricsSnapshot,
+  OutboxWorkerTransport,
+  SqlOutboxBindingOptions,
+  SqlOutboxBindings,
   SqlOutboxOptions,
 } from "../core/events/outbox/index.ts";
 export {
   createOutboxMetricsCollector,
   createOutboxMigration,
+  createOutboxWorkerTransport,
+  createSqlOutboxBindings,
   renderOutboxMetrics,
   SqlOutbox,
 } from "../core/events/outbox/index.ts";
@@ -752,10 +769,7 @@ export {
   runWithTenant,
   tenantContext,
 } from "../core/tenant/tenantContext.ts";
-export {
-  isInsideTenantDatabaseScope,
-  runWithTenantDatabase,
-} from "../core/tenant/tenantDatabaseScope.ts";
+export { runWithTenantDatabase } from "../core/tenant/tenantDatabaseScope.ts";
 export type {
   PublicTenancyOptions,
   TenantMiddlewareOptions,
@@ -766,7 +780,7 @@ export {
   createTenantMiddleware,
   DEFAULT_TENANT,
   normalizeTenantHostname,
-  resolveUserTenantId,
+  resolveTenantForRequest,
 } from "../core/tenant/tenantMiddleware.ts";
 export type { TracingMetricsSnapshot } from "../core/tracing/health.ts";
 export { renderTracingMetrics } from "../core/tracing/health.ts";

@@ -1,66 +1,67 @@
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import type { ServiceDeclaration } from "@getstrata/core/contracts/services";
+import type { RepositoryEffectsDeclaration } from "@getstrata/core/database/definitions";
 import {
   type InfrastructureDiscoveryOptions,
   importInfrastructure,
   infrastructureFiles,
 } from "./infrastructureDiscovery";
 
-type ListenerRegistrar = () => void | Promise<void>;
-interface DiscoverListenersOptions extends InfrastructureDiscoveryOptions {
-  manifest?: readonly ListenerRegistrar[];
+/** Inert graph declarations, collected before application construction and pool effects. */
+export interface ListenerDeclarations {
+  readonly services: readonly ServiceDeclaration[];
+  readonly repositoryEffects: readonly RepositoryEffectsDeclaration[];
 }
-interface DiscoverListenersState {
-  loads: Map<string | readonly ListenerRegistrar[], Promise<ListenerRegistrar[]>>;
+export interface DiscoverListenersOptions extends InfrastructureDiscoveryOptions {
+  readonly manifest?: readonly ListenerDeclarations[];
 }
-const KEY = Symbol.for("@getstrata/discoverListenersState");
-function state(): DiscoverListenersState {
-  const globals = globalThis as Record<symbol, DiscoverListenersState | undefined>;
-  globals[KEY] ??= { loads: new Map() };
-  return globals[KEY];
+function snapshot(value: unknown, location: string): ListenerDeclarations {
+  if (!value || typeof value !== "object")
+    throw new TypeError(`Invalid listener declarations at ${location}.`);
+  const fields = Object.getOwnPropertyDescriptors(value);
+  const services = fields.services?.value,
+    effects = fields.repositoryEffects?.value;
+  if (
+    !fields.services ||
+    !("value" in fields.services) ||
+    !Array.isArray(services) ||
+    !fields.repositoryEffects ||
+    !("value" in fields.repositoryEffects) ||
+    !Array.isArray(effects)
+  )
+    throw new TypeError(
+      `Listener ${location} must export services and repositoryEffects declarations; registrar callbacks are no longer supported.`,
+    );
+  return Object.freeze({
+    services: Object.freeze([...services]),
+    repositoryEffects: Object.freeze([...effects]),
+  });
 }
-async function load(options: DiscoverListenersOptions): Promise<ListenerRegistrar[]> {
-  const listeners = new Set<ListenerRegistrar>();
-  const add = (value: unknown, location: string) => {
-    if (typeof value !== "function")
-      throw new TypeError(
-        `Invalid listener registrar at ${location}: expected a default function.`,
-      );
-    listeners.add(value as ListenerRegistrar);
+export async function discoverListeners(
+  options: DiscoverListenersOptions = {},
+): Promise<readonly ListenerDeclarations[]> {
+  const result: ListenerDeclarations[] = [];
+  const seen = new Set<object>();
+  const add = (input: unknown, location: string) => {
+    const value =
+      input && typeof input === "object" && Object.getOwnPropertyDescriptor(input, "default")?.value
+        ? Object.getOwnPropertyDescriptor(input, "default")?.value
+        : input;
+    if (value && typeof value === "object") {
+      if (seen.has(value)) return;
+      seen.add(value);
+    }
+    result.push(snapshot(value, location));
   };
   if (options.manifest)
-    for (const [index, value] of options.manifest.entries())
-      add(value, `listener manifest[${index}]`);
+    for (const [index, value] of options.manifest.entries()) add(value, `manifest[${index}]`);
   else
     for (const file of await infrastructureFiles(
       options.directory ?? join(process.cwd(), "src", "listeners"),
       options.exclude,
     )) {
       const exports = await importInfrastructure(file);
-      const value = exports.default;
-      add(value && typeof value === "object" && "default" in value ? value.default : value, file);
+      add(exports.default, file);
     }
-  return [...listeners];
+  return Object.freeze(result);
 }
-function discoverListeners(options: DiscoverListenersOptions = {}): Promise<ListenerRegistrar[]> {
-  const cache = state().loads;
-  const key =
-    options.manifest ??
-    JSON.stringify([
-      resolve(options.directory ?? join(process.cwd(), "src", "listeners")),
-      [...(options.exclude ?? [])].sort(),
-    ]);
-  const existing = cache.get(key);
-  if (existing) return existing;
-  const pending = load(options).catch((error) => {
-    if (cache.get(key) === pending) cache.delete(key);
-    throw error;
-  });
-  cache.set(key, pending);
-  return pending;
-}
-function resetDiscoverListenersForTests(): void {
-  state().loads = new Map();
-}
-
-export type { DiscoverListenersOptions, ListenerRegistrar };
-export { discoverListeners, resetDiscoverListenersForTests };

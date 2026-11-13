@@ -1,35 +1,36 @@
 import type { AuthRenderingContext } from "./renderingContext.ts";
+import { portAuthRouteSource } from "./routePersistence.ts";
 
 export function renderMfaChallengeRoutes(): string {
   return `        "/login/mfa": {
-          GET: kernel.wrapWebGuest(async (request) => {
-            const pending = readPendingMfaChallenge(request);
-            const record = pending ? await starterAuthDirectory.findByIdOrThrow(pending.userId).catch(() => null) : null;
+          GET: kernel.wrapWebGuest(async (request, _ports) => {
+            const pending = authServices.pendingMfa.read(request);
+            const record = pending ? await authServices.directory(_ports).findByIdOrThrow(pending.userId).catch(() => null) : null;
             if (!record?.is_active || record.auth_version !== pending?.authVersion) return redirectTo("/login");
             return views.render("mfa-challenge.eta", { layout: { title: "MFA" }, errors: {}, code: "" }, { request });
           }),
           POST: wrapWebLogin(
             kernel,
-            async (request) => {
-            const pending = readPendingMfaChallenge(request);
+            async (request, _ports) => {
+            const pending = authServices.pendingMfa.read(request);
             if (!pending) {
               return redirectTo("/login");
             }
             const { fields } = await parseFormBody(request);
             const submitted = (fields.code ?? "").trim();
-            return runWithLockedAuthUser(pending.userId, async (record) => {
+            return runWithLockedAccount(_ports, pending.userId, async (record, _ports) => {
             if (!record?.is_active || record.auth_version !== pending.authVersion) {
               const failed = redirectTo("/login");
-              failed.headers.append("set-cookie", pendingMfaClearCookie());
+              failed.headers.append("set-cookie", authServices.pendingMfa.clearCookie());
               return failed;
             }
             const mfaResult = completePasswordLogin(record, { mfaCode: submitted });
             if (!mfaResult.ok) {
               return views.render("mfa-challenge.eta", { layout: { title: "MFA" }, errors: { code: "That code is not valid." }, code: "" }, { request });
             }
-            await persistAuthRecovery(pending.userId, record.mfa_recovery_codes, mfaResult.consumedRecoveryHash);
-            const signed = await auth.signInRedirect(sessionUser(record), "/");
-            signed.headers.append("set-cookie", pendingMfaClearCookie());
+            await persistAuthRecovery(_ports, pending.userId, record.mfa_recovery_codes, mfaResult.consumedRecoveryHash);
+            const signed = await authServices.session(_ports).signInRedirect(sessionUser(record), "/");
+            signed.headers.append("set-cookie", authServices.pendingMfa.clearCookie());
             return signed;
             });
           },
@@ -50,7 +51,7 @@ export function renderBrowserAuthRoutes({
                   mfa
                     ? `if (mfaResult.error === "mfa_required") {
                   const pending = redirectTo("/login/mfa");
-                  pending.headers.append("set-cookie", pendingMfaSetCookie(mfaResult.user.id, mfaResult.user.auth_version));
+                  pending.headers.append("set-cookie", authServices.pendingMfa.setCookie(mfaResult.user.id, mfaResult.user.auth_version));
                   return pending;
                 }`
                     : ""
@@ -71,7 +72,7 @@ export function renderBrowserAuthRoutes({
   const cookieRoutes = cookie
     ? `
     webRoutes({ kernel, dependencies }) {
-      const auth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
+      const authServices = dependencies.container.resolve(STARTER_AUTH_SERVICES);
       const views = dependencies.container.resolve(CORE_VIEW_RENDERER_TOKEN).namespace("auth", { headers: { "Cache-Control": "private, no-store" } });
       return {
         "/login": {
@@ -80,14 +81,14 @@ export function renderBrowserAuthRoutes({
           ),
           POST: wrapWebLogin(
             kernel,
-            async (request) => {
+            async (request, _ports) => {
               const { fields } = await parseFormBody(request);
               const { email, password, mfa_code } = parseLoginCredentials(fields);
-              return runWithLoginUser(email, async (candidate) => {
-              const mfaResult = await authenticatePasswordUser(candidate, password, mfa_code);
+              return runWithLoginUser(_ports, email, async (candidate, _ports) => {
+              const mfaResult = await authenticatePasswordUser(_ports, candidate, password, mfa_code);
               ${mfaLoginBranch}
               const user = mfaResult.user;
-              return auth.signInRedirect(sessionUser(user), "/");
+              return authServices.session(_ports).signInRedirect(sessionUser(user), "/");
               });
             },
             async (request) =>
@@ -95,28 +96,28 @@ export function renderBrowserAuthRoutes({
           ),
         },
         "/register": {
-          GET: kernel.wrapWebGuest(async (request) => {
-            if ((process.env.FEATURE_REGISTRATION ?? "true") === "false") {
+          GET: kernel.wrapWebGuest(async (request, _ports) => {
+            if (!authServices.config.registrationEnabled) {
               return new Response("Not found", { status: 404 });
             }
             return views.render("register.eta", { layout: { title: "Create account" }, errors: {}, name: "", email: "", password: "" }, { request });
           }),
           POST: wrapWebRegister(
             kernel,
-            async (request) => {
-              if ((process.env.FEATURE_REGISTRATION ?? "true") === "false") {
+            async (request, _ports) => {
+              if (!authServices.config.registrationEnabled) {
                 return new Response("Not found", { status: 404 });
               }
               const { fields } = await parseFormBody(request);
               const { name, email, password } = parseRegisterCredentials(fields);
-              const existing = await starterAuthDirectory.findByEmail?.(email);
+              const existing = await authServices.directory(_ports).findByEmail?.(email);
               await hashPassword(password);
               if (existing) {
                 ${registerSuccessExisting}
               }
               const hashed = await hashPassword(password);
-              ${verify ? "const verificationMail = " : ""}await createRegistration({ name, email, password: hashed }${verify ? ', "/email/verify"' : ""});
-              ${verify ? "// SMTP follows the outermost commit, including request RLS.\n              if (verificationMail) await afterCommit(() => mailer().send(verificationMail));" : ""}
+              ${verify ? "const verificationMail = " : ""}await createRegistration(_ports, authServices, { name, email, password: hashed }${verify ? ', "/email/verify"' : ""});
+              ${verify ? "// SMTP follows the outermost commit, including request RLS.\n              if (verificationMail) await deferAuthEffect(_ports, () => authServices.mail.send(verificationMail));" : ""}
               ${verifyRegisterBranch}
             },
             async (request) =>
@@ -127,12 +128,12 @@ export function renderBrowserAuthRoutes({
           GET: kernel.wrapWebGuest(async (request) =>
             views.render("forgot-password.eta", { layout: { title: "Forgot password" }, errors: {}, email: "" }, { request }),
           ),
-          POST: kernel.wrapWeb(async (request) => {
+          POST: kernel.wrapWeb(async (request, _ports) => {
             const { fields } = await parseFormBody(request);
             const email = parseForgotPasswordEmail(fields);
-            const user = await starterAuthDirectory.findByEmail?.(email);
+            const user = await authServices.directory(_ports).findByEmail?.(email);
             if (user) {
-              await issueSignedAuthMail(email, "Reset your password", "/reset-password", AUTH_ONE_TIME_PURPOSES.passwordReset, user.id, { email });
+              await issueSignedAuthMail(_ports, authServices, email, "Reset your password", "/reset-password", AUTH_ONE_TIME_PURPOSES.passwordReset, user.id, { email });
             }
             return flashResponse(redirectTo("/forgot-password"), {
               level: "success",
@@ -141,31 +142,31 @@ export function renderBrowserAuthRoutes({
           }),
         },
         "/reset-password": {
-          GET: kernel.wrapWeb(kernel.wrapSigned(async (request) => {
+          GET: kernel.wrapWeb(kernel.wrapSigned(async (request, _ports) => {
             const email = new URL(request.url).searchParams.get("email") ?? "";
             return views.render("reset-password.eta", { layout: { title: "Reset password" }, errors: {}, password: "", email, action: \`\${new URL(request.url).pathname}\${new URL(request.url).search}\` }, { request });
           })),
-          POST: kernel.wrapWeb(kernel.wrapSigned(async (request) => {
+          POST: kernel.wrapWeb(kernel.wrapSigned(async (request, _ports) => {
             const { fields } = await parseFormBody(request);
             const email = new URL(request.url).searchParams.get("email") ?? fields.email ?? "";
             const password = fields.password ?? "";
-            if (!email || !(await completeSignedPasswordReset(request, password))) {
+            if (!email || !(await completeSignedPasswordReset(_ports, request, password))) {
               return views.render("reset-password.eta", { layout: { title: "Reset password" }, errors: { password: "Invalid or expired reset link." }, password: "", email, action: \`\${new URL(request.url).pathname}\${new URL(request.url).search}\` }, { request });
             }
             return flashResponse(redirectTo("/login"), { level: "success", message: "Password updated. Sign in." });
           })),
         },
         "/logout": {
-          POST: kernel.wrapWebAuthenticatedAllowUnverified((request) => auth.signOutRedirect(request, "/")),
+          POST: kernel.wrapWebAuthenticatedAllowUnverified(async (request, _ports) => { return authServices.session(_ports).signOutRedirect(request, "/"); }),
         },${
           verify
             ? `
         "/email/verify": {
-          GET: kernel.wrapWeb(async (request) => {
+          GET: kernel.wrapWeb(async (request, _ports) => {
             const url = new URL(request.url);
             if (url.searchParams.get("signature")) {
-              assertValidSignature(request);
-              if (await completeSignedEmailVerification(request)) {
+              assertValidSignature(request, authServices.config.signatureSecret);
+              if (await completeSignedEmailVerification(_ports, request)) {
                 return flashResponse(
                   redirectTo("/login"),
                   { level: "success", message: "Email verified. Sign in." },
@@ -180,11 +181,11 @@ export function renderBrowserAuthRoutes({
           }),
         },
         "/email/verification-notification": {
-          POST: kernel.wrapWebAuthenticatedAllowUnverified(async (request) => {
-            const user = await auth.user(request);
+          POST: kernel.wrapWebAuthenticatedAllowUnverified(async (request, _ports) => {
+            const user = await _ports.auth.user(request);
             if (user) {
-              const record = await starterAuthDirectory.findByIdOrThrow(Number(user.id));
-              await issueSignedAuthMail(record.email ?? "", "Verify your email", "/email/verify", AUTH_ONE_TIME_PURPOSES.emailVerify, Number(record.id), { id: String(record.id) });
+              const record = await authServices.directory(_ports).findByIdOrThrow(Number(user.id));
+              await issueSignedAuthMail(_ports, authServices, record.email ?? "", "Verify your email", "/email/verify", AUTH_ONE_TIME_PURPOSES.emailVerify, Number(record.id), { id: String(record.id) });
             }
             return flashResponse(redirectTo("/email/verify"), { level: "info", message: "Verification link sent." });
           }),
@@ -197,39 +198,39 @@ ${renderMfaChallengeRoutes()}        "/confirm-password": {
           GET: kernel.wrapWebAuthenticated(async (request) =>
             views.render("confirm-password.eta", { layout: { title: "Confirm password" }, errors: {}, password: "" }, { request }),
           ),
-          POST: kernel.wrapWebAuthenticated(async (request) => {
-            const user = await auth.user(request);
+          POST: kernel.wrapWebAuthenticated(async (request, _ports) => {
+            const user = await _ports.auth.user(request);
             if (!user) {
               return redirectTo("/login");
             }
             const { fields } = await parseFormBody(request);
             const password = fields.password ?? "";
-            return runWithLockedAuthUser(Number(user.id), async (record) => {
+            return runWithLockedAccount(_ports, Number(user.id), async (record, _ports) => {
             if (!record?.is_active || record.auth_version !== user.authVersion) return redirectTo("/login");
             if (!record.password || !(await verifyPassword(password, record.password))) {
               return views.render("confirm-password.eta", { layout: { title: "Confirm password" }, errors: { password: "That password is not correct." }, password: "" }, { request });
             }
             const next = sanitizeInternalPath(new URL(request.url).searchParams.get("redirect") ?? "/account/mfa");
             const confirmed = redirectTo(next);
-            confirmed.headers.append("set-cookie", createPasswordConfirmCookie(Number(user.id), record.auth_version));
+            confirmed.headers.append("set-cookie", createPasswordConfirmCookie(Number(user.id), record.auth_version, authServices.config.passwordConfirmation));
             return confirmed;
             });
           }),
         },
         "/account/mfa": {
-          GET: kernel.wrapWebAuthenticated(async (request) => {
+          GET: kernel.wrapWebAuthenticated(async (request, _ports) => {
             const secret = generateTotpSecret();
-            const user = await auth.user(request);
-            const record = user ? await starterAuthDirectory.findByIdOrThrow(Number(user.id)) : null;
+            const user = await _ports.auth.user(request);
+            const record = user ? await authServices.directory(_ports).findByIdOrThrow(Number(user.id)) : null;
             const otpauth = buildOtpauthUrl({
               secret,
               account: record?.email ?? "user",
-              issuer: process.env.APP_NAME ?? "Strata",
+              issuer: authServices.config.appName,
             });
             return views.render("mfa-setup.eta", { layout: { title: "MFA" }, errors: {}, code: "", secret, otpauth }, { request });
           }),
-          POST: kernel.wrapWebPasswordConfirm(async (request) => {
-            const user = await auth.user(request);
+          POST: kernel.wrapWebPasswordConfirm(async (request, _ports) => {
+            const user = await _ports.auth.user(request);
             if (!user) {
               return redirectTo("/login");
             }
@@ -242,16 +243,16 @@ ${renderMfaChallengeRoutes()}        "/confirm-password": {
                   errors: { code: "Could not confirm that code." },
                   code: "",
                   secret,
-                  otpauth: buildOtpauthUrl({ secret, account: "user", issuer: process.env.APP_NAME ?? "Strata" }),
+                  otpauth: buildOtpauthUrl({ secret, account: "user", issuer: authServices.config.appName }),
                 }, { request });
             }
-            const recoveryCodes = await enrollMfa(user, secret);
+            const recoveryCodes = await enrollMfa(_ports, user, secret);
             return views.render("mfa-setup.eta", {
                 layout: { title: "MFA" },
                 errors: {},
                 code: "",
                 secret,
-                otpauth: buildOtpauthUrl({ secret, account: "user", issuer: process.env.APP_NAME ?? "Strata" }),
+                otpauth: buildOtpauthUrl({ secret, account: "user", issuer: authServices.config.appName }),
                 recoveryCodes,
               }, { request });
           }),
@@ -261,5 +262,5 @@ ${renderMfaChallengeRoutes()}        "/confirm-password": {
       };
     },`
     : "";
-  return cookieRoutes;
+  return portAuthRouteSource(cookieRoutes);
 }

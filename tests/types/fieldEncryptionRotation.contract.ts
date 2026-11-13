@@ -4,15 +4,20 @@ import {
   runFieldEncryptionRotationBatch,
 } from "@getstrata/core/crypto/fieldEncryptionRotation";
 import type { BaseRepository } from "@getstrata/core/database/baseRepository";
+import type { RepositoryDefinition } from "@getstrata/core/database/definitions";
+import type { DatabaseSession } from "@getstrata/core/database/session";
 
 type Account = { id: number; email: string; lookup: string; mfa: string | null };
 export async function rotationContract(
-  repository: BaseRepository<Account, "id">,
+  repository: RepositoryDefinition<Account, "id", BaseRepository<Account, "id">>,
+  session: DatabaseSession,
   source: FieldEncryptionKeyring,
   target: FieldEncryptionKeyring,
 ) {
   const options: FieldEncryptionRotationOptions<Account, "id"> = {
     repository,
+    session,
+    tenantId: 1,
     runId: "admin_run",
     scopeId: "tenant_1",
     maintenanceMode: true,

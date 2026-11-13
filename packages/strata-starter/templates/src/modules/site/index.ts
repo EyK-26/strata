@@ -1,5 +1,4 @@
 import type { AppModule } from "@getstrata/bootstrap/contracts";
-import { withErrorHandling } from "@getstrata/core/http/response";
 import { CORE_VIEW_RENDERER_TOKEN, textResponse } from "@getstrata/core/view";
 import { pingDatabase } from "../../bootstrap/database.ts";
 
@@ -21,12 +20,10 @@ const siteModule: AppModule = {
           { request },
         ),
       ),
-      "/health": kernel.wrapWeb(
-        withErrorHandling(async () => {
-          const dbOk = await pingDatabase();
-          return textResponse(dbOk ? "ok" : "degraded", { status: dbOk ? 200 : 503 });
-        }),
-      ),
+      "/health": kernel.wrapWeb(async (_request, { database }) => {
+        const dbOk = await pingDatabase(database);
+        return textResponse(dbOk ? "ok" : "degraded", { status: dbOk ? 200 : 503 });
+      }),
     };
   },
 };

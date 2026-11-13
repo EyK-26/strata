@@ -1,3 +1,4 @@
+import type { BoundModel } from "@getstrata/core/database/definitions";
 /** Compiled against source and packed public declarations; not executed. */
 import { Model } from "@getstrata/core/database/model";
 
@@ -23,32 +24,36 @@ class ExternalProduct extends Model<{ sku: string; title: string }, "sku"> {
   }
 }
 
-export async function modelResultContracts(): Promise<void> {
+export async function modelResultContracts(
+  products: BoundModel<ProductRecord, "id", Product>,
+  featuredProducts: BoundModel<ProductRecord, "id", FeaturedProduct>,
+  externalProducts: BoundModel<{ sku: string; title: string }, "sku", ExternalProduct>,
+): Promise<void> {
   const nullable: Array<Product | null> = [
-    await Product.find(1),
-    await Product.query().find(1),
-    await Product.query().first(),
-    await Product.firstWhere({ title: "book" }),
+    await products.find(1),
+    await products.query().find(1),
+    await products.query().first(),
+    await products.firstWhere({ title: "book" }),
   ];
   const models: Product[] = [
-    await Product.findOrFail(1),
-    await Product.query().findOrFail(1),
-    await Product.create({ title: "book", price: 10 }),
-    Product.newFromRecord({ id: 1, title: "book", price: 10 }),
-    await Product.firstOrNew({ title: "book" }),
-    await Product.firstOrCreate({ title: "book" }),
-    await Product.updateOrCreate({ title: "book" }, { price: 10 }),
-    ...(await Product.all()),
-    ...(await Product.where({ price: 10 })),
-    ...(await Product.with("category").where({ price: 10 }).get()),
-    ...(await Product.withTrashed().get()),
-    ...(await Product.onlyTrashed().get()),
-    ...(await Product.whereHas("category").get()),
-    ...(await Product.has("category").get()),
-    ...(await Product.doesntHave("category").get()),
-    ...(await Product.whereDoesntHave("category").get()),
-    ...(await Product.query().orderBy({ title: "asc" }).paginate({ page: 1, perPage: 10 })).data,
-    ...(await Product.cursorPaginate({ perPage: 10 })).data,
+    await products.findOrFail(1),
+    await products.query().findOrFail(1),
+    await products.create({ title: "book", price: 10 }),
+    products.newFromRecord({ id: 1, title: "book", price: 10 }),
+    await products.firstOrNew({ title: "book" }),
+    await products.firstOrCreate({ title: "book" }),
+    await products.updateOrCreate({ title: "book" }, { price: 10 }),
+    ...(await products.all()),
+    ...(await products.where({ price: 10 })),
+    ...(await products.with("category").where({ price: 10 }).get()),
+    ...(await products.withTrashed().get()),
+    ...(await products.onlyTrashed().get()),
+    ...(await products.whereHas("category").get()),
+    ...(await products.has("category").get()),
+    ...(await products.doesntHave("category").get()),
+    ...(await products.whereDoesntHave("category").get()),
+    ...(await products.query().orderBy({ title: "asc" }).paginate({ page: 1, perPage: 10 })).data,
+    ...(await products.cursorPaginate({ perPage: 10 })).data,
   ];
   for (const model of [...models, ...nullable]) {
     if (!model) continue;
@@ -66,20 +71,20 @@ export async function modelResultContracts(): Promise<void> {
     void badPrice;
   }
   // @ts-expect-error find may return null.
-  const nonNullable: Product = await Product.find(1);
+  const nonNullable: Product = await products.find(1);
   void nonNullable;
-  await Product.chunk(10, async (items) => {
+  await products.chunk(10, async (items) => {
     for (const item of items) item.label();
   });
-  await Product.query().then((items) => {
+  await products.query().then((items) => {
     for (const item of items) item.label();
   });
-  const external = await ExternalProduct.findOrFail("sku-1");
+  const external = await externalProducts.findOrFail("sku-1");
   const sku: string = external.id;
   void sku;
-  const featured: FeaturedProduct = await FeaturedProduct.findOrFail(1);
+  const featured: FeaturedProduct = await featuredProducts.findOrFail(1);
   featured.featured();
-  const counted = await Product.query().withCount("reviews").withCount("orders", "sales").first();
+  const counted = await products.query().withCount("reviews").withCount("orders", "sales").first();
   if (counted) {
     const reviews: unknown = counted.toObject().reviews_count;
     const sales: unknown = counted.get("sales");
@@ -95,7 +100,7 @@ export async function modelResultContracts(): Promise<void> {
     void [reviews, sales];
   }
   // Dynamic SQL projections remain explicitly untyped escape hatches.
-  const values: unknown[] = await Product.query().pluck("price");
-  const projected: unknown = await Product.value("price");
+  const values: unknown[] = await products.query().pluck("price");
+  const projected: unknown = await products.value("price");
   void [values, projected];
 }

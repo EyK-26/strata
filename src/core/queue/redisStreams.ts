@@ -1,9 +1,9 @@
 import { RedisClient } from "bun";
-import type FailedJobService from "./failedJobService";
 import type { Job, Queue } from "./index";
 import { jobRegistry } from "./jobRegistry";
 import { parseQueueJobEnvelope, type QueueJobEnvelope, runQueueJob } from "./jobRunner";
 import { readQueueVisibilityMs } from "./queueConfig";
+import type { QueueServices } from "./queueServices";
 import { defaultQueueKeys, queueKeyForPriority } from "./redisQueueKeys";
 import {
   ASSERT_DRAINED,
@@ -410,7 +410,7 @@ class RedisStreamsWorker {
   private active?: AbortController;
   constructor(
     private readonly redisUrl: string,
-    private readonly failedJobs: FailedJobService,
+    private readonly failedJobs: Pick<QueueServices, "recordFailure" | "runAttempt">,
     private readonly timeoutSeconds = 5,
     private readonly queueKeys: readonly string[] = defaultQueueKeys(),
   ) {
@@ -472,6 +472,12 @@ class RedisStreamsWorker {
   private async handle(key: string, reservation: StreamReservation): Promise<void> {
     const envelope = parseQueueJobEnvelope(reservation.payload);
     if (!envelope) {
+      await this.failedJobs.recordFailure({
+        jobName: "queue.invalid-envelope",
+        jobId: `${streamQueueKey(key)}/${reservation.id}`,
+        payload: { raw: reservation.payload },
+        exception: "Malformed or unknown queue envelope",
+      });
       await updateStreamReservation(this.client, key, reservation, "quarantine");
       return;
     }

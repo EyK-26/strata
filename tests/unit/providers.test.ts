@@ -7,6 +7,7 @@ import {
 } from "@getstrata/bootstrap/config";
 import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createAppContext } from "@getstrata/bootstrap/dependencies";
+import { createDatabaseBindings } from "@getstrata/core/database/bindings";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("service container", () => {
@@ -48,7 +49,18 @@ describe("app providers", () => {
     process.env.APP_ENV = "production";
 
     try {
-      await expect(createAppContext()).resolves.toBeDefined();
+      const context = await createAppContext(undefined, {
+        connection: "main",
+        definition: {
+          providers: [],
+          services: createDatabaseBindings({
+            default: "main",
+            connections: { main: { driver: "sqlite", filename: ":memory:" } },
+          }),
+        },
+      });
+      expect(context).toBeDefined();
+      await context.dispose();
     } finally {
       restoreEnvVar("APP_ENV", previous);
     }
@@ -64,12 +76,22 @@ describe("app providers", () => {
     process.env.CACHE_MAX_ENTRIES = "25";
 
     try {
-      const context = await createAppContext();
+      const context = await createAppContext(undefined, {
+        connection: "main",
+        definition: {
+          providers: [],
+          services: createDatabaseBindings({
+            default: "main",
+            connections: { main: { driver: "sqlite", filename: ":memory:" } },
+          }),
+        },
+      });
 
       expect(context.config.getRequired<number>(APP_PORT_CONFIG_KEY)).toBe(4100);
       expect(context.config.getRequired<number>(CACHE_TTL_MS_CONFIG_KEY)).toBe(2500);
       expect(context.config.getRequired<number>(CACHE_MAX_ENTRIES_CONFIG_KEY)).toBe(25);
       expect(context.dependencies.cache).toBe(context.container.resolve(CORE_CACHE_TOKEN));
+      await context.dispose();
     } finally {
       restoreEnvVar("PORT", previousPort);
       restoreEnvVar("CACHE_TTL_MS", previousTtl);

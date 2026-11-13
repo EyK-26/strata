@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
-import type { DatabaseConnection } from "@getstrata/core/database/baseRepository";
 import { dialectFor } from "@getstrata/core/database/dialect";
 import { createMysqlConnection } from "@getstrata/core/database/mysqlConnection";
 import { Schema } from "@getstrata/core/database/schema";
 import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
 import { SQL } from "bun";
+import type { DatabaseConnection } from "../../src/core/database/connectionContracts";
 
 for (const driver of ["pgsql", "sqlite", "mysql"] as const) {
   const enabled =

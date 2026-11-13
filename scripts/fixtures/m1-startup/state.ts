@@ -1,3 +1,4 @@
+import type { Application } from "@getstrata/core/contracts/application";
 /** Fixture-owned resources and counters; not a startup validator or runtime adapter. */
 import type { Server } from "bun";
 import type { Mode } from "./types.ts";
@@ -8,6 +9,7 @@ export interface Resource {
   closed: number;
 }
 export interface Attempt {
+  owner?: Application;
   mode: Mode;
   number: number;
   events: string[];
@@ -50,4 +52,11 @@ export function acquire(attempt: Attempt, label: string): Resource {
   attempt.resources.push(resource);
   attempt.events.push(`${label}.acquire`);
   return resource;
+}
+
+/** Transparent test-only observer of the original generated application's public handle. */
+export function captureOwner(application: Application): undefined {
+  if (current.owner) throw new Error("Startup attempt constructed more than one application");
+  current.owner = application;
+  return undefined;
 }

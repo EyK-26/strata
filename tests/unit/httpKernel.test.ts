@@ -21,14 +21,18 @@ import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
 import { resetMemoryLoginThrottleForTests } from "@getstrata/core/http/loginThrottleMiddleware";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { temporarySignedUrl } from "@getstrata/core/http/signedUrl";
-import { enableDevAuthHeaders, restoreDevAuthHeaders } from "../helpers/devAuthHeaders";
+import {
+  enableDevAuthHeaders,
+  guestGuardOptions,
+  restoreDevAuthHeaders,
+} from "../helpers/devAuthHeaders";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 import { createMockDependencies } from "./testHelpers";
 
 function createKernelDependencies(config?: ConfigStore): AppDependencies {
   const container = new ServiceContainer();
-  container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
+  container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard(guestGuardOptions())));
 
   if (config) {
     container.set(CORE_CONFIG_TOKEN, config);
@@ -146,11 +150,24 @@ describe("HttpKernel", () => {
     expect(() => kernel.wrapLogin(async () => new Response("bypass"))).toThrow("disposed");
   });
 
-  test("registers global middleware for logging, request id, and auth", () => {
-    const kernel = createHttpKernel(createKernelDependencies());
-    const middleware = kernel.globalMiddleware();
-
-    expect(middleware.length).toBe(11);
+  test("global response policy observes one explicit authentication before business work", async () => {
+    const dependencies = createKernelDependencies();
+    let calls = 0;
+    dependencies.container.set(CORE_AUTH_TOKEN, {
+      resolveWithSource: async () => {
+        calls++;
+        return { user: { id: 1, role: "admin" }, credentialSource: "session" };
+      },
+    });
+    const kernel = createHttpKernel(dependencies);
+    const response = await kernel.wrapWebGlobalAdmin(async () => new Response("ok"))(
+      new Request("http://example.test/admin", {
+        headers: { "x-request-id": "kernel-owned-request" },
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toBe("kernel-owned-request");
+    expect(calls).toBe(1);
   });
 
   test("skips api throttle middleware when config is not registered", () => {

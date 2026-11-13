@@ -1,6 +1,4 @@
-import { resolveAuthUserDirectory } from "@getstrata/core/contracts/serviceTokens";
 import type { AuthUserDirectory } from "../contracts/authUserDirectory";
-import type { ServiceContainerLike } from "../contracts/serviceContainer";
 import { readBearerToken } from "../http/statelessAuth";
 import { isAccountActive, matchesAuthVersion } from "./accountState";
 import type { AuthUser } from "./authContext";
@@ -9,17 +7,8 @@ import { type JwtPayload, verifyJwt } from "./jwt";
 import { isSessionInvalidated } from "./sessionCookie";
 
 interface JwtGuardOptions {
-  secret?: string;
-  directory?: AuthUserDirectory;
-  container?: ServiceContainerLike;
-}
-
-function isServiceContainer(value: object): value is ServiceContainerLike {
-  return (
-    "has" in value &&
-    "resolve" in value &&
-    typeof (value as ServiceContainerLike).has === "function"
-  );
+  secret: string;
+  directory: AuthUserDirectory;
 }
 
 function authUserFromJwt(payload: JwtPayload): AuthUser {
@@ -45,8 +34,8 @@ function jwtSubjectId(payload: JwtPayload): number | null {
 class JwtGuard implements AuthGuard {
   private readonly options: JwtGuardOptions;
 
-  constructor(options: JwtGuardOptions | ServiceContainerLike = {}) {
-    this.options = isServiceContainer(options) ? { container: options } : options;
+  constructor(options: JwtGuardOptions) {
+    this.options = options;
   }
 
   async resolve(request: Request): Promise<AuthUser | null> {
@@ -66,9 +55,7 @@ class JwtGuard implements AuthGuard {
       return null;
     }
 
-    const directory =
-      this.options.directory ??
-      (this.options.container ? resolveAuthUserDirectory(this.options.container) : null);
+    const directory = this.options.directory;
 
     if (!directory) {
       return null;

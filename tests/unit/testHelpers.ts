@@ -1,9 +1,26 @@
+import { afterEach } from "bun:test";
+import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
 import type { AppDependencies } from "@getstrata/bootstrap/contracts";
-import type { DatabaseConnection as CoreDatabaseConnection } from "@getstrata/core/database/baseRepository";
+import type { HttpPersistenceOptions } from "@getstrata/bootstrap/persistenceContracts";
+import { createPersistenceInvocation } from "@getstrata/bootstrap/persistenceInvocation";
+import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import {
+  passwordConfirmCookieName,
+  passwordConfirmTtlSeconds,
+} from "@getstrata/core/auth/passwordConfirmCookie";
+import type { Application } from "@getstrata/core/contracts/application";
+import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
+import { CORE_HTTP_CLEANUP_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { bindDatabaseConnection } from "@getstrata/core/database/bindConnection";
+import { createDatabaseBindings } from "@getstrata/core/database/bindings";
 import { resetBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
+import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
+import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
+import { createApplication } from "@getstrata/core/runtime/application";
 import { createStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
 import { SQL } from "bun";
+import { HTTP_PERSISTENCE_OPTIONS } from "../../src/bootstrap/httpPersistence";
+import type { DatabaseConnection as CoreDatabaseConnection } from "../../src/core/database/connectionContracts";
 import type { DatabaseConnection } from "../../src/db/connection";
 import type { CacheLike } from "../../src/types/services";
 
@@ -101,24 +118,132 @@ function createMockCache(overrides: Partial<CacheLike> = {}): CacheLike {
   };
 }
 
+const dependencyOwners: Array<{
+  application?: Application;
+  start?: Promise<void>;
+  cleanups: Array<() => void | Promise<void>>;
+}> = [];
+afterEach(async () => {
+  const errors: unknown[] = [];
+  for (const owner of dependencyOwners.splice(0).reverse()) {
+    for (const cleanup of owner.cleanups.reverse()) {
+      try {
+        await cleanup();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    await owner.start?.catch(() => {});
+    try {
+      await owner.application?.stop();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length) throw new AggregateError(errors, "Test dependency cleanup failed.");
+});
+
+/** Each test fixture owns a real lazy application; it never supplies ambient ORM authority. */
 function createMockDependencies(
   container: AppDependencies["container"],
   cache: CacheLike = createMockCache(),
   storage: StorageManager = new StorageManager(createStorageDriver()),
+  explicitInvoke?: PersistenceInvocation,
+  http?: HttpPersistenceOptions,
 ): AppDependencies {
-  return { container, cache, storage };
+  const owner: {
+    application?: Application;
+    start?: Promise<void>;
+    cleanups: Array<() => void | Promise<void>>;
+  } = { cleanups: [] };
+  dependencyOwners.push(owner);
+  if (!container.has(CORE_HTTP_CLEANUP_TOKEN))
+    container.set(CORE_HTTP_CLEANUP_TOKEN, (cleanup) => {
+      owner.cleanups.push(cleanup);
+    });
+  const invoke: PersistenceInvocation =
+    explicitInvoke ??
+    (async (envelope, work) => {
+      if (!owner.application) {
+        owner.application = createApplication({
+          providers: [],
+          services: createDatabaseBindings({
+            default: "main",
+            connections: { main: { driver: "sqlite", filename: ":memory:" } },
+          }),
+        });
+        const application = owner.application;
+        owner.start = application.start();
+      }
+      await owner.start;
+      return createPersistenceInvocation(owner.application, "main")(envelope, work);
+    });
+  if (!container.has(HTTP_PERSISTENCE_OPTIONS)) {
+    const anonymous = new AuthManager(
+      new GuestGuard({
+        production: false,
+        allowDevHeaders: false,
+        abilities: { admin: [], member: [] },
+      }),
+    );
+    const environment = Object.freeze({ ...process.env });
+    const secret = (keys: readonly string[], fallback: string) =>
+      keys.some((key) => environment[key]?.trim()) || !isProductionEnv(environment)
+        ? requireConfiguredSecret([...keys], fallback, environment)
+        : undefined;
+    const signatureSecret = secret(
+      ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
+      "signed-url-secret",
+    );
+    const passwordSecret = secret(["SESSION_SECRET", "OAUTH_STATE_SECRET"], "session-secret");
+    const options: HttpPersistenceOptions = http ?? {
+      ...(signatureSecret ? { signatureSecret } : {}),
+      ...(passwordSecret
+        ? {
+            passwordConfirmation: Object.freeze({
+              secret: passwordSecret,
+              cookieName: passwordConfirmCookieName(environment),
+              ttlSeconds: passwordConfirmTtlSeconds(environment),
+            }),
+          }
+        : {}),
+      tenancy: "none",
+      production: false,
+      allowTenantDevHeaders: false,
+      metadata: () => ({
+        authenticate: async (request) => {
+          type FixtureAuth = Pick<AuthManager, "resolve"> &
+            Partial<Pick<AuthManager, "resolveWithSource">>;
+          const manager: FixtureAuth = container.has(CORE_AUTH_TOKEN)
+            ? container.resolve<FixtureAuth>(CORE_AUTH_TOKEN)
+            : anonymous;
+          return typeof manager.resolveWithSource === "function"
+            ? manager.resolveWithSource(request)
+            : { user: await manager.resolve(request), credentialSource: null };
+        },
+        memberships: async () => [],
+        userTenantId: async () => defaultTestTenant.id,
+        tenant: async (id) => (id === defaultTestTenant.id ? defaultTestTenant : null),
+      }),
+    };
+    container.set(HTTP_PERSISTENCE_OPTIONS, Object.freeze(options));
+  }
+  return { container, cache, storage, invoke };
 }
 
 function mockFetch(implementation: (...args: never[]) => unknown): typeof fetch {
   return implementation as unknown as typeof fetch;
 }
 
+/** Explicit legacy audit-fixture cleanup; it does not grant canonical ORM authority. */
 async function clearPendingAuditLogs(): Promise<void> {
-  const { runWithMigrationBypass } = await import("@getstrata/core/tenant/databaseTenantContext");
   const db = (await import("../../src/db/connection")).default;
-
-  await runWithMigrationBypass(async () => {
-    await db`UPDATE audit_log SET exported_at = NOW() WHERE exported_at IS NULL`;
+  await db.begin(async (transaction) => {
+    if ((process.env.DB_CONNECTION ?? "pgsql") === "pgsql")
+      await transaction.unsafe("SELECT set_config('app.bypass_rls', $1, true)", ["true"]);
+    await transaction.unsafe(
+      "UPDATE audit_log SET exported_at = CURRENT_TIMESTAMP WHERE exported_at IS NULL",
+    );
   });
 }
 

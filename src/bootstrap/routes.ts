@@ -1,12 +1,6 @@
-import { appContext } from "./context";
-import type { AppRouteMap } from "./contracts";
+import type { AppDependencies, AppRouteMap } from "./contracts";
 import { createRoutes } from "./createRoutes";
-
-let cachedRoutes: AppRouteMap | undefined;
-
-function buildRoutes(): AppRouteMap {
-  cachedRoutes ??= createRoutes(appContext.dependencies);
-  return cachedRoutes;
+/** Compile once in the caller's application assembly; never cache another owner's routes. */
+export function buildRoutes(dependencies: AppDependencies): AppRouteMap {
+  return createRoutes(dependencies);
 }
-
-export { buildRoutes };

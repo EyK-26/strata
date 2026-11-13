@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import { runWithSqlDialect } from "@getstrata/core/database/dialect";
-import FailedJobRepository from "@getstrata/core/queue/failedJobRepository";
+import { failedJobRepository } from "@getstrata/core/queue/failedJobRepository";
 import FailedJobService from "@getstrata/core/queue/failedJobService";
 import { grantPostgresAppRolePrivileges } from "@getstrata/core/tenant/enableTenantRls";
 import { SQL } from "bun";
+import { createNativePersistenceApplication } from "../helpers/nativePersistenceApplication";
 
 test("native PostgreSQL retains JSONB object storage, restricted-role replay and legacy string recovery", async () => {
   const restrictedUrl =
@@ -13,7 +13,7 @@ test("native PostgreSQL retains JSONB object storage, restricted-role replay and
   const control = new SQL({ url: process.env.MIGRATION_DATABASE_URL, max: 1 });
   const database = `owned_failed_json_${crypto.randomUUID().replaceAll("-", "")}`;
   let owner: SQL | undefined;
-  let runtime: SQL | undefined;
+  let native: Awaited<ReturnType<typeof createNativePersistenceApplication>> | undefined;
   let created = false;
   try {
     await control.unsafe(`CREATE DATABASE ${database}`);
@@ -30,15 +30,21 @@ test("native PostgreSQL retains JSONB object storage, restricted-role replay and
       role: decodeURIComponent(runtimeUrl.username),
     });
     runtimeUrl.pathname = `/${database}`;
-    runtime = new SQL({ url: runtimeUrl.href, max: 1 });
-    const [identity] = await runtime.unsafe<{ rolsuper: boolean; rolbypassrls: boolean }[]>(
-      "SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user",
+    native = await createNativePersistenceApplication({
+      default: "test",
+      connections: { test: { driver: "pgsql", url: runtimeUrl.href, max: 1 } },
+      repositories: [failedJobRepository],
+    });
+    const [identity] = await native.run((database) =>
+      database.execute<{ rolsuper: boolean; rolbypassrls: boolean }>({
+        text: "SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user",
+        params: [],
+      }),
     );
     expect(identity).toEqual({ rolsuper: false, rolbypassrls: false });
-    const runtimeConnection = runtime;
     const ownerConnection = owner;
-    await runWithSqlDialect("pgsql", async () => {
-      const repository = new FailedJobRepository().withConnection(runtimeConnection);
+    await native.run(async (database) => {
+      const repository = database.repository(failedJobRepository);
       const service = new FailedJobService(repository);
       const payload = {
         event: "orders.created",
@@ -89,7 +95,7 @@ test("native PostgreSQL retains JSONB object storage, restricted-role replay and
       expect(storedDefault).toEqual({ kind: "object", payload: {} });
     });
   } finally {
-    await runtime?.close();
+    await native?.close();
     await owner?.close();
     if (created) await control.unsafe(`DROP DATABASE ${database} WITH (FORCE)`);
     await control.close();

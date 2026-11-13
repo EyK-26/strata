@@ -71,7 +71,7 @@ function starterSchemaStatements(layers: StarterLayers): string[] {
     failed_at ${d.timestamp}
   )`);
 
-  if (tenancyOn) {
+  if (tenancyOn || layers.extras.scim) {
     statements.push(`CREATE TABLE IF NOT EXISTS tenant (
     id ${d.id},
     slug ${d.keyText} NOT NULL UNIQUE
@@ -191,78 +191,38 @@ export default migration;
 }
 
 function renderMigrationRuntimeTs(layers: StarterLayers): string {
-  if (layers.database === "postgres") {
-    return `import { join } from "node:path";
-import { loadMigrationsFromDirectory } from "@getstrata/core/database/migrations";
-import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
-import {
-  grantPostgresAppRolePrivileges,
-  openPostgresAdminConnection,
-  postgresDatabaseNameFromUrl,
-} from "@getstrata/core/tenant/enableTenantRls";
-
-const MIGRATIONS_DIRECTORY = join(import.meta.dir, "migrations");
-
-export async function loadStarterMigrations() {
-  return loadMigrationsFromDirectory(MIGRATIONS_DIRECTORY);
-}
-
-export async function withMigrationDatabase<T>(
-  fn: (db: MigrationDatabase) => Promise<T>,
-  options: { grantRuntimePrivileges?: boolean } = {},
-): Promise<T> {
-  const runtimeUrl = process.env.DATABASE_URL ?? "";
-  const admin = await openPostgresAdminConnection({
-    runtimeUrl,
-    migrationUrl: process.env.MIGRATION_DATABASE_URL,
-  });
-  try {
-    const result = await fn(admin);
-    if (options.grantRuntimePrivileges !== false) {
-      await grantPostgresAppRolePrivileges(admin, {
-        database: postgresDatabaseNameFromUrl(runtimeUrl),
-      });
-    }
-    return result;
-  } finally {
-    await admin.close?.();
-  }
-}
-`;
-  }
-
-  if (layers.database === "mysql") {
-    return `import { join } from "node:path";
-import { loadMigrationsFromDirectory } from "@getstrata/core/database/migrations";
-import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
-import { createMysqlConnection } from "@getstrata/core/database/mysqlConnection";
-import { runWithDatabaseConnection } from "@getstrata/core/database/connectionContext";
-import { getSql } from "../bootstrap/database.ts";
-
-const MIGRATIONS_DIRECTORY = join(import.meta.dir, "migrations");
-
-export async function loadStarterMigrations() {
-  return loadMigrationsFromDirectory(MIGRATIONS_DIRECTORY);
-}
-
-export async function withMigrationDatabase<T>(fn: (db: MigrationDatabase) => Promise<T>): Promise<T> {
-  const runtime = getSql();
-  const url = process.env.MIGRATION_DATABASE_URL?.trim();
-  if (!url) return fn(runtime);
-  const admin = createMysqlConnection(url);
-  try {
-    return await runWithDatabaseConnection(admin, () => fn(admin));
-  } finally {
-    await admin.close();
-  }
-}
-`;
-  }
-
+  const driver = layers.database === "postgres" ? "pgsql" : layers.database;
+  const imports =
+    layers.database === "postgres"
+      ? `import { grantPostgresAppRolePrivileges, openPostgresAdminConnection, postgresDatabaseNameFromUrl } from "@getstrata/core/tenant/enableTenantRls";`
+      : layers.database === "mysql"
+        ? `import { createMysqlConnection } from "@getstrata/core/database/mysqlConnection";`
+        : `import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";`;
+  const opening =
+    layers.database === "postgres"
+      ? `const connection = await openPostgresAdminConnection({runtimeUrl: options.url, migrationUrl: process.env.MIGRATION_DATABASE_URL});`
+      : layers.database === "mysql"
+        ? `const connection = createMysqlConnection(process.env.MIGRATION_DATABASE_URL?.trim() || options.url);`
+        : `if (options.filename !== ":memory:") mkdirSync(dirname(options.filename), { recursive: true });
+  const connection = createSqliteConnection(options.filename);`;
+  const grantOption =
+    layers.database === "postgres"
+      ? `,
+  controls: { grantRuntimePrivileges?: boolean } = {}`
+      : "";
+  const grants =
+    layers.database === "postgres"
+      ? `
+    if (controls.grantRuntimePrivileges !== false) await grantPostgresAppRolePrivileges(connection, {database: postgresDatabaseNameFromUrl(options.url)});`
+      : "";
   return `import { join } from "node:path";
 import { loadMigrationsFromDirectory } from "@getstrata/core/database/migrations";
 import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
-import { getSql } from "../bootstrap/database.ts";
+import { runWithSqlDialect } from "@getstrata/core/database/dialect";
+${imports}
+import { databaseOptions } from "../bootstrap/database.ts";
 
 const MIGRATIONS_DIRECTORY = join(import.meta.dir, "migrations");
 
@@ -270,92 +230,79 @@ export async function loadStarterMigrations() {
   return loadMigrationsFromDirectory(MIGRATIONS_DIRECTORY);
 }
 
+/** Schema commands own this connection; it never becomes the runtime pool. */
 export async function withMigrationDatabase<T>(
-  fn: (db: MigrationDatabase) => Promise<T>,
+  fn: (db: MigrationDatabase) => Promise<T>${grantOption},
 ): Promise<T> {
-  return fn(getSql());
+  const options = databaseOptions();
+  if (options.driver !== "${driver}") throw new Error("Unexpected migration database driver");
+  ${opening}
+  try {
+    const result = await runWithSqlDialect("${driver}", () => fn(connection));${grants}
+    return result;
+  } finally {
+    await connection.close?.();
+  }
 }
 `;
 }
 
 function renderMigrateTs(layers: StarterLayers): string {
   const tenancyOn = usesTenantTable(layers.tenancy);
-  const ph = layers.database === "postgres";
-  const verifyOn = layers.extras.emailVerification && authNeedsUsers(layers.auth);
-  const verifiedNow = "sqlTimestamp()";
-
-  const seedTenant = tenancyOn
-    ? `
-  const [{ count: tenantCount }] = await sql.unsafe<{ count: string | number }>(
-    "SELECT COUNT(*) AS count FROM tenant",
-  );
-  if (Number(tenantCount) === 0) {
-    await sql.unsafe(
-      "INSERT INTO tenant (slug) VALUES (${ph ? "$1" : "?"})",
-      ["default"],
-    );
-  }`
+  const usersOn = authNeedsUsers(layers.auth);
+  const verifyOn = layers.extras.emailVerification && usersOn;
+  const rlsOn = layers.tenancy === "rls" && layers.database === "postgres";
+  const imports = usersOn
+    ? `import { hashPassword } from "@getstrata/core/auth/password";
+import { User, UserRepository } from "../models/User.ts";
+`
     : "";
-
-  const seedUsers = authNeedsUsers(layers.auth)
-    ? `
-  if ((await User.query().value("id")) === null) {
-    const password = await hashPassword("StrataDemo!ChangeMe");
-    await User.create({
-      name: "Demo User",
-      email: "demo@example.com",
-      password,
-      is_admin: false,${verifyOn ? `\n      email_verified_at: ${verifiedNow},` : ""}
-    });
-    await User.create({
-      name: "Admin User",
-      email: "admin@example.test",
-      password,
-      is_admin: true,${verifyOn ? `\n      email_verified_at: ${verifiedNow},` : ""}
-    });
-  }`
-    : "";
-
-  const hashImport = authNeedsUsers(layers.auth)
-    ? `import { hashPassword } from "@getstrata/core/auth/password";\n`
-    : "";
-
-  const rlsBypassImport =
-    layers.tenancy === "rls" && layers.database === "postgres"
-      ? `import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";\n`
+  const tenant =
+    tenancyOn || layers.extras.scim
+      ? `
+    const [tenant] = await selected.execute<{count:string|number}>({text:"SELECT COUNT(*) AS count FROM tenant",params:[]});
+    if (Number(tenant?.count ?? 0) === 0) await selected.execute({text:\`INSERT INTO tenant (slug) VALUES (\${selected.dialect.placeholder(1)})\`,params:["default"]});`
       : "";
-  const bindSql =
-    seedTenant || (layers.tenancy === "rls" && layers.database === "postgres")
-      ? "  const sql = getSql();\n"
-      : "  getSql();\n";
-  const seedOpen =
-    layers.tenancy === "rls" && layers.database === "postgres"
-      ? "  await runWithMigrationBypass(async () => {\n"
-      : "";
-  const seedClose = layers.tenancy === "rls" && layers.database === "postgres" ? "\n  });" : "";
-  const noteCreate = tenancyOn
-    ? `await Note.create({ body: "Welcome to Strata!", tenant_id: 1 });`
-    : `await Note.create({ body: "Welcome to Strata!" });`;
-
-  const userImport = authNeedsUsers(layers.auth)
-    ? `import { User } from "../models/User.ts";\n`
+  const users = usersOn
+    ? `
+    const users = selected.model(User);
+    if ((await users.query().value("id")) === null) {
+      const password = await hashPassword("StrataDemo!ChangeMe");
+      await users.create({name:"Demo User",email:"demo@example.com",password,is_admin:false${verifyOn ? ",email_verified_at:selected.dialect.timestampValue(new Date())" : ""}});
+      await users.create({name:"Admin User",email:"admin@example.test",password,is_admin:true${verifyOn ? ",email_verified_at:selected.dialect.timestampValue(new Date())" : ""}});
+    }`
     : "";
-  const databaseImport = `import { closeDatabase, getSql } from "../bootstrap/database.ts";\n`;
-
-  const timestampImport = verifyOn
-    ? `import { sqlTimestamp } from "@getstrata/core/database/dialect";\n`
-    : "";
-  return `${hashImport}${timestampImport}${rlsBypassImport}${ensureImport(layers)}${databaseImport}import { migrateDatabase } from "@getstrata/core/database/migrations";
-import { Note } from "../models/Note.ts";
-${userImport}import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
+  const run = rlsOn
+    ? `policy.run(database, {kind:"bypass"}, writeSeed)`
+    : `database.transaction(writeSeed)`;
+  return `${imports}${ensureImport(layers)}import { createApplication } from "@getstrata/core/runtime/application";
+import { createDatabaseBindings } from "@getstrata/core/database/bindings";
+import type { DatabaseSession, TransactionSession } from "@getstrata/core/database/session";
+import { createPersistenceInvocation } from "@getstrata/bootstrap/persistenceInvocation";
+import { migrateDatabase } from "@getstrata/core/database/migrations";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
+import { databaseOptions } from "../bootstrap/database.ts";
+import { Note, NoteRepository } from "../models/Note.ts";
+import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
+/** An explicit development-only command owns its own canonical Application. */
 export async function seed() {
   if (isProductionEnv()) throw new Error("Demo seeding is disabled in production and staging.");
-${ensureCall(layers)}${bindSql}${seedOpen}${seedTenant}
-  if ((await Note.query().value("id")) === null) {
-    ${noteCreate}
-  }${seedUsers}${seedClose}
+${ensureCall(layers)}  const connection = databaseOptions();
+  const application = createApplication({providers:[],services:createDatabaseBindings({default:"main",connections:{main:connection},repositories:[NoteRepository${usersOn ? ",UserRepository" : ""}],models:[Note${usersOn ? ",User" : ""}]})});
+  await application.start();
+  try {
+    const invoke = createPersistenceInvocation(application, "main");
+    await invoke({kind:"command",actor:{kind:"system",policy:"starter-demo-seed"}}, ({database${rlsOn ? ",policy" : ""}}) => {
+      const writeSeed = async (selected: DatabaseSession | TransactionSession) => {${tenant}
+        const notes = selected.model(Note);
+        if ((await notes.query().value("id")) === null) await notes.create({body:"Welcome to Strata!"${tenancyOn ? ",tenant_id:1" : ""}});${users}
+      };
+      return ${run};
+    });
+  } finally {
+    await application.stop();
+  }
 }
 
 export async function migrate() {
@@ -364,16 +311,9 @@ ${ensureCall(layers)}  await withMigrationDatabase(async (db) => {
   });
 }
 
-/** The CLI calls this after migrate() so pooled drivers do not hold the process open. */
-export async function close() {
-  await closeDatabase();
-}
-
 if (import.meta.main) {
   await migrate();
   console.log("Database migrated.");
-  await close();
-  process.exit(0);
 }
 `;
 }
@@ -392,7 +332,7 @@ function dropTables(layers: StarterLayers): string[] {
     ordered.push("users");
   }
   ordered.push("notes");
-  if (usesTenantTable(layers.tenancy)) {
+  if (usesTenantTable(layers.tenancy) || layers.extras.scim) {
     ordered.push("tenant");
   }
   return ordered;
@@ -401,7 +341,6 @@ function dropTables(layers: StarterLayers): string[] {
 function renderFreshTs(layers: StarterLayers): string {
   return `${ensureImport(layers)}import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { freshDatabase } from "@getstrata/core/database/migrations";
-import { closeDatabase } from "../bootstrap/database.ts";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function fresh() {
@@ -411,32 +350,22 @@ ${ensureCall(layers)}  await withMigrationDatabase(async (db) => {
   });
 }
 
-/** The CLI calls this after fresh() so pooled drivers do not hold the process open. */
-export async function close() {
-  await closeDatabase();
-}
-
 if (import.meta.main) {
   await fresh();
   console.log("Database reset and migrated.");
-  await close();
   process.exit(0);
 }
 `;
 }
 
 function renderSeedTs(): string {
-  return `import { close, seed } from "./migrate.ts";
+  return `import { seed } from "./migrate.ts";
 
 export { seed };
 
 if (import.meta.main) {
-  try {
-    await seed();
-    console.log("Demo database seeded.");
-  } finally {
-    await close();
-  }
+  await seed();
+  console.log("Demo database seeded.");
 }
 `;
 }

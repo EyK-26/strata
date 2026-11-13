@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
 import { Job } from "@getstrata/core/queue";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
+import type { QueueServices } from "@getstrata/core/queue/queueServices";
 import {
   QueueWorker,
   queueInvalidKey,
@@ -13,30 +14,41 @@ import {
   updateQueueReservation,
 } from "@getstrata/core/queue/redisQueue";
 import { RedisClient } from "bun";
+import { createQueuePersistenceFixture, overrideQueueRecorder } from "../helpers/queuePersistence";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 const redisUrl = process.env.REDIS_URL?.trim() ?? "";
 const describeRedis = redisUrl ? describe : describe.skip;
 
-async function fixture(run: (client: RedisClient, key: string) => Promise<void>) {
+async function fixture(
+  run: (
+    client: RedisClient,
+    key: string,
+    services: QueueServices,
+    persistence: Awaited<ReturnType<typeof createQueuePersistenceFixture>>,
+  ) => Promise<void>,
+) {
   const client = new RedisClient(redisUrl);
   const key = `strata:test:reservation:${crypto.randomUUID()}`;
+  const persistence = await createQueuePersistenceFixture();
   try {
-    await run(client, key);
+    await run(client, key, persistence.services, persistence);
   } finally {
     await client.del(
       key,
       queueProcessingKey(key),
       queueProcessingLeaseKey(key),
       queueInvalidKey(key),
+      `${key}:started`,
     );
     client.close();
+    expect((await persistence.application.stop()).successful).toBe(true);
   }
 }
 
 describeRedis("queue reservation failure boundaries", () => {
   test("shutdown drains and acknowledges the active Redis job before cleanup without reserving its successor", async () => {
-    await fixture(async (client, key) => {
+    await fixture(async (client, key, services) => {
       let entered!: () => void;
       let release!: () => void;
       const started = new Promise<void>((resolve) => {
@@ -60,7 +72,7 @@ describeRedis("queue reservation failure boundaries", () => {
         JSON.stringify({ name, payload: {} }),
         JSON.stringify({ name, payload: {} }),
       );
-      const worker = new QueueWorker(redisUrl, {} as never, 0, [key]);
+      const worker = new QueueWorker(redisUrl, services, 0, [key]);
       const running = worker.run();
       const lifecycle = new LifecycleCoordinator({ timeoutMs: 2000 });
       const order: string[] = [];
@@ -202,7 +214,7 @@ describeRedis("queue reservation failure boundaries", () => {
   });
 
   test("a failed failure-record write retains the job; a successful record permits acknowledgement", async () => {
-    await fixture(async (client, key) => {
+    await fixture(async (client, key, _services, persistence) => {
       class Failure extends Job {
         override readonly maxAttempts = 1;
         override async handle() {
@@ -213,12 +225,12 @@ describeRedis("queue reservation failure boundaries", () => {
       jobRegistry.register(name, () => new Failure());
       await client.lpush(key, JSON.stringify({ name, payload: {}, attempts: 0 }));
       let saved = false;
-      const service = {
+      const service = overrideQueueRecorder(persistence, {
         recordFailure: async () => {
           if (!saved) throw new Error("failed-job database unavailable");
         },
-      };
-      const worker = new QueueWorker(redisUrl, service as never, 0, [key]);
+      });
+      const worker = new QueueWorker(redisUrl, service, 0, [key]);
       try {
         await worker.processNext();
         expect(await client.llen(queueProcessingKey(key))).toBe(1);
@@ -245,7 +257,7 @@ describeRedis("queue reservation failure boundaries", () => {
     const previous = process.env.QUEUE_VISIBILITY_MS;
     process.env.QUEUE_VISIBILITY_MS = "200";
     try {
-      await fixture(async (client, key) => {
+      await fixture(async (client, key, services) => {
         let start: () => void = () => {};
         let finish: () => void = () => {};
         const started = new Promise<void>((resolve) => {
@@ -263,9 +275,7 @@ describeRedis("queue reservation failure boundaries", () => {
         const name = `test.slow.${crypto.randomUUID()}`;
         jobRegistry.register(name, () => new Slow());
         await client.lpush(key, JSON.stringify({ name, payload: {} }));
-        const worker = new QueueWorker(redisUrl, { recordFailure: async () => {} } as never, 0, [
-          key,
-        ]);
+        const worker = new QueueWorker(redisUrl, services, 0, [key]);
         const running = worker.processNext();
         try {
           await started;
@@ -286,17 +296,23 @@ describeRedis("queue reservation failure boundaries", () => {
   });
 
   test("SIGKILL of a real worker leaves a recoverable reservation", async () => {
-    await fixture(async (client, key) => {
+    await fixture(async (client, key, services) => {
       const source = join(import.meta.dir, "../../src/core/queue");
       const name = `test.killed.${crypto.randomUUID()}`;
       const script = `
         import { QueueWorker } from ${JSON.stringify(`${source}/redisQueue.ts`)};
-        import { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
-import { Job } from ${JSON.stringify(`${source}/index.ts`)};
+        import { Job } from ${JSON.stringify(`${source}/index.ts`)};
         import { jobRegistry } from ${JSON.stringify(`${source}/jobRegistry.ts`)};
-        class Blocked extends Job { async handle() { await new Promise(() => {}); } }
+        import { createQueuePersistenceFixture } from ${JSON.stringify(join(import.meta.dir, "../helpers/queuePersistence.ts"))};
+        import { RedisClient } from "bun";
+        const persistence = await createQueuePersistenceFixture();
+        const observed = new RedisClient(process.env.REDIS_URL);
+        class Blocked extends Job { async handle() {
+          await observed.set(${JSON.stringify(`${key}:started`)}, "handler-entered");
+          await new Promise(() => {});
+        } }
         jobRegistry.register(${JSON.stringify(name)}, () => new Blocked());
-        const worker = new QueueWorker(process.env.REDIS_URL, {}, 0, [${JSON.stringify(key)}]);
+        const worker = new QueueWorker(process.env.REDIS_URL, persistence.services, 0, [${JSON.stringify(key)}]);
         await worker.processNext();
       `;
       await client.lpush(key, JSON.stringify({ name, payload: {} }));
@@ -308,7 +324,7 @@ import { Job } from ${JSON.stringify(`${source}/index.ts`)};
       });
       try {
         const deadline = performance.now() + 3000;
-        while ((await client.llen(queueProcessingKey(key))) === 0) {
+        while ((await client.get(`${key}:started`)) !== "handler-entered") {
           if (performance.now() >= deadline)
             throw new Error("Child worker did not reserve its job");
           await Bun.sleep(10);
@@ -324,7 +340,7 @@ import { Job } from ${JSON.stringify(`${source}/index.ts`)};
           }
         }
         jobRegistry.register(name, () => new Recovered());
-        const worker = new QueueWorker(redisUrl, {} as never, 0, [key]);
+        const worker = new QueueWorker(redisUrl, services, 0, [key]);
         try {
           await worker.processNext();
         } finally {
@@ -341,13 +357,13 @@ import { Job } from ${JSON.stringify(`${source}/index.ts`)};
   }, 6000);
 
   test("legacy processing lists recover atomically and invalid jobs remain inspectable", async () => {
-    await fixture(async (client, key) => {
+    await fixture(async (client, key, services) => {
       const legacy = JSON.stringify({ name: "missing.job", payload: {} });
       await client.lpush(queueProcessingKey(key), legacy);
       await client.hset(queueProcessingLeaseKey(key), legacy, String(Date.now() - 120_000));
       expect(await reclaimExpiredQueueReservations(client, [key])).toBe(1);
       expect(await client.hlen(queueProcessingLeaseKey(key))).toBe(0);
-      const worker = new QueueWorker(redisUrl, {} as never, 0, [key]);
+      const worker = new QueueWorker(redisUrl, services, 0, [key]);
       try {
         await worker.processNext();
       } finally {

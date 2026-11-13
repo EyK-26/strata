@@ -2,9 +2,11 @@ import type { Queue } from "./index";
 import {
   createFailedJobService,
   createProductionQueue,
+  createQueueServices,
   createQueueWorker,
+  createSystemQueueServices,
   createTrackedJob,
-  type FailedJobService,
+  type QueueServices,
 } from "./publicQueue";
 import { resolveQueueConfig } from "./queueConfig";
 
@@ -12,8 +14,8 @@ const FAILED_JOB_SERVICE_TOKEN = "core.failedJobs";
 
 function createAppQueue(
   driver: "sync" | "async" | "redis",
-  redisUrl?: string,
-  failedJobs: FailedJobService = createFailedJobService(),
+  redisUrl: string | undefined,
+  failedJobs: QueueServices,
   registerJobs?: () => void,
 ): Queue {
   return createProductionQueue(driver, {
@@ -23,10 +25,13 @@ function createAppQueue(
   });
 }
 
+export type { QueueInvocation, QueueInvocationConfig, QueueServices } from "./queueServices";
 export {
   createAppQueue,
   createFailedJobService,
+  createQueueServices,
   createQueueWorker,
+  createSystemQueueServices,
   createTrackedJob,
   FAILED_JOB_SERVICE_TOKEN,
   resolveQueueConfig,

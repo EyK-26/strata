@@ -37,23 +37,57 @@ const env = {
   APP_ENV: "local",
   DATABASE_URL: fixture.runtimeUrl,
   APP_DATABASE_URL: fixture.runtimeUrl,
-  MIGRATION_DATABASE_URL: fixture.migrationUrl,
+  SESSION_SECRET: crypto.randomUUID() + crypto.randomUUID(),
   TENANCY_DRIVER: tenancy,
   OTEL_SDK_DISABLED: "true",
 };
-await writeFile(
-  join(fixture.app, ".env"),
-  await readFile(join(fixture.app, ".env.example"), "utf8"),
-);
 const cli = join(fixture.app, "node_modules/@getstrata/cli/cli.ts");
+const failures: unknown[] = [];
+const activeChildren = new Set<ReturnType<typeof Bun.spawn<"ignore", "pipe", "pipe">>>();
+let terminationTimer: ReturnType<typeof setTimeout> | undefined;
+let interrupted = false;
+const interruption = new Error("Command data verification interrupted by SIGTERM.");
+function throwFailures(errors: unknown[], message: string): void {
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) throw new AggregateError(errors, message);
+}
+function checkInterrupted(): void {
+  if (interrupted) throw interruption;
+}
+const terminate = () => {
+  interrupted = true;
+  process.exitCode = 143;
+  // The body observes every owned child before its finally releases the fixture.
+  for (const child of activeChildren) {
+    try {
+      if (child.exitCode === null) child.kill("SIGTERM");
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (activeChildren.size)
+    terminationTimer ??= setTimeout(() => {
+      for (const child of activeChildren) {
+        try {
+          if (child.exitCode === null) child.kill("SIGKILL");
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+    }, 5000);
+};
+process.once("SIGTERM", terminate);
 async function run(
   args: string[],
   options: { input?: string; admin?: boolean; mode?: string } = {},
 ) {
+  checkInterrupted();
   const child = Bun.spawn([process.execPath, ...args], {
     cwd: fixture.app,
     env: {
       ...env,
+      // An empty runtime migration URL also prevents generated development preload fallback.
+      MIGRATION_DATABASE_URL: options.admin ? fixture.migrationUrl : "",
       ...(options.admin
         ? { DATABASE_URL: fixture.migrationUrl, APP_DATABASE_URL: fixture.migrationUrl }
         : {}),
@@ -63,36 +97,76 @@ async function run(
     stdout: "pipe",
     stderr: "pipe",
     timeout: 60000,
+    killSignal: "SIGKILL",
   });
-  const [code, out, err] = await Promise.all([
-    child.exited,
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-  ]);
-  return { code, output: out + err };
+  activeChildren.add(child);
+  try {
+    const results = await Promise.allSettled([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ] as const);
+    const errors = results.flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : [],
+    );
+    if (interrupted) errors.push(interruption);
+    throwFailures(errors, "Command data child exit/output collection failed.");
+    const [terminal, out, err] = results;
+    if (terminal.status !== "fulfilled" || out.status !== "fulfilled" || err.status !== "fulfilled")
+      throw new Error("Command data child channels did not settle successfully.");
+    return { code: terminal.value, output: out.value + err.value };
+  } finally {
+    activeChildren.delete(child);
+    if (!activeChildren.size) {
+      if (terminationTimer) clearTimeout(terminationTimer);
+      terminationTimer = undefined;
+    }
+  }
 }
 async function successful(args: string[], options: Parameters<typeof run>[1] = {}) {
   const result = await run(args, options);
   assert.equal(result.code, 0, result.output);
   return result.output;
 }
-const setup = `import {getSql,closeDatabase} from './src/bootstrap/database.ts';getSql();import {BaseRepository} from '@getstrata/core/database/baseRepository';import {defineTable} from '@getstrata/core/database/table';import {runWithMigrationBypass} from '@getstrata/core/tenant/databaseTenantContext';import {User} from './src/models/User.ts';const claims=new BaseRepository(defineTable({name:'initial_admin_provisioning',primaryKey:'id',columns:['id','email','provisioned_at']}));`;
+const probe = `import assert from 'node:assert/strict';
+import type {Application} from '@getstrata/core/contracts/application';
+import {BaseRepository} from '@getstrata/core/database/baseRepository';
+import {defineRepository} from '@getstrata/core/database/definitions';
+import {defineTable} from '@getstrata/core/database/table';
+import {bootstrapApp} from './src/bootstrap/createApp.ts';
+import {User} from './src/models/User.ts';
+assert.equal(process.env.MIGRATION_DATABASE_URL??'','');
+const claims=defineRepository({name:'FixtureAdminClaims',table:defineTable<{id:number;email:string;provisioned_at:Date|string},'id'>({name:'initial_admin_provisioning',primaryKey:'id',columns:['id','email','provisioned_at']}),dependencies:[],create:binding=>new BaseRepository(binding)});
+const tenants=defineRepository({name:'FixtureAdminTenants',table:defineTable<{id:number;slug:string},'id'>({name:'tenant',primaryKey:'id',columns:['id','slug']}),dependencies:[],create:binding=>new BaseRepository(binding)});
+let owner:Application|undefined;const errors:unknown[]=[];let result:unknown;
+try{
+ const app=await bootstrapApp({migrate:false,mode:'command',persistence:{repositories:[claims${tenancy === "none" ? "" : ",tenants"}]},onConstructed:application=>{owner=application;return undefined;}});
+ result=await app.invoke({kind:'command',actor:{kind:'system',policy:'fixture.admin-account-inventory'}},async({database${database === "postgres" ? ",policy" : ""}})=>{
+  const inspect=async(selected:import('@getstrata/core/contracts/persistence').SelectedSession)=>{
+   if(process.argv[2]==='prepare'){
+    const tenant=await selected.repository(tenants).create({slug:'owned-test'});assert.equal(tenant.id,1);return null;
+   }
+   assert.equal(process.argv[2],'counts');
+   const users=selected.model(User);const claimRepository=selected.repository(claims);
+   const userCount=await users.query().count();const claimCount=await claimRepository.count();
+   if(claimCount===1){
+    const claim=await claimRepository.findById(1);assert.ok(claim);
+    assert.equal(await users.where({email:claim.email${tenancy === "none" ? "" : ",tenant_id:1"}}).count(),1,'The completed claim must identify its single scoped account.');
+   }
+   return {users:userCount,claims:claimCount};
+  };
+  return ${database === "postgres" ? "policy.run(database,{kind:'bypass'},inspect)" : "inspect(database)"};
+ });
+}catch(error){errors.push(error);}
+if(owner)try{const stopped=await owner.stop({reason:'Admin data probe complete'});if(!stopped.successful)throw new Error('Admin data owner did not stop cleanly',{cause:stopped});}catch(error){errors.push(error);}
+if(errors.length===1)throw errors[0];if(errors.length>1)throw new AggregateError(errors,'Admin data probe and cleanup failed.');
+console.log(JSON.stringify(result));
+`;
 async function prepareTenant() {
-  if (tenancy !== "none")
-    await successful([
-      "-e",
-      `${setup}const tenants=new BaseRepository(defineTable({name:'tenant',primaryKey:'id',columns:['id','slug']}));await tenants.create({slug:'owned-test'});await closeDatabase();`,
-    ]);
+  if (tenancy !== "none") await successful(["admin-data-probe.ts", "prepare"]);
 }
 async function counts() {
-  return JSON.parse(
-    (
-      await successful([
-        "-e",
-        `${setup}const users=await runWithMigrationBypass(()=>User.query().count());console.log(JSON.stringify({users,claims:await claims.count()}));await closeDatabase();`,
-      ])
-    ).trim(),
-  );
+  return JSON.parse((await successful(["admin-data-probe.ts", "counts"])).trim());
 }
 function provision(email: string) {
   return run(
@@ -109,13 +183,15 @@ function provision(email: string) {
     { input: "OwnedQualificationPassword!123\n" },
   );
 }
-let cleanupPromise: Promise<void> | undefined;
-const cleanup = () => (cleanupPromise ??= fixture.close());
-const terminate = () => {
-  void cleanup().finally(() => process.exit(143));
-};
-process.once("SIGTERM", terminate);
 try {
+  await writeFile(
+    join(fixture.app, ".env"),
+    (await readFile(join(fixture.app, ".env.example"), "utf8")).replace(
+      /^MIGRATION_DATABASE_URL=.*$/gm,
+      "MIGRATION_DATABASE_URL=",
+    ),
+  );
+  await writeFile(join(fixture.app, "admin-data-probe.ts"), probe);
   // Isolate the claim in a later batch so a real ordinary rollback reaches its guard first.
   const migration = join(fixture.app, "src/db/migrations/0004_initial_admin_provisioning.ts");
   const held = join(fixture.app, "pending-admin.ts");
@@ -144,23 +220,56 @@ try {
   assert.deepEqual(await counts(), { users: 0, claims: 0 });
   await successful([cli, "migrate"], { admin: true });
   await prepareTenant();
-  const race = await Promise.all([
+  const observations = await Promise.allSettled([
     provision("race-a@example.test"),
     provision("race-b@example.test"),
   ]);
+  const raceErrors = observations.flatMap((result) =>
+    result.status === "rejected" ? [result.reason] : [],
+  );
+  throwFailures(raceErrors, "Both concurrent admin claimants were observed before failure.");
+  const race = observations.flatMap((result) =>
+    result.status === "fulfilled" ? [result.value] : [],
+  );
+  assert.equal(race.length, 2);
+  const diagnostic = race.map((result) => `exit=${result.code}: ${result.output}`).join("\n");
   assert.equal(
     race.filter((result) => result.code === 0).length,
     1,
-    "One concurrent claimant must win.",
+    `One concurrent claimant must win.\n${diagnostic}`,
   );
-  assert.equal(race.filter((result) => result.code !== 0).length, 1);
+  const loser = race.find((result) => result.code !== 0);
+  assert.ok(loser, diagnostic);
+  assert.equal(loser.code, 1, diagnostic);
+  assert.ok(
+    loser.output.includes(
+      "Initial-admin provisioning failed. Check schema, tenant, existing admins/accounts and the one-time claim; no account is promoted or overwritten.",
+    ),
+    diagnostic,
+  );
+  const winner = race.find((result) => result.code === 0);
+  assert.ok(
+    winner?.output.includes(
+      "Initial admin provisioned. Complete email verification and MFA through the application.",
+    ),
+    diagnostic,
+  );
   assert.deepEqual(await counts(), { users: 1, claims: 1 });
   await successful([cli, "migrate:fresh", "--seed"], { admin: true });
   assert.deepEqual(await counts(), { users: 2, claims: 0 });
-  console.log(
-    `PASS ${database}/${tenancy}: real admin provisioning, protected rollback, production/staging refusal, explicit local reset and concurrent claim`,
-  );
+  checkInterrupted();
+} catch (error) {
+  failures.push(error);
 } finally {
+  try {
+    await fixture.close();
+  } catch (error) {
+    failures.push(error);
+  }
+  if (interrupted) failures.push(interruption);
   process.removeListener("SIGTERM", terminate);
-  await cleanup();
 }
+throwFailures(failures, "Admin reset verification and cleanup failed.");
+console.log(
+  `PASS ${database}/${tenancy}: real admin provisioning, protected rollback, production/staging refusal, explicit local reset and concurrent claim`,
+);

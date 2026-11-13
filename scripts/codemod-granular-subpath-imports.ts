@@ -72,7 +72,6 @@ const SYMBOL_TARGETS: Record<string, string> = {
   compileBlueprint: "database/schema",
   createSchemaBuilder: "database/schema",
   defineTable: "database/table",
-  runInTransaction: "database/transaction",
   WhereBuilder: "database/whereBuilder",
   currentAuthUser: "auth/authContext",
   runWithAuthUser: "auth/authContext",

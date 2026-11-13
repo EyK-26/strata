@@ -4,31 +4,38 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createMetricsRoutes, createMetricsRuntime } from "@getstrata/bootstrap/metricsRoutes";
 import {
-  bindDatabaseConnection,
-  getBoundDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "@getstrata/core/database/boundConnection";
-import { resetSqlDialect, useSqlDialect } from "@getstrata/core/database/dialect";
+  createOwnedReadOnlyObservation,
+  type ReadOnlyObservation,
+} from "@getstrata/core/database/ownedReadOnlyObservation";
 import { Schema } from "@getstrata/core/database/schema";
 import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
 import { createOutboxMigration } from "@getstrata/core/events/outbox";
-import { renderFailedJobMetrics } from "@getstrata/core/queue/queueMetrics";
-import { createReadOnlyCollector } from "../../src/core/database/readOnlyCollector";
-import { repositoryConnection } from "../../src/core/database/repositoryConnection";
+import {
+  createFailedJobMetricsCollector,
+  renderFailedJobMetrics,
+} from "@getstrata/core/queue/queueMetrics";
+import { createNativePersistenceApplication } from "../helpers/nativePersistenceApplication";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 async function fixture(
-  run: (db: ReturnType<typeof createSqliteConnection>, filename: string) => Promise<void>,
+  run: (
+    db: ReturnType<typeof createSqliteConnection>,
+    filename: string,
+    observeReadOnly: ReadOnlyObservation,
+  ) => Promise<void>,
 ) {
   const directory = await mkdtemp(join(tmpdir(), "sqlite-metrics-"));
   const filename = join(directory, "app.sqlite");
   const db = createSqliteConnection(filename);
-  const previous = getBoundDatabaseConnection();
+  const configured = { driver: "sqlite" as const, filename };
+  const native = await createNativePersistenceApplication({
+    default: "test",
+    connections: { test: configured },
+  });
+  const observeReadOnly = createOwnedReadOnlyObservation(native.application, "test", configured);
   const token = process.env.METRICS_TOKEN;
   process.env.METRICS_TOKEN = "sqlite-metrics-fixture";
   try {
-    bindDatabaseConnection(db);
-    useSqlDialect("sqlite");
     await Schema.run(db, "sqlite", (schema) => {
       schema.create("failed_job", (table) => {
         table.id();
@@ -43,11 +50,9 @@ async function fixture(
     await db.unsafe(
       "INSERT INTO strata_outbox_event VALUES ('fixture', 'private-event', 1, NULL, 'private-payload', 1, 'fixture')",
     );
-    await run(db, filename);
+    await run(db, filename, observeReadOnly);
   } finally {
-    if (previous) bindDatabaseConnection(previous);
-    else resetBoundDatabaseConnection();
-    resetSqlDialect();
+    await native.close();
     restoreEnvVar("METRICS_TOKEN", token);
     db.close();
     await rm(directory, { recursive: true, force: true });
@@ -55,10 +60,10 @@ async function fixture(
 }
 
 test("SQLite bounded ORM failed-job projections and indexed outbox samples exclude completed history", async () => {
-  await fixture(async (db) => {
+  await fixture(async (db, _filename, observeReadOnly) => {
     const runtime = createMetricsRuntime({
-      failedJobs: { sampleLimit: 2 },
-      outbox: { sampleLimit: 2 },
+      failedJobs: { observeReadOnly, sampleLimit: 2 },
+      outbox: { observeReadOnly, sampleLimit: 2 },
     });
     try {
       expect(await runtime.options.failedJobs?.collect()).toEqual({
@@ -105,13 +110,11 @@ test("SQLite bounded ORM failed-job projections and indexed outbox samples exclu
       expect(
         outbox?.states.find((row) => row.state === "pending_waiting")?.actionableLatenessSeconds,
       ).toBeNull();
-      const plans = await db.observeReadOnly(
-        (tx) =>
-          tx.unsafe(
-            "EXPLAIN QUERY PLAN SELECT available_at FROM strata_outbox_delivery INDEXED BY strata_outbox_due WHERE status='pending' AND available_at<=? ORDER BY available_at,event_id,listener_name LIMIT 3",
-            [Date.now()],
-          ),
-        { signal: AbortSignal.timeout(1000), timeoutMs: 1000 },
+      const plans = await observeReadOnly(1000, (tx) =>
+        tx.execute({
+          text: "EXPLAIN QUERY PLAN SELECT available_at FROM strata_outbox_delivery INDEXED BY strata_outbox_due WHERE status='pending' AND available_at<=? ORDER BY available_at,event_id,listener_name LIMIT 3",
+          params: [Date.now()],
+        }),
       );
       const plan = JSON.stringify(plans);
       expect(plan).toContain("COVERING INDEX strata_outbox_due");
@@ -131,8 +134,11 @@ test("SQLite bounded ORM failed-job projections and indexed outbox samples exclu
 });
 
 test("SQLite rejects missing/wrong schemas and indexes, coalesces authenticated scrapes and recovers", async () => {
-  await fixture(async (db) => {
-    const runtime = createMetricsRuntime({ failedJobs: {}, outbox: {} });
+  await fixture(async (db, _filename, observeReadOnly) => {
+    const runtime = createMetricsRuntime({
+      failedJobs: { observeReadOnly },
+      outbox: { observeReadOnly },
+    });
     const routes = createMetricsRoutes(runtime.options);
     const request = () =>
       new Request("http://local/metrics", {
@@ -177,12 +183,18 @@ test("SQLite rejects missing/wrong schemas and indexes, coalesces authenticated 
 });
 
 test("SQLite collector deadline cancels actual VM work and close drains before business connection closure", async () => {
-  await fixture(async (db) => {
-    const collector = createReadOnlyCollector("Test observation", 100, () =>
-      repositoryConnection.unsafe(
-        "WITH RECURSIVE n(x) AS (VALUES(0) UNION ALL SELECT x+1 FROM n WHERE x<1000000000) SELECT sum(x) FROM n",
-      ),
-    );
+  await fixture(async (db, _filename, observeReadOnly) => {
+    const collector = createFailedJobMetricsCollector({
+      timeoutMs: 100,
+      observeReadOnly: (timeout, collect) =>
+        observeReadOnly(timeout, async (executor, remaining) => {
+          await executor.execute({
+            text: "WITH RECURSIVE n(x) AS (VALUES(0) UNION ALL SELECT x+1 FROM n WHERE x<1000000000) SELECT sum(x) FROM n",
+            params: [],
+          });
+          return collect(executor, remaining);
+        }),
+    });
     const start = performance.now();
     await expect(collector.collect()).rejects.toThrow("timed out");
     await collector.close();
@@ -193,19 +205,11 @@ test("SQLite collector deadline cancels actual VM work and close drains before b
 });
 
 test("three independent processes observe the same SQLite database without additive counts", async () => {
-  await fixture(async (db, filename) => {
+  await fixture(async (db, filename, _observeReadOnly) => {
     await db.unsafe(
       "INSERT INTO failed_job(job_name,payload,exception) VALUES ('private','private','private')",
     );
-    const program = `import {createSqliteConnection} from '@getstrata/core/database/sqliteConnection';
-      import {bindDatabaseConnection} from '@getstrata/core/database/boundConnection';
-      import {useSqlDialect} from '@getstrata/core/database/dialect';
-      import {createMetricsRuntime} from '@getstrata/bootstrap/metricsRoutes';
-      const db=createSqliteConnection(process.env.SQLITE_METRICS_FILE); bindDatabaseConnection(db); useSqlDialect('sqlite');
-      const runtime=createMetricsRuntime({failedJobs:{},outbox:{}});
-      try { const failed=await runtime.options.failedJobs.collect(); const outbox=await runtime.options.outbox.collect();
-        console.log(JSON.stringify({failed,states:outbox.states.map(row=>[row.state,row.count,row.capped])})); }
-      finally {await runtime.close(); db.close();}`;
+    const program = `import{createApplication}from '@getstrata/core/runtime/application';import{createDatabaseBindings}from '@getstrata/core/database/bindings';import{createOwnedReadOnlyObservation}from '@getstrata/core/database/ownedReadOnlyObservation';import{createMetricsRuntime}from '@getstrata/bootstrap/metricsRoutes';const options={driver:'sqlite',filename:process.env.SQLITE_METRICS_FILE};const app=createApplication({providers:[],services:createDatabaseBindings({default:'main',connections:{main:options}})});await app.start();const observeReadOnly=createOwnedReadOnlyObservation(app,'main',options);const runtime=createMetricsRuntime({failedJobs:{observeReadOnly},outbox:{observeReadOnly}});try{const failed=await runtime.options.failedJobs.collect();const outbox=await runtime.options.outbox.collect();console.log(JSON.stringify({failed,states:outbox.states.map(row=>[row.state,row.count,row.capped])}));}finally{await runtime.close();const result=await app.stop();if(!result.successful)throw Error('Application cleanup was not confirmed');}`;
     const results = await Promise.all(
       Array.from({ length: 3 }, async () => {
         const child = Bun.spawn([process.execPath, "--no-env-file", "-e", program], {

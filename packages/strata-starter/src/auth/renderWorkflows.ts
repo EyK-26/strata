@@ -12,11 +12,37 @@ export function renderAuthHelpers({
   "layers" | "cookie" | "mfa" | "verify" | "tenantCreateField" | "samlTenantCreateField"
 >) {
   const helpers = `
+function withAuthDatabase(ports: BusinessRequestPorts, database: SelectedSession): BusinessRequestPorts {
+  return { ...ports, database };
+}
+function runAuthTransaction<T>(ports: BusinessRequestPorts, work: (child: BusinessRequestPorts) => T | Promise<T>): Promise<T> {
+  return ports.database.transaction(database => work(withAuthDatabase(ports, database)));
+}
+function runWithLockedAccount<T>(ports: BusinessRequestPorts, id: number, work: (record: StarterAuthUserRecord | null, child: BusinessRequestPorts) => Promise<T>): Promise<T> {
+  return runWithLockedAuthUser(ports, id, (record, child) => work(record, withAuthDatabase(ports, child.database)));
+}
+function authTimestamp(ports: BusinessRequestPorts, value = new Date()): string {
+  return ports.database.dialect.timestampValue(value);
+}
+async function deferAuthEffect(ports: BusinessRequestPorts, work: () => void | Promise<void>): Promise<void> {
+  if ("afterCommit" in ports.database) ports.database.afterCommit(work);
+  else await work();
+}
+${
+  layers.tenancy === "none"
+    ? ""
+    : `function establishedTenantId(ports: BusinessRequestPorts): number {
+  const id = ports.established.tenant?.id;
+  if (!Number.isSafeInteger(id) || id! <= 0) throw new Error("Established tenant identity is required.");
+  return id!;
+}
+`
+}
 type StarterPasswordLoginResult =
   | { ok: false; error: "invalid_credentials" }
   | (PasswordLoginResult & { user: StarterAuthUserRecord });
 
-async function authenticatePasswordUser(
+async function authenticatePasswordUser(ports: BusinessRequestPorts,
   user: StarterAuthUserRecord | null,
   password: string,
   mfaCode: string | undefined,
@@ -26,7 +52,7 @@ async function authenticatePasswordUser(
   }
   const result = completePasswordLogin(user, { mfaCode });
   if (!result.ok) return { ...result, user };
-  await persistAuthRecovery(user.id, user.mfa_recovery_codes, result.consumedRecoveryHash);
+  await persistAuthRecovery(ports, user.id, user.mfa_recovery_codes, result.consumedRecoveryHash);
   return { ...result, user };
 }
 
@@ -63,82 +89,82 @@ function parseForgotPasswordEmail(payload: unknown) {
   return String(body.email).toLowerCase();
 }
 
-async function runWithLoginUser<T>(email: string, operation: (record: StarterAuthUserRecord | null) => Promise<T>): Promise<T> {
-  const candidate = await starterAuthDirectory.findByEmail(email);
-  if (!candidate) return operation(null);
-  return runWithLockedAuthUser(candidate.id, async (record) => {
+async function runWithLoginUser<T>(ports: BusinessRequestPorts, email: string, operation: (record: StarterAuthUserRecord | null, ports: BusinessRequestPorts) => Promise<T>): Promise<T> {
+  const candidate = await createStarterAuthDirectory(ports).findByEmail(email);
+  if (!candidate) return operation(null, ports);
+  return runWithLockedAccount(ports, candidate.id, async (record, ports) => {
     // Recheck identity after locking: provisioning may have changed the email.
-    return operation(record?.email === email.trim().toLowerCase() ? record : null);
+    return operation(record?.email === email.trim().toLowerCase() ? record : null, ports);
   });
 }
 
-async function runAuthWrite<T>(identifier: string | number, callback: () => Promise<T>): Promise<T> {
-  return await runWithMigrationBypassForIdentifier(identifier, callback);
+async function runAuthWrite<T>(ports: BusinessRequestPorts, identifier: string | number, callback: (ports: BusinessRequestPorts) => Promise<T>): Promise<T> {
+  return withAuthIdentifier(ports, identifier, database => callback(withAuthDatabase(ports, database)));
 }
 
-async function prepareSignedAuthMail(to: string, subject: string, path: string, purpose: string, userId: number, extra: Record<string, string> = {}) {
+async function prepareSignedAuthMail(ports: BusinessRequestPorts, services: StarterAuthServices, to: string, subject: string, path: string, purpose: string, userId: number, extra: Record<string, string> = {}) {
   const issued = generateOneTimeToken();
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-  await runAuthWrite(userId, async () => {
-    await AuthOneTimeToken.create({
+  await runAuthWrite(ports, userId, async (ports) => {
+    await ports.database.model(AuthOneTimeToken).create({
       purpose,
       user_id: userId,
       token_hash: issued.hash,
-      expires_at: sqlTimestamp(expiresAt),
+      expires_at: authTimestamp(ports, expiresAt),
     });
   });
-  const link = absoluteTemporarySignedUrl(path, 3600, { ...extra, token: issued.plain });
+  const link = absoluteTemporarySignedUrl(path, 3600, { ...extra, token: issued.plain }, services.config.appUrl, services.config.signatureSecret);
   return { to, subject, body: \`\${subject}\\n\\n\${link}\\n\` };
 }
 
-async function issueSignedAuthMail(to: string, subject: string, path: string, purpose: string, userId: number, extra: Record<string, string> = {}) {
-  const message = await prepareSignedAuthMail(to, subject, path, purpose, userId, extra);
-  await afterCommit(() => mailer().send(message));
+async function issueSignedAuthMail(ports: BusinessRequestPorts, services: StarterAuthServices, to: string, subject: string, path: string, purpose: string, userId: number, extra: Record<string, string> = {}) {
+  const message = await prepareSignedAuthMail(ports, services, to, subject, path, purpose, userId, extra);
+  await deferAuthEffect(ports, () => services.mail.send(message));
 }
 
-async function createRegistration(credentials: { name: string; email: string; password: string }${verify ? ", verificationPath: string" : ""}) {
+async function createRegistration(ports: BusinessRequestPorts, services: StarterAuthServices, credentials: { name: string; email: string; password: string }${verify ? ", verificationPath: string" : ""}) {
   const { email } = credentials;
   try {
-    return await runAuthWrite(email, () => runInTransaction(async () => {
-      ${verify ? "const created = " : ""}await User.create({
+    return await runAuthWrite(ports, email, (ports) => runAuthTransaction(ports, async (ports) => {
+      ${verify ? "const created = " : ""}await ports.database.model(User).create({
         ...credentials,
         is_admin: false,${tenantCreateField}
       });
-      ${verify ? `return prepareSignedAuthMail(email, "Verify your email", verificationPath, AUTH_ONE_TIME_PURPOSES.emailVerify, Number(created.get("id")), { id: String(created.get("id")) });` : ""}
+      ${verify ? `return prepareSignedAuthMail(ports, services, email, "Verify your email", verificationPath, AUTH_ONE_TIME_PURPOSES.emailVerify, Number(created.get("id")), { id: String(created.get("id")) });` : ""}
     }));
   } catch (error) {
     // The failed transaction/savepoint is already rolled back before readback.
     // Only an actual account race is neutral; unrelated persistence failures propagate.
-    if (!isUniqueConstraintError(error) || !(await starterAuthDirectory.findByEmail(email))) throw error;
+    if (!isUniqueConstraintError(error) || !(await createStarterAuthDirectory(ports).findByEmail(email))) throw error;
     return undefined;
   }
 }
 
-async function consumeSignedAuthToken(request: Request, purpose: string): Promise<number | null> {
+async function consumeSignedAuthToken(ports: BusinessRequestPorts, request: Request, purpose: string): Promise<number | null> {
   const token = new URL(request.url).searchParams.get("token") ?? "";
   if (!token) {
     return null;
   }
-  return await runAuthWrite(hashOneTimeToken(token), async () => consumeOneTimeToken(getSql(), purpose, token));
+  return await runAuthWrite(ports, hashOneTimeToken(token), async (ports) => consumeOneTimeToken(ports.database, purpose, token));
 }
 
-async function revokeUserSessions(userId: number) {
-  await runAuthWrite(userId, async () => {
-    await revokeStoredUserSessions(getSql(), userId, { incrementAuthVersion: true });
+async function revokeUserSessions(ports: BusinessRequestPorts, userId: number) {
+  await runAuthWrite(ports, userId, async (ports) => {
+    await revokeStoredUserSessions(ports.database, userId, { incrementAuthVersion: true });
   });
 }
 
 ${
   verify
     ? `
-async function completeSignedEmailVerification(request: Request): Promise<boolean> {
-  return await runInTransaction(async () => {
-    const userId = await consumeSignedAuthToken(request, AUTH_ONE_TIME_PURPOSES.emailVerify);
+async function completeSignedEmailVerification(ports: BusinessRequestPorts, request: Request): Promise<boolean> {
+  return await runAuthTransaction(ports, async (ports) => {
+    const userId = await consumeSignedAuthToken(ports, request, AUTH_ONE_TIME_PURPOSES.emailVerify);
     if (!userId) return false;
-    await runAuthWrite(userId, async () => {
-      const user = await User.find(userId);
+    await runAuthWrite(ports, userId, async (ports) => {
+      const user = await ports.database.model(User).find(userId);
       if (!user) throw new Error("Verification account no longer exists.");
-      await user.update({ email_verified_at: sqlTimestamp() });
+      await user.update({ email_verified_at: authTimestamp(ports) });
     });
     return true;
   });
@@ -147,28 +173,28 @@ async function completeSignedEmailVerification(request: Request): Promise<boolea
     : ""
 }
 
-async function completeSignedPasswordReset(request: Request, password: unknown): Promise<boolean> {
+async function completeSignedPasswordReset(ports: BusinessRequestPorts, request: Request, password: unknown): Promise<boolean> {
   if (typeof password !== "string" || password.length < 8) return false;
-  return await runInTransaction(async () => {
-    const userId = await consumeSignedAuthToken(request, AUTH_ONE_TIME_PURPOSES.passwordReset);
+  return await runAuthTransaction(ports, async (ports) => {
+    const userId = await consumeSignedAuthToken(ports, request, AUTH_ONE_TIME_PURPOSES.passwordReset);
     if (!userId) return false;
-    await runAuthWrite(userId, async () => {
-      const user = await User.where({ id: userId })${layers.database === "sqlite" ? "" : ".lockForUpdate()"}.first();
+    await runAuthWrite(ports, userId, async (ports) => {
+      const user = await ports.database.model(User).where({ id: userId })${layers.database === "sqlite" ? "" : ".lockForUpdate()"}.first();
       if (!user) throw new Error("Reset account no longer exists.");
       await user.update({ password: await hashPassword(password) });
-      await revokeStoredUserSessions(getSql(), userId, { incrementAuthVersion: true });
+      await revokeStoredUserSessions(ports.database, userId, { incrementAuthVersion: true });
     });
     return true;
   });
 }
 
-async function persistAuthRecovery(
+async function persistAuthRecovery(ports: BusinessRequestPorts,
   userId: number,
   currentRaw: string | null | undefined,
   consumedHash: string | undefined,
 ) {
-  await runAuthWrite(userId, async () => {
-    await persistConsumedRecoveryHash(getSql(), userId, currentRaw, consumedHash);
+  await runAuthWrite(ports, userId, async (ports) => {
+    await persistConsumedRecoveryHash(ports.database, userId, currentRaw, consumedHash);
   });
 }
 ${
@@ -190,46 +216,48 @@ function sessionUser(user: StarterAuthUserRecord) {
 }
 
 async function completeBrowserSsoLogin(
-  dependencies: { container: { resolve: <T>(token: string) => T } },
+  ports: BusinessRequestPorts,
+  services: StarterAuthServices,
   profile: { email: string; name: string },
   label: string,
 ): Promise<Response> {
   const email = profile.email.trim().toLowerCase();
-  let record = await starterAuthDirectory.findByEmail?.(email);
+  let record = await createStarterAuthDirectory(ports).findByEmail?.(email);
   if (!record) {
-    if ((process.env.FEATURE_REGISTRATION ?? "true") === "false") {
+    if (!services.config.registrationEnabled) {
       return privateJsonResponse({ error: \`\${label} user is not provisioned.\` }, { status: 403 });
     }
     const hashed = await hashPassword(randomBytes(18).toString("hex"));
     try {
-      await runAuthWrite(email, async () => {
-        await User.create({
+      await runAuthWrite(ports, email, async (ports) => {
+        await ports.database.model(User).create({
           name: profile.name,
           email,
           password: hashed,
           is_admin: false,${samlTenantCreateField}
         });
       });
-    } catch {
-      // Unique email: another request already provisioned this user.
+    } catch (error) {
+      // Only a verified uniqueness race is neutral; transaction failures propagate.
+      if (!isUniqueConstraintError(error)) throw error;
     }
-    record = await starterAuthDirectory.findByEmail?.(email);
+    record = await createStarterAuthDirectory(ports).findByEmail?.(email);
   }
   if (!record) {
     return privateJsonResponse({ error: \`Could not complete \${label} login.\` }, { status: 500 });
   }
-  return runWithLockedAuthUser(record.id, async (record) => {
+  return runWithLockedAccount(ports, record.id, async (record, ports) => {
     if (!record?.is_active || record.email !== email) return privateJsonResponse({ error: "Account unavailable." }, { status: 403 });
   ${
     mfa
       ? `if (record.mfa_enabled) {
     const pending = redirectTo("/login/mfa");
-    pending.headers.append("set-cookie", pendingMfaSetCookie(record.id, record.auth_version));
+    pending.headers.append("set-cookie", services.pendingMfa.setCookie(record.id, record.auth_version));
     return pending;
   }
   `
       : ""
-  }const auth = dependencies.container.resolve<CookieSessionAuthManager>(CORE_AUTH_TOKEN);
+  }const auth = services.session(ports);
   return auth.signInRedirect(sessionUser(record), "/");
   });
 }
@@ -242,15 +270,15 @@ async function completeBrowserSsoLogin(
 export function renderMfaEnrollment(mfa: boolean): string {
   return mfa
     ? `
-async function enrollMfa(user: { id: string | number; authVersion?: number }, secret: string) {
+async function enrollMfa(ports: BusinessRequestPorts, user: { id: string | number; authVersion?: number }, secret: string) {
   const recoveryCodes = generateRecoveryCodes();
   const stored = protectMfaSecret(secret);
-  const previous = await runAuthWrite(Number(user.id), () => User.find(Number(user.id)));
+  const previous = await runAuthWrite(ports, Number(user.id), (ports) => ports.database.model(User).find(Number(user.id)));
   if (!previous || previous.get("auth_version") !== user.authVersion || !(previous.get("is_active") === true || previous.get("is_active") === 1)) throw new ConflictError("MFA configuration changed. Reload and confirm again.");
-  await runInTransaction(async () => {
-    await runAuthWrite(Number(user.id), async () => {
+  await runAuthTransaction(ports, async (ports) => {
+    await runAuthWrite(ports, Number(user.id), async (ports) => {
       // Trusted, pre-protected security fields: atomically replace only the state we read.
-      const changed = await previous.getRepository().updateWhere({
+      const changed = await ports.database.model(User).repository().updateWhere({
         mfa_secret: stored,
         mfa_enabled: true,
         mfa_recovery_codes: JSON.stringify(recoveryCodes.map((item) => hashRecoveryCode(item))),
@@ -265,7 +293,7 @@ async function enrollMfa(user: { id: string | number; authVersion?: number }, se
       } });
       if (changed !== 1) throw new ConflictError("MFA configuration changed. Reload and confirm again.");
     });
-    await revokeUserSessions(Number(user.id));
+    await revokeUserSessions(ports, Number(user.id));
   });
   return recoveryCodes;
 }

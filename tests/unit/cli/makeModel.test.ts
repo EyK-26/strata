@@ -26,7 +26,7 @@ async function workspace(
   }
 }
 
-test("make:model generates a discoverable declarative model without migrations or a repository", () =>
+test("make:model generates a discoverable declarative model with owned repository and model definitions, without migrations", () =>
   workspace(async (root, command) => {
     await mkdir(join(root, "src/models"), { recursive: true });
     const register = join(root, "src/models/register.ts");
@@ -34,9 +34,14 @@ test("make:model generates a discoverable declarative model without migrations o
     await command("Invoice");
     const code = await readFile(join(root, "src/models/Invoice.ts"), "utf8");
     expect(code).toContain('from "@getstrata/core/database/model"');
-    expect(code).toContain("class Invoice extends defineModel(");
+    expect(code).toContain('class Invoice extends Model<InvoiceRecord, "id">');
     expect(code).toContain('name: "invoices"');
-    expect(code).toContain("static override $timestamps = false");
+    expect(code).toContain("const InvoiceDefinition = defineModel({");
+    expect(code).toContain("const repository = defineRepository({");
+    expect(code).toContain("construct: (state, binding) => new Invoice(state, binding)");
+    expect(code).toContain("repository as InvoiceRepository");
+    expect(code).not.toContain("registerModelClass");
+    expect(code).toContain("attributes: { fillable: [], timestamps: false }");
     expect(await readFile(register, "utf8")).toBe("// app-owned orchestration\n");
     expect(await Bun.file(join(root, "src/modules/invoice/repository.ts")).exists()).toBe(false);
     expect(existsSync(join(root, "src/db/migrations"))).toBe(false);
@@ -51,11 +56,13 @@ test("make:model supports nested names and explicit legacy table/string key meta
       "--key-type=string",
     );
     const code = await readFile(join(root, "src/models/Billing/Invoice.ts"), "utf8");
-    expect(code).toContain("class BillingInvoice extends defineModel(");
+    expect(code).toContain(
+      'class BillingInvoice extends Model<BillingInvoiceRecord, "invoice_id">',
+    );
     expect(code).toContain("invoice_id: string");
     expect(code).toContain('name: "legacy_invoice"');
     expect(code).toContain('primaryKey: "invoice_id"');
-    expect(code).toContain('static override $fillable = ["invoice_id"] as const');
+    expect(code).toContain('attributes: { fillable: ["invoice_id"], timestamps: false }');
   }));
 
 test("make:model refuses collisions and keeps the original bytes", () =>

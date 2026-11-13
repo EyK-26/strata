@@ -64,22 +64,15 @@ test("one-shot dual failures retain both errors and the original cause", async (
     expect(error.cause).toBe(primary);
   }
 });
-test("failed-job factories close after every bootstrap failure and invalid retry admission", async () => {
-  let closes = 0,
-    boots = 0;
-  const commands = createQueueFailedCommands(
-    async () => {
-      boots++;
-      throw Error("boot failed");
-    },
-    () => {
-      closes++;
-    },
-  );
+test("failed-job factories preserve bootstrap failure and reject invalid admission before acquiring an owner", async () => {
+  let boots = 0;
+  const commands = createQueueFailedCommands(async () => {
+    boots++;
+    throw new Error("boot failed");
+  });
   await expect(commands.queueFailedCommand()).rejects.toThrow("boot failed");
   await expect(commands.queueFlushFailedCommand()).rejects.toThrow("boot failed");
   await expect(commands.queueRetryCommand("1")).rejects.toThrow("boot failed");
   await expect(commands.queueRetryCommand("invalid")).rejects.toThrow("positive integer");
   expect(boots).toBe(3);
-  expect(closes).toBe(4);
 });

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
 
-test("installed CLI models discover and persist through automatic repositories on all dialects", async () => {
+test("installed CLI models register explicitly and persist through selected repositories on all dialects", async () => {
   const proc = Bun.spawn(
     [process.execPath, join(import.meta.dir, "../../scripts/verify-model-generator.ts")],
     {
@@ -18,6 +18,6 @@ test("installed CLI models discover and persist through automatic repositories o
   ]);
   expect({ stdout, stderr, exit }).toMatchObject({ exit: 0 });
   expect(stdout).toContain('"installedModelGenerator":true');
-  expect(stdout).toContain('"automaticRepositories":true');
+  expect(stdout).toContain('"explicitRepositories":true');
   expect(stdout).toContain('"dialects":["sqlite","postgres","mysql"]');
 }, 185000);

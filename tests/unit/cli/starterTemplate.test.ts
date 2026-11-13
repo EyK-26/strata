@@ -64,6 +64,6 @@ test("generated CSRF target example is opt-in and config providers wire its expl
   expect(env).toContain("# CSRF_TARGET_ORIGIN=https://app.example.com");
   expect(env.split("\n").some((line) => line.startsWith("CSRF_TARGET_ORIGIN="))).toBe(false);
   expect(renderConfigProvider(layers)).toContain(
-    "config.set(CSRF_TARGET_ORIGIN_CONFIG_KEY, process.env.CSRF_TARGET_ORIGIN)",
+    "config.set(CSRF_TARGET_ORIGIN_CONFIG_KEY, env.CSRF_TARGET_ORIGIN)",
   );
 });

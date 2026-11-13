@@ -560,3 +560,131 @@ describe("M3a explicit persistence boundaries", () => {
     );
   });
 });
+
+describe("M3b2 exact ORM closure", () => {
+  test.each([
+    ["src/core/database/baseRepository.ts", 'import { runtime } from "#strata-orm-internal";'],
+    [
+      "src/core/database/transactionSession.ts",
+      'import { runWithTransactionLineage } from "#strata-orm-internal";',
+    ],
+    ["src/core/database/ormInternal.ts", 'import { AsyncLocalStorage } from "node:async_hooks";'],
+    ["src/core/database/ormRuntime.ts", 'import { BaseRepository } from "./baseRepository";'],
+    ["src/core/database/modelRegistry.ts", 'import { runtime } from "#strata-orm-runtime";'],
+    ["src/core/database/modelQuery.ts", 'type Builder = import("./whereBuilder.ts").WhereBuilder;'],
+    ["src/core/database/keyset.ts", 'import type { SqlDialect } from "./sqlDialects.ts";'],
+  ])("accepts the exact ORM edge in %s", (file, source) => {
+    expect(inspectModule(file, source)).toEqual([]);
+  });
+
+  test.each([
+    ["src/core/database/baseRepository.ts", 'import { runtime } from "./ormInternal";'],
+    ["src/core/database/modelRegistry.ts", 'import { runtime } from "./ormRuntime";'],
+    ["src/core/database/query.ts", 'import { runtime } from "#strata-orm-internal";'],
+    ["src/core/database/modelRegistry.ts", 'import { AsyncLocalStorage } from "node:async_hooks";'],
+    [
+      "src/core/database/transactionSession.ts",
+      'import { runWithTransactionLineage } from "./ormInternal";',
+    ],
+    ["src/core/database/modelQuery.ts", 'const builder = import("./whereBuilder.ts");'],
+    [
+      "src/core/database/modelQuery.ts",
+      'type Owner = import("../runtime/applicationRegistry").Owner;',
+    ],
+    ["src/core/auth/password.ts", 'import type { Owner } from "../contracts/application";'],
+    ["src/core/auth/password.ts", 'import { hash } from "bun";'],
+  ])("rejects broadened ORM/password edges in %s", (file, source) => {
+    expect(inspectModule(file, source).some((issue) => issue.rule === "dependency")).toBe(true);
+  });
+
+  test("permits only direct Bun password hash and verify calls in the password leaf", () => {
+    const file = "src/core/auth/password.ts";
+    expect(
+      inspectModule(
+        file,
+        "export const hash = (value: string) => Bun.password.hash(value); export const verify = (value: string, hash: string) => Bun.password.verify(value, hash);",
+      ),
+    ).toEqual([]);
+    for (const source of [
+      "const password = Bun.password;",
+      "const hash = Bun.password.hash;",
+      'Bun.password["hash"]("secret");',
+      'Bun["password"].hash("secret");',
+      'Bun.password.hash.call(null, "secret");',
+      'Bun.password.needsRehash("secret");',
+      'new Bun.password.hash("secret");',
+      'Bun.SQL("sqlite://:memory:");',
+      "Bun.serve({});",
+      "const config = process.env;",
+      'fetch("https://example.test");',
+      "const fallback = globalThis.Bun;",
+      "getDefaultDatabasePool();",
+    ]) {
+      expect(inspectModule(file, source).some((issue) => issue.rule === "ambient-capability")).toBe(
+        true,
+      );
+    }
+    expect(
+      inspectModule("src/core/database/modelAttributes.ts", 'Bun.password.hash("secret");').some(
+        (issue) => issue.rule === "ambient-capability",
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("explicit after-commit policy graph", () => {
+  test("accepts only the exact type/context and selected policy composition edges", () => {
+    for (const [file, source] of [
+      [
+        "src/core/database/definitions.ts",
+        'import type {ExecutionContext} from "../contracts/application"; import type {ExecutionPersistence} from "../contracts/persistence";',
+      ],
+      [
+        "src/core/database/modelRegistry.ts",
+        'import {createScopedPolicy} from "../tenant/scopedDatabasePolicy"; export const policy=createScopedPolicy;',
+      ],
+      [
+        "src/core/contracts/persistence.ts",
+        'import type {ExecutionEnvelope} from "./application"; import type {DatabaseSession} from "../database/session";',
+      ],
+      [
+        "src/core/tenant/scopedDatabasePolicy.ts",
+        'import {assertSameSessionSelection} from "#strata-orm-internal"; import type {ExecutionContext} from "../contracts/application"; import type {OwnedExecution} from "../contracts/executionOwnership"; import type {ScopedPolicy} from "../contracts/persistence"; import type {DatabaseSession} from "../database/session"; export const exact=assertSameSessionSelection;',
+      ],
+    ] as const)
+      expect(inspectModule(file, source)).toEqual([]);
+  });
+  test.each([
+    [
+      "src/core/database/modelRegistry.ts",
+      'import {currentTenant} from "../tenant/tenantContext";',
+    ],
+    [
+      "src/core/database/modelRegistry.ts",
+      'import type {TenantContext} from "../tenant/tenantContext";',
+    ],
+    [
+      "src/core/tenant/scopedDatabasePolicy.ts",
+      'import {getDefaultDatabasePool} from "../database/defaultConnection";',
+    ],
+    [
+      "src/core/tenant/scopedDatabasePolicy.ts",
+      'import {runWithScopedTenantTransaction} from "./legacyDatabaseTenantContext";',
+    ],
+    [
+      "src/core/database/definitions.ts",
+      'import {ExecutionContext} from "../contracts/application";',
+    ],
+    [
+      "src/core/database/definitions.ts",
+      'import {ExecutionPersistence} from "../contracts/persistence";',
+    ],
+    ["src/core/contracts/persistence.ts", 'import {ExecutionEnvelope} from "./application";'],
+    [
+      "src/core/tenant/scopedDatabasePolicy.ts",
+      'import {OwnedExecution} from "../contracts/executionOwnership";',
+    ],
+  ])("rejects sibling/legacy ownership and executable type-only edges in %s", (file, source) => {
+    expect(inspectModule(file, source).some((issue) => issue.rule === "dependency")).toBe(true);
+  });
+});

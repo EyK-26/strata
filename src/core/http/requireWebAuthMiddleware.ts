@@ -1,12 +1,12 @@
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
-import type { AuthManager } from "@getstrata/core/auth/guard";
 import { createIntendedUrlCookieFromRequest } from "@getstrata/core/auth/intendedUrlCookie";
 import { UnauthorizedError } from "@getstrata/core/errors/http";
+import type { AuthReader } from "../auth/authReader";
 import { requestPrefersJson } from "./contentNegotiation";
 import type { Middleware } from "./middleware";
 import { loginRedirectLocation } from "./safeInternalPath";
 
-function createRequireWebAuthMiddleware(auth: AuthManager): Middleware {
+function createRequireWebAuthMiddleware(auth: AuthReader): Middleware {
   return async (request: Request, next: () => Promise<Response>) => {
     const user = await auth.resolve(request);
 

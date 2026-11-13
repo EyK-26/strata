@@ -1,27 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import {
-  BaseRepository,
-  type SqlDatabaseConnection,
-} from "@getstrata/core/database/baseRepository";
-import {
-  bindDatabaseConnection,
-  getBoundDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "@getstrata/core/database/boundConnection";
-import {
-  getActiveDatabaseConnection,
-  runWithDatabaseConnection,
-} from "@getstrata/core/database/connectionContext";
-import {
-  getDefaultDatabasePool,
-  registerDefaultDatabasePool,
-} from "@getstrata/core/database/defaultConnection";
-import { runWithSqlDialect } from "@getstrata/core/database/dialect";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineRepository } from "@getstrata/core/database/definitions";
 import { createMysqlConnection } from "@getstrata/core/database/mysqlConnection";
+import type { TransactionSession } from "@getstrata/core/database/session";
 import { defineTable } from "@getstrata/core/database/table";
 import type { KeysetCursor } from "@getstrata/core/pagination";
-import { runWithTenantDatabase } from "@getstrata/core/tenant/tenantDatabaseScope";
 import { SQL } from "bun";
+import {
+  createNativePersistenceApplication,
+  sessionSql,
+} from "../helpers/nativePersistenceApplication";
 
 const orderBy = [
   { column: "stamp", direction: "desc" },
@@ -41,61 +29,73 @@ for (const driver of ["pgsql", "mysql"] as const) {
         "id"
       >({ name, primaryKey: "id", columns: ["id", "tenant_id", "stamp", "label", "score"] });
       let owner: SQL | ReturnType<typeof createMysqlConnection>;
-      let runtime: SQL | ReturnType<typeof createMysqlConnection>;
-      let previous: SqlDatabaseConnection;
-      let bound: ReturnType<typeof getBoundDatabaseConnection>;
-      let tenancy: string | undefined;
-      const repo = new BaseRepository(table);
+      let native: Awaited<ReturnType<typeof createNativePersistenceApplication>>;
+      const captured: Array<{ text: string; params: readonly unknown[] }> = [];
+      const repositoryDefinition = defineRepository({
+        name: "keyset.repository",
+        table,
+        dependencies: [] as const,
+        create: (binding) => new BaseRepository(binding),
+      });
+      const repoFor = (selected: TransactionSession) => selected.repository(repositoryDefinition);
       beforeAll(async () => {
-        previous = getDefaultDatabasePool();
-        bound = getBoundDatabaseConnection();
-        tenancy = process.env.TENANCY_DRIVER;
         if (driver === "pgsql") {
           owner = new SQL(process.env.MIGRATION_DATABASE_URL!);
-          const pool = new SQL({ url: urls.pgsql!, max: 5 });
-          runtime = pool;
-          const [role] = await pool.unsafe<{ rolsuper: boolean; rolbypassrls: boolean }[]>(
-            "SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user",
+          native = await createNativePersistenceApplication(
+            {
+              default: "test",
+              connections: { test: { driver: "pgsql", url: urls.pgsql!, max: 5 } },
+              repositories: [repositoryDefinition],
+            },
+            (statement) => captured.push(statement),
+          );
+          const [role] = await native.run((database) =>
+            database.execute<{ rolsuper: boolean; rolbypassrls: boolean }>({
+              text: "SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user",
+              params: [],
+            }),
           );
           expect(role!.rolsuper || role!.rolbypassrls).toBe(false);
           await owner.unsafe(
             `CREATE TABLE ${name} (id INTEGER PRIMARY KEY, tenant_id INTEGER NOT NULL, stamp TIMESTAMPTZ(6) NOT NULL, label TEXT NOT NULL, score DOUBLE PRECISION NOT NULL); ALTER TABLE ${name} ENABLE ROW LEVEL SECURITY; ALTER TABLE ${name} FORCE ROW LEVEL SECURITY; CREATE POLICY scope ON ${name} USING (tenant_id=NULLIF(current_setting('app.tenant_id',true),'')::integer); GRANT SELECT ON ${name} TO strata_app`,
           );
-          process.env.TENANCY_DRIVER = "rls";
-          registerDefaultDatabasePool(runtime as unknown as SqlDatabaseConnection);
-          resetBoundDatabaseConnection();
         } else {
           owner = createMysqlConnection(urls.mysql!);
-          runtime = owner;
+          native = await createNativePersistenceApplication(
+            {
+              default: "test",
+              connections: { test: { driver: "mysql", url: urls.mysql! } },
+              repositories: [repositoryDefinition],
+            },
+            (statement) => captured.push(statement),
+          );
           await owner.unsafe(
             `CREATE TABLE ${name} (id INTEGER PRIMARY KEY,tenant_id INTEGER NOT NULL,stamp DATETIME(6) NOT NULL,label TEXT NOT NULL,score DOUBLE NOT NULL)`,
           );
-          bindDatabaseConnection(runtime);
-          process.env.TENANCY_DRIVER = "none";
         }
         await owner.unsafe(
           `INSERT INTO ${name} VALUES (10,1,'2030-01-01 00:00:00.123451','a',1.0000000000000002),(2,1,'2030-01-01 00:00:00.123452','b',1.0000000000000004),(8,1,'2030-01-01 00:00:00.123452','c',2),(900,2,'2031-01-01','private',3)`,
         );
       });
       afterAll(async () => {
-        if (previous) registerDefaultDatabasePool(previous);
-        if (bound) bindDatabaseConnection(bound);
-        else resetBoundDatabaseConnection();
-        if (tenancy === undefined) delete process.env.TENANCY_DRIVER;
-        else process.env.TENANCY_DRIVER = tenancy;
         await owner?.unsafe(`DROP TABLE IF EXISTS ${name}`);
         await owner?.close();
-        if (runtime !== owner) await runtime?.close();
+        await native?.close();
       });
-      const scope = <T>(id: number, work: () => Promise<T>) =>
-        runWithSqlDialect(driver, () =>
-          driver === "pgsql" ? runWithTenantDatabase({ id, slug: `keyset-${id}` }, work) : work(),
-        );
+      const scope = <T>(
+        id: number,
+        work: (repo: ReturnType<typeof repoFor>, transaction: TransactionSession) => Promise<T>,
+      ) =>
+        driver === "pgsql"
+          ? native.tenant(id, (transaction) => work(repoFor(transaction), transaction))
+          : native.run((database) =>
+              database.transaction((transaction) => work(repoFor(transaction), transaction)),
+            );
       test("native Date truncation cannot skip microsecond boundaries and equal timestamps", async () => {
         let cursor: KeysetCursor | undefined;
         const ids: number[] = [];
         do {
-          const page = await scope(1, () =>
+          const page = await scope(1, (repo, _transaction) =>
             repo.query().where({ tenant_id: 1 }).keysetPaginate({ perPage: 1, orderBy, cursor }),
           );
           ids.push(...page.data.map((r) => r.id));
@@ -104,7 +104,7 @@ for (const driver of ["pgsql", "mysql"] as const) {
           cursor = page.meta.next_cursor ?? undefined;
         } while (cursor);
         expect(ids).toEqual([8, 2, 10]);
-        const page = await scope(1, () =>
+        const page = await scope(1, (repo, _transaction) =>
           repo.query().where({ tenant_id: 1 }).projectKeyset(["label"], { perPage: 1, orderBy }),
         );
         expect(page.data).toEqual([{ label: "c" }]);
@@ -114,10 +114,10 @@ for (const driver of ["pgsql", "mysql"] as const) {
           { column: "score", direction: "asc" },
           { column: "id", direction: "desc" },
         ] as const;
-        const first = await scope(1, () =>
+        const first = await scope(1, (repo, _transaction) =>
           repo.query().where({ tenant_id: 1 }).keysetPaginate({ perPage: 1, orderBy: order }),
         );
-        const next = await scope(1, () =>
+        const next = await scope(1, (repo, _transaction) =>
           repo
             .query()
             .where({ tenant_id: 1 })
@@ -130,12 +130,12 @@ for (const driver of ["pgsql", "mysql"] as const) {
         "concurrent tenant scopes and replayed foreign cursor cannot bypass RLS",
         async () => {
           const [a, b] = await Promise.all([
-            scope(1, () => repo.query().keysetPaginate({ perPage: 1, orderBy })),
-            scope(2, () => repo.query().keysetPaginate({ perPage: 1, orderBy })),
+            scope(1, (repo, _transaction) => repo.query().keysetPaginate({ perPage: 1, orderBy })),
+            scope(2, (repo, _transaction) => repo.query().keysetPaginate({ perPage: 1, orderBy })),
           ]);
           expect(a.data[0]?.id).toBe(8);
           expect(b.data[0]?.id).toBe(900);
-          const rows = await scope(2, () =>
+          const rows = await scope(2, (repo, _transaction) =>
             repo
               .query()
               .orWhere({ tenant_id: 1 })
@@ -153,8 +153,8 @@ for (const driver of ["pgsql", "mysql"] as const) {
           await owner.unsafe(
             `CREATE INDEX ${name}_seek ON ${name} (tenant_id,stamp,id); ANALYZE ${name}`,
           );
-          await scope(1, async () => {
-            const active = getActiveDatabaseConnection(runtime as unknown as SqlDatabaseConnection);
+          await scope(1, async (repo, transaction) => {
+            const active = sessionSql(transaction);
             const [boundary] = await active.unsafe<{ stamp: string; id: string }>(
               `SELECT stamp::text AS stamp,id::text AS id FROM ${name} WHERE tenant_id=1 AND id=26000`,
             );
@@ -163,28 +163,21 @@ for (const driver of ["pgsql", "mysql"] as const) {
               const ordering = orderBy.map((item) => ({ ...item, direction }));
               let query = "";
               let params: readonly unknown[] = [];
-              const page = await runWithDatabaseConnection(
-                {
-                  async unsafe<T>(sql: string, values: readonly unknown[] = []) {
-                    query = sql;
-                    params = values;
-                    return active.unsafe<T>(sql, values);
-                  },
-                },
-                () =>
-                  repo
-                    .query()
-                    .where({ tenant_id: 1 })
-                    .keysetPaginate({
-                      perPage: 20,
-                      orderBy: ordering,
-                      cursor: {
-                        version: 1,
-                        order: ordering,
-                        values: [boundary!.stamp, boundary!.id],
-                      },
-                    }),
+              captured.length = 0;
+              const page = await repo
+                .query()
+                .where({ tenant_id: 1 })
+                .keysetPaginate({
+                  perPage: 20,
+                  orderBy: ordering,
+                  cursor: { version: 1, order: ordering, values: [boundary!.stamp, boundary!.id] },
+                });
+              const statement = captured.findLast((statement) =>
+                statement.text.startsWith("SELECT"),
               );
+              if (!statement) throw Error("Expected the actual native keyset statement.");
+              query = statement.text;
+              params = statement.params;
               expect(page.data).toHaveLength(20);
               expect(page.data.every((row) => row.tenant_id === 1)).toBe(true);
               const [row] = await active.unsafe<{

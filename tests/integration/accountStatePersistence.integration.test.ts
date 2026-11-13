@@ -1,15 +1,22 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createAccountStateMigration } from "@getstrata/core/auth/accountStateMigration";
 import { revokeUserSessions } from "@getstrata/core/auth/oneTimeToken";
-import { runWithSqlDialect } from "@getstrata/core/database/dialect";
 import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
 import { Schema } from "@getstrata/core/database/schema";
 import type { DatabaseDriver } from "@getstrata/core/database/schema/driver";
 import { SQL } from "bun";
 import { createConnection } from "mysql2/promise";
+import { createNativePersistenceApplication } from "../helpers/nativePersistenceApplication";
 
-async function qualify(db: MigrationDatabase, driver: DatabaseDriver) {
+async function qualify(
+  db: MigrationDatabase,
+  driver: DatabaseDriver,
+  owner: Awaited<ReturnType<typeof createNativePersistenceApplication>>,
+) {
   await Schema.run(db, driver, (schema) => {
     schema.create("users", (table) => {
       table.integer("id").primary();
@@ -57,9 +64,9 @@ async function qualify(db: MigrationDatabase, driver: DatabaseDriver) {
   for (const table of ["sessions", "api_tokens"]) {
     await db.unsafe(`INSERT INTO ${table} (id,user_id) VALUES (1,1),(2,2)`);
   }
-  await runWithSqlDialect(driver, async () => {
-    await revokeUserSessions(db, 1, { incrementAuthVersion: true });
-    await revokeUserSessions(db, 1, { incrementAuthVersion: true });
+  await owner.run(async (database) => {
+    await revokeUserSessions(database, 1, { incrementAuthVersion: true });
+    await revokeUserSessions(database, 1, { incrementAuthVersion: true });
   });
   expect((await read()).map((row) => [row.id, Boolean(row.is_active), row.auth_version])).toEqual([
     [1, false, 2],
@@ -70,18 +77,19 @@ async function qualify(db: MigrationDatabase, driver: DatabaseDriver) {
   }
   // Failure after epoch/session mutation must roll back together with account status.
   await db.unsafe("INSERT INTO sessions (id,user_id) VALUES (3,1)");
-  await db.unsafe("BEGIN");
   try {
-    await db.unsafe("UPDATE users SET is_active=TRUE WHERE id=1");
-    await runWithSqlDialect(driver, () =>
-      revokeUserSessions(db, 1, { incrementAuthVersion: true }),
+    await owner.run((database) =>
+      database.transaction(async (child) => {
+        await child.execute({ text: "UPDATE users SET is_active=TRUE WHERE id=1", params: [] });
+        await revokeUserSessions(child, 1, { incrementAuthVersion: true });
+        await child.execute({ text: "INSERT INTO sessions (id,user_id) VALUES (2,1)", params: [] });
+        throw new Error("Expected duplicate primary key failure");
+      }),
     );
-    await db.unsafe("INSERT INTO sessions (id,user_id) VALUES (2,1)");
-    throw new Error("Expected duplicate primary key failure");
   } catch (error) {
-    expect(String(error)).not.toContain("Expected duplicate");
-    expect(String(error)).toMatch(/duplicate|unique/i);
-    await db.unsafe("ROLLBACK");
+    const native = error && typeof error === "object" && "cause" in error ? error.cause : error;
+    expect(String(native)).not.toContain("Expected duplicate");
+    expect(String(native)).toMatch(/duplicate|unique/i);
   }
   expect((await read())[0]?.auth_version).toBe(2);
   expect(Boolean((await read())[0]?.is_active)).toBe(false);
@@ -89,29 +97,15 @@ async function qualify(db: MigrationDatabase, driver: DatabaseDriver) {
   // A cookie-only installation has no API-token table. Missing optional storage
   // must not silently abort the surrounding Postgres account transaction.
   await db.unsafe("DROP TABLE api_tokens");
-  await db.unsafe("BEGIN");
-  try {
-    await runWithSqlDialect(driver, () =>
-      revokeUserSessions(db, 1, { incrementAuthVersion: true }),
-    );
-    await db.unsafe("COMMIT");
-  } catch (error) {
-    await db.unsafe("ROLLBACK");
-    throw error;
-  }
+  await owner.run((database) =>
+    database.transaction((child) => revokeUserSessions(child, 1, { incrementAuthVersion: true })),
+  );
   expect((await read())[0]?.auth_version).toBe(3);
   expect(await db.unsafe("SELECT user_id FROM sessions WHERE id=3")).toEqual([]);
   await db.unsafe("DROP TABLE sessions");
-  await db.unsafe("BEGIN");
-  try {
-    await runWithSqlDialect(driver, () =>
-      revokeUserSessions(db, 1, { incrementAuthVersion: true }),
-    );
-    await db.unsafe("COMMIT");
-  } catch (error) {
-    await db.unsafe("ROLLBACK");
-    throw error;
-  }
+  await owner.run((database) =>
+    database.transaction((child) => revokeUserSessions(child, 1, { incrementAuthVersion: true })),
+  );
   expect((await read())[0]?.auth_version).toBe(4);
   await Schema.run(db, driver, (schema) => {
     schema.create("sessions", (table) => {
@@ -128,16 +122,24 @@ async function qualify(db: MigrationDatabase, driver: DatabaseDriver) {
 }
 
 test("account-state additive migration and transactional revocation on SQLite", async () => {
-  const sqlite = new Database(":memory:");
+  const directory = await mkdtemp(join(tmpdir(), "account-state-native-"));
+  const filename = join(directory, "app.sqlite");
+  const sqlite = new Database(filename);
+  const owner = await createNativePersistenceApplication({
+    default: "main",
+    connections: { main: { driver: "sqlite", filename } },
+  });
   const db: MigrationDatabase = {
     async unsafe<T>(query: string, params: readonly unknown[] = []) {
       return sqlite.query(query).all(...(params as (string | number | null)[])) as T[];
     },
   };
   try {
-    await qualify(db, "sqlite");
+    await qualify(db, "sqlite", owner);
   } finally {
+    await owner.close();
     sqlite.close();
+    await rm(directory, { recursive: true, force: true });
   }
 });
 
@@ -147,13 +149,20 @@ test("account-state additive migration and transactional revocation on Postgres"
   const control = new SQL(url);
   const name = `account_state_${crypto.randomUUID().replaceAll("-", "")}`;
   let connection: SQL | undefined;
+  let close = async () => {};
   try {
     await control.unsafe(`CREATE DATABASE ${name}`);
     const target = new URL(url);
     target.pathname = `/${name}`;
     connection = new SQL(target.href, { max: 1 });
-    await qualify(connection, "pgsql");
+    const owner = await createNativePersistenceApplication({
+      default: "main",
+      connections: { main: { driver: "pgsql", url: target.href, max: 1 } },
+    });
+    close = owner.close;
+    await qualify(connection, "pgsql", owner);
   } finally {
+    await close();
     await connection?.close();
     await control.unsafe(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
     await control.close();
@@ -166,6 +175,7 @@ test("account-state additive migration and transactional revocation on MySQL", a
     throw new Error("MYSQL_OBSERVABILITY_ADMIN_URL required; run with scripts/with-host-env.sh");
   const connection = await createConnection(url);
   const name = `account_state_${crypto.randomUUID().replaceAll("-", "")}`;
+  let close = async () => {};
   const db: MigrationDatabase = {
     async unsafe<T>(query: string, params: readonly unknown[] = []) {
       const [rows] = await connection.query(query, [...params]);
@@ -175,8 +185,16 @@ test("account-state additive migration and transactional revocation on MySQL", a
   try {
     await connection.query(`CREATE DATABASE ${name}`);
     await connection.query(`USE ${name}`);
-    await qualify(db, "mysql");
+    const target = new URL(url);
+    target.pathname = `/${name}`;
+    const owner = await createNativePersistenceApplication({
+      default: "main",
+      connections: { main: { driver: "mysql", url: target.href, max: 1 } },
+    });
+    close = owner.close;
+    await qualify(db, "mysql", owner);
   } finally {
+    await close();
     await connection.query(`DROP DATABASE IF EXISTS ${name}`);
     await connection.end();
   }

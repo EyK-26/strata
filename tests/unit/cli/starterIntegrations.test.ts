@@ -143,7 +143,7 @@ describe("create-strata integration extras", () => {
     expect(billing).toContain("/billing/webhooks/stripe");
     expect(billing).toContain("/api/v1/billing/subscription");
     expect(billing).toContain("verifyStripeWebhookSignature");
-    expect(billing).toContain("withJsonErrorHandling");
+    expect(billing).toContain("kernel.wrapApi");
     expect(billing).not.toContain("withErrorHandling");
     expect(billing).toContain("applyStripeWebhook");
     expect(billing).not.toContain("runWithMigrationBypass(");
@@ -159,29 +159,48 @@ describe("create-strata integration extras", () => {
     const api = await readFile(join(app, "docs/API.md"), "utf8");
     expect(api).toContain("/billing/webhooks/stripe");
     const queue = await readFile(join(app, "src/bootstrap/providers/queue.ts"), "utf8");
-    expect(queue).toContain("discoverJobs()");
+    expect(queue).toContain(
+      "export function createQueueProvider(queue:Queue,services:QueueServices)",
+    );
+    expect(await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8")).toContain(
+      "discoverJobs()",
+    );
   });
 
   test("--webhooks writes webhook.dispatch and a notes.created listener", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["hook-app", "--webhooks", "--yes"]);
     const job = await readFile(join(app, "src/jobs/dispatchOutboundWebhookJob.ts"), "utf8");
-    expect(job).toContain('static readonly jobName = "webhook.dispatch"');
+    expect(job).toContain('static override readonly jobName = "webhook.dispatch"');
     expect(job).toContain("signWebhookBody");
-    expect(job).toContain("WEBHOOK_ALLOW_PRIVATE");
+    expect(job).toContain("const allowPrivate = payload.allowPrivate === true");
+    expect(job).toContain("allowHttp: allowPrivate");
+    expect(await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8")).toContain(
+      'allowPrivate:!isProductionEnv(env)&&env.WEBHOOK_ALLOW_PRIVATE==="true"',
+    );
     expect(job).toContain("VALUES (?, ?, ?, ?, ?, ?)");
     expect(job).toContain("payload.event");
-    expect(job).toContain("runWithMigrationBypass(async () => {");
+    expect(job).toContain("await context.database.execute({");
+    expect(job).toContain("Webhook delivery requires an owned queue invocation.");
+    expect(job).not.toContain("runWithMigrationBypass(");
     expect(job).not.toContain('"notes.created"');
     const listener = await readFile(
       join(app, "src/listeners/noteCreatedWebhookListener.ts"),
       "utf8",
     );
-    expect(listener).toContain('modelEventName("notes", "created")');
+    expect(listener).toContain('const event = "notes.created"');
+    expect(listener).toContain("repositoryEffects(NoteRepository");
+    expect(listener).toContain('{action: "created", afterCommit: noteCreated}');
+    expect(listener).toContain(
+      "dependencies: [STARTER_QUEUE_TOKEN, STARTER_WEBHOOK_OPTIONS_TOKEN]",
+    );
     expect(listener).toContain("event,");
     expect(existsSync(join(app, "src/db/migrations/0002_webhooks_schema.ts"))).toBe(true);
     const providers = await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8");
-    expect(providers).toContain("discoverListeners");
+    expect(await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8")).toContain(
+      "await discoverListeners({directory:",
+    );
+    expect(providers).not.toContain("setActiveApplicationContext");
   });
 
   test("postgres webhooks and billing use $1 placeholders", async () => {

@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { isProductionEnv } from "../runtime/appEnv";
+import { type EnvRecord, isProductionEnv } from "../runtime/appEnv";
 import { appCookieName, requireConfiguredSecret } from "../runtime/appKeyPrefix";
 import { readRequestCookie } from "./cookies.ts";
 import { currentRequestMeta } from "./requestMetaContext";
@@ -7,16 +7,31 @@ import { currentRequestMeta } from "./requestMetaContext";
 const CSRF_COOKIE = appCookieName("csrf");
 const CSRF_TTL_MS = 60 * 60 * 1000;
 
-function csrfCookieName(): string {
-  return process.env.CSRF_COOKIE_NAME?.trim() || appCookieName("csrf");
+interface CsrfTokenOptions {
+  readonly secret: string;
+  readonly cookieName: string;
+  readonly production: boolean;
 }
 
-function resolveCsrfSecret(): string {
-  return requireConfiguredSecret(["SESSION_SECRET", "CSRF_SECRET"], "csrf-secret");
+/** Resolve once from the application's captured environment, never a later request. */
+function csrfTokenOptionsFromEnvironment(env: EnvRecord): CsrfTokenOptions {
+  return Object.freeze({
+    secret: requireConfiguredSecret(["SESSION_SECRET", "CSRF_SECRET"], "csrf-secret", env),
+    cookieName: env.CSRF_COOKIE_NAME?.trim() || appCookieName("csrf", env),
+    production: isProductionEnv(env),
+  });
 }
 
-function csrfVerifyOptions() {
-  return { secret: resolveCsrfSecret(), maxAge: CSRF_TTL_MS };
+function csrfCookieName(options?: CsrfTokenOptions): string {
+  return options?.cookieName ?? (process.env.CSRF_COOKIE_NAME?.trim() || appCookieName("csrf"));
+}
+
+function csrfVerifyOptions(options: CsrfTokenOptions) {
+  return { secret: options.secret, maxAge: CSRF_TTL_MS };
+}
+
+function verifyCsrfTokenValue(token: string, options: CsrfTokenOptions): boolean {
+  return Bun.CSRF.verify(token, csrfVerifyOptions(options));
 }
 
 function tokensMatch(left: string, right: string): boolean {
@@ -30,25 +45,30 @@ function tokensMatch(left: string, right: string): boolean {
   return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-function createCsrfTokenCookie(): { token: string; cookie: string } {
-  const token = Bun.CSRF.generate(resolveCsrfSecret(), { expiresIn: CSRF_TTL_MS });
+function createCsrfTokenCookie(
+  options: CsrfTokenOptions = csrfTokenOptionsFromEnvironment(process.env),
+): { token: string; cookie: string } {
+  const token = Bun.CSRF.generate(options.secret, { expiresIn: CSRF_TTL_MS });
 
-  const secure = isProductionEnv() ? "; Secure" : "";
+  const secure = options.production ? "; Secure" : "";
 
   return {
     token,
-    cookie: `${csrfCookieName()}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(CSRF_TTL_MS / 1000)}${secure}`,
+    cookie: `${csrfCookieName(options)}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(CSRF_TTL_MS / 1000)}${secure}`,
   };
 }
 
-function resolveCsrfToken(request: Request): { token: string; cookie?: string } {
-  const cookieValue = readRequestCookie(request, csrfCookieName());
+function resolveCsrfToken(
+  request: Request,
+  options: CsrfTokenOptions = csrfTokenOptionsFromEnvironment(process.env),
+): { token: string; cookie?: string } {
+  const cookieValue = readRequestCookie(request, csrfCookieName(options));
 
-  if (cookieValue && Bun.CSRF.verify(cookieValue, csrfVerifyOptions())) {
+  if (cookieValue && verifyCsrfTokenValue(cookieValue, options)) {
     return { token: cookieValue };
   }
 
-  return createCsrfTokenCookie();
+  return createCsrfTokenCookie(options);
 }
 
 function readSubmittedCsrfToken(request: Request): string | null {
@@ -91,12 +111,16 @@ async function readSubmittedCsrfTokenFromBody(request: Request): Promise<string 
   return null;
 }
 
-function verifyCsrfToken(request: Request, submittedToken: string | null): boolean {
+function verifyCsrfToken(
+  request: Request,
+  submittedToken: string | null,
+  options: CsrfTokenOptions = csrfTokenOptionsFromEnvironment(process.env),
+): boolean {
   if (!submittedToken) {
     return false;
   }
 
-  const cookieValue = readRequestCookie(request, csrfCookieName());
+  const cookieValue = readRequestCookie(request, csrfCookieName(options));
 
   if (!cookieValue) {
     return false;
@@ -106,26 +130,32 @@ function verifyCsrfToken(request: Request, submittedToken: string | null): boole
     return false;
   }
 
-  return Bun.CSRF.verify(submittedToken, csrfVerifyOptions());
+  return verifyCsrfTokenValue(submittedToken, options);
 }
 
-function resolveCsrfTokenForRequest(request: Request): string {
+function resolveCsrfTokenForRequest(
+  request: Request,
+  options: CsrfTokenOptions = csrfTokenOptionsFromEnvironment(process.env),
+): string {
   const metaToken = currentRequestMeta().csrfToken;
 
-  if (metaToken) {
+  if (metaToken && verifyCsrfTokenValue(metaToken, options)) {
     return metaToken;
   }
 
-  return resolveCsrfToken(request).token;
+  return resolveCsrfToken(request, options).token;
 }
 
+export type { CsrfTokenOptions };
 export {
   CSRF_COOKIE,
   createCsrfTokenCookie,
   csrfCookieName,
+  csrfTokenOptionsFromEnvironment,
   readSubmittedCsrfToken,
   readSubmittedCsrfTokenFromBody,
   resolveCsrfToken,
   resolveCsrfTokenForRequest,
   verifyCsrfToken,
+  verifyCsrfTokenValue,
 };

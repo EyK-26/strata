@@ -1,12 +1,7 @@
 import { expect, test } from "bun:test";
 import { type CredentialSource, runWithAuthContext } from "@getstrata/core/auth/authContext";
-import {
-  bindDatabaseConnection,
-  getBoundDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "@getstrata/core/database/boundConnection";
-import { runWithSqlDialect } from "@getstrata/core/database/dialect";
 import { withJsonErrorHandling } from "@getstrata/core/http/response";
+import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { currentTenant } from "@getstrata/core/tenant/tenantContext";
 import { createTenantMiddleware } from "@getstrata/core/tenant/tenantMiddleware";
 import { restoreEnvVar } from "../helpers/restoreEnv";
@@ -19,19 +14,18 @@ async function scenario(
 ): Promise<{ response: Response; queries: string[]; tenantId: number | null; nextCalls: number }> {
   const keys = ["APP_ENV", "TENANCY_DRIVER", "TENANT_DEV_HEADERS"] as const;
   const before = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
-  const bound = getBoundDatabaseConnection();
   const queries: string[] = [];
   Object.assign(process.env, { APP_ENV: mode, TENANCY_DRIVER: "column", TENANT_DEV_HEADERS: flag });
-  bindDatabaseConnection({
-    async unsafe<T>(query: string): Promise<T[]> {
-      queries.push(query);
-      throw new Error("A persisted-account lookup must not silently succeed");
-    },
-  });
   let tenantId: number | null = null;
   let nextCalls = 0;
   try {
     const middleware = createTenantMiddleware({
+      auth: { user: { id: 42, role: "admin" }, credentialSource: source },
+      config: { enabled: true, production: isProductionEnv(), allowDevHeaders: flag === "true" },
+      userTenantId: async () => {
+        queries.push("SELECT tenant_id FROM users WHERE id = ?");
+        throw new Error("A persisted-account lookup must not silently succeed");
+      },
       resolveTenant: async (id) => ({ id, slug: `tenant-${id}` }),
       ...(hostPolicy
         ? {
@@ -42,26 +36,22 @@ async function scenario(
           }
         : {}),
     });
-    const response = await runWithSqlDialect("sqlite", () =>
-      runWithAuthContext({ id: 42, role: "admin" }, source, () =>
-        withJsonErrorHandling((request: Request) =>
-          middleware(request, async () => {
-            nextCalls++;
-            tenantId = currentTenant()?.id ?? null;
-            return Response.json({ ok: true });
-          }),
-        )(
-          new Request("https://approved.example.test/api/notes", {
-            headers: { "x-tenant-id": "999", "x-forwarded-host": "untrusted.example.test" },
-          }),
-        ),
+    const response = await runWithAuthContext({ id: 42, role: "admin" }, source, () =>
+      withJsonErrorHandling((request: Request) =>
+        middleware(request, async () => {
+          nextCalls++;
+          tenantId = currentTenant()?.id ?? null;
+          return Response.json({ ok: true });
+        }),
+      )(
+        new Request("https://approved.example.test/api/notes", {
+          headers: { "x-tenant-id": "999", "x-forwarded-host": "untrusted.example.test" },
+        }),
       ),
     );
     return { response, queries, tenantId, nextCalls };
   } finally {
     for (const key of keys) restoreEnvVar(key, before[key]);
-    if (bound) bindDatabaseConnection(bound);
-    else resetBoundDatabaseConnection();
   }
 }
 for (const [mode, flag, policy, status, tenant] of [

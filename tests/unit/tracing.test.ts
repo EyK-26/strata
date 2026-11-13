@@ -219,6 +219,9 @@ test("core provider owns shared runtime flush and idempotent final release", asy
     container,
     config: new ConfigStore(),
     dependencies: { container },
+    invoke: () => {
+      throw new Error("This structural provider test must not invoke persistence.");
+    },
     onCleanup(callback, phase = "close") {
       handlers.push({ callback, phase });
     },

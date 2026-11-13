@@ -1,14 +1,20 @@
 import { expect, test } from "bun:test";
-import type { DatabaseConnection } from "@getstrata/core/database/baseRepository";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineRepository } from "@getstrata/core/database/definitions";
 import { resetSqlDialect, useSqlDialect } from "@getstrata/core/database/dialect";
 import { migrateDatabase, rollbackDatabase } from "@getstrata/core/database/migrations/runner";
 import type { Migration } from "@getstrata/core/database/migrations/types";
-import { defineModel, registerModelRepository } from "@getstrata/core/database/model";
+import { defineModel, Model } from "@getstrata/core/database/model";
 import { createMysqlConnection } from "@getstrata/core/database/mysqlConnection";
 import { Schema } from "@getstrata/core/database/schema";
 import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
 import { defineTable } from "@getstrata/core/database/table";
 import { SQL } from "bun";
+import type { DatabaseConnection } from "../../src/core/database/connectionContracts";
+import { withBoundDatabase } from "../helpers/boundRepositoryHarness";
 
 for (const driver of ["pgsql", "mysql", "sqlite"] as const) {
   const url =
@@ -23,9 +29,12 @@ for (const driver of ["pgsql", "mysql", "sqlite"] as const) {
       let db: DatabaseConnection | undefined;
       let control: DatabaseConnection | undefined;
       let created = false;
+      const directory = await mkdtemp(join(tmpdir(), "uuid-native-"));
+      const filename = join(directory, "app.sqlite");
+      let persistenceUrl: string | undefined;
       try {
         useSqlDialect(driver);
-        if (driver === "sqlite") db = createSqliteConnection(":memory:");
+        if (driver === "sqlite") db = createSqliteConnection(filename);
         else {
           if (!url) throw new Error("A disposable migration administrator URL is required.");
           if (driver === "pgsql") {
@@ -41,6 +50,7 @@ for (const driver of ["pgsql", "mysql", "sqlite"] as const) {
           created = true;
           const target = new URL(url);
           target.pathname = `/${name}`;
+          persistenceUrl = target.href;
           if (driver === "pgsql") {
             const pool = new SQL(target.href);
             db = {
@@ -90,94 +100,122 @@ for (const driver of ["pgsql", "mysql", "sqlite"] as const) {
           external_id: string;
           title: string;
         }
-        class Document extends defineModel(
-          defineTable<Row, "id">({
+        class DocumentModel extends Model<Row, "id"> {}
+        const repository = defineRepository({
+          name: "uuid.document",
+          table: defineTable<Row, "id">({
             name: "uuid_documents",
             primaryKey: "id",
             columns: ["id", "external_id", "title"],
           }),
-        ) {
-          static override $fillable = ["id", "external_id", "title"] as const;
-          static override $timestamps = false;
-        }
-        registerModelRepository(Document, Document.repository().withConnection(connection));
-        const id = "12345678-1234-4234-8234-123456789abc";
-        const external = crypto.randomUUID();
-        const document = await Document.create({
-          id,
-          external_id: external,
-          title: "Příliš žluťoučký",
+          dependencies: [] as const,
+          create: (binding) => new BaseRepository(binding),
         });
-        expect(document.toObject().id).toBe(id);
-        expect((await Document.find(id))?.toObject().title).toBe("Příliš žluťoučký");
-        await document.update({ title: "Updated UUID record" });
-        expect((await Document.find(id))?.toObject().title).toBe("Updated UUID record");
-        await expect(
-          Document.create({ id, external_id: crypto.randomUUID(), title: "duplicate ID" }),
-        ).rejects.toThrow();
-        await expect(
-          Document.create({
-            id: crypto.randomUUID(),
-            external_id: external,
-            title: "duplicate external",
-          }),
-        ).rejects.toThrow();
-        await expect(
-          Document.create({
-            id: null as unknown as string,
-            external_id: crypto.randomUUID(),
-            title: "null ID",
-          }),
-        ).rejects.toThrow();
-        const placeholder = driver === "pgsql" ? "$1,$2" : "?,?";
-        await expect(
-          connection.unsafe(
-            `INSERT INTO uuid_references (id,document_id) VALUES (${placeholder})`,
-            [crypto.randomUUID(), crypto.randomUUID()],
-          ),
-        ).rejects.toThrow();
-        await connection.unsafe(
-          `INSERT INTO uuid_references (id,document_id) VALUES (${placeholder})`,
-          [crypto.randomUUID(), id],
+        const documentDefinition = defineModel({
+          name: "Document",
+          repository,
+          dependencies: [] as const,
+          attributes: { fillable: ["id", "external_id", "title"], timestamps: false },
+          construct: (state, binding) => new DocumentModel(state, binding),
+        });
+        await withBoundDatabase(
+          {
+            definition: {
+              default: "test",
+              connections: {
+                test:
+                  driver === "sqlite"
+                    ? { driver: "sqlite", filename }
+                    : driver === "pgsql"
+                      ? { driver: "pgsql", url: persistenceUrl! }
+                      : { driver: "mysql", url: persistenceUrl! },
+              },
+              repositories: [repository],
+              models: [documentDefinition],
+            },
+          },
+          async (database) => {
+            const Document = database.model(documentDefinition);
+            const id = "12345678-1234-4234-8234-123456789abc";
+            const external = crypto.randomUUID();
+            const document = await Document.create({
+              id,
+              external_id: external,
+              title: "Příliš žluťoučký",
+            });
+            expect(document.toObject().id).toBe(id);
+            expect((await Document.find(id))?.toObject().title).toBe("Příliš žluťoučký");
+            await document.update({ title: "Updated UUID record" });
+            expect((await Document.find(id))?.toObject().title).toBe("Updated UUID record");
+            await expect(
+              Document.create({ id, external_id: crypto.randomUUID(), title: "duplicate ID" }),
+            ).rejects.toThrow();
+            await expect(
+              Document.create({
+                id: crypto.randomUUID(),
+                external_id: external,
+                title: "duplicate external",
+              }),
+            ).rejects.toThrow();
+            await expect(
+              Document.create({
+                id: null as unknown as string,
+                external_id: crypto.randomUUID(),
+                title: "null ID",
+              }),
+            ).rejects.toThrow();
+            const placeholder = driver === "pgsql" ? "$1,$2" : "?,?";
+            await expect(
+              connection.unsafe(
+                `INSERT INTO uuid_references (id,document_id) VALUES (${placeholder})`,
+                [crypto.randomUUID(), crypto.randomUUID()],
+              ),
+            ).rejects.toThrow();
+            await connection.unsafe(
+              `INSERT INTO uuid_references (id,document_id) VALUES (${placeholder})`,
+              [crypto.randomUUID(), id],
+            );
+            if (driver === "pgsql") {
+              const columns = await connection.unsafe<{ column_name: string; udt_name: string }>(
+                "SELECT column_name,udt_name FROM information_schema.columns WHERE table_name='uuid_documents' AND column_name IN ('id','external_id') ORDER BY column_name",
+              );
+              expect(columns.map((column) => column.udt_name)).toEqual(["uuid", "uuid"]);
+              await expect(
+                Document.create({
+                  id: "not-a-uuid",
+                  external_id: crypto.randomUUID(),
+                  title: "invalid",
+                }),
+              ).rejects.toThrow();
+            } else if (driver === "mysql") {
+              const columns = await connection.unsafe<{
+                data_type: string;
+                character_maximum_length: number;
+              }>(
+                "SELECT DATA_TYPE AS data_type,CHARACTER_MAXIMUM_LENGTH AS character_maximum_length FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='uuid_documents' AND column_name='id'",
+              );
+              expect(columns[0]?.data_type).toBe("char");
+              expect(Number(columns[0]?.character_maximum_length)).toBe(36);
+            } else {
+              const columns = await connection.unsafe<{ name: string; type: string }>(
+                "PRAGMA table_info(uuid_documents)",
+              );
+              expect(columns.find((column) => column.name === "id")?.type).toBe("TEXT");
+            }
+            expect(await migrateDatabase(connection, [initial, addition])).toBe(1);
+            expect(await rollbackDatabase(connection, [initial, addition])).toBe(1);
+            expect((await Document.find(id))?.toObject().id).toBe(id);
+            expect((await Document.find(id))?.toObject().title).toBe("Updated UUID record");
+            expect(await rollbackDatabase(connection, [initial, addition])).toBe(1);
+            await expect(Document.find(id)).rejects.toThrow();
+          },
         );
-        if (driver === "pgsql") {
-          const columns = await connection.unsafe<{ column_name: string; udt_name: string }>(
-            "SELECT column_name,udt_name FROM information_schema.columns WHERE table_name='uuid_documents' AND column_name IN ('id','external_id') ORDER BY column_name",
-          );
-          expect(columns.map((column) => column.udt_name)).toEqual(["uuid", "uuid"]);
-          await expect(
-            Document.create({
-              id: "not-a-uuid",
-              external_id: crypto.randomUUID(),
-              title: "invalid",
-            }),
-          ).rejects.toThrow();
-        } else if (driver === "mysql") {
-          const columns = await connection.unsafe<{
-            data_type: string;
-            character_maximum_length: number;
-          }>(
-            "SELECT DATA_TYPE AS data_type,CHARACTER_MAXIMUM_LENGTH AS character_maximum_length FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='uuid_documents' AND column_name='id'",
-          );
-          expect(columns[0]?.data_type).toBe("char");
-          expect(Number(columns[0]?.character_maximum_length)).toBe(36);
-        } else {
-          const columns = await connection.unsafe<{ name: string; type: string }>(
-            "PRAGMA table_info(uuid_documents)",
-          );
-          expect(columns.find((column) => column.name === "id")?.type).toBe("TEXT");
-        }
-        expect(await migrateDatabase(connection, [initial, addition])).toBe(1);
-        expect(await rollbackDatabase(connection, [initial, addition])).toBe(1);
-        expect((await Document.find(id))?.toObject().id).toBe(id);
-        expect((await Document.find(id))?.toObject().title).toBe("Updated UUID record");
-        expect(await rollbackDatabase(connection, [initial, addition])).toBe(1);
-        await expect(Document.find(id)).rejects.toThrow();
       } finally {
         await db?.close?.();
         if (created) await control?.unsafe(`DROP DATABASE ${name}`);
         await control?.close?.();
         resetSqlDialect();
+        await rm(directory, { recursive: true, force: true });
       }
     },
   );

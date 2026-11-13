@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { createCsrfProtection, DEFAULT_CSRF_TTL_MS } from "@getstrata/core/http/csrfProtection";
 import { jobRegistry } from "@getstrata/core/queue/jobRegistry";
 import { runQueueJob } from "@getstrata/core/queue/jobRunner";
+import { overrideQueueRecorder, withQueuePersistence } from "../helpers/queuePersistence";
 
 describe("CSRF protection", () => {
   const secret = "csrf-test-secret-value-at-least-32-chars";
@@ -61,19 +62,25 @@ function recordingFailedJobs() {
   };
 }
 
+function queueTest(name: string, work: Parameters<typeof withQueuePersistence>[0]) {
+  test(name, () => withQueuePersistence(work));
+}
 describe("queue job retries", () => {
-  test("a job that succeeds runs once and records no failure", async () => {
+  queueTest("a job that succeeds runs once and records no failure", async (persistence) => {
     const handle = mock(async () => {});
     jobRegistry.register("test.ok", () => ({ handle }));
     const { service, failures } = recordingFailedJobs();
 
-    await runQueueJob({ name: "test.ok", payload: {} }, service as never);
+    await runQueueJob(
+      { name: "test.ok", payload: {} },
+      overrideQueueRecorder(persistence, service),
+    );
 
     expect(handle).toHaveBeenCalledTimes(1);
     expect(failures).toEqual([]);
   });
 
-  test("a failing job retries up to maxAttempts before giving up", async () => {
+  queueTest("a failing job retries up to maxAttempts before giving up", async (persistence) => {
     let calls = 0;
     jobRegistry.register("test.always-fails", () => ({
       maxAttempts: 3,
@@ -86,7 +93,10 @@ describe("queue job retries", () => {
     const { service, failures } = recordingFailedJobs();
 
     await expect(
-      runQueueJob({ name: "test.always-fails", payload: {} }, service as never),
+      runQueueJob(
+        { name: "test.always-fails", payload: {} },
+        overrideQueueRecorder(persistence, service),
+      ),
     ).rejects.toThrow("boom");
 
     expect(calls).toBe(3);
@@ -94,7 +104,7 @@ describe("queue job retries", () => {
     expect(failures[0]?.jobName).toBe("test.always-fails");
   });
 
-  test("a job that recovers on a retry does not record a failure", async () => {
+  queueTest("a job that recovers on a retry does not record a failure", async (persistence) => {
     let calls = 0;
     jobRegistry.register("test.recovers", () => ({
       maxAttempts: 3,
@@ -108,13 +118,16 @@ describe("queue job retries", () => {
     }));
     const { service, failures } = recordingFailedJobs();
 
-    await runQueueJob({ name: "test.recovers", payload: {} }, service as never);
+    await runQueueJob(
+      { name: "test.recovers", payload: {} },
+      overrideQueueRecorder(persistence, service),
+    );
 
     expect(calls).toBe(2);
     expect(failures).toEqual([]);
   });
 
-  test("a single-attempt job records the failure immediately", async () => {
+  queueTest("a single-attempt job records the failure immediately", async (persistence) => {
     jobRegistry.register("test.single", () => ({
       maxAttempts: 1,
       backoffMs: 0,
@@ -125,13 +138,16 @@ describe("queue job retries", () => {
     const { service, failures } = recordingFailedJobs();
 
     await expect(
-      runQueueJob({ name: "test.single", payload: {} }, service as never),
+      runQueueJob(
+        { name: "test.single", payload: {} },
+        overrideQueueRecorder(persistence, service),
+      ),
     ).rejects.toThrow("nope");
 
     expect(failures).toHaveLength(1);
   });
 
-  test("the recorded failure carries the payload and a stack", async () => {
+  queueTest("the recorded failure carries the payload and a stack", async (persistence) => {
     jobRegistry.register("test.payload", () => ({
       maxAttempts: 1,
       backoffMs: 0,
@@ -147,18 +163,24 @@ describe("queue job retries", () => {
     };
 
     await expect(
-      runQueueJob({ name: "test.payload", payload: { id: 7 } }, service as never),
+      runQueueJob(
+        { name: "test.payload", payload: { id: 7 } },
+        overrideQueueRecorder(persistence, service),
+      ),
     ).rejects.toThrow();
 
     expect(captured[0]?.payload).toEqual({ id: 7 });
     expect(String(captured[0]?.exception)).toContain("with-stack");
   });
 
-  test("an unknown job name throws rather than silently passing", async () => {
+  queueTest("an unknown job name throws rather than silently passing", async (persistence) => {
     const { service } = recordingFailedJobs();
 
     await expect(
-      runQueueJob({ name: "test.does-not-exist", payload: {} }, service as never),
+      runQueueJob(
+        { name: "test.does-not-exist", payload: {} },
+        overrideQueueRecorder(persistence, service),
+      ),
     ).rejects.toThrow(/Unknown job/);
   });
 });

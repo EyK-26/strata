@@ -1,12 +1,10 @@
-import { resolveDatabaseDriver, Schema } from "../../framework/public-api.ts";
-import { asMigrationDatabase } from "./migrationDatabase.ts";
+import { Schema } from "../../framework/public-api.ts";
 import type { Migration } from "./types";
 
 const migration: Migration = {
   name: "0014_create_tenants",
   async up(db) {
-    const migrationDb = asMigrationDatabase(db);
-    await Schema.run(migrationDb, resolveDatabaseDriver(), (schema) => {
+    await Schema.run(db, "pgsql", (schema) => {
       schema.create("tenant", (table) => {
         table.id();
         table.string("name");
@@ -20,25 +18,36 @@ const migration: Migration = {
       });
     });
 
-    await db`
+    await db.unsafe(
+      `
       INSERT INTO tenant (id, name, slug, plan)
       VALUES (1, 'Default Tenant', 'default', 'enterprise')
       ON CONFLICT (id) DO NOTHING
-    `;
-    await db`
+    `,
+      [],
+    );
+    await db.unsafe(
+      `
       UPDATE organization SET tenant_id = 1 WHERE tenant_id IS NULL
-    `;
-    await db`
+    `,
+      [],
+    );
+    await db.unsafe(
+      `
       ALTER TABLE organization
       ALTER COLUMN tenant_id SET NOT NULL
-    `;
-    await db`
+    `,
+      [],
+    );
+    await db.unsafe(
+      `
       CREATE INDEX IF NOT EXISTS idx_organization_tenant_id ON organization(tenant_id)
-    `;
+    `,
+      [],
+    );
   },
   async down(db) {
-    const migrationDb = asMigrationDatabase(db);
-    await Schema.run(migrationDb, resolveDatabaseDriver(), (schema) => {
+    await Schema.run(db, "pgsql", (schema) => {
       schema.table("organization", (table) => {
         table.dropColumn("tenant_id");
       });

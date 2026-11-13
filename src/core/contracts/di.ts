@@ -8,6 +8,7 @@ import type {
   ServiceFactory,
   ServiceToken,
 } from "./container";
+import type { PersistenceInvocation } from "./persistence";
 
 // biome-ignore lint/suspicious/noExplicitAny: matches Bun's Routes map expectations
 type AppRouteMap = Record<string, any>;
@@ -20,6 +21,7 @@ type CachedJson = <T>(
 ) => Promise<Response>;
 
 interface AppDependencies {
+  readonly invoke: PersistenceInvocation;
   container: ServiceContainer;
   cache: CacheLike;
   storage: StorageManager;
@@ -29,6 +31,7 @@ type MutableAppDependencies = Partial<Omit<AppDependencies, "container">> &
   Pick<AppDependencies, "container">;
 
 interface ProviderContext {
+  readonly invoke: PersistenceInvocation;
   container: ServiceContainer;
   config: ConfigStore;
   dependencies: MutableAppDependencies;
@@ -50,6 +53,7 @@ interface AppContext {
 
 const requiredDependencyKeys = [
   "container",
+  "invoke",
   "cache",
   "storage",
 ] as const satisfies readonly (keyof AppDependencies)[];
@@ -70,6 +74,8 @@ function getRequiredDependency<K extends keyof AppDependencies>(
 function assertAppDependenciesComplete(
   dependencies: MutableAppDependencies,
 ): asserts dependencies is AppDependencies {
+  if (dependencies.invoke !== undefined && typeof dependencies.invoke !== "function")
+    throw new TypeError("Application persistence invocation must be a function.");
   for (const key of requiredDependencyKeys) {
     getRequiredDependency(dependencies, key);
   }

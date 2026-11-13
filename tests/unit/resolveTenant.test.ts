@@ -1,29 +1,25 @@
 import { describe, expect, test } from "bun:test";
 import { resolveTenant } from "@getstrata/core/tenant/resolveTenant";
-import { restoreEnvVar } from "../helpers/restoreEnv";
+import { withBoundDatabase } from "../helpers/boundRepositoryHarness";
 
 describe("resolveTenant", () => {
-  test("loads the seeded default tenant", async () => {
-    const tenant = await resolveTenant(1);
-
-    expect(tenant).toMatchObject({
-      id: 1,
-      slug: "default",
-    });
-    expect(tenant).toEqual({ id: 1, slug: "default" });
-  });
-
-  test("returns a synthetic tenant when TENANCY_DRIVER=none", async () => {
-    const previous = process.env.TENANCY_DRIVER;
-    process.env.TENANCY_DRIVER = "none";
-
-    try {
-      await expect(resolveTenant(9)).resolves.toEqual({
-        id: 9,
-        slug: "default",
-      });
-    } finally {
-      restoreEnvVar("TENANCY_DRIVER", previous);
-    }
+  test("loads an explicit selected database row and returns null for a missing identity", async () => {
+    await withBoundDatabase(
+      {
+        definition: {
+          default: "main",
+          connections: { main: { driver: "sqlite", filename: ":memory:" } },
+        },
+      },
+      async (database) => {
+        await database.execute({
+          text: "CREATE TABLE tenant (id INTEGER PRIMARY KEY,slug TEXT)",
+          params: [],
+        });
+        await database.execute({ text: "INSERT INTO tenant VALUES (?,?)", params: [1, "default"] });
+        expect(await resolveTenant(database, 1)).toEqual({ id: 1, slug: "default" });
+        expect(await resolveTenant(database, 999)).toBeNull();
+      },
+    );
   });
 });

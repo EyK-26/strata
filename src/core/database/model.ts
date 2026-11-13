@@ -1,8 +1,18 @@
+import { isDeepStrictEqual } from "node:util";
+import type {
+  AnyModelDefinition,
+  ModelBinding,
+  ModelDefinition,
+  ModelObserver,
+  ModelState,
+  RepositoryDefinition,
+} from "@getstrata/core/database/definitions";
 import { isUniqueConstraintError } from "@getstrata/core/database/errors";
 import { NotFoundError } from "@getstrata/core/errors/http";
-import { onDeferredModelRollback } from "../events/deferredModelEvents.ts";
+import { getBindingPorts } from "#strata-orm-internal";
 import type { KeysetOptions } from "../pagination/index.ts";
-import BaseRepository from "./baseRepository.ts";
+import type BaseRepository from "./baseRepository.ts";
+import { getRepositoryBinding } from "./baseRepository.ts";
 import { foreignKeyFromTable, pivotTableName } from "./inflection.ts";
 import {
   applyCasts,
@@ -26,23 +36,10 @@ import {
   type ModelProjection,
   ModelQuery,
   type RelationNameInput,
+  snapshotModelQuery,
 } from "./modelQuery.ts";
-import {
-  addModelGlobalScope,
-  bindModelRepository,
-  ensureBooted,
-  findNamedModel,
-  type GlobalScopeFn,
-  getGlobalScopes,
-  type ModelObserver,
-  nameModel,
-  observeModel,
-  registerModelClass,
-  registerModelRepositoryFactory,
-  resolveModelRepository,
-  runObservers,
-} from "./modelRegistry.ts";
-import { resolveSoftDeleteColumn } from "./query.ts";
+import { quoteIdentifier, resolveSoftDeleteColumn } from "./query.ts";
+import { snapshotQueryPlan } from "./queryPlanSnapshot.ts";
 import type { AnyRelationQuery, RelatedModelClass } from "./relationQuery.ts";
 import {
   BelongsToManyRelationQuery,
@@ -73,7 +70,6 @@ import {
   morphTo,
 } from "./relationships.ts";
 import type { RepositoryQuery } from "./repositoryQuery.ts";
-import type { TableDefinition } from "./table.ts";
 import type {
   ModelWhere,
   ModelWriteValues,
@@ -83,93 +79,29 @@ import type {
   UpdateValues,
 } from "./types.ts";
 
-type ModelClassType<
-  TEntity extends object,
-  PrimaryKey extends keyof TEntity & string,
-> = typeof Model &
-  (new (
-    attributes: TEntity,
-    repository: BaseRepository<TEntity, PrimaryKey>,
-    exists?: boolean,
-  ) => Model<TEntity, PrimaryKey>);
-
-interface ModelConstructor<
-  TEntity extends object,
-  PrimaryKey extends keyof TEntity & string,
-  TModel extends Model<TEntity, PrimaryKey>,
-> extends ModelClassType<TEntity, PrimaryKey> {
-  new (
-    attributes: TEntity,
-    repository: BaseRepository<TEntity, PrimaryKey>,
-    exists?: boolean,
-  ): TModel;
-}
-
-type RelatedRef<TRelated extends object, RelatedKey extends keyof TRelated & string> =
-  | RelatedModelClass<TRelated, RelatedKey>
+type RelatedRef<
+  TRelated extends object,
+  RelatedKey extends keyof TRelated & string,
+  M extends Model<TRelated, RelatedKey> = Model<TRelated, RelatedKey>,
+> =
+  | ModelDefinition<TRelated, RelatedKey, M>
   | string
-  | (() => RelatedModelClass<TRelated, RelatedKey>);
+  | (() => ModelDefinition<TRelated, RelatedKey, M>);
 
 function accessorName(key: string): string {
   const pascal = key.replace(/_([a-z])/g, (_match, letter: string) => letter.toUpperCase());
   return `get${pascal.charAt(0).toUpperCase()}${pascal.slice(1)}Attribute`;
 }
 
-/** Retain the declared table as repository() defaults without narrowing legacy explicit calls. */
-type DefinedModel<TEntity extends object, PrimaryKey extends keyof TEntity & string> = {
-  repository<
-    TRecord extends object = TEntity,
-    TKey extends keyof TRecord & string = PrimaryKey & keyof TRecord & string,
-  >(this: object): BaseRepository<TRecord, TKey>;
-} & typeof Model<TEntity, PrimaryKey>;
-
-/** Typed model base with a lazily created framework repository and active connection. */
-function defineModel<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
-  table: TableDefinition<TEntity, PrimaryKey>,
-): DefinedModel<TEntity, PrimaryKey> {
-  class TableModel extends Model<TEntity, PrimaryKey> {}
-  registerModelRepositoryFactory(TableModel, () => new BaseRepository(table));
-  return TableModel;
-}
-
-/** Register all relationship names before initializing any model's boot hooks. */
-function bootModels(models: readonly object[]): void {
-  const names = new Map<string, object>();
-  for (const model of models) {
-    const { name, $morphClass } = model as { name?: string; $morphClass?: string };
-    for (const alias of [name, $morphClass]) {
-      if (!alias) continue;
-      const existing = names.get(alias);
-      if (existing && existing !== model) throw new Error(`Duplicate model name [${alias}].`);
-      names.set(alias, model);
-    }
-  }
-  for (const model of models) nameModel(model);
-  for (const model of models) {
-    resolveModelRepository(model);
-    ensureBooted(model);
-  }
-}
-
-function resolveRelated<TRelated extends object, RelatedKey extends keyof TRelated & string>(
-  related: RelatedRef<TRelated, RelatedKey>,
+function resolveRelated<
+  TRelated extends object,
+  RelatedKey extends keyof TRelated & string,
+  M extends Model<TRelated, RelatedKey>,
+>(
+  owner: Model<object, never>,
+  related: RelatedRef<TRelated, RelatedKey, M>,
 ): RelatedModelClass<TRelated, RelatedKey> {
-  if (typeof related === "string") {
-    const found = findNamedModel(related);
-    if (!found) {
-      throw new Error(`Model [${related}] is not registered. Call registerModelClass() first.`);
-    }
-    return found as RelatedModelClass<TRelated, RelatedKey>;
-  }
-
-  if (
-    typeof related === "function" &&
-    typeof (related as unknown as RelatedModelClass<TRelated, RelatedKey>).repository !== "function"
-  ) {
-    return (related as () => RelatedModelClass<TRelated, RelatedKey>)();
-  }
-
-  return related as RelatedModelClass<TRelated, RelatedKey>;
+  return modelFacade(owner).resolveRelated(related) as RelatedModelClass<TRelated, RelatedKey>;
 }
 
 function inferRelationMethodName(callee: string): string | undefined {
@@ -200,62 +132,114 @@ function inferRelationMethodName(callee: string): string | undefined {
 }
 
 function morphClassOf(model: object): string {
-  const statics = modelStatics(model.constructor === Function ? model : model.constructor);
-  return (
-    statics.$morphClass ??
-    (model.constructor === Function ? (model as { name: string }).name : model.constructor.name)
-  );
+  return modelFacade(model).name;
+}
+function modelStatics(model: object): BoundModelFacade<Record<string, unknown>, "id", AnyModel> {
+  return model as BoundModelFacade<Record<string, unknown>, "id", AnyModel>;
 }
 
-function modelStatics(model: object): typeof Model {
-  return model as typeof Model;
+let inspectModelBinding: (
+  entity: Model<object, never>,
+) => ModelBinding<object, never, BaseRepository<object, never>>;
+let inspectModelState: (entity: Model<object, never>) => ModelState<object>;
+let acceptModelRecord: (entity: Model<object, never>, record: object) => void;
+let saveRelatedModel: (entity: AnyModel, forced: LoadedAttributes) => Promise<AnyModel>;
+function getModelBinding<R extends object, K extends keyof R & string>(
+  entity: Model<R, K>,
+): ModelBinding<R, K, BaseRepository<R, K>> {
+  return inspectModelBinding(entity as never) as unknown as ModelBinding<
+    R,
+    K,
+    BaseRepository<R, K>
+  >;
+}
+function modelFacade(entity: object): BoundModelFacade<Record<string, unknown>, "id", AnyModel> {
+  return new BoundModelFacade(getModelBinding(entity as AnyModel));
+}
+async function runObservers(
+  entity: AnyModel,
+  event: keyof ModelObserver<unknown>,
+): Promise<boolean> {
+  const binding = getModelBinding(entity);
+  getBindingPorts(binding).assertActive();
+  for (const observer of getBindingPorts(binding).observers) {
+    const callback = observer[event];
+    if (callback && (await callback.call(observer, entity)) === false) return false;
+  }
+  return true;
 }
 
 class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
-  static $fillable?: readonly string[];
-  static $guarded?: readonly string[] | true;
-  static $casts: ModelCasts = {};
-  static $timestamps = true;
-  static $hidden?: readonly string[];
-  static $visible?: readonly string[];
-  static $appends?: readonly string[];
-  static $morphClass?: string;
-
-  private _exists: boolean;
-  private originalAttributes: LoadedAttributes;
-  private readonly loadedRelations: Record<string, unknown> = {};
-  private hiddenOverrides: string[] = [];
-  private visibleOverrides: string[] = [];
-  private appended: string[] = [];
+  #attributes: TEntity;
+  #originalAttributes: LoadedAttributes;
+  #exists: boolean;
+  #loadedRelations: Record<string, unknown> = {};
+  #hiddenOverrides: string[];
+  #visibleOverrides: string[] | undefined;
+  #appended: string[];
+  #binding: ModelBinding<TEntity, PrimaryKey, BaseRepository<TEntity, PrimaryKey>>;
 
   constructor(
-    protected attributes: TEntity,
-    protected readonly repository: BaseRepository<TEntity, PrimaryKey>,
-    exists = true,
+    state: ModelState<TEntity>,
+    binding: ModelBinding<TEntity, PrimaryKey, BaseRepository<TEntity, PrimaryKey>>,
   ) {
-    this._exists = exists;
-    this.attributes = modelStatics(this.constructor).hydrateAttributes(attributes);
-    this.originalAttributes = snapshotAttributes(this.attributes as LoadedAttributes);
+    this.#binding = binding;
+    this.#attributes = snapshotAttributes(state.attributes as LoadedAttributes) as TEntity;
+    this.#originalAttributes = snapshotAttributes(state.original as LoadedAttributes);
+    this.#exists = state.exists;
+    this.#hiddenOverrides = [...state.hidden];
+    this.#visibleOverrides = state.visible === undefined ? undefined : [...state.visible];
+    this.#appended = [...state.appends];
   }
 
-  private acceptPersistedAttributes(record: TEntity): void {
-    const original = this.originalAttributes;
-    const beforeWrite = snapshotAttributes(this.attributes as LoadedAttributes);
-    const existed = this._exists;
-    this.attributes = modelStatics(this.constructor).hydrateAttributes(record);
-    this.originalAttributes = snapshotAttributes(this.attributes as LoadedAttributes);
-    const written = this.originalAttributes;
-    this._exists = true;
-    onDeferredModelRollback(() => {
-      // Keep intended edits and subsequent observer/caller edits retryable, but
-      // discard fields brought in by RETURNING from a transaction that rolled back.
-      this.attributes = {
-        ...beforeWrite,
-        ...changedAttributes(this.attributes as LoadedAttributes, written),
-      } as TEntity;
-      this.originalAttributes = original;
-      this._exists = existed;
+  protected get attributes(): TEntity {
+    return this.#attributes;
+  }
+  protected get repository(): BaseRepository<TEntity, PrimaryKey> {
+    return this.#binding.repository;
+  }
+
+  static {
+    inspectModelBinding = (entity) => entity.#binding as never;
+    inspectModelState = (entity) => ({
+      attributes: snapshotAttributes(entity.#attributes as LoadedAttributes),
+      original: snapshotAttributes(entity.#originalAttributes),
+      exists: entity.#exists,
+      hidden: [...entity.#hiddenOverrides],
+      visible: entity.#visibleOverrides === undefined ? undefined : [...entity.#visibleOverrides],
+      appends: [...entity.#appended],
     });
+    acceptModelRecord = (entity, record) => entity.#acceptPersistedAttributes(record);
+    saveRelatedModel = (entity, forced) =>
+      entity.#mutateSnapshot(forced, (attributes, id, values) => {
+        getBindingPorts(entity.#binding).assertMutation(entity.#exists ? "updated" : "created");
+        entity.#attributes = attributes;
+        Object.assign(entity.#attributes, values);
+        return entity.#save(id);
+      });
+  }
+
+  #acceptPersistedAttributes(record: TEntity): void {
+    const original = this.#originalAttributes;
+    const beforeWrite = snapshotAttributes(this.#attributes as LoadedAttributes);
+    const existed = this.#exists;
+    let written = beforeWrite;
+    // Admission precedes hydration and acceptance. Restoration touches only native
+    // base state: subclass methods, casts and observers never run in finalization.
+    getBindingPorts(this.#binding).registerRestore(() => {
+      this.#attributes = {
+        ...beforeWrite,
+        ...changedAttributes(this.#attributes as LoadedAttributes, written),
+      } as TEntity;
+      this.#originalAttributes = original;
+      this.#exists = existed;
+      return undefined;
+    });
+    const hydrated = modelFacade(this).hydrateAttributes(record);
+    written = snapshotAttributes(hydrated as LoadedAttributes);
+    this.#attributes = hydrated;
+    this.#originalAttributes = written;
+    this.#exists = true;
   }
 
   getRepository(): BaseRepository<TEntity, PrimaryKey> {
@@ -263,7 +247,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   }
 
   get $exists(): boolean {
-    return this._exists;
+    return this.#exists;
   }
 
   get<K extends keyof TEntity>(key: K): TEntity[K] {
@@ -279,9 +263,9 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   }
 
   toArray(): Record<string, unknown> {
-    const ModelClass = modelStatics(this.constructor);
-    const hidden = new Set([...(ModelClass.$hidden ?? []), ...this.hiddenOverrides]);
-    const visible = this.visibleOverrides.length > 0 ? this.visibleOverrides : ModelClass.$visible;
+    const ModelClass = modelFacade(this);
+    const hidden = new Set([...(ModelClass.$hidden ?? []), ...this.#hiddenOverrides]);
+    const visible = this.#visibleOverrides ?? ModelClass.$visible;
     const data: Record<string, unknown> = { ...(this.attributes as LoadedAttributes) };
 
     if (visible && visible.length > 0) {
@@ -296,17 +280,17 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
       delete data[key];
     }
 
-    for (const key of [...(ModelClass.$appends ?? []), ...this.appended]) {
+    for (const key of [...(ModelClass.$appends ?? []), ...this.#appended]) {
       const accessor = (this as unknown as Record<string, unknown>)[accessorName(key)];
       if (typeof accessor === "function") {
         data[key] = (accessor as () => unknown).call(this);
       }
     }
 
-    for (const [name, value] of Object.entries(this.loadedRelations)) {
+    for (const [name, value] of Object.entries(this.#loadedRelations)) {
       if (
         !hidden.has(name) &&
-        (!visible || visible.includes(name) || this.appended.includes(name))
+        (!visible || visible.includes(name) || this.#appended.includes(name))
       ) {
         data[name] = value;
       }
@@ -320,17 +304,22 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   }
 
   makeHidden(...keys: string[]): this {
-    this.hiddenOverrides.push(...keys);
+    getBindingPorts(this.#binding).assertEditable(this);
+    this.#hiddenOverrides.push(...keys);
     return this;
   }
 
   makeVisible(...keys: string[]): this {
-    this.visibleOverrides.push(...keys);
+    getBindingPorts(this.#binding).assertEditable(this);
+    if (keys.length === 0) return this;
+    this.#visibleOverrides ??= [];
+    this.#visibleOverrides.push(...keys);
     return this;
   }
 
   append(...keys: string[]): this {
-    this.appended.push(...keys);
+    getBindingPorts(this.#binding).assertEditable(this);
+    this.#appended.push(...keys);
     return this;
   }
 
@@ -338,495 +327,36 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     return this.repository.getTable().primaryKey as PrimaryKey;
   }
 
-  protected static primaryKeyField(this: object): string {
-    return resolveModelRepository(this).getTable().primaryKey;
-  }
-
-  protected static hydrateAttributes<TEntity extends object>(
-    this: object,
-    attributes: TEntity,
-  ): TEntity {
-    const casts = modelStatics(this).$casts ?? {};
-    return applyCasts(attributes as LoadedAttributes, casts, "hydrate") as TEntity;
-  }
-
-  protected static dehydrateAttributes(
-    this: object,
-    attributes: LoadedAttributes,
-  ): LoadedAttributes | Promise<LoadedAttributes> {
-    const casts = modelStatics(this).$casts ?? {};
-    return applyCasts(attributes, casts, "dehydrate");
-  }
-
-  protected static fromRecord<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
-    this: object,
-    record: TEntity,
-    repository: BaseRepository<TEntity, PrimaryKey>,
-    exists = true,
-  ): Model<TEntity, PrimaryKey> {
-    const statics = modelStatics(this);
-    const hydrated = statics.hydrateAttributes(record);
-    return new (statics as ModelClassType<TEntity, PrimaryKey>)(hydrated, repository, exists);
-  }
-
-  static boot(): void {}
-
-  static observe(this: object, observer: ModelObserver): void {
-    observeModel(this, observer);
-  }
-
-  static addGlobalScope<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
-    this: object,
-    _name: string,
-    scope: GlobalScopeFn<TEntity, PrimaryKey>,
-  ): void {
-    addModelGlobalScope(this, scope);
-  }
-
-  static repository<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
-    this: object,
-  ): BaseRepository<TEntity, PrimaryKey> {
-    const repository = resolveModelRepository(this);
-    ensureBooted(this);
-    return repository as unknown as BaseRepository<TEntity, PrimaryKey>;
-  }
-
-  /** Apply this model's global filters to a query with an explicitly selected connection. */
-  static scopeQuery<TEntity extends object, PrimaryKey extends keyof TEntity & string>(
-    this: object,
-    query: RepositoryQuery<TEntity, PrimaryKey>,
-  ): RepositoryQuery<TEntity, PrimaryKey> {
-    ensureBooted(this);
-    let scoped = query as unknown as RepositoryQuery<Record<string, unknown>, "id">;
-    for (const scope of getGlobalScopes(this)) scoped = scope(scoped).protectWhere();
-    return scoped as unknown as RepositoryQuery<TEntity, PrimaryKey>;
-  }
-
-  static query<TModel extends object>(this: { prototype: TModel }): ModelQuery<TModel>;
-  static query(this: object): ModelQuery {
-    ensureBooted(this);
-    const repository = resolveModelRepository(this);
-    const scopeQuery = Model.scopeQuery<Record<string, unknown>, "id">;
-    return new ModelQuery(this, scopeQuery.call(this, repository.query()));
-  }
-
-  static newFromRecord<TModel extends object>(
-    this: { prototype: TModel },
-    record: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
-    exists: false,
-  ): TModel;
-  static newFromRecord<TModel extends object>(
-    this: { prototype: TModel },
-    record: NoInfer<ModelAttributes<TModel>>,
-    exists?: boolean,
-  ): TModel;
-  static newFromRecord(
-    this: object,
-    record: object,
-    exists = true,
-  ): Model<Record<string, unknown>, "id"> {
-    const repository = resolveModelRepository(this);
-    return modelStatics(this).fromRecord(
-      record as never,
-      repository as never,
-      exists,
-    ) as unknown as Model<Record<string, unknown>, "id">;
-  }
-
-  /** Trusted SQL/driver/partial-record hydration. Callers own shape and completeness. */
-  static newFromTrustedRecord<TModel extends object>(
-    this: { prototype: TModel },
-    record: object,
-    exists?: boolean,
-  ): TModel;
-  static newFromTrustedRecord(this: object, record: object, exists = true): AnyModel {
-    return modelStatics(this).newFromRecord(record, exists);
-  }
-
-  static create<TModel extends object>(
-    this: { prototype: TModel },
-    attributes: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
-    forced?: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
-  ): Promise<TModel>;
-  static async create(
-    this: object,
-    attributes: Record<string, unknown>,
-    forced: Record<string, unknown> = {},
-  ): Promise<Model<Record<string, unknown>, "id">> {
-    const statics = modelStatics(this);
-    ensureBooted(this);
-    const repository = resolveModelRepository(this);
-    const table = repository.getTable();
-    const timestamps = statics.$timestamps ?? true;
-    const assignable = {
-      ...filterMassAssignable(statics.$fillable, statics.$guarded, attributes),
-      ...forced,
-    };
-    const withTimestamps = applyTimestampsOnCreate(table.columns, assignable, timestamps);
-    const payload = await statics.dehydrateAttributes(withTimestamps);
-    const pending = statics.newFromRecord({ ...payload }, false) as AnyModel;
-    const beforeObservers = snapshotAttributes(pending.attributes);
-
-    if ((await runObservers(pending, "saving")) === false) {
-      throw new Error(`${(this as { name: string }).name}.create() was cancelled by an observer.`);
-    }
-
-    if ((await runObservers(pending, "creating")) === false) {
-      throw new Error(`${(this as { name: string }).name}.create() was cancelled by an observer.`);
-    }
-
-    // Keep the established resolved-casts-before-observers contract. Only edits
-    // need another write transformation; unchanged values must never be cast
-    // twice. Trusted relationship/tenant keys retain their original priority.
-    const edits = changedAttributes(pending.attributes, beforeObservers);
-    const forcedKeys = new Set(Object.keys(forced));
-    for (const key of forcedKeys) delete edits[key];
-    let finalPayload = payload;
-    if (Object.keys(edits).length > 0) {
-      const changed = await statics.dehydrateAttributes(edits);
-      // Hook results belong to the extension and may be immutable. Filter and
-      // combine into our own payload instead of deleting/assigning its fields.
-      const writeEdits = Object.fromEntries(
-        Object.entries(changed).filter(([key]) => !forcedKeys.has(key)),
-      );
-      finalPayload = { ...payload, ...writeEdits };
-    }
-    const record = await repository.create(finalPayload as MutationValues<object>);
-    const created = statics.fromRecord(record, repository, true) as AnyModel;
-    await runObservers(created, "created");
-    await runObservers(created, "saved");
-    return created;
-  }
-
-  static with<TModel extends object>(
-    this: { prototype: TModel },
-    ...relations: RelationNameInput[]
-  ): ModelQuery<TModel>;
-  static with(this: object, ...relations: RelationNameInput[]): ModelQuery {
-    return (Model.query as (this: object) => ModelQuery).call(this).with(...relations);
-  }
-
-  static withTrashed<TModel extends object>(this: { prototype: TModel }): ModelQuery<TModel>;
-  static withTrashed(this: object): ModelQuery {
-    return (Model.query as (this: object) => ModelQuery).call(this).withTrashed();
-  }
-
-  static onlyTrashed<TModel extends object>(this: { prototype: TModel }): ModelQuery<TModel>;
-  static onlyTrashed(this: object): ModelQuery {
-    return (Model.query as (this: object) => ModelQuery).call(this).onlyTrashed();
-  }
-
-  static chunk<TModel extends object>(
-    this: { prototype: TModel },
-    count: number,
-    callback: (models: TModel[]) => Promise<boolean | void>,
-  ): Promise<void>;
-  static async chunk(
-    this: object,
-    count: number,
-    callback: (models: Array<Model<Record<string, unknown>, "id">>) => Promise<boolean | void>,
-  ): Promise<void> {
-    const statics = modelStatics(this);
-    ensureBooted(this);
-    await (Model.query as (this: object) => ModelQuery)
-      .call(this)
-      .query.chunk(count, async (rows) => {
-        return await callback(
-          rows.map(
-            (row) => statics.newFromRecord(row, true) as Model<Record<string, unknown>, "id">,
-          ),
-        );
-      });
-  }
-
-  static keysetPaginate<TModel extends object>(
-    this: { prototype: TModel },
-    options: KeysetOptions<ModelAttributes<TModel>>,
-  ) {
-    return (Model.query as (this: object) => ModelQuery<TModel>).call(this).keysetPaginate(options);
-  }
-
-  static cursorPaginate<TModel extends object>(
-    this: { prototype: TModel },
-    options: { perPage: number; cursor?: unknown },
-  ): Promise<{
-    data: TModel[];
-    meta: { per_page: number; next_cursor: unknown; prev_cursor: unknown; has_more: boolean };
-  }>;
-  static async cursorPaginate(
-    this: object,
-    options: { perPage: number; cursor?: unknown },
-  ): Promise<{
-    data: Array<Model<Record<string, unknown>, "id">>;
-    meta: { per_page: number; next_cursor: unknown; prev_cursor: unknown; has_more: boolean };
-  }> {
-    const statics = modelStatics(this);
-    ensureBooted(this);
-    const page = await (Model.query as (this: object) => ModelQuery)
-      .call(this)
-      .query.cursorPaginate({
-        perPage: options.perPage,
-        cursor: options.cursor as never,
-      });
-    return {
-      data: page.data.map(
-        (row) => statics.newFromRecord(row, true) as Model<Record<string, unknown>, "id">,
-      ),
-      meta: page.meta,
-    };
-  }
-
-  static whereHas<TModel extends object>(
-    this: { prototype: TModel },
-    name: string,
-    constrain?: (query: AnyRelationQuery) => void,
-  ): ModelQuery<TModel>;
-  static whereHas(
-    this: object,
-    name: string,
-    constrain?: (query: AnyRelationQuery) => void,
-  ): ModelQuery {
-    return (Model.query as (this: object) => ModelQuery).call(this).whereHas(name, constrain);
-  }
-
-  static has<TModel extends object>(this: { prototype: TModel }, name: string): ModelQuery<TModel>;
-  static has(this: object, name: string): ModelQuery {
-    return (Model.query as (this: object) => ModelQuery).call(this).has(name);
-  }
-
-  static doesntHave<TModel extends object>(
-    this: { prototype: TModel },
-    name: string,
-  ): ModelQuery<TModel>;
-  static doesntHave(this: object, name: string): ModelQuery {
-    return (Model.query as (this: object) => ModelQuery).call(this).doesntHave(name);
-  }
-
-  static whereDoesntHave<TModel extends object>(
-    this: { prototype: TModel },
-    name: string,
-    constrain?: (query: AnyRelationQuery) => void,
-  ): ModelQuery<TModel>;
-  static whereDoesntHave(
-    this: object,
-    name: string,
-    constrain?: (query: AnyRelationQuery) => void,
-  ): ModelQuery {
-    return (Model.query as (this: object) => ModelQuery)
-      .call(this)
-      .whereDoesntHave(name, constrain);
-  }
-
-  static find<TModel extends object>(
-    this: { prototype: TModel },
-    id: NoInfer<ModelIdentifier<TModel>>,
-  ): Promise<TModel | null>;
-  static async find(
-    this: object,
-    id: unknown,
-  ): Promise<Model<Record<string, unknown>, "id"> | null> {
-    const primaryKey = resolveModelRepository(this).getTable().primaryKey;
-    return (Model.query as (this: object) => ModelQuery)
-      .call(this)
-      .where({ [primaryKey]: id } as QueryWhere<object>)
-      .first();
-  }
-
-  static findOrFail<TModel extends object>(
-    this: { prototype: TModel },
-    id: NoInfer<ModelIdentifier<TModel>>,
-    errorFactory?: (id: unknown) => Error,
-  ): Promise<TModel>;
-  static async findOrFail(
-    this: object,
-    id: unknown,
-    errorFactory?: (id: unknown) => Error,
-  ): Promise<Model<Record<string, unknown>, "id">> {
-    const model = await (
-      Model.find as (
-        this: object,
-        value: unknown,
-      ) => Promise<Model<Record<string, unknown>, "id"> | null>
-    ).call(this, id);
-
-    if (model) {
-      return model;
-    }
-
-    throw (
-      errorFactory?.(id) ??
-      new NotFoundError(`${(this as { name: string }).name} ${String(id)} not found.`)
-    );
-  }
-
-  static all<TModel extends object>(
-    this: { prototype: TModel },
-    options?: Omit<QueryOptions<ModelAttributes<TModel>>, "where" | "select">,
-  ): Promise<TModel[]>;
-  static async all(
-    this: object,
-    options: Omit<QueryOptions<object>, "where"> = {},
-  ): Promise<Array<Model<Record<string, unknown>, "id">>> {
-    let query = (Model.query as (this: object) => ModelQuery).call(this);
-
-    if (options.orderBy) {
-      query = query.orderBy(options.orderBy);
-    }
-
-    if (options.limit !== undefined) {
-      query = query.limit(options.limit);
-    }
-
-    return query.get();
-  }
-
-  static where<TModel extends object>(
-    this: { prototype: TModel },
-    where: NoInfer<ModelWhere<ModelAttributes<TModel>>>,
-  ): ModelQuery<TModel>;
-  static where(this: object, where: QueryWhere<object>): ModelQuery {
-    return (Model.query as (this: object) => ModelQuery).call(this).where(where);
-  }
-
-  static async count(this: object): Promise<number> {
-    return (Model.query as (this: object) => ModelQuery).call(this).count();
-  }
-
-  static pluck(this: object, column: string): Promise<unknown[]>;
-  static pluck(this: object, column: string, keyBy: string): Promise<Map<unknown, unknown>>;
-  static pluck(
-    this: object,
-    column: string,
-    keyBy?: string,
-  ): Promise<unknown[] | Map<unknown, unknown>> {
-    const query = (Model.query as (this: object) => ModelQuery).call(this);
-    return keyBy === undefined ? query.pluck(column) : query.pluck(column, keyBy);
-  }
-
-  static value(this: object, column: string): Promise<unknown> {
-    return (Model.query as (this: object) => ModelQuery).call(this).value(column);
-  }
-
-  static firstWhere<TModel extends object>(
-    this: { prototype: TModel },
-    where: NoInfer<ModelWhere<ModelAttributes<TModel>>>,
-    options?: Omit<QueryOptions<ModelAttributes<TModel>>, "where" | "select">,
-  ): Promise<TModel | null>;
-  static async firstWhere(
-    this: object,
-    where: QueryWhere<object>,
-    options: Omit<QueryOptions<object>, "where"> = {},
-  ): Promise<Model<Record<string, unknown>, "id"> | null> {
-    let query = (Model.query as (this: object) => ModelQuery).call(this).where(where);
-
-    if (options.orderBy) {
-      query = query.orderBy(options.orderBy);
-    }
-
-    return query.first();
-  }
-
-  static firstOrNew<TModel extends object>(
-    this: { prototype: TModel },
-    where: NoInfer<ModelWhere<ModelAttributes<TModel>>>,
-    values?: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
-  ): Promise<TModel>;
-  static async firstOrNew(
-    this: object,
-    where: QueryWhere<object>,
-    values: Record<string, unknown> = {},
-  ): Promise<Model<Record<string, unknown>, "id">> {
-    const existing = await (
-      Model.firstWhere as (
-        this: object,
-        filter: QueryWhere<object>,
-      ) => Promise<Model<Record<string, unknown>, "id"> | null>
-    ).call(this, where);
-
-    if (existing) {
-      return existing;
-    }
-
-    return modelStatics(this).newFromRecord({ ...where, ...values }, false);
-  }
-
-  static firstOrCreate<TModel extends object>(
-    this: { prototype: TModel },
-    where: NoInfer<ModelWhere<ModelAttributes<TModel>>>,
-    values?: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
-  ): Promise<TModel>;
-  static async firstOrCreate(
-    this: object,
-    where: QueryWhere<object>,
-    values: Record<string, unknown> = {},
-  ): Promise<Model<Record<string, unknown>, "id">> {
-    const findExisting = () =>
-      (
-        Model.firstWhere as (
-          this: object,
-          filter: QueryWhere<object>,
-        ) => Promise<Model<Record<string, unknown>, "id"> | null>
-      ).call(this, where);
-
-    const existing = await findExisting();
-
-    if (existing) {
-      return existing;
-    }
-
+  #mutateSnapshot<A, V>(
+    input: A,
+    work: (attributes: TEntity, id: TEntity[PrimaryKey], captured: A) => V | Promise<V>,
+  ): Promise<V> {
+    getBindingPorts(this.#binding).assertEditable(this);
+    let attributes: TEntity;
+    let captured: A;
     try {
-      return await (
-        Model.create as (
-          this: object,
-          attributes: Record<string, unknown>,
-        ) => Promise<Model<Record<string, unknown>, "id">>
-      ).call(this, { ...where, ...values });
+      attributes = snapshotAttributes(this.#attributes as LoadedAttributes) as TEntity;
+      captured = snapshotQueryPlan(input);
     } catch (error) {
-      if (!isUniqueConstraintError(error)) {
+      return this.#binding.run(() => {
         throw error;
-      }
-
-      const raced = await findExisting();
-
-      if (!raced) {
-        throw error;
-      }
-
-      return raced;
+      });
     }
+    const id = attributes[this.#binding.table.primaryKey];
+    return getBindingPorts(this.#binding).mutate(this, () => work(attributes, id, captured));
   }
 
-  static updateOrCreate<TModel extends object>(
-    this: { prototype: TModel },
-    where: NoInfer<ModelWhere<ModelAttributes<TModel>>>,
-    values?: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
-  ): Promise<TModel>;
-  static async updateOrCreate(
-    this: object,
-    where: QueryWhere<object>,
-    values: Record<string, unknown> = {},
-  ): Promise<Model<Record<string, unknown>, "id">> {
-    const existing = await (
-      Model.firstWhere as (
-        this: object,
-        filter: QueryWhere<object>,
-      ) => Promise<Model<Record<string, unknown>, "id"> | null>
-    ).call(this, where);
-
-    if (existing) {
-      return existing.update(values);
-    }
-
-    return (
-      Model.create as (
-        this: object,
-        attributes: Record<string, unknown>,
-      ) => Promise<Model<Record<string, unknown>, "id">>
-    ).call(this, { ...where, ...values });
+  save(): Promise<this> {
+    return this.#mutateSnapshot(undefined, (attributes, id) => {
+      getBindingPorts(this.#binding).assertMutation(this.#exists ? "updated" : "created");
+      this.#attributes = attributes;
+      return this.#save(id);
+    });
   }
 
-  async save(): Promise<this> {
-    const ModelClass = modelStatics(this.constructor);
+  async #save(targetId: TEntity[PrimaryKey]): Promise<this> {
+    getBindingPorts(this.#binding).assertMutation(this.#exists ? "updated" : "created");
+    const ModelClass = modelFacade(this);
     const timestamps = ModelClass.$timestamps ?? true;
     const table = this.repository.getTable();
     const updating = this.$exists;
@@ -840,7 +370,10 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     }
 
     if (updating) {
-      const dirty = changedAttributes(this.attributes as LoadedAttributes, this.originalAttributes);
+      const dirty = changedAttributes(
+        this.attributes as LoadedAttributes,
+        this.#originalAttributes,
+      );
       if (Object.keys(dirty).length === 0) {
         await runObservers(this as never, "saved");
         return this;
@@ -850,8 +383,8 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
         await ModelClass.dehydrateAttributes(dirty),
         timestamps,
       ) as UpdateValues<TEntity, PrimaryKey>;
-      const record = await this.repository.updateByIdOrThrow(this.id, changes);
-      this.acceptPersistedAttributes(record);
+      const record = await this.repository.updateByIdOrThrow(targetId, changes);
+      this.#acceptPersistedAttributes(record);
       await runObservers(this as never, "updated");
       await runObservers(this as never, "saved");
       return this;
@@ -867,31 +400,41 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
       withTimestamps,
     )) as MutationValues<TEntity>;
     const record = await this.repository.create(payload);
-    this.acceptPersistedAttributes(record);
+    this.#acceptPersistedAttributes(record);
     await runObservers(this as never, "created");
     await runObservers(this as never, "saved");
     return this;
   }
 
-  async update(changes: Partial<TEntity>): Promise<this> {
-    const ModelClass = modelStatics(this.constructor);
-    const assignable = filterMassAssignable(
-      ModelClass.$fillable,
-      ModelClass.$guarded,
-      changes as LoadedAttributes,
-    );
-    Object.assign(this.attributes as LoadedAttributes, assignable);
-    return await this.save();
+  update(changes: Partial<TEntity>): Promise<this> {
+    return this.#mutateSnapshot(changes, (attributes, id, snapshot) => {
+      getBindingPorts(this.#binding).assertMutation(this.#exists ? "updated" : "created");
+      const ModelClass = modelFacade(this);
+      const assignable = filterMassAssignable(
+        ModelClass.$fillable,
+        ModelClass.$guarded,
+        snapshot as LoadedAttributes,
+      );
+      this.#attributes = attributes;
+      Object.assign(this.#attributes, assignable);
+      return this.#save(id);
+    });
   }
 
-  async delete(): Promise<boolean> {
+  delete(): Promise<boolean> {
+    return this.#mutateSnapshot(undefined, (_attributes, id) => this.#delete(id));
+  }
+
+  async #delete(targetId: TEntity[PrimaryKey]): Promise<boolean> {
+    const softDelete = Boolean(resolveSoftDeleteColumn(this.#binding.table));
+    getBindingPorts(this.#binding).assertMutation(softDelete ? "deleted" : "force-deleted");
     if ((await runObservers(this as never, "deleting")) === false) {
       return false;
     }
 
-    const deleted = resolveSoftDeleteColumn(this.repository.getTable())
-      ? await this.repository.deleteById(this.id)
-      : await this.repository.forceDeleteById(this.id);
+    const deleted = softDelete
+      ? await this.repository.deleteById(targetId)
+      : await this.repository.forceDeleteById(targetId);
 
     if (deleted) {
       await runObservers(this as never, "deleted");
@@ -900,22 +443,50 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     return deleted;
   }
 
-  async forceDelete(): Promise<boolean> {
-    return await this.repository.forceDeleteById(this.id);
+  forceDelete(): Promise<boolean> {
+    return this.#mutateSnapshot(undefined, (_attributes, id) => this.#forceDelete(id));
   }
 
-  async restore(): Promise<this | null> {
-    const record = await this.repository.restoreById(this.id);
+  async #forceDelete(targetId: TEntity[PrimaryKey]): Promise<boolean> {
+    getBindingPorts(this.#binding).assertMutation("force-deleted");
+    return await this.repository.forceDeleteById(targetId);
+  }
+
+  restore(): Promise<this | null> {
+    return this.#mutateSnapshot(undefined, (_attributes, id) => this.#restore(id));
+  }
+
+  async #restore(targetId: TEntity[PrimaryKey]): Promise<this | null> {
+    getBindingPorts(this.#binding).assertMutation("restored");
+    const record = await this.repository.restoreById(targetId);
 
     if (!record) {
       return null;
     }
 
-    this.acceptPersistedAttributes(record);
+    this.#acceptPersistedAttributes(record);
     return this;
   }
 
-  async loadHasMany<
+  #readTerminal<A, V>(
+    prepare: () => A,
+    work: (attributes: TEntity, input: A) => Promise<V>,
+  ): Promise<V> {
+    let attributes: TEntity;
+    let input: A;
+    try {
+      getBindingPorts(this.#binding).assertEditable(this);
+      attributes = snapshotAttributes(this.#attributes as LoadedAttributes) as TEntity;
+      input = snapshotQueryPlan(prepare());
+    } catch (error) {
+      return this.#binding.run(() => {
+        throw error;
+      });
+    }
+    return this.#binding.run(() => work(attributes, input));
+  }
+
+  loadHasMany<
     TChild extends object,
     LocalKey extends keyof TEntity & string,
     ForeignKey extends keyof TChild & string,
@@ -926,14 +497,27 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     childRepository: BaseRepository<TChild, keyof TChild & string>,
     options: Omit<QueryOptions<TChild>, "where"> = {},
   ): Promise<this & Record<Alias, TChild[]>> {
-    const grouped = await childRepository
-      .withConnection(this.repository.getConnection())
-      .loadHasManyForParents([this.attributes], relation, options);
-    const loaded = getByRelationKey(grouped, this.attributes[relation.localKey]) ?? [];
-    return Object.assign(this, { [as]: loaded }) as this & Record<Alias, TChild[]>;
+    return this.#readTerminal(
+      () => ({
+        as,
+        relation,
+        definition: relatedRepositoryDefinition(childRepository, this.#binding.session),
+        options,
+      }),
+      async (attributes, plan) => {
+        const repository = this.#binding.session.repository(plan.definition);
+        const grouped = await repository.loadHasManyForParents(
+          [attributes],
+          plan.relation,
+          plan.options,
+        );
+        const loaded = getByRelationKey(grouped, attributes[plan.relation.localKey]) ?? [];
+        return Object.assign(this, { [plan.as]: loaded }) as this & Record<Alias, TChild[]>;
+      },
+    );
   }
 
-  async loadHasOne<
+  loadHasOne<
     TChild extends object,
     LocalKey extends keyof TEntity & string,
     ForeignKey extends keyof TChild & string,
@@ -944,17 +528,28 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     childRepository: BaseRepository<TChild, keyof TChild & string>,
     options: Omit<QueryOptions<TChild>, "where"> = {},
   ): Promise<this & Record<Alias, TChild | undefined>> {
-    const loaded = await this.loadHasMany(
-      as,
-      relation as unknown as HasManyRelation<TEntity, TChild, LocalKey, ForeignKey>,
-      childRepository,
-      { ...options, limit: 1 },
+    return this.#readTerminal(
+      () => ({
+        as,
+        relation,
+        definition: relatedRepositoryDefinition(childRepository, this.#binding.session),
+        options: { ...options, limit: 1 },
+      }),
+      async (attributes, plan) => {
+        const repository = this.#binding.session.repository(plan.definition);
+        const grouped = await repository.loadHasManyForParents(
+          [attributes],
+          plan.relation as unknown as HasManyRelation<TEntity, TChild, LocalKey, ForeignKey>,
+          plan.options,
+        );
+        const loaded = getByRelationKey(grouped, attributes[plan.relation.localKey])?.[0];
+        return Object.assign(this, { [plan.as]: loaded }) as this &
+          Record<Alias, TChild | undefined>;
+      },
     );
-    const value = (loaded as Record<Alias, TChild[]>)[as]?.[0];
-    return Object.assign(this, { [as]: value }) as this & Record<Alias, TChild | undefined>;
   }
 
-  async loadBelongsTo<
+  loadBelongsTo<
     TParent extends object,
     ForeignKey extends keyof TEntity & string,
     OwnerKey extends keyof TParent & string,
@@ -965,17 +560,28 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     parentRepository: BaseRepository<TParent, OwnerKey>,
     options: Omit<QueryOptions<TParent>, "where"> = {},
   ): Promise<this & Record<Alias, TParent | undefined>> {
-    const grouped = await this.repository.loadBelongsToForParents(
-      [this.attributes],
-      relation,
-      parentRepository,
-      options,
+    return this.#readTerminal(
+      () => ({
+        as,
+        relation,
+        definition: relatedRepositoryDefinition(parentRepository, this.#binding.session),
+        options,
+      }),
+      async (attributes, plan) => {
+        const grouped = await this.#binding.repository.loadBelongsToForParents(
+          [attributes],
+          plan.relation,
+          this.#binding.session.repository(plan.definition),
+          plan.options,
+        );
+        const loaded = getByRelationKey(grouped, attributes[plan.relation.foreignKey]);
+        return Object.assign(this, { [plan.as]: loaded }) as this &
+          Record<Alias, TParent | undefined>;
+      },
     );
-    const loaded = getByRelationKey(grouped, this.attributes[relation.foreignKey as keyof TEntity]);
-    return Object.assign(this, { [as]: loaded }) as this & Record<Alias, TParent | undefined>;
   }
 
-  async loadBelongsToMany<
+  loadBelongsToMany<
     TRelated extends object,
     Pivot extends object,
     ParentKey extends keyof TEntity & string,
@@ -997,40 +603,56 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     relatedRepository: BaseRepository<TRelated, RelatedKey>,
     options: Omit<QueryOptions<TRelated>, "where"> = {},
   ): Promise<this & Record<Alias, TRelated[]>> {
-    const connection = this.repository.getConnection();
-    const parentId = this.attributes[relation.parentKey];
-    const pivotRows = await connection.unsafe<Pivot>(
-      `SELECT * FROM ${relation.pivotTable} WHERE ${String(relation.foreignPivotKey)} = $1`,
-      [parentId],
+    return this.#readTerminal(
+      () => ({
+        as,
+        relation,
+        definition: relatedRepositoryDefinition(relatedRepository, this.#binding.session),
+        options,
+      }),
+      async (attributes, plan) => {
+        const connection = this.#binding.session;
+        const dialect = this.#binding.dialect;
+        const parentId = attributes[plan.relation.parentKey];
+        const pivotRows = await connection.execute<Pivot>({
+          text: `SELECT * FROM ${quoteIdentifier(dialect, plan.relation.pivotTable)} WHERE ${quoteIdentifier(dialect, String(plan.relation.foreignPivotKey))} = ${dialect.placeholder(1)}`,
+          params: [parentId],
+        });
+        if (pivotRows.length === 0)
+          return Object.assign(this, { [plan.as]: [] }) as this & Record<Alias, TRelated[]>;
+        const relatedIds = [
+          ...new Set(
+            pivotRows.map(
+              (row) => row[plan.relation.relatedPivotKey] as unknown as TRelated[RelatedKey],
+            ),
+          ),
+        ];
+        const relatedRows = await connection
+          .repository(plan.definition)
+          .findAll({ ...plan.options, where: { [plan.relation.relatedKey]: relatedIds } as never });
+        const grouped = indexBelongsToManyRelation(
+          [attributes],
+          [...pivotRows],
+          relatedRows,
+          plan.relation,
+        );
+        const loaded = getByRelationKey(grouped, parentId) ?? [];
+        return Object.assign(this, { [plan.as]: loaded }) as this & Record<Alias, TRelated[]>;
+      },
     );
-
-    if (pivotRows.length === 0) {
-      return Object.assign(this, { [as]: [] }) as this & Record<Alias, TRelated[]>;
-    }
-
-    const relatedIds = [
-      ...new Set(
-        pivotRows.map((row) => row[relation.relatedPivotKey] as unknown as TRelated[RelatedKey]),
-      ),
-    ];
-    const relatedRows = await relatedRepository.withConnection(connection).findAll({
-      ...options,
-      where: {
-        [relation.relatedKey]: relatedIds,
-      } as never,
-    });
-    const grouped = indexBelongsToManyRelation([this.attributes], pivotRows, relatedRows, relation);
-    const loaded = getByRelationKey(grouped, parentId) ?? [];
-    return Object.assign(this, { [as]: loaded }) as this & Record<Alias, TRelated[]>;
   }
 
-  hasMany<TRelated extends object, RelatedKey extends keyof TRelated & string>(
-    related: RelatedRef<TRelated, RelatedKey>,
+  hasMany<
+    TRelated extends object,
+    RelatedKey extends keyof TRelated & string,
+    M extends Model<TRelated, RelatedKey>,
+  >(
+    related: RelatedRef<TRelated, RelatedKey, M>,
     foreignKey?: keyof TRelated & string,
     localKey?: PrimaryKey,
   ): HasManyRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey> {
     const table = this.repository.getTable();
-    const relatedClass = resolveRelated(related);
+    const relatedClass = resolveRelated(this as never, related);
     return new HasManyRelationQuery(
       this,
       relatedClass,
@@ -1042,13 +664,17 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     );
   }
 
-  hasOne<TRelated extends object, RelatedKey extends keyof TRelated & string>(
-    related: RelatedRef<TRelated, RelatedKey>,
+  hasOne<
+    TRelated extends object,
+    RelatedKey extends keyof TRelated & string,
+    M extends Model<TRelated, RelatedKey>,
+  >(
+    related: RelatedRef<TRelated, RelatedKey, M>,
     foreignKey?: keyof TRelated & string,
     localKey?: PrimaryKey,
   ): HasOneRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey> {
     const table = this.repository.getTable();
-    const relatedClass = resolveRelated(related);
+    const relatedClass = resolveRelated(this as never, related);
     return new HasOneRelationQuery(
       this,
       relatedClass,
@@ -1060,12 +686,16 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     );
   }
 
-  belongsTo<TRelated extends object, RelatedKey extends keyof TRelated & string>(
-    related: RelatedRef<TRelated, RelatedKey>,
+  belongsTo<
+    TRelated extends object,
+    RelatedKey extends keyof TRelated & string,
+    M extends Model<TRelated, RelatedKey>,
+  >(
+    related: RelatedRef<TRelated, RelatedKey, M>,
     foreignKey?: keyof TEntity & string,
     ownerKey?: RelatedKey,
   ): BelongsToRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey> {
-    const relatedClass = resolveRelated(related);
+    const relatedClass = resolveRelated(this as never, related);
     const relatedTable = relatedClass.repository().getTable();
     return new BelongsToRelationQuery(
       this,
@@ -1084,17 +714,19 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     TThrough extends object,
     RelatedKey extends keyof TRelated & string,
     ThroughKey extends keyof TThrough & string,
+    M extends Model<TRelated, RelatedKey>,
+    ThroughM extends Model<TThrough, ThroughKey>,
   >(
-    related: RelatedRef<TRelated, RelatedKey>,
-    through: RelatedRef<TThrough, ThroughKey>,
+    related: RelatedRef<TRelated, RelatedKey, M>,
+    through: RelatedRef<TThrough, ThroughKey, ThroughM>,
     firstKey?: string,
     secondKey?: keyof TRelated & string,
     localKey?: PrimaryKey,
     secondLocalKey?: ThroughKey,
   ): HasManyThroughRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey> {
     const table = this.repository.getTable();
-    const relatedClass = resolveRelated(related);
-    const throughClass = resolveRelated(through);
+    const relatedClass = resolveRelated(this as never, related);
+    const throughClass = resolveRelated(this as never, through);
     const throughTable = throughClass.repository().getTable();
     return new HasManyThroughRelationQuery(
       this,
@@ -1114,14 +746,15 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     TRelated extends object,
     RelatedKey extends keyof TRelated & string,
     Pivot extends object = Record<string, unknown>,
+    M extends Model<TRelated, RelatedKey> = Model<TRelated, RelatedKey>,
   >(
-    related: RelatedRef<TRelated, RelatedKey>,
+    related: RelatedRef<TRelated, RelatedKey, M>,
     pivotTable?: string,
     foreignPivotKey?: keyof Pivot & string,
     relatedPivotKey?: keyof Pivot & string,
   ): BelongsToManyRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey, Pivot> {
     const table = this.repository.getTable();
-    const relatedClass = resolveRelated(related);
+    const relatedClass = resolveRelated(this as never, related);
     const relatedTable = relatedClass.repository().getTable();
     return new BelongsToManyRelationQuery(
       this,
@@ -1139,15 +772,19 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     );
   }
 
-  morphMany<TRelated extends object, RelatedKey extends keyof TRelated & string>(
-    related: RelatedRef<TRelated, RelatedKey>,
+  morphMany<
+    TRelated extends object,
+    RelatedKey extends keyof TRelated & string,
+    M extends Model<TRelated, RelatedKey>,
+  >(
+    related: RelatedRef<TRelated, RelatedKey, M>,
     morphName: string,
     typeKey?: keyof TRelated & string,
     idKey?: keyof TRelated & string,
     morphType?: string,
   ): MorphManyRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey> {
     const table = this.repository.getTable();
-    const relatedClass = resolveRelated(related);
+    const relatedClass = resolveRelated(this as never, related);
     return new MorphManyRelationQuery(
       this,
       relatedClass,
@@ -1161,15 +798,19 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     );
   }
 
-  morphOne<TRelated extends object, RelatedKey extends keyof TRelated & string>(
-    related: RelatedRef<TRelated, RelatedKey>,
+  morphOne<
+    TRelated extends object,
+    RelatedKey extends keyof TRelated & string,
+    M extends Model<TRelated, RelatedKey>,
+  >(
+    related: RelatedRef<TRelated, RelatedKey, M>,
     morphName: string,
     typeKey?: keyof TRelated & string,
     idKey?: keyof TRelated & string,
     morphType?: string,
   ): MorphOneRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey> {
     const table = this.repository.getTable();
-    const relatedClass = resolveRelated(related);
+    const relatedClass = resolveRelated(this as never, related);
     return new MorphOneRelationQuery(
       this,
       relatedClass,
@@ -1184,7 +825,7 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   }
 
   morphTo(
-    relatedByType: Record<string, RelatedRef<Record<string, unknown>, "id">>,
+    relatedByType: Record<string, AnyModelDefinition | string | (() => AnyModelDefinition)>,
     morphName?: string,
     typeKey?: keyof TEntity & string,
     idKey?: keyof TEntity & string,
@@ -1198,7 +839,12 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     }
 
     const resolvedMap = Object.fromEntries(
-      Object.entries(relatedByType).map(([type, related]) => [type, resolveRelated(related)]),
+      Object.entries(relatedByType).map(([type, related]) => [
+        type,
+        getBindingPorts(this.#binding).model(
+          (typeof related === "function" ? related() : related) as never,
+        ),
+      ]),
     ) as Record<string, RelatedModelClass<Record<string, unknown>, "id">>;
 
     return new MorphToRelationQuery(
@@ -1212,49 +858,649 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     );
   }
 
-  async load(...names: RelationNameInput[]): Promise<this> {
-    for (const name of flattenRelationNames(names)) {
-      if (name.includes(".")) {
-        await loadNested(this as never, name);
-        continue;
-      }
-
-      const method = (this as unknown as Record<string, unknown>)[name];
-
-      if (typeof method !== "function") {
-        throw new Error(`${this.constructor.name} has no relation method ${name}().`);
-      }
-
-      const relationQuery = method.call(this) as { get: () => Promise<unknown> };
-      this.loadedRelations[name] = await relationQuery.get();
+  load(...names: RelationNameInput[]): Promise<this> {
+    let plan: Array<{ name: string; query: AnyRelationQuery }>;
+    try {
+      getBindingPorts(this.#binding).assertEditable(this);
+      plan = flattenRelationNames(names).map((name) => {
+        const root = name.split(".")[0] ?? name;
+        const method = (this as unknown as Record<string, unknown>)[root];
+        if (typeof method !== "function")
+          throw new Error(`${this.constructor.name} has no relation method ${root}().`);
+        return { name, query: (method.call(this) as AnyRelationQuery).snapshot() };
+      });
+    } catch (error) {
+      return this.#binding.run(() => {
+        throw error;
+      });
     }
-
-    return this;
+    return this.#binding.run(async () => {
+      for (const { name, query } of plan) {
+        if (name.includes(".")) await loadNested(this as never, name, query);
+        else this.#loadedRelations[name] = await query.get();
+      }
+      return this;
+    });
   }
 
   loaded<T = unknown>(name: string): T | undefined {
-    return this.loadedRelations[name] as T | undefined;
+    return this.#loadedRelations[name] as T | undefined;
   }
 
   setLoaded(name: string, value: unknown): this {
-    this.loadedRelations[name] = value;
+    getBindingPorts(this.#binding).assertEditable(this);
+    this.#loadedRelations[name] = value;
+    return this;
+  }
+
+  set<K extends keyof TEntity>(key: K, value: TEntity[K]): this {
+    getBindingPorts(this.#binding).assertEditable(this);
+    this.#attributes[key] = value;
+    return this;
+  }
+
+  fill(values: Partial<TEntity>): this {
+    getBindingPorts(this.#binding).assertEditable(this);
+    const facade = modelFacade(this);
+    Object.assign(
+      this.#attributes,
+      filterMassAssignable(facade.$fillable, facade.$guarded, values as LoadedAttributes),
+    );
     return this;
   }
 
   mergeAttributes(patch: Partial<TEntity>): this {
+    getBindingPorts(this.#binding).assertEditable(this);
     Object.assign(this.attributes as LoadedAttributes, patch);
     return this;
   }
 }
 
-/** Binds a Model class to its table/connection and names it for `hasMany("User")`. */
-function registerModelRepository<TModelClass>(model: TModelClass, repository: object): TModelClass {
-  bindModelRepository(model as object, repository as BaseRepository<Record<string, unknown>, "id">);
-  nameModel(model as object);
-  ensureBooted(model as object);
-  return model;
+function relatedRepositoryDefinition<R extends object, K extends keyof R & string>(
+  repository: BaseRepository<R, K>,
+  session: ModelBinding<R, K, BaseRepository<R, K>>["session"],
+): RepositoryDefinition<R, K, BaseRepository<R, K>> {
+  const binding = getRepositoryBinding(repository);
+  const ports = getBindingPorts(binding);
+  ports.assertActive();
+  if (binding.session !== session)
+    throw new TypeError("Related repository requires the exact active session.");
+  return ports.definition as unknown as RepositoryDefinition<R, K, BaseRepository<R, K>>;
 }
 
+class BoundModelFacade<R extends object, K extends keyof R & string, M extends Model<R, K>> {
+  declare readonly prototype: M;
+  readonly #binding: ModelBinding<R, K, BaseRepository<R, K>>;
+  constructor(binding: ModelBinding<R, K, BaseRepository<R, K>>) {
+    this.#binding = binding;
+  }
+  get binding(): ModelBinding<R, K, BaseRepository<R, K>> {
+    return this.#binding;
+  }
+  get definition(): ModelDefinition<R, K, M> {
+    return getBindingPorts(this.binding).modelDefinition as unknown as ModelDefinition<R, K, M>;
+  }
+  get name(): string {
+    return this.definition.name;
+  }
+  get $fillable(): readonly string[] | undefined {
+    return this.definition.attributes.fillable;
+  }
+  get $guarded(): readonly string[] | true | undefined {
+    return this.definition.attributes.guarded;
+  }
+  get $casts(): ModelCasts {
+    return this.definition.attributes.casts ?? {};
+  }
+  get $timestamps(): boolean {
+    return this.definition.attributes.timestamps ?? true;
+  }
+  get $hidden(): readonly string[] | undefined {
+    return this.definition.attributes.hidden;
+  }
+  get $visible(): readonly string[] | undefined {
+    return this.definition.attributes.visible;
+  }
+  get $appends(): readonly string[] | undefined {
+    return this.definition.attributes.appends;
+  }
+  repository(): BaseRepository<R, K> {
+    getBindingPorts(this.binding).assertActive();
+    return this.binding.repository;
+  }
+  scopeQuery<A extends object, B extends keyof A & string>(
+    query: RepositoryQuery<A, B>,
+  ): RepositoryQuery<A, B> {
+    getBindingPorts(this.binding).assertActive();
+    let scoped = query;
+    for (const scope of getBindingPorts(this.binding).scopes)
+      scoped = (scope(scoped) as RepositoryQuery<A, B>).protectWhere();
+    return scoped;
+  }
+  hydrateAttributes<A extends object>(values: A): A {
+    return applyCasts(values as LoadedAttributes, this.$casts, "hydrate") as A;
+  }
+  dehydrateAttributes(values: LoadedAttributes): Promise<LoadedAttributes> {
+    let captured: LoadedAttributes;
+    try {
+      getBindingPorts(this.binding).assertActive();
+      captured = snapshotAttributes(values);
+    } catch (error) {
+      return this.binding.run(() => {
+        throw error;
+      });
+    }
+    return this.binding.run(async () => {
+      const cast = await applyCasts(captured, this.$casts, "dehydrate");
+      const hook = getBindingPorts(this.binding).dehydrate;
+      const written = hook ? await hook(snapshotAttributes(cast) as Readonly<Partial<R>>) : cast;
+      return snapshotAttributes(written as LoadedAttributes);
+    });
+  }
+  hydrate(values: R, exists = true): M {
+    const ports = getBindingPorts(this.binding);
+    ports.assertActive();
+    const attributes = this.hydrateAttributes(
+      snapshotAttributes(values as LoadedAttributes),
+    ) as Partial<R>;
+    if (!ports.construct) throw new TypeError("A model requires a prepared constructor.");
+    return ports.construct(
+      {
+        attributes,
+        original: snapshotAttributes(attributes as LoadedAttributes) as Partial<R>,
+        exists,
+        hidden: [],
+        visible: undefined,
+        appends: [],
+      },
+      undefined,
+    ) as M;
+  }
+  newRecord(values: Partial<R>): M {
+    return this.hydrate(values as R, false);
+  }
+  bind(source: NoInfer<M>): M {
+    const sourceBinding = getModelBinding(source);
+    const from = getBindingPorts(sourceBinding);
+    const target = getBindingPorts(this.binding);
+    if (
+      from.app !== target.app ||
+      from.pool !== target.pool ||
+      sourceBinding.definition !== this.binding.definition ||
+      !isDeepStrictEqual(from.tenant, target.tenant)
+    )
+      throw new TypeError("Model binding authority mismatch.");
+    from.assertBindable(source);
+    target.assertActive();
+    if (!target.construct) throw new TypeError("A model requires a prepared constructor.");
+    return target.construct(inspectModelState(source as never) as ModelState<R>, source) as M;
+  }
+  resolveRelated<A extends object, B extends keyof A & string, Related extends Model<A, B>>(
+    reference: RelatedRef<A, B, Related>,
+  ): RelatedModelClass<A, B> {
+    const definition = typeof reference === "function" ? reference() : reference;
+    return getBindingPorts(this.binding).model(definition) as unknown as RelatedModelClass<A, B>;
+  }
+  private terminal<V, A>(
+    work: (facade: BoundModelFacade<R, K, M>, input: A, query: ModelQuery<M>) => Promise<V>,
+    input: A,
+  ): Promise<V> {
+    let captured: A;
+    let query: ModelQuery<M>;
+    try {
+      getBindingPorts(this.binding).assertActive();
+      captured = snapshotQueryPlan(input);
+      query = snapshotModelQuery(this.query());
+    } catch (error) {
+      return this.binding.run(() => {
+        throw error;
+      });
+    }
+    return this.binding.run(() => work(this, captured, query));
+  }
+  createOwned(values: Partial<R>, forced: Partial<R> = {}): Promise<M> {
+    const ports = getBindingPorts(this.binding);
+    ports.assertActive();
+    ports.assertMutation("created");
+    const attributes = snapshotAttributes(values as LoadedAttributes);
+    const forcedValues = snapshotAttributes(forced as LoadedAttributes);
+    const pending = this.newRecord({} as Partial<R>);
+    return ports.mutate(pending, async () => {
+      const table = this.binding.table;
+      const assignable = {
+        ...filterMassAssignable(this.$fillable, this.$guarded, attributes),
+        ...forcedValues,
+      };
+      const payload = await this.dehydrateAttributes(
+        applyTimestampsOnCreate(table.columns, assignable, this.$timestamps),
+      );
+      pending.mergeAttributes(this.hydrateAttributes(payload) as Partial<R>);
+      const beforeObservers = snapshotAttributes(pending.toObject() as LoadedAttributes);
+      if (
+        (await runObservers(pending as never, "saving")) === false ||
+        (await runObservers(pending as never, "creating")) === false
+      )
+        throw new Error(`${this.name}.create() was cancelled by an observer.`);
+      const edits = changedAttributes(pending.toObject() as LoadedAttributes, beforeObservers);
+      const forcedKeys = new Set(Object.keys(forcedValues));
+      for (const key of forcedKeys) delete edits[key];
+      let finalPayload = payload;
+      if (Object.keys(edits).length) {
+        const changed = await this.dehydrateAttributes(edits);
+        finalPayload = {
+          ...payload,
+          ...Object.fromEntries(Object.entries(changed).filter(([key]) => !forcedKeys.has(key))),
+        };
+      }
+      const record = await this.binding.repository.create(finalPayload as MutationValues<R>);
+      acceptModelRecord(pending as never, record);
+      await runObservers(pending as never, "created");
+      await runObservers(pending as never, "saved");
+      return pending;
+    });
+  }
+  query<TModel extends object>(this: { prototype: TModel }): ModelQuery<TModel>;
+  query(this: object): ModelQuery {
+    const repository = modelStatics(this).repository();
+    const scopeQuery = BoundModelFacade.prototype.scopeQuery<Record<string, unknown>, "id">;
+    return new ModelQuery(this, scopeQuery.call(this, repository.query()));
+  }
+
+  newFromRecord<TModel extends object>(
+    this: { prototype: TModel },
+    record: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
+    exists: false,
+  ): TModel;
+  newFromRecord<TModel extends object>(
+    this: { prototype: TModel },
+    record: NoInfer<ModelAttributes<TModel>>,
+    exists?: boolean,
+  ): TModel;
+  newFromRecord(this: object, record: object, exists = true): Model<Record<string, unknown>, "id"> {
+    return modelStatics(this).hydrate(record as Record<string, unknown>, exists) as AnyModel;
+  }
+
+  /** Trusted SQL/driver/partial-record hydration. Callers own shape and completeness. */
+  newFromTrustedRecord<TModel extends object>(
+    this: { prototype: TModel },
+    record: object,
+    exists?: boolean,
+  ): TModel;
+  newFromTrustedRecord(this: object, record: object, exists = true): AnyModel {
+    return modelStatics(this).hydrate(record as Record<string, unknown>, exists);
+  }
+
+  create<TModel extends object>(
+    this: { prototype: TModel },
+    attributes: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
+    forced?: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
+  ): Promise<TModel>;
+  create(
+    this: object,
+    attributes: Record<string, unknown>,
+    forced: Record<string, unknown> = {},
+  ): Promise<AnyModel> {
+    const facade = modelStatics(this);
+    return facade.createOwned(attributes, forced) as Promise<AnyModel>;
+  }
+
+  with<TModel extends object>(
+    this: { prototype: TModel },
+    ...relations: RelationNameInput[]
+  ): ModelQuery<TModel>;
+  with(this: object, ...relations: RelationNameInput[]): ModelQuery {
+    return (BoundModelFacade.prototype.query as (this: object) => ModelQuery)
+      .call(this)
+      .with(...relations);
+  }
+
+  withTrashed<TModel extends object>(this: { prototype: TModel }): ModelQuery<TModel>;
+  withTrashed(this: object): ModelQuery {
+    return (BoundModelFacade.prototype.query as (this: object) => ModelQuery)
+      .call(this)
+      .withTrashed();
+  }
+
+  onlyTrashed<TModel extends object>(this: { prototype: TModel }): ModelQuery<TModel>;
+  onlyTrashed(this: object): ModelQuery {
+    return (BoundModelFacade.prototype.query as (this: object) => ModelQuery)
+      .call(this)
+      .onlyTrashed();
+  }
+
+  chunk<TModel extends object>(
+    this: { prototype: TModel },
+    count: number,
+    // biome-ignore lint/suspicious/noConfusingVoidType: Existing chunk callbacks may return no value.
+    callback: (models: TModel[]) => Promise<boolean | void>,
+  ): Promise<void>;
+  chunk(
+    this: object,
+    count: number,
+    // biome-ignore lint/suspicious/noConfusingVoidType: Existing chunk callbacks may return no value.
+    callback: (models: Array<Model<Record<string, unknown>, "id">>) => Promise<boolean | void>,
+  ): Promise<void> {
+    return modelStatics(this).terminal(
+      async (facade, input, capturedQuery) => {
+        const statics = modelStatics(facade);
+        await capturedQuery.query.chunk(input.count, async (rows) => {
+          return await input.callback(
+            rows.map(
+              (row) => statics.newFromRecord(row, true) as Model<Record<string, unknown>, "id">,
+            ),
+          );
+        });
+      },
+      { count, callback },
+    );
+  }
+
+  keysetPaginate<TModel extends object>(
+    this: { prototype: TModel },
+    options: KeysetOptions<ModelAttributes<TModel>>,
+  ) {
+    return (BoundModelFacade.prototype.query as (this: object) => ModelQuery<TModel>)
+      .call(this)
+      .keysetPaginate(options);
+  }
+
+  cursorPaginate<TModel extends object>(
+    this: { prototype: TModel },
+    options: { perPage: number; cursor?: unknown },
+  ): Promise<{
+    data: TModel[];
+    meta: { per_page: number; next_cursor: unknown; prev_cursor: unknown; has_more: boolean };
+  }>;
+  cursorPaginate(
+    this: object,
+    options: { perPage: number; cursor?: unknown },
+  ): Promise<{
+    data: Array<Model<Record<string, unknown>, "id">>;
+    meta: { per_page: number; next_cursor: unknown; prev_cursor: unknown; has_more: boolean };
+  }> {
+    return modelStatics(this).terminal(
+      async (facade, input, capturedQuery) => {
+        const statics = modelStatics(facade);
+        const page = await capturedQuery.query.cursorPaginate({
+          perPage: input.options.perPage,
+          cursor: input.options.cursor as never,
+        });
+        return {
+          data: page.data.map(
+            (row) => statics.newFromRecord(row, true) as Model<Record<string, unknown>, "id">,
+          ),
+          meta: page.meta,
+        };
+      },
+      { options },
+    );
+  }
+
+  whereHas<TModel extends object>(
+    this: { prototype: TModel },
+    name: string,
+    constrain?: (query: AnyRelationQuery) => void,
+  ): ModelQuery<TModel>;
+  whereHas(this: object, name: string, constrain?: (query: AnyRelationQuery) => void): ModelQuery {
+    return (BoundModelFacade.prototype.query as (this: object) => ModelQuery)
+      .call(this)
+      .whereHas(name, constrain);
+  }
+
+  has<TModel extends object>(this: { prototype: TModel }, name: string): ModelQuery<TModel>;
+  has(this: object, name: string): ModelQuery {
+    return (BoundModelFacade.prototype.query as (this: object) => ModelQuery).call(this).has(name);
+  }
+
+  doesntHave<TModel extends object>(this: { prototype: TModel }, name: string): ModelQuery<TModel>;
+  doesntHave(this: object, name: string): ModelQuery {
+    return (BoundModelFacade.prototype.query as (this: object) => ModelQuery)
+      .call(this)
+      .doesntHave(name);
+  }
+
+  whereDoesntHave<TModel extends object>(
+    this: { prototype: TModel },
+    name: string,
+    constrain?: (query: AnyRelationQuery) => void,
+  ): ModelQuery<TModel>;
+  whereDoesntHave(
+    this: object,
+    name: string,
+    constrain?: (query: AnyRelationQuery) => void,
+  ): ModelQuery {
+    return (BoundModelFacade.prototype.query as (this: object) => ModelQuery)
+      .call(this)
+      .whereDoesntHave(name, constrain);
+  }
+
+  find<TModel extends object>(
+    this: { prototype: TModel },
+    id: NoInfer<ModelIdentifier<TModel>>,
+  ): Promise<TModel | null>;
+  find(this: object, id: unknown): Promise<Model<Record<string, unknown>, "id"> | null> {
+    return modelStatics(this).terminal(
+      async (facade, input, capturedQuery) => {
+        const primaryKey = modelStatics(facade).repository().getTable().primaryKey;
+        return capturedQuery.where({ [primaryKey]: input.id } as QueryWhere<object>).first();
+      },
+      { id },
+    );
+  }
+
+  findOrFail<TModel extends object>(
+    this: { prototype: TModel },
+    id: NoInfer<ModelIdentifier<TModel>>,
+    errorFactory?: (id: unknown) => Error,
+  ): Promise<TModel>;
+  findOrFail(
+    this: object,
+    id: unknown,
+    errorFactory?: (id: unknown) => Error,
+  ): Promise<Model<Record<string, unknown>, "id">> {
+    return modelStatics(this).terminal(
+      async (facade, input, capturedQuery) => {
+        const model = await capturedQuery.find(input.id);
+
+        if (model) {
+          return model;
+        }
+
+        throw (
+          input.errorFactory?.(input.id) ??
+          new NotFoundError(`${(facade as { name: string }).name} ${String(input.id)} not found.`)
+        );
+      },
+      { id, errorFactory },
+    );
+  }
+
+  all<TModel extends object>(
+    this: { prototype: TModel },
+    options?: Omit<QueryOptions<ModelAttributes<TModel>>, "where" | "select">,
+  ): Promise<TModel[]>;
+  all(
+    this: object,
+    options: Omit<QueryOptions<object>, "where"> = {},
+  ): Promise<Array<Model<Record<string, unknown>, "id">>> {
+    return modelStatics(this).terminal(
+      async (_facade, input, capturedQuery) => {
+        let query = capturedQuery;
+
+        if (input.options.orderBy) {
+          query = query.orderBy(input.options.orderBy);
+        }
+
+        if (input.options.limit !== undefined) {
+          query = query.limit(input.options.limit);
+        }
+
+        return query.get();
+      },
+      { options },
+    );
+  }
+
+  where<TModel extends object>(
+    this: { prototype: TModel },
+    where: NoInfer<ModelWhere<ModelAttributes<TModel>>>,
+  ): ModelQuery<TModel>;
+  where(this: object, where: QueryWhere<object>): ModelQuery {
+    return (BoundModelFacade.prototype.query as (this: object) => ModelQuery)
+      .call(this)
+      .where(where);
+  }
+
+  count(this: object): Promise<number> {
+    return modelStatics(this).terminal(async (_facade, _input, capturedQuery) => {
+      return capturedQuery.count();
+    }, {});
+  }
+
+  pluck(this: object, column: string): Promise<unknown[]>;
+  pluck(this: object, column: string, keyBy: string): Promise<Map<unknown, unknown>>;
+  pluck(this: object, column: string, keyBy?: string): Promise<unknown[] | Map<unknown, unknown>> {
+    const query = (BoundModelFacade.prototype.query as (this: object) => ModelQuery).call(this);
+    return keyBy === undefined ? query.pluck(column) : query.pluck(column, keyBy);
+  }
+
+  value(this: object, column: string): Promise<unknown> {
+    return (BoundModelFacade.prototype.query as (this: object) => ModelQuery)
+      .call(this)
+      .value(column);
+  }
+
+  firstWhere<TModel extends object>(
+    this: { prototype: TModel },
+    where: NoInfer<ModelWhere<ModelAttributes<TModel>>>,
+    options?: Omit<QueryOptions<ModelAttributes<TModel>>, "where" | "select">,
+  ): Promise<TModel | null>;
+  firstWhere(
+    this: object,
+    where: QueryWhere<object>,
+    options: Omit<QueryOptions<object>, "where"> = {},
+  ): Promise<Model<Record<string, unknown>, "id"> | null> {
+    return modelStatics(this).terminal(
+      async (_facade, input, capturedQuery) => {
+        let query = capturedQuery.where(input.where);
+
+        if (input.options.orderBy) {
+          query = query.orderBy(input.options.orderBy);
+        }
+
+        return query.first();
+      },
+      { where, options },
+    );
+  }
+
+  firstOrNew<TModel extends object>(
+    this: { prototype: TModel },
+    where: NoInfer<ModelWhere<ModelAttributes<TModel>>>,
+    values?: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
+  ): Promise<TModel>;
+  firstOrNew(
+    this: object,
+    where: QueryWhere<object>,
+    values: Record<string, unknown> = {},
+  ): Promise<Model<Record<string, unknown>, "id">> {
+    return modelStatics(this).terminal(
+      async (facade, input, capturedQuery) => {
+        const existing = await snapshotModelQuery(capturedQuery).whereDynamic(input.where).first();
+
+        if (existing) {
+          return existing;
+        }
+
+        return modelStatics(facade).newFromRecord({ ...input.where, ...input.values }, false);
+      },
+      { where, values },
+    );
+  }
+
+  firstOrCreate<TModel extends object>(
+    this: { prototype: TModel },
+    where: NoInfer<ModelWhere<ModelAttributes<TModel>>>,
+    values?: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
+  ): Promise<TModel>;
+  firstOrCreate(
+    this: object,
+    where: QueryWhere<object>,
+    values: Record<string, unknown> = {},
+  ): Promise<Model<Record<string, unknown>, "id">> {
+    return modelStatics(this).terminal(
+      async (facade, input, capturedQuery) => {
+        const findExisting = () =>
+          snapshotModelQuery(capturedQuery).whereDynamic(input.where).first();
+
+        const existing = await findExisting();
+
+        if (existing) {
+          return existing;
+        }
+
+        try {
+          return await (
+            BoundModelFacade.prototype.create as (
+              this: object,
+              attributes: Record<string, unknown>,
+            ) => Promise<Model<Record<string, unknown>, "id">>
+          ).call(facade, { ...input.where, ...input.values });
+        } catch (error) {
+          if (!isUniqueConstraintError(error)) {
+            throw error;
+          }
+
+          const raced = await findExisting();
+
+          if (!raced) {
+            throw error;
+          }
+
+          return raced;
+        }
+      },
+      { where, values },
+    );
+  }
+
+  updateOrCreate<TModel extends object>(
+    this: { prototype: TModel },
+    where: NoInfer<ModelWhere<ModelAttributes<TModel>>>,
+    values?: NoInfer<ModelWriteValues<ModelAttributes<TModel>>>,
+  ): Promise<TModel>;
+  updateOrCreate(
+    this: object,
+    where: QueryWhere<object>,
+    values: Record<string, unknown> = {},
+  ): Promise<Model<Record<string, unknown>, "id">> {
+    return modelStatics(this).terminal(
+      async (facade, input, capturedQuery) => {
+        const existing = await snapshotModelQuery(capturedQuery).whereDynamic(input.where).first();
+
+        if (existing) {
+          return existing.update(input.values);
+        }
+
+        return (
+          BoundModelFacade.prototype.create as (
+            this: object,
+            attributes: Record<string, unknown>,
+          ) => Promise<Model<Record<string, unknown>, "id">>
+        ).call(facade, { ...input.where, ...input.values });
+      },
+      { where, values },
+    );
+  }
+}
+
+function createBoundModel<R extends object, K extends keyof R & string, M extends Model<R, K>>(
+  binding: ModelBinding<R, K, BaseRepository<R, K>>,
+): BoundModelFacade<R, K, M> {
+  return new BoundModelFacade(binding);
+}
+
+export { defineModel } from "@getstrata/core/database/definitions";
 export {
   BelongsToManyRelationQuery,
   BelongsToRelationQuery,
@@ -1265,23 +1511,18 @@ export {
   MorphOneRelationQuery,
   MorphToRelationQuery,
 } from "./relationQuery.ts";
-export type {
-  CastType,
-  GlobalScopeFn,
-  ModelAttributes,
-  ModelClassType,
-  ModelConstructor,
-  ModelProjection,
-};
+export type { CastType, ModelAttributes, ModelProjection, RelatedRef };
 export {
   applyCasts,
-  bootModels,
-  defineModel,
+  BoundModelFacade,
+  createBoundModel,
   dehydrateValue,
   filterMassAssignable,
+  getModelBinding,
   hydrateValue,
   Model,
   ModelQuery,
-  registerModelClass,
-  registerModelRepository,
+  modelFacade,
+  runObservers,
+  saveRelatedModel,
 };

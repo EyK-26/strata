@@ -144,8 +144,8 @@ const notesModule: AppModule = {
   order: 2,
   routes({ kernel }) {
     return {
-      "/api/v1/notes": kernel.wrap("api", async () => {
-        const bodiesById = await Note.query().orderBy({ id: "desc" }).pluck("body", "id");
+      "/api/v1/notes": kernel.wrap("api", async (_request, { database }) => {
+        const bodiesById = await database.model(Note).query().orderBy({ id: "desc" }).pluck("body", "id");
         return jsonResponse({ data: Object.fromEntries(bodiesById) });
       }),
     };
@@ -155,7 +155,7 @@ const notesModule: AppModule = {
 export default notesModule;
 \`\`\`
 
-Import from \`@getstrata/core/...\` subpaths rather than the package root, so singleton state such as the database pool stays shared.
+Use the handler’s explicit \`database\` port to bind model definitions to the current application and execution. Public root and subpath imports share the same definitions and runtime classes.
 
 ## Docs
 

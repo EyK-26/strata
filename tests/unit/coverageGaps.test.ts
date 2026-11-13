@@ -264,16 +264,6 @@ describe("coverage gap helpers", () => {
   });
 
   test("covers remaining security, queue, and policy branches", async () => {
-    const { eventBus } = await import("@getstrata/core/events/eventBus");
-    let singletonCount = 0;
-    const unsubscribe = eventBus.listen("singleton.event", () => {
-      singletonCount += 1;
-    });
-    await eventBus.dispatch("singleton.event", {});
-    unsubscribe();
-    expect(singletonCount).toBe(1);
-    await expect(eventBus.dispatch("unused.event", {})).resolves.toBeUndefined();
-
     const failedService = new FailedJobService({
       create: async (input: {
         jobName: string;

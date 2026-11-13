@@ -1,26 +1,22 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
-import {
-  type AppDependencies,
-  ConfigStore,
-  ServiceContainer,
-} from "@getstrata/bootstrap/contracts";
 import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { Policy, PolicyGate } from "@getstrata/core/auth/policy";
-import { CacheRepository } from "@getstrata/core/cache/repository";
-import { SimpleCache } from "@getstrata/core/cache/simpleCache";
-import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import {
   ForbiddenError,
   NotFoundError,
   PreconditionFailedError,
 } from "@getstrata/core/errors/http";
 import { etagFromResource } from "@getstrata/core/http/etag";
-import { securedBindRouteModel } from "@getstrata/core/http/securedRouteModelBinding";
-import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
-import { createStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
-import { enableDevAuthHeaders, restoreDevAuthHeaders } from "../helpers/devAuthHeaders";
+import {
+  type RouteModelBindingPorts,
+  securedBindRouteModel,
+} from "@getstrata/core/http/securedRouteModelBinding";
+import {
+  enableDevAuthHeaders,
+  guestGuardOptions,
+  restoreDevAuthHeaders,
+} from "../helpers/devAuthHeaders";
 
 interface WidgetRecord {
   id: number;
@@ -40,24 +36,11 @@ class WidgetPolicy extends Policy {
 
 type WidgetParams = { id: string };
 
-function bootstrapPolicyGate(): AppDependencies {
-  const container = new ServiceContainer();
-  const cache = new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20)));
+function bootstrapPolicyGate(): RouteModelBindingPorts {
+  const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
   const gate = new PolicyGate();
   gate.register("widget", new WidgetPolicy());
-
-  container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
-  container.set(CORE_POLICY_GATE_TOKEN, gate);
-
-  const dependencies = { container, cache, storage: new StorageManager(createStorageDriver()) };
-
-  setActiveApplicationContext({
-    container,
-    config: new ConfigStore(),
-    dependencies,
-  });
-
-  return dependencies;
+  return { auth, authorize: gate.authorize.bind(gate), etagEnabled: true };
 }
 
 describe("securedBindRouteModel", () => {
@@ -69,7 +52,7 @@ describe("securedBindRouteModel", () => {
     restoreDevAuthHeaders(previousHeaders);
   });
   test("authorizes against the resolved model before running the handler", async () => {
-    bootstrapPolicyGate();
+    const ports = bootstrapPolicyGate();
 
     const handler = securedBindRouteModel(
       "id",
@@ -80,6 +63,7 @@ describe("securedBindRouteModel", () => {
       }),
       { resource: "widget", action: "update" },
       async (_request, widget) => Response.json(widget),
+      ports,
     );
 
     await expect(
@@ -110,7 +94,7 @@ describe("securedBindRouteModel", () => {
   });
 
   test("propagates resolver failures before authorization runs", async () => {
-    bootstrapPolicyGate();
+    const ports = bootstrapPolicyGate();
 
     const handler = securedBindRouteModel(
       "id",
@@ -119,6 +103,7 @@ describe("securedBindRouteModel", () => {
       },
       { resource: "widget", action: "update" },
       async () => Response.json({ ok: true }),
+      ports,
     );
 
     await expect(
@@ -133,7 +118,7 @@ describe("securedBindRouteModel", () => {
   });
 
   test("returns 304 for view when If-None-Match matches", async () => {
-    bootstrapPolicyGate();
+    const ports = bootstrapPolicyGate();
 
     const model = {
       id: 1,
@@ -147,6 +132,7 @@ describe("securedBindRouteModel", () => {
       async () => model,
       { resource: "widget", action: "view" },
       async (_request, widget) => Response.json(widget),
+      ports,
     );
 
     const response = await handler({
@@ -161,7 +147,7 @@ describe("securedBindRouteModel", () => {
   });
 
   test("rejects update when If-Match does not match", async () => {
-    bootstrapPolicyGate();
+    const ports = bootstrapPolicyGate();
 
     const handler = securedBindRouteModel(
       "id",
@@ -172,6 +158,7 @@ describe("securedBindRouteModel", () => {
       }),
       { resource: "widget", action: "update" },
       async (_request, widget) => Response.json(widget),
+      ports,
     );
 
     await expect(
@@ -187,7 +174,7 @@ describe("securedBindRouteModel", () => {
   });
 
   test("rejects update when If-Match header is missing", async () => {
-    bootstrapPolicyGate();
+    const ports = bootstrapPolicyGate();
 
     const handler = securedBindRouteModel(
       "id",
@@ -198,6 +185,7 @@ describe("securedBindRouteModel", () => {
       }),
       { resource: "widget", action: "update" },
       async (_request, widget) => Response.json(widget),
+      ports,
     );
 
     await expect(

@@ -1,20 +1,11 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { beforeEach, expect, test } from "bun:test";
 import {
-  bindDatabaseConnection,
-  getBoundDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "@getstrata/core/database/boundConnection";
-import type { UnsafeQueryable } from "@getstrata/core/database/connection";
-import {
-  currentSqlDialect,
-  resetSqlDialect,
-  type SqlDialect,
-  useSqlDialect,
-} from "@getstrata/core/database/dialect";
+  createOwnedReadOnlyObservation,
+  type ReadOnlyObservation,
+} from "@getstrata/core/database/ownedReadOnlyObservation";
+import { dialectFor } from "@getstrata/core/database/sqlDialects";
 import { createOutboxMetricsCollector, renderOutboxMetrics } from "@getstrata/core/events/outbox";
-import { createAsyncContextStore } from "@getstrata/core/runtime/asyncContextStore";
-import { createReadOnlyCollector } from "../../src/core/database/readOnlyCollector";
-import { restoreEnvVar } from "../helpers/restoreEnv";
+import { createApplication } from "@getstrata/core/runtime/application";
 
 const states = [
   "pending_due",
@@ -25,40 +16,22 @@ const states = [
   "failed",
 ];
 let rows: unknown[];
-let previous: ReturnType<typeof getBoundDatabaseConnection>;
-let tenancy: string | undefined;
+let observeReadOnly: ReadOnlyObservation;
 beforeEach(() => {
-  previous = getBoundDatabaseConnection();
-  tenancy = process.env.TENANCY_DRIVER;
-  process.env.TENANCY_DRIVER = "none";
-  useSqlDialect("pgsql");
   rows = states.map((state) => ({
     state,
     count: 0,
     lateness_ms: state === "pending_due" || state === "processing_expired" ? 0 : null,
   }));
-  const unsafe = async <T>(query: string): Promise<T[]> =>
-    query.includes("WITH snapshot_clock") ? (rows as T[]) : [];
-  const reserved = {
-    unsafe,
-    release() {},
-    async begin<T>(run: (tx: UnsafeQueryable) => Promise<T>) {
-      return run({ unsafe });
-    },
-  };
-  bindDatabaseConnection({
-    reserve: async () => reserved,
-    unsafe,
-    async begin<T>(run: (tx: UnsafeQueryable) => Promise<T>) {
-      return run({ unsafe });
-    },
-  });
-});
-afterEach(() => {
-  if (previous) bindDatabaseConnection(previous);
-  else resetBoundDatabaseConnection();
-  resetSqlDialect();
-  restoreEnvVar("TENANCY_DRIVER", tenancy);
+  observeReadOnly = async (_timeout, work) =>
+    work(
+      {
+        dialect: dialectFor("pgsql"),
+        execute: async <R>({ text }: import("@getstrata/core/database/driverPorts").SqlStatement) =>
+          (text.includes("WITH snapshot_clock") ? rows : []) as R[],
+      },
+      () => 1000,
+    );
 });
 
 test("malformed database responses fail rather than produce metrics", async () => {
@@ -80,7 +53,7 @@ test("malformed database responses fail rather than produce metrics", async () =
     ),
   ]) {
     rows = invalid;
-    const collector = createOutboxMetricsCollector();
+    const collector = createOutboxMetricsCollector({ observeReadOnly });
     try {
       await expect(collector.collect()).rejects.toThrow("Invalid outbox metrics");
     } finally {
@@ -90,7 +63,7 @@ test("malformed database responses fail rather than produce metrics", async () =
 });
 
 test("renderer validates fixed state vocabulary and numeric observations", async () => {
-  const collector = createOutboxMetricsCollector();
+  const collector = createOutboxMetricsCollector({ observeReadOnly });
   const snapshot = await collector.collect();
   expect(renderOutboxMetrics(snapshot)).toContain("strata_outbox_collector_success 1");
   for (const limit of [0, 1001, 1.5])
@@ -114,7 +87,6 @@ test("renderer validates fixed state vocabulary and numeric observations", async
 });
 
 test("portable observation refuses invalid adapter clocks and row timestamps", async () => {
-  useSqlDialect("mysql");
   for (const broken of ["clock", "timestamp"]) {
     const unsafe = async <T>(query: string, params: readonly unknown[] = []): Promise<T[]> => {
       const result = query.includes("information_schema.TABLES")
@@ -133,13 +105,15 @@ test("portable observation refuses invalid adapter clocks and row timestamps", a
               : [];
       return result as T[];
     };
-    bindDatabaseConnection({
-      unsafe,
-      async observeReadOnly<T>(work: (connection: UnsafeQueryable) => Promise<T>) {
-        return work({ unsafe });
-      },
-    });
-    const collector = createOutboxMetricsCollector();
+    observeReadOnly = async (_timeout, work) =>
+      work(
+        {
+          dialect: dialectFor("mysql"),
+          execute: (statement) => unsafe(statement.text, statement.params),
+        },
+        () => 1000,
+      );
+    const collector = createOutboxMetricsCollector({ observeReadOnly });
     try {
       await expect(collector.collect()).rejects.toThrow(
         broken === "clock" ? "Invalid outbox clock" : "Invalid outbox timestamp",
@@ -150,36 +124,32 @@ test("portable observation refuses invalid adapter clocks and row timestamps", a
   }
 });
 
-test("an unsupported runtime dialect descriptor is rejected before observation effects", async () => {
-  const dialect = currentSqlDialect();
+test("an unsupported immutable observation driver is rejected before application effects", () => {
+  const dialect = dialectFor("pgsql");
   expect(Object.isFrozen(dialect)).toBe(true);
   expect(Reflect.set(dialect, "driver", "unsupported")).toBe(false);
   let effects = 0;
-  bindDatabaseConnection({
-    async unsafe<T>(): Promise<T[]> {
-      effects++;
-      return [];
-    },
-    async reserve() {
-      effects++;
-      throw new Error("Unsupported dialect must not reserve a pin");
-    },
+  const app = createApplication({
+    providers: [
+      {
+        name: "fixture",
+        setup() {
+          effects++;
+        },
+      },
+    ],
   });
-  // The legacy collector still consumes this established context seam. Inject an
-  // invalid fixture record there instead of mutating a canonical frozen dialect.
-  const context = createAsyncContextStore<SqlDialect>("@getstrata/sqlDialect");
-  const unsupported = Object.freeze({ ...dialect, driver: "unsupported" }) as unknown as SqlDialect;
-  const collector = createReadOnlyCollector("Qualification", 100, async () => {
-    effects++;
-    return 0;
-  });
-  try {
-    await expect(context.run(unsupported, () => collector.collect())).rejects.toThrow(
-      "require Postgres or an interruptible",
+  expect(() =>
+    createOwnedReadOnlyObservation(app, "main", { driver: "unsupported" } as never),
+  ).toThrow("Unsupported SQL driver");
+  expect(effects).toBe(0);
+  expect(dialectFor("pgsql")).toBe(dialect);
+});
+
+test("metrics construction requires its explicit observation runner without an ambient fallback", () => {
+  for (const observeReadOnly of [undefined, null, {}, "default"]) {
+    expect(() => createOutboxMetricsCollector({ observeReadOnly } as never)).toThrow(
+      "Outbox metrics require an explicit read-only observation runner",
     );
-    expect(effects).toBe(0);
-    expect(currentSqlDialect()).toBe(dialect);
-  } finally {
-    await collector.close();
   }
 });

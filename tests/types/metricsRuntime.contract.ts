@@ -6,11 +6,12 @@ import {
   type MetricsRuntime,
   type MetricsRuntimeOptions,
 } from "@getstrata/bootstrap/metricsRoutes";
+import type { FailedJobObservation } from "@getstrata/core/queue/failedJobMetrics";
 
-export async function metricsRuntimeContract() {
+export async function metricsRuntimeContract(observeReadOnly: FailedJobObservation) {
   const options: MetricsRuntimeOptions = {
-    outbox: { sampleLimit: 500 },
-    failedJobs: { timeoutMs: 1000 },
+    outbox: { sampleLimit: 500, observeReadOnly },
+    failedJobs: { timeoutMs: 1000, observeReadOnly },
     queue: { redisUrl: "redis://localhost", transport: "streams" },
   };
   const runtime: MetricsRuntime = createMetricsRuntime(options);

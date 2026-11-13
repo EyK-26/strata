@@ -30,7 +30,10 @@
       "@getstrata/cli/scaffold": ["./packages/strata-cli/src/scaffold/index.ts"],
       "@getstrata/cli/openapi": ["./packages/strata-cli/src/openapi.ts"],
       "@getstrata/cli/initialAdmin": ["./packages/strata-cli/src/initialAdmin.ts"],
-      "@getstrata/cli/schedule": ["./packages/strata-cli/src/schedule.ts"]
+      "@getstrata/cli/schedule": ["./packages/strata-cli/src/schedule.ts"],
+      "#strata-orm-internal": ["./src/core/database/ormInternal.ts"],
+      "#strata-orm-runtime": ["./src/core/database/ormRuntime.ts"],
+      "#strata-http-route": ["./src/bootstrap/ownedHttpRoute.ts"]
     }
   },
   "include": ["src", "tests", "scripts"],

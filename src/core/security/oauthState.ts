@@ -6,6 +6,11 @@ const OAUTH_STATE_COOKIE = "oauth_state";
 const OIDC_PKCE_COOKIE = "oidc_pkce";
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
+interface OAuthStateOptions {
+  readonly secret: string;
+  readonly production: boolean;
+}
+
 interface OidcPkceSeal {
   state: string;
   nonce: string;
@@ -16,14 +21,16 @@ function resolveOAuthStateSecret(): string {
   return requireConfiguredSecret(["OAUTH_STATE_SECRET", "SESSION_SECRET"], "oauth-state-secret");
 }
 
-function signOAuthState(state: string, issuedAt: number): string {
+function signOAuthState(state: string, issuedAt: number, options?: OAuthStateOptions): string {
   const payload = `${state}.${issuedAt}`;
-  const signature = createHmac("sha256", resolveOAuthStateSecret()).update(payload).digest("hex");
+  const signature = createHmac("sha256", options?.secret ?? resolveOAuthStateSecret())
+    .update(payload)
+    .digest("hex");
 
   return `${payload}.${signature}`;
 }
 
-function verifySignedOAuthStateValue(value: string): boolean {
+function verifySignedOAuthStateValue(value: string, options?: OAuthStateOptions): boolean {
   const parts = value.split(".");
 
   if (parts.length !== 3) {
@@ -46,7 +53,7 @@ function verifySignedOAuthStateValue(value: string): boolean {
     return false;
   }
 
-  const expectedSignature = signOAuthState(nonce, issuedAt).split(".").at(-1) ?? "";
+  const expectedSignature = signOAuthState(nonce, issuedAt, options).split(".").at(-1) ?? "";
   const expectedBuffer = Buffer.from(expectedSignature);
   const actualBuffer = Buffer.from(signature);
 
@@ -57,39 +64,43 @@ function verifySignedOAuthStateValue(value: string): boolean {
   return timingSafeEqual(expectedBuffer, actualBuffer);
 }
 
-function createOAuthState(): { state: string } {
+function createOAuthState(options?: OAuthStateOptions): { state: string } {
   const nonce = randomBytes(24).toString("hex");
   const issuedAt = Date.now();
 
-  return { state: signOAuthState(nonce, issuedAt) };
+  return { state: signOAuthState(nonce, issuedAt, options) };
 }
 
-function createOAuthStateCookie(): { state: string; cookie: string } {
-  const { state } = createOAuthState();
+function createOAuthStateCookie(options?: OAuthStateOptions): { state: string; cookie: string } {
+  const { state } = createOAuthState(options);
 
   return {
     state,
-    cookie: `${OAUTH_STATE_COOKIE}=${encodeURIComponent(state)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${isProductionEnv() ? "; Secure" : ""}`,
+    cookie: `${OAUTH_STATE_COOKIE}=${encodeURIComponent(state)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${(options?.production ?? isProductionEnv()) ? "; Secure" : ""}`,
   };
 }
 
-function verifyOAuthState(_request: Request, returnedState: string | null): boolean {
+function verifyOAuthState(
+  _request: Request,
+  returnedState: string | null,
+  options?: OAuthStateOptions,
+): boolean {
   if (!returnedState || returnedState.trim().length === 0) {
     return false;
   }
 
-  return verifySignedOAuthStateValue(returnedState.trim());
+  return verifySignedOAuthStateValue(returnedState.trim(), options);
 }
 
-function clearOAuthStateCookie(): string {
-  return `${OAUTH_STATE_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${isProductionEnv() ? "; Secure" : ""}`;
+function clearOAuthStateCookie(options?: OAuthStateOptions): string {
+  return `${OAUTH_STATE_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${(options?.production ?? isProductionEnv()) ? "; Secure" : ""}`;
 }
 
-function oauthCookieSuffix(): string {
-  return `Path=/; HttpOnly; SameSite=Lax${isProductionEnv() ? "; Secure" : ""}`;
+function oauthCookieSuffix(options?: OAuthStateOptions): string {
+  return `Path=/; HttpOnly; SameSite=Lax${(options?.production ?? isProductionEnv()) ? "; Secure" : ""}`;
 }
 
-function sealOidcPkceCookie(payload: OidcPkceSeal): string {
+function sealOidcPkceCookie(payload: OidcPkceSeal, options?: OAuthStateOptions): string {
   const body = Buffer.from(
     JSON.stringify({
       state: payload.state,
@@ -98,20 +109,21 @@ function sealOidcPkceCookie(payload: OidcPkceSeal): string {
       iat: Date.now(),
     }),
   ).toString("base64url");
-  const signature = createHmac("sha256", resolveOAuthStateSecret())
+  const signature = createHmac("sha256", options?.secret ?? resolveOAuthStateSecret())
     .update(body)
     .digest("base64url");
   const value = encodeURIComponent(`${body}.${signature}`);
-  return `${OIDC_PKCE_COOKIE}=${value}; ${oauthCookieSuffix()}; Max-Age=600`;
+  return `${OIDC_PKCE_COOKIE}=${value}; ${oauthCookieSuffix(options)}; Max-Age=600`;
 }
 
-function clearOidcPkceCookie(): string {
-  return `${OIDC_PKCE_COOKIE}=; ${oauthCookieSuffix()}; Max-Age=0`;
+function clearOidcPkceCookie(options?: OAuthStateOptions): string {
+  return `${OIDC_PKCE_COOKIE}=; ${oauthCookieSuffix(options)}; Max-Age=0`;
 }
 
 function readOidcPkceCookie(
   request: Request,
   returnedState: string | null,
+  options?: OAuthStateOptions,
 ): { nonce: string; codeVerifier: string } | null {
   const state = returnedState?.trim() ?? "";
   if (!state) {
@@ -124,7 +136,7 @@ function readOidcPkceCookie(
     if (name !== OIDC_PKCE_COOKIE) {
       continue;
     }
-    return unsealOidcPkceValue(rest.join("="), state);
+    return unsealOidcPkceValue(rest.join("="), state, options);
   }
 
   return null;
@@ -133,6 +145,7 @@ function readOidcPkceCookie(
 function unsealOidcPkceValue(
   rawValue: string,
   returnedState: string,
+  options?: OAuthStateOptions,
 ): { nonce: string; codeVerifier: string } | null {
   let decoded = rawValue;
   try {
@@ -148,7 +161,9 @@ function unsealOidcPkceValue(
 
   const body = decoded.slice(0, splitAt);
   const signature = decoded.slice(splitAt + 1);
-  const expected = createHmac("sha256", resolveOAuthStateSecret()).update(body).digest("base64url");
+  const expected = createHmac("sha256", options?.secret ?? resolveOAuthStateSecret())
+    .update(body)
+    .digest("base64url");
   const expectedBuffer = Buffer.from(expected);
   const actualBuffer = Buffer.from(signature);
   if (
@@ -189,7 +204,7 @@ function unsealOidcPkceValue(
   return { nonce: parsed.nonce, codeVerifier: parsed.codeVerifier };
 }
 
-export type { OidcPkceSeal };
+export type { OAuthStateOptions, OidcPkceSeal };
 export {
   clearOAuthStateCookie,
   clearOidcPkceCookie,

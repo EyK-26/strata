@@ -1,3 +1,66 @@
+function requiredServer<T>(server: T | undefined): T {
+  if (!server) throw new Error("Expected application-owned HTTP server");
+  return server;
+}
+async function prepareObserverFixture(app: string): Promise<void> {
+  const path = join(app, "src/models/User.ts");
+  let source = await readFile(path, "utf8");
+  source =
+    'import {createServiceToken} from "@getstrata/core/contracts/token";\nimport {valueService} from "@getstrata/core/contracts/services";\nimport type {ModelObserver} from "@getstrata/core/database/definitions";\n' +
+    source;
+  source = source
+    .replace(
+      "const User = defineModel",
+      'const FixtureObserver=createServiceToken<ModelObserver<UserEntity>>("fixture.user.observer");\nexport function fixtureObserverService(observer:ModelObserver<UserEntity>){return valueService(FixtureObserver,observer); }\nconst User = defineModel',
+    )
+    .replace(
+      "  attributes: { fillable:",
+      "  observers:[FixtureObserver],\n  attributes: { fillable:",
+    );
+  if (!source.includes("observers:[FixtureObserver]"))
+    throw new Error("Generated observer fixture did not match the immutable User declaration.");
+  await writeFile(path, source);
+}
+
+import type {
+  ExecutionPersistence,
+  PersistenceInvocation,
+} from "@getstrata/core/contracts/persistence";
+import type { Model } from "@getstrata/core/database/model";
+import type { DatabaseSession } from "@getstrata/core/database/session";
+
+type FixtureRow = {
+  id: number;
+  name: string;
+  email: string;
+  password: string;
+  tenant_id: number;
+  email_verified_at: string | null;
+  consumed_at: string | null;
+  auth_version: number;
+  is_active: boolean | number;
+  [key: string]: unknown;
+};
+type FixtureRun = <T>(work: (database: DatabaseSession) => Promise<T>) => Promise<T>;
+function fixtureRun(boot: { invoke: PersistenceInvocation }): FixtureRun {
+  return (work) =>
+    boot.invoke(
+      { kind: "command", actor: { kind: "system", policy: "generated-test-fixture" } },
+      ({ database }) => work(database),
+    );
+}
+function executeFixture(run: FixtureRun, text: string, params: readonly unknown[] = []) {
+  return run((database) => database.execute({ text, params }));
+}
+async function fixturePort(): Promise<number> {
+  const probe = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response(null) });
+  const port = probe.port;
+  await probe.stop(true);
+  if (!port) throw new Error("Missing owned fixture port");
+  process.env.APP_URL = `http://127.0.0.1:${port}`;
+  return port;
+}
+
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -5,9 +68,6 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
-import { resetBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
-import { resetDefaultDatabasePoolForTests } from "@getstrata/core/database/defaultConnection";
-import { resetSqlDialect } from "@getstrata/core/database/dialect";
 import {
   generateProject,
   resolveOverlayRoot,
@@ -19,6 +79,7 @@ import {
 } from "../../../packages/strata-starter/src/parseArgs.ts";
 import { defaultLayers, exampleAppLayers } from "../../../packages/strata-starter/src/presets.ts";
 import { type Prompter, promptLayers } from "../../../packages/strata-starter/src/prompt.ts";
+import { candidatePackage } from "../../../scripts/candidate-packages.ts";
 import { jsonCsrfHeaders, mergeCookies } from "../../helpers/jsonCsrf";
 import { appTest, installGeneratedAppDependencies, repoRoot } from "./helpers";
 
@@ -56,9 +117,6 @@ function restoreRuntime(): void {
       process.env[key] = value;
     }
   }
-  resetSqlDialect();
-  resetBoundDatabaseConnection();
-  resetDefaultDatabasePoolForTests();
   resetDiscoverModulesForTests();
 }
 
@@ -77,6 +135,32 @@ async function tempDir(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "strata-starter-"));
   tempDirectories.push(directory);
   return directory;
+}
+
+async function installPackedGeneratedApp(app: string): Promise<void> {
+  const archiveDirectory = await tempDir();
+  const packagePath = join(app, "package.json");
+  const pkg = JSON.parse(await readFile(packagePath, "utf8"));
+  for (const part of ["core", "bootstrap", "cli"] as const) {
+    pkg.dependencies[`@getstrata/${part}`] =
+      `file:${await candidatePackage(part, archiveDirectory)}`;
+  }
+  await writeFile(packagePath, `${JSON.stringify(pkg, null, 2)}\n`);
+  installGeneratedAppDependencies(app);
+  const installed = Object.fromEntries(
+    ["core", "bootstrap", "cli"].map((part) => {
+      const path = createRequire(packagePath).resolve(`@getstrata/${part}`);
+      expect(path.startsWith(join(app, "node_modules/"))).toBe(true);
+      return [part, path];
+    }),
+  );
+  const evidence = process.env.STRATA_GENERATED_APP_EVIDENCE_DIR;
+  if (evidence) {
+    const directory = await mkdtemp(join(evidence, "installed-"));
+    await writeFile(join(directory, "package.json"), await readFile(packagePath));
+    await writeFile(join(directory, "bun.lock"), await readFile(join(app, "bun.lock")));
+    await writeFile(join(directory, "resolved.json"), JSON.stringify({ app, installed }, null, 2));
+  }
 }
 
 function generateFromArgs(directory: string, argv: string[]): string {
@@ -256,63 +340,71 @@ describe("create-strata generate", () => {
     expect(readme).toContain("openapi:check");
 
     const modelsRegister = await readFile(join(app, "src/models/register.ts"), "utf8");
-    expect(modelsRegister).toContain("@getstrata/bootstrap/discoverModels");
-    expect(modelsRegister).toContain("await discoverModels(import.meta.dir)");
+    expect(modelsRegister).toContain("export const modelDefinitions = Object.freeze([Note])");
+    expect(modelsRegister).toContain(
+      "export const repositoryDefinitions = Object.freeze([NoteRepository])",
+    );
     expect(modelsRegister).not.toContain("\nimport { registerModelClass }");
     expect(modelsRegister).not.toContain("void registerModelClass;");
     const noteModel = await readFile(join(app, "src/models/Note.ts"), "utf8");
-    expect(noteModel).toContain("class Note extends defineModel(notesTable)");
+    expect(noteModel).toContain('class NoteEntity extends Model<NoteRecord, "id">');
     expect(noteModel).not.toContain("registerModelRepository");
-    expect(noteModel).not.toContain("BaseRepository");
+    expect(noteModel).toContain("const NoteRepository = defineRepository");
     expect(noteModel).not.toContain("class NoteRepository");
     const bootstrap = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
-    expect(bootstrap).toContain("createProviderAppContext");
+    expect(bootstrap).toContain("createApplicationContext");
     expect(bootstrap).not.toContain("AppConfigStore");
     expect(bootstrap).not.toContain("as unknown as ConfigStore");
     expect(bootstrap).not.toContain("dependencies as AppDependencies");
     expect(bootstrap).not.toContain("appContext as never");
     const preload = await readFile(join(app, "src/bootstrap/preload.ts"), "utf8");
-    expect(preload).toContain("../models/register.ts");
+    expect(bootstrap).toContain(
+      'import { repositoryDefinitions, modelDefinitions } from "../models/register.ts";',
+    );
+    expect(preload).toContain("configureModulesDirectory");
     expect(existsSync(join(app, "src/modules/billing/index.ts"))).toBe(false);
     expect(existsSync(join(app, "src/jobs/dispatchOutboundWebhookJob.ts"))).toBe(false);
 
     const authProvider = await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8");
-    expect(authProvider).toContain("envFlagEnabled(process.env.AUTH_DEV_HEADERS)");
+    expect(bootstrap).toContain('allowDevHeaders:!production&&env.AUTH_DEV_HEADERS==="true"');
+    expect(authProvider).toContain("new GuestGuard(snapshot)");
     expect(authProvider).not.toContain('AUTH_DEV_HEADERS === "false"');
     const providers = await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8");
     expect(providers).toContain("policyProvider");
-    expect(providers).toContain("registerInvalidateCacheOnModelWriteListeners");
-    expect(providers).toContain("discoverListeners");
-    expect(providers).toContain("onCleanup(registerInvalidateCacheOnModelWriteListeners())");
+    expect(bootstrap).toContain("await discoverListeners(");
+    expect(bootstrap).toContain(
+      "createModelCacheInvalidationEffects(repositoryDefinitions,modules,",
+    );
+    expect(bootstrap).toContain(
+      "repositoryEffects:[...catalog.flatMap(declaration=>declaration.repositoryEffects)",
+    );
     expect(existsSync(join(app, "src/bootstrap/providers/policy.ts"))).toBe(true);
 
     expect(providers).toContain('import { tracingProvider } from "@getstrata/bootstrap"');
     expect(providers).toContain("  tracingProvider,");
 
-    const queueProvider = await readFile(join(app, "src/bootstrap/providers/queue.ts"), "utf8");
+    const queueProvider = providers;
     expect(queueProvider).toContain("registerDefaultJobs");
     expect(queueProvider).toContain("discoverJobs");
 
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(createApp).not.toContain("createMetricsRoutes");
-    expect(createApp).toContain("isProductionEnv()");
+    expect(createApp).toContain("isProductionEnv(env)");
     expect(createApp).toContain("discoverModules");
-    expect(createApp).toContain("moduleProviders");
+    expect(createApp).toContain("...modules.flatMap(module=>module.providers??[])");
     expect(createApp.indexOf("await ensureModulesLoaded()")).toBeLessThan(
-      createApp.indexOf("context = await createAppContext();"),
+      createApp.indexOf("const handle=createApplicationContext("),
     );
-    expect(createApp).toContain(
-      "return createProviderAppContext([...starterProviders, ...moduleProviders])",
-    );
+    expect(createApp).toContain("providersFromScope:scope=>");
     expect(createApp).not.toContain("runProviderPhase");
-    expect(queueProvider).toContain("register({ container, onCleanup })");
+    expect(queueProvider).toContain("async register({container})");
     expect(queueProvider.indexOf("discoverJobs()")).toBeGreaterThan(
-      queueProvider.indexOf("register({ container, onCleanup })"),
+      queueProvider.indexOf("async register({container})"),
     );
     expect(readme).not.toContain("GET /metrics");
 
     const database = await readFile(join(app, "src/bootstrap/database.ts"), "utf8");
-    expect(database).toContain("createSqliteConnection");
+    expect(database).toContain('driver: "sqlite"');
     expect(database).not.toContain('from "@getstrata/core"');
 
     const pkg = JSON.parse(await readFile(join(app, "package.json"), "utf8")) as {
@@ -336,13 +428,13 @@ describe("create-strata generate", () => {
     expect(existsSync(join(app, "src/models/User.ts"))).toBe(false);
     expect(existsSync(join(app, "src/models/ApiToken.ts"))).toBe(false);
     const note = await readFile(join(app, "src/models/Note.ts"), "utf8");
-    expect(note).toContain("defineModel(notesTable)");
-    expect(note).toContain('static $fillable = ["body"]');
+    expect(note).toContain("const Note = defineModel<NoteRecord");
+    expect(note).toContain('fillable: ["body"]');
     expect(note).not.toContain('from "@getstrata/core"');
 
     const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
-    expect(migrate).toContain('Note.query().value("id")');
-    expect(migrate).toContain('Note.create({ body: "Welcome to Strata!" })');
+    expect(migrate).toContain('notes.query().value("id")');
+    expect(migrate).toContain('notes.create({body:"Welcome to Strata!"})');
     expect(migrate).not.toContain("INSERT INTO notes");
     expect(migrate).toContain("migrateDatabase");
     expect(migrate).toContain("loadStarterMigrations");
@@ -355,9 +447,9 @@ describe("create-strata generate", () => {
     const site = await readFile(join(app, "src/modules/site/index.ts"), "utf8");
     expect(site).not.toContain("/health");
     const healthBootstrap = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
-    expect(healthBootstrap).toContain('Note.query().limit(1).select("id").get()');
+    expect(healthBootstrap).toContain('database.model(Note).query().limit(1).select("id").get()');
     expect(healthBootstrap).not.toContain("runWithMigrationBypass");
-    expect(site).not.toContain('Note.query().value("id")');
+    expect(site).not.toContain('notes.query().value("id")');
     expect(site).not.toContain("runWithMigrationBypass");
     expect(site).not.toContain("SELECT 1 FROM notes LIMIT 1");
 
@@ -472,7 +564,8 @@ describe("create-strata generate", () => {
 
     const auth = await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8");
     expect(auth).toContain("createCookieSessionAuthManager");
-    expect(auth).toContain("JwtGuard");
+    expect(auth).toContain("createMetadataAuthManager");
+    expect(auth).toContain('"jwt"');
   });
 
   test("postgres --no-docker skips compose and documents local installs", async () => {
@@ -616,25 +709,27 @@ describe("create-strata generate", () => {
     expect(schema).toContain("auth_saml_assertions");
     const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
     const seedFn = migrate.slice(migrate.indexOf("export async function seed"));
-    expect(seedFn.indexOf("getSql()")).toBeGreaterThan(-1);
-    expect(seedFn.indexOf("getSql()")).toBeLessThan(seedFn.indexOf("runWithMigrationBypass(async"));
+    expect(seedFn.indexOf("const connection = databaseOptions()")).toBeGreaterThan(-1);
+    expect(seedFn.indexOf("const connection = databaseOptions()")).toBeLessThan(
+      seedFn.indexOf('policy.run(database, {kind:"bypass"}, writeSeed)'),
+    );
     const authModule = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
     expect(authModule).toContain("completePasswordLogin");
     expect(authModule).toMatch(/"\/api\/v1\/auth\/login":[\s\S]*?wrapLogin\(/);
     expect(authModule).toMatch(/"\/api\/auth\/token":[\s\S]*?wrapLogin\(/);
-    expect(authModule).toContain("runWithMigrationBypassForIdentifier");
+    expect(authModule).toContain("withAuthIdentifier");
     expect(authModule).toContain("runAuthWrite");
-    expect(authModule).toContain("createOAuthState()");
+    expect(authModule).toContain("createOAuthState(authServices.config.oauth)");
     expect(authModule).not.toContain("createOAuthStateCookie");
     expect(authModule).toContain("JSON.stringify([])");
     expect(authModule).toContain("abilities: []");
-    expect(authModule).toContain("User.create({");
-    expect(authModule).toContain("ApiToken.create({");
+    expect(authModule).toContain("ports.database.model(User).create({");
+    expect(authModule).toContain("database.model(ApiToken).create({");
     expect(authModule).not.toContain("FROM users");
     expect(authModule).not.toContain("INTO users");
     expect(authModule).not.toContain("INTO api_tokens");
     expect(await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8")).toContain(
-      "new JwtGuard(container)",
+      "createMetadataAuthManager(directory, { ...snapshot, mechanisms:",
     );
     expect(existsSync(join(app, "src/bootstrap/ensureDatabase.ts"))).toBe(true);
     const ensure = await readFile(join(app, "src/bootstrap/ensureDatabase.ts"), "utf8");
@@ -643,7 +738,7 @@ describe("create-strata generate", () => {
     expect(ensure).not.toContain("acme_test");
     expect(ensure).not.toMatch(/url\.pathname\s*=/);
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
-    expect(createApp).toContain("assertRlsLiveDatabaseRole");
+    expect(createApp).toContain("createDatabaseReadinessBindings");
     const env = await readFile(join(app, ".env.example"), "utf8");
     expect(env).toContain("/acme");
     expect(env).toMatch(
@@ -694,7 +789,7 @@ describe("create-strata generate", () => {
     const site = await readFile(join(app, "src/modules/site/index.ts"), "utf8");
     expect(site).not.toContain("/health");
     const healthBootstrap = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
-    expect(healthBootstrap).toContain('Note.query().limit(1).select("id").get()');
+    expect(healthBootstrap).toContain('database.model(Note).query().limit(1).select("id").get()');
     expect(healthBootstrap).not.toContain("runWithMigrationBypass");
     expect(site).not.toContain("runWithMigrationBypass");
   });
@@ -719,17 +814,17 @@ describe("create-strata generate", () => {
     expect(existsSync(join(app, "src/bootstrap/pendingMfa.ts"))).toBe(true);
     const scim = await readFile(join(app, "src/modules/scim/index.ts"), "utf8");
     expect(scim).toContain("/scim/v2/Users");
-    expect(scim).toContain("createScimAuthMiddleware");
+    expect(scim).toContain("kernel.wrapScim");
     const auth = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
     expect(auth).toContain("/register");
     expect(auth).toContain("/forgot-password");
     expect(auth).toContain("/email/verify");
     expect(auth).toContain("if (record.mfa_enabled)");
-    expect(auth).toContain("pendingMfaSetCookie(record.id, record.auth_version)");
-    expect(auth).toContain("await revokeUserSessions(Number(user.id))");
+    expect(auth).toContain("services.pendingMfa.setCookie(record.id, record.auth_version)");
+    expect(auth).toContain("await revokeUserSessions(ports, Number(user.id))");
     expect(auth).toContain("kernel.wrapWebPasswordConfirm(");
     expect(auth).toMatch(/"\/reset-password":[\s\S]*?wrapWeb\(kernel\.wrapSigned\(/);
-    expect(auth).toContain("assertValidSignature(request)");
+    expect(auth).toContain("assertValidSignature(request, authServices.config.signatureSecret)");
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(createApp).not.toContain("createMetricsRoutes");
   });
@@ -747,15 +842,21 @@ describe("create-strata generate", () => {
       "--yes",
     ]);
     const scim = await readFile(join(app, "src/modules/scim/index.ts"), "utf8");
-    expect(scim).toContain("User.where({ email, tenant_id: tenantId() }).first()");
-    expect(scim).toContain("User.where({ tenant_id: tenantId() }).count()");
     expect(scim).toContain(
-      "User.where({ tenant_id: tenantId() }).offset(startIndex - 1).limit(count).get()",
+      "ports.database.model(User).where({ email, tenant_id: tenantId(ports) }).first()",
     );
-    expect(scim).toContain("User.where({ id, tenant_id: tenantId() }).first()");
+    expect(scim).toContain(
+      "ports.database.model(User).where({ tenant_id: tenantId(ports) }).count()",
+    );
+    expect(scim).toContain(
+      "ports.database.model(User).where({ tenant_id: tenantId(ports) }).offset(startIndex - 1).limit(count).get()",
+    );
+    expect(scim).toContain(
+      "ports.database.model(User).where({ id, tenant_id: tenantId(ports) }).first()",
+    );
     expect(scim).toContain("parsePositiveIntParam");
-    expect(scim).toContain("User.create({");
-    expect(scim).toContain("tenant_id: tenantId()");
+    expect(scim).toContain("ports.database.model(User).create({");
+    expect(scim).toContain("tenant_id: tenantId(ports)");
     expect(scim).toContain(
       "await user.update({ name, email, ...(active === undefined ? {} : { is_active: active }) })",
     );
@@ -764,12 +865,14 @@ describe("create-strata generate", () => {
     expect(scim).not.toContain("INTO users");
     expect(scim).not.toContain("runWithMigrationBypass(");
     expect(scim).not.toContain("as User");
-    expect(scim).not.toContain("User.where({ tenant_id: tenantId() }).get()");
+    expect(scim).not.toContain(
+      "ports.database.model(User).where({ tenant_id: tenantId(ports) }).get()",
+    );
 
     const auth = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
-    expect(auth).toContain("User.create({");
-    expect(auth).toContain("ApiToken.create({");
-    expect(auth).toContain("AuthOneTimeToken.create({");
+    expect(auth).toContain("ports.database.model(User).create({");
+    expect(auth).toContain("database.model(ApiToken).create({");
+    expect(auth).toContain("ports.database.model(AuthOneTimeToken).create({");
     expect(auth).toContain("JSON.stringify([])");
     expect(auth).toContain("parseJsonBody(request, parseRegisterCredentials)");
     expect(auth).toContain("validateObject");
@@ -787,7 +890,7 @@ describe("create-strata generate", () => {
 
     const providers = await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8");
     expect(providers).toContain("policyProvider");
-    expect(providers).toContain("authProvider");
+    expect(providers).toContain("createStarterAuthProvider(auth)");
     const policy = await readFile(join(app, "src/bootstrap/providers/policy.ts"), "utf8");
     expect(policy).toContain("CORE_POLICY_GATE_TOKEN");
     expect(policy).toContain("new PolicyGate()");
@@ -795,12 +898,12 @@ describe("create-strata generate", () => {
     expect(policy).toContain("@getstrata/bootstrap/config");
 
     const directory = await readFile(join(app, "src/bootstrap/authDirectory.ts"), "utf8");
-    expect(directory).toContain("User.where({ email }).first()");
-    expect(directory).toContain("User.find(id)");
-    expect(directory).toContain("ApiToken.where({ token_hash: hashed }).first()");
-    expect(directory).toContain("User.find(user_id)");
-    expect(directory).toContain("runWithMigrationBypassForIdentifier(hashed");
-    expect(directory).toContain("runWithMigrationBypassForIdentifier(user_id");
+    expect(directory).toContain("database.model(User).where({ email }).first()");
+    expect(directory).toContain("database.model(User).find(id)");
+    expect(directory).toContain("database.model(ApiToken).where({ token_hash: hashed }).first()");
+    expect(directory).toContain("database.model(User).find(user_id)");
+    expect(directory).toContain("withAuthIdentifier(ports, hashed");
+    expect(directory).toContain("withAuthIdentifier(ports, user_id");
     expect(directory).not.toContain("JOIN");
     expect(directory).not.toContain("FROM users");
     expect(directory).not.toContain("FROM api_tokens");
@@ -816,16 +919,14 @@ describe("create-strata generate", () => {
     expect(directory).toContain('asNullableString(user.get("mfa_secret"))');
 
     const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
-    expect(migrate).toContain("User.create({");
-    expect(migrate).toContain('User.query().value("id")');
+    expect(migrate).toContain("await users.create({");
+    expect(migrate).toContain('users.query().value("id")');
     expect(migrate).not.toContain("INSERT INTO users");
     expect(migrate).not.toContain("INSERT INTO notes");
 
     const userModel = await readFile(join(app, "src/models/User.ts"), "utf8");
-    expect(userModel).toContain(
-      'static $hidden = ["password", "mfa_secret", "mfa_recovery_codes"]',
-    );
-    expect(userModel).toContain("static $timestamps = false");
+    expect(userModel).toContain('hidden: ["password", "mfa_secret", "mfa_recovery_codes"]');
+    expect(userModel).toContain("timestamps: false");
     expect(userModel).toContain("tenant_id");
     expect(existsSync(join(app, "src/models/ApiToken.ts"))).toBe(true);
     expect(existsSync(join(app, "src/models/AuthOneTimeToken.ts"))).toBe(true);
@@ -836,11 +937,11 @@ describe("create-strata generate", () => {
     const app = generateFromArgs(root, ["metrics-app", "--metrics", "--yes"]);
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(createApp).toContain("createMetricsRoutes");
-    expect(createApp).toContain("runtimeMetrics?: MetricsRuntimeOptions");
-    expect(createApp).toContain("createMetricsRuntime(options.runtimeMetrics)");
-    expect(createApp).toContain('onCleanup(() => metricsRuntime.close(), "drain")');
-    expect(createApp).toContain("...metricsProviders");
-    expect(createApp).toContain("() => metricsRuntime?.close(), closeDatabase");
+    expect(createApp).toContain("runtimeMetrics?:Omit<MetricsRuntimeOptions");
+    expect(createApp).toContain("createMetricsRuntime({...runtime");
+    expect(createApp).toContain('onCleanup(()=>metrics!.close(),"drain")');
+    expect(createApp).toContain("createOwnedReadOnlyObservation(handle.application");
+    expect(createApp).toContain('await handle.application.stop({reason:"STARTUP_FAILED"})');
     const env = await readFile(join(app, ".env.example"), "utf8");
     expect(env).toContain("METRICS_TOKEN=dev-metrics-token-change-me");
     const readme = await readFile(join(app, "README.md"), "utf8");
@@ -1224,9 +1325,12 @@ export default probeModule;
     await writeFile(
       providerIndex,
       providerSource.replace(
-        "  async boot({ onCleanup }) {",
-        `  async boot({ onCleanup, container }) {
-    if (container.resolve("probe.module.register.token") !== "module-provider-register") throw new Error("starter boot ran before module registration");`,
+        "    createStarterAuthProvider(auth),",
+        `    {name:"fixture.starter-boot-order",boot({container}) {
+      if(container.resolve("probe.module.register.token")!=="module-provider-register") throw new Error("starter boot ran before module registration");
+      container.set("fixture.starter-boot-observed",true);
+    }},
+    createStarterAuthProvider(auth),`,
       ),
     );
 
@@ -1234,6 +1338,7 @@ export default probeModule;
 
     process.chdir(app);
     process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
+    process.env.APP_DATABASE_URL = "sqlite:./storage/app.sqlite";
     process.env.APP_ENV = "local";
     process.env.FRONTEND_MODE = "api";
     process.env.AUTH_DEV_HEADERS = "true";
@@ -1248,13 +1353,13 @@ export default probeModule;
       const { PROBE_BOOT_TOKEN, PROBE_REGISTER_TOKEN } = await import(
         `${join(probeDir, "index.ts")}`
       );
-      const { closeDatabase } = await import(`${join(app, "src/bootstrap/database.ts")}`);
 
       // Compare identities within the installed consumer, not against the source checkout.
       const { ConfigStore } = await import(
         createRequire(join(app, "package.json")).resolve("@getstrata/bootstrap/contracts")
       );
       const { context } = await bootstrapApp({ migrate: false });
+      expect(context.container.resolve("fixture.starter-boot-observed")).toBe(true);
       expect(context.container.resolve(PROBE_REGISTER_TOKEN)).toBe("module-provider-register");
       expect(context.container.resolve(PROBE_BOOT_TOKEN)).toBe("module-provider-boot");
       expect(context.config).toBeInstanceOf(ConfigStore);
@@ -1265,7 +1370,6 @@ export default probeModule;
       );
       await context.dispose();
       expect(context.container.resolve("probe.closed")).toBe(true);
-      await closeDatabase();
     } finally {
       resetDiscoverModulesForTests();
       process.chdir(repoRoot);
@@ -1293,14 +1397,19 @@ export default probeModule;
     process.env.QUEUE_DRIVER = "sync";
     process.env.METRICS_TOKEN = "generated-metrics-fixture";
     resetDiscoverModulesForTests();
-    const { bootstrapApp, createAppServer } = await import(join(app, "src/bootstrap/createApp.ts"));
-    const { closeDatabase, getSql } = await import(join(app, "src/bootstrap/database.ts"));
+    const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
+
     let context: Awaited<ReturnType<typeof bootstrapApp>>["context"] | undefined;
-    let server: ReturnType<typeof createAppServer> | undefined;
+    let server: NonNullable<Awaited<ReturnType<typeof bootstrapApp>>["server"]> | undefined;
     try {
-      const boot = await bootstrapApp({ runtimeMetrics: { outbox: {}, failedJobs: {} } });
+      const boot = await bootstrapApp({
+        mode: "http",
+        server: { port: await fixturePort(), native: { hostname: "127.0.0.1" } },
+        runtimeMetrics: { outbox: {}, failedJobs: {} },
+      });
+      const run = fixtureRun(boot);
       context = boot.context;
-      server = createAppServer(boot.routes, 0, undefined, { hostname: "127.0.0.1" });
+      server = requiredServer(boot.server);
       const scrape = () =>
         fetch(`http://127.0.0.1:${server?.port}/metrics`, {
           headers: { authorization: "Bearer generated-metrics-fixture" },
@@ -1311,11 +1420,16 @@ export default probeModule;
       expect(body).toContain('strata_outbox_deliveries_sample{state="pending_due"} 0');
       expect(body).toContain("strata_queue_failed_job_collector_success 1");
       // Dev boot runs file migrations. The collector only reads strata_outbox_*.
-      const tables = await getSql().unsafe("SELECT name FROM sqlite_master WHERE type='table'");
+      const tables = await run((database) =>
+        database.execute<{ name: string }>({
+          text: "SELECT name FROM sqlite_master WHERE type='table'",
+          params: [],
+        }),
+      );
       expect(tables.some((row: { name: string }) => row.name === "strata_outbox_delivery")).toBe(
         true,
       );
-      server.stop(true);
+      await boot.context.dispose();
       server = undefined;
       await context.drain();
       await context.dispose();
@@ -1326,7 +1440,6 @@ export default probeModule;
     } finally {
       server?.stop(true);
       await context?.dispose();
-      await closeDatabase();
     }
   });
 
@@ -1346,6 +1459,7 @@ export default probeModule;
 
     process.chdir(app);
     process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
+    process.env.APP_DATABASE_URL = "sqlite:./storage/app.sqlite";
     process.env.APP_ENV = "local";
     process.env.FRONTEND_MODE = "api";
     process.env.AUTH_DEV_HEADERS = "true";
@@ -1355,16 +1469,15 @@ export default probeModule;
     process.env.QUEUE_DRIVER = "sync";
 
     try {
-      const { bootstrapApp, createAppServer } = await import(
-        `${join(app, "src/bootstrap/createApp.ts")}`
-      );
-      const { closeDatabase } = await import(`${join(app, "src/bootstrap/database.ts")}`);
+      const { bootstrapApp } = await import(`${join(app, "src/bootstrap/createApp.ts")}`);
 
       // Unmigrated database: the process is up but must not enter rotation.
-      const unmigrated = await bootstrapApp({ migrate: false });
-      const coldServer = createAppServer(unmigrated.routes, 0, undefined, {
-        hostname: "127.0.0.1",
+      const unmigrated = await bootstrapApp({
+        migrate: false,
+        mode: "http",
+        server: { port: await fixturePort(), native: { hostname: "127.0.0.1" } },
       });
+      const coldServer = requiredServer(unmigrated.server);
       try {
         const cold = await fetch(`http://127.0.0.1:${coldServer.port}/health`);
         expect(cold.status).toBe(503);
@@ -1377,19 +1490,22 @@ export default probeModule;
         expect(readyBody).toMatchObject({ status: "ready" });
         expect(readyBody.checks).toBeUndefined();
       } finally {
-        coldServer.stop();
+        await unmigrated.context.dispose();
       }
 
-      const { routes } = await bootstrapApp();
+      const port = await fixturePort();
+      const boot = await bootstrapApp({
+        mode: "http",
+        server: { port, native: { hostname: "127.0.0.1" } },
+      });
       await (await import(join(app, "src/db/migrate.ts"))).seed();
-      const server = createAppServer(routes, 0, undefined, { hostname: "127.0.0.1" });
+      const server = requiredServer(boot.server);
       try {
         const response = await fetch(`http://127.0.0.1:${server.port}/health`);
         expect(response.status).toBe(200);
         expect(await response.text()).toBe("ok");
       } finally {
-        server.stop();
-        await closeDatabase();
+        await boot.context.dispose();
       }
     } finally {
       process.chdir(repoRoot);
@@ -1411,9 +1527,14 @@ export default probeModule;
       const provider = await readFile(join(app, "src/bootstrap/providers/view.ts"), "utf8");
       expect(provider).toContain("createViewProvider");
       expect(provider).toContain('userKey: "currentUser"');
+      expect(provider).toContain("await establishedAuthReader.user(request)");
+      expect(provider).toContain(
+        'name: user.name ?? "", email: user.email ?? "", role: user.role ?? "member"',
+      );
+      expect(provider).not.toContain("resolveAuthUserDirectory");
       expect(provider).not.toContain("EtaViewEngine");
       expect(await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8")).toContain(
-        "  viewProvider,",
+        "createStarterViewProvider(env)",
       );
       const site = await readFile(join(app, "src/modules/site/index.ts"), "utf8");
       expect(site).toContain("resolve(CORE_VIEW_RENDERER_TOKEN)");
@@ -1424,11 +1545,13 @@ export default probeModule;
         expect(authModule).toContain(
           '.namespace("auth", { headers: { "Cache-Control": "private, no-store" } })',
         );
-        expect(authModule).toContain("import { privateJsonResponse, withErrorHandling }");
+        expect(authModule).toContain(
+          'import { privateJsonResponse } from "@getstrata/core/http/response";',
+        );
         expect(authModule).not.toContain('views.render("auth/');
         expect(authModule).toContain("status: 429");
         expect(authModule).not.toContain("renderHtmx");
-        expect(provider).toContain('process.env.FEATURE_OAUTH === "true"');
+        expect(provider).toContain('env.FEATURE_OAUTH === "true"');
       }
     }
   });
@@ -1452,7 +1575,7 @@ export default probeModule;
         pkg.dependencies[`@getstrata/${name}`] =
           `file:${join(repoRoot, `packages/strata-${name}`)}`;
       await writeFile(packagePath, JSON.stringify(pkg));
-      installGeneratedAppDependencies(app);
+      await installPackedGeneratedApp(app);
       process.chdir(app);
       Object.assign(process.env, {
         DATABASE_URL: "sqlite:./storage/app.sqlite",
@@ -1471,43 +1594,42 @@ export default probeModule;
         REDIS_URL: "",
       });
       resetDiscoverModulesForTests();
-      const { bootstrapApp, createAppServer } = await import(
-        join(app, "src/bootstrap/createApp.ts")
-      );
-      const { closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
+      const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
+
       const { User } = await import(join(app, "src/models/User.ts"));
-      const { BaseRepository } = await import("@getstrata/core/database/baseRepository");
-      const { defineTable } = await import("@getstrata/core/database/table");
+
       const { hashPassword } = await import("@getstrata/core/auth/password");
-      const boot = await bootstrapApp();
-      const server = createAppServer(boot.routes, 0, undefined, { hostname: "127.0.0.1" }),
+      const port = await fixturePort();
+      const boot = await bootstrapApp({
+        mode: "http",
+        server: { port, native: { hostname: "127.0.0.1" } },
+      });
+      const run = fixtureRun(boot);
+      const server = requiredServer(boot.server),
         origin = `http://127.0.0.1:${server.port}`;
       process.env.APP_URL = origin;
       try {
-        const tenants = new BaseRepository(
-          defineTable<{ id: number; slug: string }, "id">({
-            name: "tenant",
-            primaryKey: "id",
-            columns: ["id", "slug"],
+        await executeFixture(run, "INSERT INTO tenant(slug) VALUES(?)", ["first"]);
+        await executeFixture(run, "INSERT INTO tenant(slug) VALUES(?)", ["second"]);
+        const password = await hashPassword("Initial!Password123");
+        const first = await run(async (database) =>
+          database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).create({
+            name: "First",
+            email: "tenant-first@example.test",
+            password,
+            is_admin: false,
+            tenant_id: 1,
           }),
         );
-        await tenants.create({ slug: "first" });
-        await tenants.create({ slug: "second" });
-        const password = await hashPassword("Initial!Password123");
-        const first = await User.create({
-          name: "First",
-          email: "tenant-first@example.test",
-          password,
-          is_admin: false,
-          tenant_id: 1,
-        });
-        const second = await User.create({
-          name: "Second",
-          email: "tenant-second@example.test",
-          password,
-          is_admin: false,
-          tenant_id: 2,
-        });
+        const second = await run(async (database) =>
+          database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).create({
+            name: "Second",
+            email: "tenant-second@example.test",
+            password,
+            is_admin: false,
+            tenant_id: 2,
+          }),
+        );
         async function scim(token: string, path = "Users", method = "GET", payload?: object) {
           const response = await fetch(`${origin}/scim/v2/${path}`, {
             method,
@@ -1550,7 +1672,15 @@ export default probeModule;
           displayName: "Created",
         });
         expect(created.status).toBe(201);
-        expect((await User.find(Number(created.body.id))).get("tenant_id")).toBe(2);
+        expect(
+          (
+            await run(async (database) =>
+              database
+                .model<FixtureRow, "id", Model<FixtureRow, "id">>(User)
+                .findOrFail(Number(created.body.id)),
+            )
+          ).get("tenant_id"),
+        ).toBe(2);
         expect(
           (
             await scim("fixture-first", `Users/${created.body.id}`, "PUT", {
@@ -1559,13 +1689,17 @@ export default probeModule;
             })
           ).status,
         ).toBe(404);
-        expect((await User.find(Number(created.body.id))).get("email")).toBe(
-          "tenant-created@example.test",
-        );
+        expect(
+          (
+            await run(async (database) =>
+              database
+                .model<FixtureRow, "id", Model<FixtureRow, "id">>(User)
+                .findOrFail(Number(created.body.id)),
+            )
+          ).get("email"),
+        ).toBe("tenant-created@example.test");
       } finally {
-        server.stop(true);
         await boot.context.dispose();
-        await closeDatabase();
       }
     },
   );
@@ -1590,7 +1724,7 @@ export default probeModule;
           pkg.dependencies[`@getstrata/${name}`] =
             `file:${join(repoRoot, `packages/strata-${name}`)}`;
         await writeFile(packagePath, JSON.stringify(pkg));
-        installGeneratedAppDependencies(app);
+        await installPackedGeneratedApp(app);
         process.chdir(app);
         Object.assign(process.env, {
           DATABASE_URL: "sqlite:./storage/app.sqlite",
@@ -1609,64 +1743,71 @@ export default probeModule;
           REDIS_URL: "",
         });
         resetDiscoverModulesForTests();
-        const { bootstrapApp, createAppServer } = await import(
-          join(app, "src/bootstrap/createApp.ts")
-        );
-        const { closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
-        const { User } = await import(join(app, "src/models/User.ts"));
-        const { BaseRepository } = await import("@getstrata/core/database/baseRepository");
-        const { defineTable } = await import("@getstrata/core/database/table");
+        await prepareObserverFixture(app);
+        const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
+
+        const { User, fixtureObserverService } = await import(join(app, "src/models/User.ts"));
+
         const { hashPassword } = await import("@getstrata/core/auth/password");
-        const boot = await bootstrapApp();
-        const server = createAppServer(boot.routes, 0, undefined, { hostname: "127.0.0.1" }),
+        const port = await fixturePort();
+        let failObserver: "update" | "create" | "delete" | undefined;
+        let observedTargetId: number | undefined;
+        const boot = await bootstrapApp({
+          services: [
+            fixtureObserverService({
+              updated(model: { get(key: string): unknown }) {
+                if (failObserver === "update" && model.get("id") === observedTargetId)
+                  throw new Error("injected SCIM update observer failure");
+              },
+              created(model: { get(key: string): unknown }) {
+                if (
+                  failObserver === "create" &&
+                  model.get("email") === "rollback-created@example.test"
+                )
+                  throw new Error("injected SCIM create observer failure");
+              },
+              deleted(model: { get(key: string): unknown }) {
+                if (failObserver === "delete" && model.get("id") === observedTargetId)
+                  throw new Error("injected SCIM delete observer failure");
+              },
+            }),
+          ],
+          mode: "http",
+          server: { port, native: { hostname: "127.0.0.1" } },
+        });
+        const run = fixtureRun(boot);
+        const server = requiredServer(boot.server),
           origin = `http://127.0.0.1:${server.port}`;
         process.env.APP_URL = origin;
         try {
-          const tenants = new BaseRepository(
-            defineTable<{ id: number; slug: string }, "id">({
-              name: "tenant",
-              primaryKey: "id",
-              columns: ["id", "slug"],
+          // SCIM always authenticates a real tenant, including apps without ordinary tenant scoping.
+          const missingTenant = await request("Users");
+          expect(missingTenant.status).toBe(401);
+          expect(missingTenant.body.detail).toBe("SCIM tenant not found.");
+          await executeFixture(run, "INSERT INTO tenant(slug) VALUES(?)", ["first"]);
+          await executeFixture(run, "INSERT INTO tenant(slug) VALUES(?)", ["second"]);
+          const password = await hashPassword("Initial!Password123");
+          const target = await run(async (database) =>
+            database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).create({
+              name: "Original",
+              email: "scim-target@example.test",
+              password,
+              is_admin: false,
+              tenant_id: 2,
             }),
           );
-          if (tenancy === "column") {
-            await tenants.create({ slug: "first" });
-            await tenants.create({ slug: "second" });
-          }
-          const password = await hashPassword("Initial!Password123");
-          const target = await User.create({
-            name: "Original",
-            email: "scim-target@example.test",
-            password,
-            is_admin: false,
-            tenant_id: 2,
-          });
-          const neighbor = await User.create({
-            name: "Neighbor",
-            email: "scim-neighbor@example.test",
-            password,
-            is_admin: false,
-            tenant_id: 1,
-          });
+          const neighbor = await run(async (database) =>
+            database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).create({
+              name: "Neighbor",
+              email: "scim-neighbor@example.test",
+              password,
+              is_admin: false,
+              tenant_id: 1,
+            }),
+          );
           const id = target.get("id");
-          let failObserver: "update" | "create" | "delete" | undefined;
-          User.observe({
-            updated(model: { get(key: string): unknown }) {
-              if (failObserver === "update" && model.get("id") === id)
-                throw new Error("injected SCIM update observer failure");
-            },
-            created(model: { get(key: string): unknown }) {
-              if (
-                failObserver === "create" &&
-                model.get("email") === "rollback-created@example.test"
-              )
-                throw new Error("injected SCIM create observer failure");
-            },
-            deleted(model: { get(key: string): unknown }) {
-              if (failObserver === "delete" && model.get("id") === id)
-                throw new Error("injected SCIM delete observer failure");
-            },
-          });
+          observedTargetId = id;
+
           async function request(
             path: string,
             method = "GET",
@@ -1756,7 +1897,9 @@ export default probeModule;
             expect(rejected.contentType).toContain("application/scim+json");
             expect(rejected.body.schemas).toEqual(["urn:ietf:params:scim:api:messages:2.0:Error"]);
             expect(rejected.body.status).toBe("400");
-            const stored = await User.find(id);
+            const stored = await run(async (database) =>
+              database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).findOrFail(id),
+            );
             expect(stored.get("name")).toBe("Original");
             expect(stored.get("email")).toBe("scim-target@example.test");
             expect(stored.get("password")).toBe(password);
@@ -1768,7 +1911,14 @@ export default probeModule;
               active: "false",
             });
             expect(rejected.status).toBe(400);
-            expect(await User.where({ email: "inactive@example.test" }).count()).toBe(0);
+            expect(
+              await run(async (database) =>
+                database
+                  .model<FixtureRow, "id", Model<FixtureRow, "id">>(User)
+                  .where({ email: "inactive@example.test" })
+                  .count(),
+              ),
+            ).toBe(0);
           }
 
           failObserver = "update";
@@ -1779,7 +1929,9 @@ export default probeModule;
                   ? patch([{ op: "replace", path: "displayName", value: "Must roll back" }])
                   : { userName: "rollback-updated@example.test", displayName: "Must roll back" };
               expect((await request(`Users/${id}`, method, body)).status).toBe(500);
-              const unchanged = await User.find(id);
+              const unchanged = await run(async (database) =>
+                database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).findOrFail(id),
+              );
               expect(unchanged.get("name")).toBe("Original");
               expect(unchanged.get("email")).toBe("scim-target@example.test");
             }
@@ -1796,14 +1948,25 @@ export default probeModule;
                 })
               ).status,
             ).toBe(500);
-            expect(await User.where({ email: "rollback-created@example.test" }).count()).toBe(0);
+            expect(
+              await run(async (database) =>
+                database
+                  .model<FixtureRow, "id", Model<FixtureRow, "id">>(User)
+                  .where({ email: "rollback-created@example.test" })
+                  .count(),
+              ),
+            ).toBe(0);
           } finally {
             failObserver = undefined;
           }
           failObserver = "delete";
           try {
             expect((await request(`Users/${id}`, "DELETE")).status).toBe(500);
-            expect(await User.find(id)).not.toBeNull();
+            expect(
+              await run(async (database) =>
+                database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).findOrFail(id),
+              ),
+            ).not.toBeNull();
           } finally {
             failObserver = undefined;
           }
@@ -1844,7 +2007,15 @@ export default probeModule;
             active: true,
           });
           expect(created.status).toBe(201);
-          expect((await User.find(Number(created.body.id))).get("tenant_id")).toBe(2);
+          expect(
+            (
+              await run(async (database) =>
+                database
+                  .model<FixtureRow, "id", Model<FixtureRow, "id">>(User)
+                  .findOrFail(Number(created.body.id)),
+              )
+            ).get("tenant_id"),
+          ).toBe(2);
           const replaced = await request(`Users/${id}`, "PUT", {
             userName: "replaced@example.test",
             displayName: "Replaced",
@@ -1852,15 +2023,17 @@ export default probeModule;
           });
           expect(replaced.status).toBe(200);
           expect(replaced.body.name).toEqual({ formatted: "Replaced" });
-          const untouched = await User.find(neighbor.get("id"));
+          const untouched = await run(async (database) =>
+            database
+              .model<FixtureRow, "id", Model<FixtureRow, "id">>(User)
+              .findOrFail(neighbor.get("id")),
+          );
           expect(untouched.get("name")).toBe("Neighbor");
           expect(untouched.get("password")).toBe(password);
           expect((await request(`Users/${id}`, "DELETE")).status).toBe(204);
           expect((await request(`Users/${id}`)).status).toBe(404);
         } finally {
-          server.stop(true);
           await boot.context.dispose();
-          await closeDatabase();
         }
         process.chdir(repoRoot);
       }
@@ -1899,60 +2072,75 @@ export default probeModule;
         QUEUE_DRIVER: "sync",
       });
       resetDiscoverModulesForTests();
-      const { bootstrapApp, createAppServer } = await import(
-        join(app, "src/bootstrap/createApp.ts")
-      );
-      const { getSql, closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
-      const { User } = await import(join(app, "src/models/User.ts"));
+      await prepareObserverFixture(app);
+      const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
+
+      const { User, fixtureObserverService } = await import(join(app, "src/models/User.ts"));
       const { AuthOneTimeToken } = await import(join(app, "src/models/AuthOneTimeToken.ts"));
       const { generateOneTimeToken, AUTH_ONE_TIME_PURPOSES } = await import(
         "@getstrata/core/auth/oneTimeToken"
       );
       const { absoluteTemporarySignedUrl } = await import("@getstrata/core/http/signedUrl");
       const { hashPassword } = await import("@getstrata/core/auth/password");
-      const boot = await bootstrapApp();
-      const server = createAppServer(boot.routes, 0, undefined, { hostname: "127.0.0.1" }),
+      const port = await fixturePort();
+      let observerFailureId: number | undefined;
+      const boot = await bootstrapApp({
+        services: [
+          fixtureObserverService({
+            updated(model: { get(key: string): unknown }) {
+              if (Number(model.get("id")) === observerFailureId)
+                throw new Error("injected verification observer failure");
+            },
+          }),
+        ],
+        mode: "http",
+        server: { port, native: { hostname: "127.0.0.1" } },
+      });
+      const run = fixtureRun(boot);
+      const server = requiredServer(boot.server),
         origin = `http://127.0.0.1:${server.port}`;
       process.env.APP_URL = origin;
-      let observerFailureId: number | undefined;
-      User.observe({
-        updated(model: { get(key: string): unknown }) {
-          if (Number(model.get("id")) === observerFailureId)
-            throw new Error("injected verification observer failure");
-        },
-      });
+
       try {
-        await getSql().unsafe(
+        await executeFixture(
+          run,
           "CREATE TABLE verification_effect_count(user_id INTEGER PRIMARY KEY, writes INTEGER NOT NULL)",
         );
-        await getSql().unsafe(
+        await executeFixture(
+          run,
           "CREATE TRIGGER count_verification AFTER UPDATE OF email_verified_at ON users BEGIN INSERT INTO verification_effect_count VALUES(NEW.id,1) ON CONFLICT(user_id) DO UPDATE SET writes=writes+1; END",
         );
         const password = await hashPassword("Initial!Password123");
-        const neighbor = await User.create({
-          name: "Neighbor",
-          email: "verification-neighbor@example.test",
-          password,
-          is_admin: false,
-        });
+        const neighbor = await run(async (database) =>
+          database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).create({
+            name: "Neighbor",
+            email: "verification-neighbor@example.test",
+            password,
+            is_admin: false,
+          }),
+        );
         const csrf = await jsonCsrfHeaders(origin);
         for (const html of [false, true]) {
           const path = html ? "/email/verify" : "/api/v1/auth/verify-email";
-          const user = await User.create({
-            name: "Verification fixture",
-            email: `verify-${html}@example.test`,
-            password,
-            is_admin: false,
-          });
+          const user = await run(async (database) =>
+            database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).create({
+              name: "Verification fixture",
+              email: `verify-${html}@example.test`,
+              password,
+              is_admin: false,
+            }),
+          );
           const id = Number(user.get("id"));
           const issue = async (purpose: string, expires = Date.now() + 60000) => {
             const issued = generateOneTimeToken();
-            const row = await AuthOneTimeToken.create({
-              purpose,
-              user_id: id,
-              token_hash: issued.hash,
-              expires_at: new Date(expires).toISOString(),
-            });
+            const row = await run(async (database) =>
+              database.model<FixtureRow, "id", Model<FixtureRow, "id">>(AuthOneTimeToken).create({
+                purpose,
+                user_id: id,
+                token_hash: issued.hash,
+                expires_at: new Date(expires).toISOString(),
+              }),
+            );
             const link = absoluteTemporarySignedUrl(path, 60, {
               token: issued.plain,
               id: String(id),
@@ -1967,7 +2155,13 @@ export default probeModule;
               body: html ? undefined : "{}",
             });
           const consumed = async (row: { get(key: string): unknown }) =>
-            (await AuthOneTimeToken.find(row.get("id"))).get("consumed_at");
+            (
+              await run(async (database) =>
+                database
+                  .model<FixtureRow, "id", Model<FixtureRow, "id">>(AuthOneTimeToken)
+                  .findOrFail(Number(row.get("id"))),
+              )
+            ).get("consumed_at");
           const valid = await issue(AUTH_ONE_TIME_PURPOSES.emailVerify);
           expect((await submit(`${valid.link}&tampered=true`)).status).toBe(403);
           expect(await consumed(valid.row)).toBeNull();
@@ -1981,17 +2175,30 @@ export default probeModule;
           const expired = await issue(AUTH_ONE_TIME_PURPOSES.emailVerify, Date.now() - 1000);
           expect((await submit(expired.link)).status).toBe(html ? 302 : 403);
           expect(await consumed(expired.row)).toBeNull();
-          expect((await User.find(id)).get("email_verified_at")).toBeNull();
-          await getSql().unsafe(
+          expect(
+            (
+              await run(async (database) =>
+                database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).findOrFail(id),
+              )
+            ).get("email_verified_at"),
+          ).toBeNull();
+          await executeFixture(
+            run,
             `CREATE TRIGGER reject_verification BEFORE UPDATE ON users WHEN OLD.id=${id} BEGIN SELECT RAISE(ABORT,'injected verification failure'); END`,
           );
           try {
             expect((await submit(valid.link)).status).toBe(400);
           } finally {
-            await getSql().unsafe("DROP TRIGGER reject_verification");
+            await executeFixture(run, "DROP TRIGGER reject_verification");
           }
           expect(await consumed(valid.row)).toBeNull();
-          expect((await User.find(id)).get("email_verified_at")).toBeNull();
+          expect(
+            (
+              await run(async (database) =>
+                database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).findOrFail(id),
+              )
+            ).get("email_verified_at"),
+          ).toBeNull();
           observerFailureId = id;
           try {
             expect((await submit(valid.link)).status).toBe(500);
@@ -1999,56 +2206,100 @@ export default probeModule;
             observerFailureId = undefined;
           }
           expect(await consumed(valid.row)).toBeNull();
-          expect((await User.find(id)).get("email_verified_at")).toBeNull();
           expect(
-            await getSql().unsafe("SELECT * FROM verification_effect_count WHERE user_id=?", [id]),
+            (
+              await run(async (database) =>
+                database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).findOrFail(id),
+              )
+            ).get("email_verified_at"),
+          ).toBeNull();
+          expect(
+            await executeFixture(run, "SELECT * FROM verification_effect_count WHERE user_id=?", [
+              id,
+            ]),
           ).toHaveLength(0);
           const success = await submit(valid.link);
           expect(success.status).toBe(html ? 302 : 200);
           expect(await consumed(valid.row)).not.toBeNull();
-          const verified = (await User.find(id)).get("email_verified_at");
+          const verified = (
+            await run(async (database) =>
+              database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).findOrFail(id),
+            )
+          ).get("email_verified_at");
           expect(verified).not.toBeNull();
           expect((await submit(valid.link)).status).toBe(html ? 302 : 403);
-          expect((await User.find(id)).get("email_verified_at")).toBe(verified);
           expect(
-            await getSql().unsafe("SELECT writes FROM verification_effect_count WHERE user_id=?", [
-              id,
-            ]),
+            (
+              await run(async (database) =>
+                database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).findOrFail(id),
+              )
+            ).get("email_verified_at"),
+          ).toBe(verified);
+          expect(
+            await executeFixture(
+              run,
+              "SELECT writes FROM verification_effect_count WHERE user_id=?",
+              [id],
+            ),
           ).toEqual([{ writes: 1 }]);
-          const next = await User.create({
-            name: "Concurrent verification",
-            email: `concurrent-${html}@example.test`,
-            password,
-            is_admin: false,
-          });
+          const next = await run(async (database) =>
+            database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).create({
+              name: "Concurrent verification",
+              email: `concurrent-${html}@example.test`,
+              password,
+              is_admin: false,
+            }),
+          );
           const nextId = Number(next.get("id"));
           const issued = generateOneTimeToken();
-          await AuthOneTimeToken.create({
-            purpose: AUTH_ONE_TIME_PURPOSES.emailVerify,
-            user_id: nextId,
-            token_hash: issued.hash,
-            expires_at: new Date(Date.now() + 60000).toISOString(),
-          });
+          await run(async (database) =>
+            database.model<FixtureRow, "id", Model<FixtureRow, "id">>(AuthOneTimeToken).create({
+              purpose: AUTH_ONE_TIME_PURPOSES.emailVerify,
+              user_id: nextId,
+              token_hash: issued.hash,
+              expires_at: new Date(Date.now() + 60000).toISOString(),
+            }),
+          );
           const link = absoluteTemporarySignedUrl(path, 60, {
             token: issued.plain,
             id: String(nextId),
           });
           const attempts = await Promise.all([submit(link), submit(link)]);
           expect(attempts.map((r) => r.status).sort()).toEqual(html ? [302, 302] : [200, 403]);
-          expect((await User.find(nextId)).get("email_verified_at")).not.toBeNull();
           expect(
-            await getSql().unsafe("SELECT writes FROM verification_effect_count WHERE user_id=?", [
-              nextId,
-            ]),
+            (
+              await run(async (database) =>
+                database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).findOrFail(nextId),
+              )
+            ).get("email_verified_at"),
+          ).not.toBeNull();
+          expect(
+            await executeFixture(
+              run,
+              "SELECT writes FROM verification_effect_count WHERE user_id=?",
+              [nextId],
+            ),
           ).toEqual([{ writes: 1 }]);
-          expect((await User.find(neighbor.get("id"))).get("email_verified_at")).toBeNull();
-          expect((await User.find(id)).get("password")).toBe(password);
+          expect(
+            (
+              await run(async (database) =>
+                database
+                  .model<FixtureRow, "id", Model<FixtureRow, "id">>(User)
+                  .findOrFail(neighbor.get("id")),
+              )
+            ).get("email_verified_at"),
+          ).toBeNull();
+          expect(
+            (
+              await run(async (database) =>
+                database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).findOrFail(id),
+              )
+            ).get("password"),
+          ).toBe(password);
         }
       } finally {
         observerFailureId = undefined;
-        server.stop(true);
         await boot.context.dispose();
-        await closeDatabase();
       }
     },
   );
@@ -2082,10 +2333,8 @@ export default probeModule;
       process.env.CACHE_DRIVER = "array";
       process.env.QUEUE_DRIVER = "sync";
       resetDiscoverModulesForTests();
-      const { bootstrapApp, createAppServer } = await import(
-        join(app, "src/bootstrap/createApp.ts")
-      );
-      const { getSql, closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
+      const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
+
       const { User } = await import(join(app, "src/models/User.ts"));
       const { AuthOneTimeToken } = await import(join(app, "src/models/AuthOneTimeToken.ts"));
       const { generateOneTimeToken, AUTH_ONE_TIME_PURPOSES } = await import(
@@ -2093,20 +2342,27 @@ export default probeModule;
       );
       const { absoluteTemporarySignedUrl } = await import("@getstrata/core/http/signedUrl");
       const { hashPassword, verifyPassword } = await import("@getstrata/core/auth/password");
-      const boot = await bootstrapApp();
-      const server = createAppServer(boot.routes, 0, undefined, { hostname: "127.0.0.1" });
+      const port = await fixturePort();
+      const boot = await bootstrapApp({
+        mode: "http",
+        server: { port, native: { hostname: "127.0.0.1" } },
+      });
+      const run = fixtureRun(boot);
+      const server = requiredServer(boot.server);
       const origin = `http://127.0.0.1:${server.port}`;
       process.env.APP_URL = origin;
       try {
         for (const html of [false, true]) {
           const password = "Initial!Password123";
           const replacement = "Replacement!Password123";
-          const user = await User.create({
-            name: "Reset fixture",
-            email: `reset-${html}@example.test`,
-            password: await hashPassword(password),
-            is_admin: false,
-          });
+          const user = await run(async (database) =>
+            database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).create({
+              name: "Reset fixture",
+              email: `reset-${html}@example.test`,
+              password: await hashPassword(password),
+              is_admin: false,
+            }),
+          );
           const id = Number(user.get("id"));
           const csrf = await jsonCsrfHeaders(origin);
           let cookie = csrf.cookie;
@@ -2161,21 +2417,29 @@ export default probeModule;
           for (const bearer of [undefined, token, jwt])
             expect(await credentialStatus(bearer)).toBe(200);
           const issued = generateOneTimeToken();
-          await AuthOneTimeToken.create({
-            purpose: AUTH_ONE_TIME_PURPOSES.passwordReset,
-            user_id: id,
-            token_hash: issued.hash,
-            expires_at: new Date(Date.now() + 60000).toISOString(),
-          });
+          await run(async (database) =>
+            database.model<FixtureRow, "id", Model<FixtureRow, "id">>(AuthOneTimeToken).create({
+              purpose: AUTH_ONE_TIME_PURPOSES.passwordReset,
+              user_id: id,
+              token_hash: issued.hash,
+              expires_at: new Date(Date.now() + 60000).toISOString(),
+            }),
+          );
           const link = absoluteTemporarySignedUrl(
             html ? "/reset-password" : "/api/v1/auth/reset-password",
             60,
             { token: issued.plain, email: String(user.get("email")) },
           );
           const consumed = async () =>
-            (await AuthOneTimeToken.query().where({ token_hash: issued.hash }).first())?.get(
-              "consumed_at",
-            );
+            (
+              await run(async (database) =>
+                database
+                  .model<FixtureRow, "id", Model<FixtureRow, "id">>(AuthOneTimeToken)
+                  .query()
+                  .where({ token_hash: issued.hash })
+                  .first(),
+              )
+            )?.get("consumed_at");
           const submit = (value: string) =>
             post(
               link,
@@ -2199,37 +2463,57 @@ export default probeModule;
           }
           for (const table of ["users", "api_tokens"]) {
             const operation = table === "users" ? "UPDATE" : "DELETE";
-            await getSql().unsafe(
+            await executeFixture(
+              run,
               `CREATE TRIGGER reject_reset BEFORE ${operation} ON ${table} BEGIN SELECT RAISE(ABORT, 'injected reset failure'); END`,
             );
             try {
               expect((await submit(replacement)).status).toBe(400);
             } finally {
-              await getSql().unsafe("DROP TRIGGER reject_reset");
+              await executeFixture(run, "DROP TRIGGER reject_reset");
             }
             expect(await consumed()).toBeNull();
-            expect(await verifyPassword(password, (await User.find(id)).get("password"))).toBe(
-              true,
-            );
+            expect(
+              await verifyPassword(
+                password,
+                (
+                  await run(async (database) =>
+                    database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).findOrFail(id),
+                  )
+                ).get("password"),
+              ),
+            ).toBe(true);
             for (const bearer of [undefined, token, jwt])
               expect(await credentialStatus(bearer)).toBe(200);
           }
           expect((await submit(replacement)).status).toBe(html ? 302 : 200);
           expect(await consumed()).not.toBeNull();
-          expect(await verifyPassword(replacement, (await User.find(id)).get("password"))).toBe(
-            true,
-          );
+          expect(
+            await verifyPassword(
+              replacement,
+              (
+                await run(async (database) =>
+                  database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).findOrFail(id),
+                )
+              ).get("password"),
+            ),
+          ).toBe(true);
           for (const bearer of [undefined, token, jwt])
             expect(await credentialStatus(bearer)).toBe(401);
           expect((await submit("Another!Password123")).status).toBe(html ? 200 : 403);
-          expect(await verifyPassword(replacement, (await User.find(id)).get("password"))).toBe(
-            true,
-          );
+          expect(
+            await verifyPassword(
+              replacement,
+              (
+                await run(async (database) =>
+                  database.model<FixtureRow, "id", Model<FixtureRow, "id">>(User).findOrFail(id),
+                )
+              ).get("password"),
+            ),
+          ).toBe(true);
         }
       } finally {
-        server.stop(true);
         await boot.context.dispose();
-        await closeDatabase();
       }
     },
   );
@@ -2253,7 +2537,7 @@ export default probeModule;
     pkg.dependencies["@getstrata/bootstrap"] = `file:${join(repo, "packages/strata-bootstrap")}`;
     pkg.dependencies["@getstrata/cli"] = `file:${join(repo, "packages/strata-cli")}`;
     await Bun.write(join(app, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
-    installGeneratedAppDependencies(app);
+    await installPackedGeneratedApp(app);
 
     process.chdir(app);
     process.env.DATABASE_URL = "sqlite:./storage/app.sqlite";
@@ -2288,14 +2572,19 @@ export default probeModule;
     }
 
     try {
-      const { bootstrapApp, createAppServer } = await import(
-        `${join(app, "src/bootstrap/createApp.ts")}`
-      );
-      const { closeDatabase } = await import(`${join(app, "src/bootstrap/database.ts")}`);
-      const { routes } = await bootstrapApp();
-      const { getSql } = await import(join(app, "src/bootstrap/database.ts"));
+      const { bootstrapApp } = await import(`${join(app, "src/bootstrap/createApp.ts")}`);
+
+      const port = await fixturePort();
+      const boot = await bootstrapApp({
+        mode: "http",
+        server: { port, native: { hostname: "127.0.0.1" } },
+      });
+      const run = fixtureRun(boot);
+
       const { seed } = await import(join(app, "src/db/migrate.ts"));
-      expect(await getSql().unsafe("SELECT COUNT(*) AS count FROM users")).toEqual([{ count: 0 }]);
+      expect(await executeFixture(run, "SELECT COUNT(*) AS count FROM users")).toEqual([
+        { count: 0 },
+      ]);
       const previousAppEnv = process.env.APP_ENV;
       try {
         for (const appEnv of ["production", "staging"]) {
@@ -2308,9 +2597,11 @@ export default probeModule;
         if (previousAppEnv === undefined) delete process.env.APP_ENV;
         else process.env.APP_ENV = previousAppEnv;
       }
-      expect(await getSql().unsafe("SELECT COUNT(*) AS count FROM users")).toEqual([{ count: 0 }]);
+      expect(await executeFixture(run, "SELECT COUNT(*) AS count FROM users")).toEqual([
+        { count: 0 },
+      ]);
       await (await import(join(app, "src/db/migrate.ts"))).seed();
-      const server = createAppServer(routes, 0, undefined, { hostname: "127.0.0.1" });
+      const server = requiredServer(boot.server);
       const origin = `http://127.0.0.1:${server.port}`;
       try {
         const home = await fetch(`${origin}/`);
@@ -2355,10 +2646,21 @@ export default probeModule;
         process.env.OIDC_CLIENT_SECRET = "fixture-secret";
         for (const flag of ["true", "1", "false"]) {
           process.env.FEATURE_OAUTH = flag;
-          const page = await fetch(`${origin}/login`);
-          expect((await page.text()).includes('href="/auth/oidc"')).toBe(flag === "true");
+          const featureBoot = await bootstrapApp({
+            mode: "http",
+            server: { port: await fixturePort(), native: { hostname: "127.0.0.1" } },
+          });
+          try {
+            const page = await fetch(
+              `http://127.0.0.1:${requiredServer(featureBoot.server).port}/login`,
+            );
+            expect((await page.text()).includes('href="/auth/oidc"')).toBe(flag === "true");
+          } finally {
+            await featureBoot.context.dispose();
+          }
         }
         process.env.FEATURE_OAUTH = "false";
+        process.env.APP_URL = origin;
 
         const token = /name="_token" value="([^"]+)"/.exec(loginHtml)?.[1];
         expect(token).toBeTruthy();
@@ -2404,9 +2706,26 @@ export default probeModule;
         const welcome = await fetch(`${origin}/`, { headers: { cookie: sessionCookies } });
         expect(welcome.status).toBe(200);
         expect(await welcome.text()).toContain("demo@example.com");
+        const { STARTER_AUTH_SERVICES } = await import(
+          join(app, "src/bootstrap/providers/auth.ts")
+        );
+        const resolvedUser = await boot.invoke(
+          { kind: "command", actor: { kind: "system", policy: "generated-cookie-reader-test" } },
+          (ports: ExecutionPersistence) =>
+            boot.context.container
+              .resolve(STARTER_AUTH_SERVICES)
+              .session(ports)
+              .resolve(new Request(`${origin}/`, { headers: { cookie: sessionCookies } })),
+        );
+        expect(resolvedUser).toMatchObject({
+          name: "Demo User",
+          email: "demo@example.com",
+          isActive: true,
+          authVersion: 0,
+          role: "member",
+        });
       } finally {
-        server.stop();
-        await closeDatabase();
+        await boot.context.dispose();
       }
     } finally {
       process.chdir(repoRoot);
@@ -2440,6 +2759,7 @@ export default probeModule;
     process.env.TENANCY_DRIVER = "none";
     process.env.AUTH_DEV_HEADERS = "false";
     process.env.FEATURE_API_TOKENS = "true";
+    process.env.SESSION_SECRET = "fixture-token-session-secret-at-least-32-characters";
     process.env.TOKEN_HASH_PEPPER = "dev-token-pepper-change-me";
     process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS = "30";
     process.env.MAIL_DRIVER = "log";
@@ -2447,13 +2767,16 @@ export default probeModule;
     process.env.QUEUE_DRIVER = "sync";
 
     try {
-      const { bootstrapApp, createAppServer } = await import(
-        `${join(app, "src/bootstrap/createApp.ts")}`
-      );
-      const { closeDatabase, getSql } = await import(`${join(app, "src/bootstrap/database.ts")}`);
-      const { routes } = await bootstrapApp();
+      const { bootstrapApp } = await import(`${join(app, "src/bootstrap/createApp.ts")}`);
+
+      const port = await fixturePort();
+      const boot = await bootstrapApp({
+        mode: "http",
+        server: { port, native: { hostname: "127.0.0.1" } },
+      });
+      const run = fixtureRun(boot);
       await (await import(join(app, "src/db/migrate.ts"))).seed();
-      const server = createAppServer(routes, 0, undefined, { hostname: "127.0.0.1" });
+      const server = requiredServer(boot.server);
       const origin = `http://127.0.0.1:${server.port}`;
       try {
         const blocked = await fetch(`${origin}/api/v1/auth/login`, {
@@ -2478,7 +2801,8 @@ export default probeModule;
         expect(days).toBeGreaterThan(29);
         expect(days).toBeLessThanOrEqual(30);
 
-        const stored = (await getSql().unsafe(
+        const stored = (await executeFixture(
+          run,
           "SELECT expires_at FROM api_tokens ORDER BY id DESC LIMIT 1",
         )) as Array<{ expires_at: string | null }>;
         expect(stored[0]?.expires_at).toBeTruthy();
@@ -2489,7 +2813,8 @@ export default probeModule;
         expect(me.status).toBe(200);
 
         // Backdate the stored expiry: the same token must now be unauthorized.
-        await getSql().unsafe(
+        await executeFixture(
+          run,
           "UPDATE api_tokens SET expires_at = ? WHERE id = (SELECT MAX(id) FROM api_tokens)",
           [new Date(Date.now() - 60_000).toISOString()],
         );
@@ -2498,8 +2823,7 @@ export default probeModule;
         });
         expect(expired.status).toBe(401);
       } finally {
-        server.stop();
-        await closeDatabase();
+        await boot.context.dispose();
       }
     } finally {
       delete process.env.FEATURE_API_TOKENS;

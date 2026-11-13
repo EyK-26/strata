@@ -1,5 +1,5 @@
 import type { KeysetCursor, KeysetOptions } from "../pagination/index.ts";
-import { currentSqlDialect } from "./dialect.ts";
+import type { SqlDialect } from "./sqlDialects.ts";
 import type { TableDefinition } from "./table.ts";
 import type { QueryWhere } from "./types.ts";
 import type { WhereNode } from "./whereBuilder.ts";
@@ -43,12 +43,13 @@ function validateKeyset<TEntity extends object, PK extends keyof TEntity & strin
   return order;
 }
 function keysetBoundary<TEntity extends object>(
+  dialect: SqlDialect,
   order: KeysetCursor["order"],
   cursor?: KeysetCursor,
 ): WhereNode<TEntity>[] {
   if (!cursor) return [];
   if (
-    currentSqlDialect().driver === "pgsql" &&
+    dialect.driver === "pgsql" &&
     order.length > 1 &&
     order.every((item) => item.direction === order[0]?.direction)
   ) {

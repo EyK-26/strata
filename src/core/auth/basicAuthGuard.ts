@@ -1,32 +1,23 @@
-import { resolveAuthUserDirectory } from "@getstrata/core/contracts/serviceTokens";
-import type { AuthUserRecord } from "../contracts/authUserDirectory";
-import type { ServiceContainerLike } from "../contracts/serviceContainer";
-import { getBoundDatabaseConnection } from "../database/boundConnection";
-import { getActiveDatabaseConnection } from "../database/connectionContext";
-import { getDefaultDatabasePool } from "../database/defaultConnection";
-import { UnprocessableEntityError } from "../errors/http";
+import { UnprocessableEntityError } from "@getstrata/core/errors/http";
+import type { AuthUserDirectory, AuthUserRecord } from "../contracts/authUserDirectory";
 import { readBasicCredentials } from "../http/statelessAuth";
-import { runWithMigrationBypassForIdentifier } from "../tenant/databaseTenantContext";
 import { isAccountActive, isAuthUserActive } from "./accountState";
 import type { AuthUser } from "./authContext";
 import type { AuthGuard } from "./guard";
 import { verifyPassword } from "./password";
-import { completePasswordLogin, persistConsumedRecoveryHash } from "./passwordLogin";
+import { completePasswordLogin } from "./passwordLogin";
 
 class BasicAuthGuard implements AuthGuard {
-  constructor(private readonly container: ServiceContainerLike) {}
+  constructor(
+    private readonly options: {
+      directory: AuthUserDirectory;
+      persistRecovery(record: AuthUserRecord, hash: string): Promise<boolean>;
+    },
+  ) {}
 
   private async persistRecovery(record: AuthUserRecord, hash: string): Promise<boolean> {
     try {
-      await runWithMigrationBypassForIdentifier(record.id, async () => {
-        await persistConsumedRecoveryHash(
-          getActiveDatabaseConnection(getBoundDatabaseConnection() ?? getDefaultDatabasePool()),
-          record.id,
-          record.mfa_recovery_codes,
-          hash,
-        );
-      });
-      return true;
+      return await this.options.persistRecovery(record, hash);
     } catch (error) {
       if (error instanceof UnprocessableEntityError && error.message === "mfa_invalid")
         return false;
@@ -41,7 +32,7 @@ class BasicAuthGuard implements AuthGuard {
       return null;
     }
 
-    const directory = resolveAuthUserDirectory(this.container);
+    const directory = this.options.directory;
 
     if (!directory) {
       return null;

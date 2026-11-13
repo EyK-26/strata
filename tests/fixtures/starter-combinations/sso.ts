@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { resolve } from "node:path";
+import type { Application } from "@getstrata/core/contracts/application";
 import { generateTotp } from "@getstrata/core/security/totp";
 
 const appDir = process.cwd();
@@ -138,79 +139,89 @@ Object.assign(process.env, {
   OIDC_CLIENT_ID: "ordinary-fixture-client",
   OIDC_CLIENT_SECRET: "ordinary-local-fixture-secret",
 });
-const { bootstrapApp, createAppServer } = await import(
-  resolve(appDir, "src/bootstrap/createApp.ts")
-);
-const { closeDatabase } = await import(resolve(appDir, "src/bootstrap/database.ts"));
-const app = await bootstrapApp({ migrate: false });
-const server = createAppServer(app.routes, 0, undefined, { hostname: "127.0.0.1" });
-origin = server.url.origin;
-process.env.APP_URL = origin;
-process.env.OIDC_REDIRECT_URI = `${origin}/auth/oidc/callback`;
-const jar = new Map<string, string>();
-let csrf = "";
-async function request(label: string, path: string, method = "GET", body?: unknown) {
-  const headers: Record<string, string> = {
-    accept: "text/html",
-    origin,
-    cookie: [...jar].map(([k, v]) => `${k}=${v}`).join("; "),
-  };
-  if (csrf) headers["x-csrf-token"] = csrf;
-  if (body !== undefined)
-    headers["content-type"] =
-      body instanceof URLSearchParams ? "application/x-www-form-urlencoded" : "application/json";
-  const response = await fetch(new URL(path, origin), {
-    method,
-    headers,
-    body:
-      body === undefined
-        ? undefined
-        : body instanceof URLSearchParams
-          ? body
-          : JSON.stringify(body),
-    redirect: "manual",
-    signal: AbortSignal.timeout(15000),
-  });
-  for (const cookie of response.headers.getSetCookie()) {
-    const nv = required(cookie.split(";")[0]);
-    const at = nv.indexOf("=");
-    const key = nv.slice(0, at),
-      value = nv.slice(at + 1);
-    if (value) jar.set(key, value);
-    else jar.delete(key);
-  }
-  const text = await response.text();
-  let json: Record<string, unknown> = {};
-  try {
-    const parsed: unknown = JSON.parse(text);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
-      json = parsed as Record<string, unknown>;
-  } catch {
-    /* HTML responses intentionally have no JSON body. */
-  }
-  const row = {
-    label,
-    status: response.status,
-    location: response.headers.get("location"),
-    cookieNames: response.headers.getSetCookie().map((v) => v.split("=")[0]),
-    ...(json?.error ? { error: json.error } : {}),
-    ...(response.status === 404 ? { bodyExcerpt: text.slice(0, 250) } : {}),
-  };
-  evidence.push(row);
-  return { response, text, json, row };
-}
-async function signIn(label: string) {
-  const start = await request(`${label}-start`, "/auth/oidc");
-  assert.equal(start.response.status, 302, start.text);
-  const authorize = await fetch(required(start.response.headers.get("location")), {
-    redirect: "manual",
-    signal: AbortSignal.timeout(15000),
-  });
-  assert.equal(authorize.status, 302);
-  await authorize.text();
-  return request(`${label}-callback`, required(authorize.headers.get("location")));
-}
+let owner: Application | undefined;
+const failures: unknown[] = [];
 try {
+  const { createAppServer } = await import(resolve(appDir, "src/bootstrap/createApp.ts"));
+  const reservation = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() });
+  const selectedPort = reservation.port;
+  origin = reservation.url.origin;
+  await reservation.stop(true);
+  process.env.APP_URL = origin;
+  process.env.OIDC_REDIRECT_URI = `${origin}/auth/oidc/callback`;
+  const app = await createAppServer({
+    migrate: false,
+    server: { port: selectedPort, native: { hostname: "127.0.0.1" } },
+    onConstructed: (application: Application) => {
+      owner = application;
+    },
+  });
+  const server = app.server;
+  assert.ok(server);
+  origin = server.url.origin;
+  const jar = new Map<string, string>();
+  let csrf = "";
+  async function request(label: string, path: string, method = "GET", body?: unknown) {
+    const headers: Record<string, string> = {
+      accept: "text/html",
+      origin,
+      cookie: [...jar].map(([k, v]) => `${k}=${v}`).join("; "),
+    };
+    if (csrf) headers["x-csrf-token"] = csrf;
+    if (body !== undefined)
+      headers["content-type"] =
+        body instanceof URLSearchParams ? "application/x-www-form-urlencoded" : "application/json";
+    const response = await fetch(new URL(path, origin), {
+      method,
+      headers,
+      body:
+        body === undefined
+          ? undefined
+          : body instanceof URLSearchParams
+            ? body
+            : JSON.stringify(body),
+      redirect: "manual",
+      signal: AbortSignal.timeout(15000),
+    });
+    for (const cookie of response.headers.getSetCookie()) {
+      const nv = required(cookie.split(";")[0]);
+      const at = nv.indexOf("=");
+      const key = nv.slice(0, at),
+        value = nv.slice(at + 1);
+      if (value) jar.set(key, value);
+      else jar.delete(key);
+    }
+    const text = await response.text();
+    let json: Record<string, unknown> = {};
+    try {
+      const parsed: unknown = JSON.parse(text);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
+        json = parsed as Record<string, unknown>;
+    } catch {
+      /* HTML responses intentionally have no JSON body. */
+    }
+    const row = {
+      label,
+      status: response.status,
+      location: response.headers.get("location"),
+      cookieNames: response.headers.getSetCookie().map((v) => v.split("=")[0]),
+      ...(json?.error ? { error: json.error } : {}),
+      ...(response.status === 404 ? { bodyExcerpt: text.slice(0, 250) } : {}),
+    };
+    evidence.push(row);
+    return { response, text, json, row };
+  }
+  async function signIn(label: string) {
+    const start = await request(`${label}-start`, "/auth/oidc");
+    assert.equal(start.response.status, 302, start.text);
+    const authorize = await fetch(required(start.response.headers.get("location")), {
+      redirect: "manual",
+      signal: AbortSignal.timeout(15000),
+    });
+    assert.equal(authorize.status, 302);
+    await authorize.text();
+    return request(`${label}-callback`, required(authorize.headers.get("location")));
+  }
   const csrfReply = await request("csrf", "/api/v1/auth/csrf");
   assert.equal(csrfReply.response.status, 200);
   csrf = stringField(csrfReply.json, "token");
@@ -304,9 +315,23 @@ try {
         challengeStatus: challenge.response.status,
       }),
   );
+} catch (error) {
+  failures.push(error);
 } finally {
-  server.stop(true);
-  idp.stop(true);
-  await app.context.dispose();
-  await closeDatabase();
+  try {
+    await idp.stop(true);
+  } catch (error) {
+    failures.push(error);
+  }
+  if (owner) {
+    try {
+      const result = await owner.stop();
+      assert.ok(result.successful, "Application cleanup must succeed");
+    } catch (error) {
+      failures.push(error);
+    }
+  }
 }
+if (failures.length === 1) throw failures[0];
+if (failures.length > 1)
+  throw new AggregateError(failures, "Installed consumer and cleanup failed");

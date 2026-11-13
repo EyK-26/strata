@@ -1,14 +1,9 @@
-import { getBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
-import { getDefaultDatabasePool } from "@getstrata/core/database/defaultConnection";
+import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
 import { jsonResponse } from "@getstrata/core/http/response";
 import { envFlagEnabled } from "@getstrata/core/runtime/appEnv";
 import { RedisClient } from "bun";
 import { CORE_CONFIG_TOKEN, REDIS_URL_CONFIG_KEY } from "./config";
 import type { AppDependencies, ConfigStore } from "./contracts";
-
-type PingableConnection = {
-  unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
-};
 
 interface CreateHealthRoutesOptions {
   pingOnHealth?: boolean;
@@ -32,41 +27,18 @@ function resolveRedisUrl(dependencies: AppDependencies): string | undefined {
   return redisUrl || undefined;
 }
 
-function resolveHealthDatabase(): PingableConnection | null {
-  const bound = getBoundDatabaseConnection();
-
-  if (bound) {
-    return bound;
-  }
-
+async function pingDatabase(invoke: PersistenceInvocation): Promise<boolean> {
   try {
-    return getDefaultDatabasePool();
-  } catch {
-    return null;
-  }
-}
-
-async function pingDatabaseClient(connection: PingableConnection): Promise<boolean> {
-  try {
-    await connection.unsafe("SELECT 1");
-    return true;
+    return await invoke(
+      { kind: "request", actor: { kind: "system", policy: "http.health" } },
+      async ({ database }) => {
+        await database.execute({ text: "SELECT 1", params: [] });
+        return true;
+      },
+    );
   } catch {
     return false;
   }
-}
-
-async function checkDatabase(): Promise<boolean> {
-  const connection = resolveHealthDatabase();
-
-  if (!connection) {
-    return false;
-  }
-
-  return await pingDatabaseClient(connection);
-}
-
-async function pingDatabase(): Promise<boolean> {
-  return await checkDatabase();
 }
 
 async function checkRedis(redisUrl: string): Promise<boolean> {
@@ -99,12 +71,11 @@ async function resolveExtraFields(
 
 async function collectDependencyChecks(
   dependencies: AppDependencies,
+  redisUrl: string | undefined,
 ): Promise<{ checks: Record<string, "ok" | "error" | "skipped">; ready: boolean }> {
   const checks: Record<string, "ok" | "error" | "skipped"> = {
-    database: (await checkDatabase()) ? "ok" : "error",
+    database: (await pingDatabase(dependencies.invoke)) ? "ok" : "error",
   };
-
-  const redisUrl = resolveRedisUrl(dependencies);
 
   if (redisUrl) {
     checks.redis = (await checkRedis(redisUrl)) ? "ok" : "error";
@@ -121,6 +92,8 @@ function createHealthRoutes(
   dependencies: AppDependencies,
   options: CreateHealthRoutesOptions = {},
 ) {
+  const redisUrl = resolveRedisUrl(dependencies);
+  const debug = envFlagEnabled(process.env.APP_DEBUG);
   return {
     "/health": async (request?: Request) => {
       if (request && request.method !== "GET" && request.method !== "HEAD") {
@@ -137,7 +110,10 @@ function createHealthRoutes(
           : jsonResponse({ status: "ok", ...extra }, { headers });
       }
 
-      const { checks, ready: dependenciesReady } = await collectDependencyChecks(dependencies);
+      const { checks, ready: dependenciesReady } = await collectDependencyChecks(
+        dependencies,
+        redisUrl,
+      );
       let schemaReady = true;
       if (options.schemaCheck) {
         try {
@@ -166,8 +142,7 @@ function createHealthRoutes(
 
     "/ready": async () => {
       const extra = await resolveExtraFields(options.extra);
-      const { checks, ready } = await collectDependencyChecks(dependencies);
-      const debug = envFlagEnabled(process.env.APP_DEBUG);
+      const { checks, ready } = await collectDependencyChecks(dependencies, redisUrl);
 
       return jsonResponse(
         {
@@ -181,4 +156,7 @@ function createHealthRoutes(
 }
 
 export type { CreateHealthRoutesOptions };
+
+const checkDatabase = pingDatabase;
+
 export { checkDatabase, checkRedis, createHealthRoutes, pingDatabase };

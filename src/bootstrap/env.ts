@@ -15,7 +15,7 @@ import {
 const appEnvSchema: EnvSchema = defineEnvSchema({
   DATABASE_URL: {
     required: true,
-    pattern: /^(postgres(ql)?|mysql|sqlite):\/\//i,
+    pattern: /^(?:(?:postgres(?:ql)?|mysql):\/\/\S+|sqlite:(?:\/\/)?\S+)$/i,
   },
   PORT: {
     integer: true,

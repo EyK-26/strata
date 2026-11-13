@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { copyFile, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp";
+import { dockerProxyCaBuildArgs } from "./docker-build-proxy-ca";
 import { installerEnvironment } from "./installer-environment";
 
 const frontend = process.argv.find((arg) => arg.startsWith("--frontend="))?.slice(11);
@@ -12,6 +13,19 @@ assert.ok(rawPrefix);
 assert.ok(rawPrefix.startsWith("/"));
 const prefix = rawPrefix;
 const publishedVersion = process.argv.find((arg) => arg.startsWith("--published="))?.slice(12);
+const proxyCaBuildArgs = dockerProxyCaBuildArgs();
+const dockerEnv = { ...installerEnvironment() };
+for (const key of [
+  "DOCKER_CONFIG",
+  "DOCKER_HOST",
+  "DOCKER_CONTEXT",
+  "DOCKER_TLS",
+  "DOCKER_TLS_VERIFY",
+  "DOCKER_CERT_PATH",
+]) {
+  const value = process.env[key];
+  if (value !== undefined) dockerEnv[key] = value;
+}
 const fixture = await createGeneratedSecurityApp(
   "sqlite",
   [
@@ -54,6 +68,48 @@ const dockerImage = process.argv.includes("--docker")
   ? `strata-spa-prefix:${crypto.randomUUID()}`
   : undefined;
 let dockerBuilt = false;
+const activeDocker = new Set<Promise<string>>();
+let dockerExitUnresolved = false;
+let terminating = false;
+const dockerContainer = dockerImage?.replace(":", "-");
+function docker(args: string[], timeout = 240000, cleanupCommand = false): Promise<string> {
+  assert.ok(!terminating || cleanupCommand, "Docker work stopped during termination");
+  const operation = observeDocker(args, timeout);
+  activeDocker.add(operation);
+  void operation.then(
+    () => activeDocker.delete(operation),
+    () => activeDocker.delete(operation),
+  );
+  return operation;
+}
+async function observeDocker(args: string[], timeout: number) {
+  const child = Bun.spawn(["docker", ...args], {
+    cwd: fixture.app,
+    env: dockerEnv,
+    stdout: "pipe",
+    stderr: "pipe",
+    timeout,
+  });
+  const results = await Promise.allSettled([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ] as const);
+  const [terminal, out, err] = results;
+  if (terminal.status === "rejected") dockerExitUnresolved = true;
+  if (args[0] === "build" && terminal.status === "fulfilled" && terminal.value === 0)
+    dockerBuilt = true;
+  const failures = results.flatMap((result) =>
+    result.status === "rejected" ? [result.reason] : [],
+  );
+  if (failures.length)
+    throw new AggregateError(failures, "Owned Docker command observation failed.");
+  assert.ok(
+    terminal.status === "fulfilled" && out.status === "fulfilled" && err.status === "fulfilled",
+  );
+  assert.equal(terminal.value, 0, out.value + err.value);
+  return out.value;
+}
 const children = new Set<ReturnType<typeof Bun.spawn>>();
 async function command(
   args: string[],
@@ -157,22 +213,70 @@ async function document(origin: string, path: string, production: boolean) {
 let cleanupPromise: Promise<void> | undefined;
 function cleanup() {
   cleanupPromise ??= (async () => {
-    for (const child of [...children]) await stop(child);
-    if (dockerBuilt && dockerImage) {
-      const remove = Bun.spawn(["docker", "image", "rm", "--force", dockerImage], {
-        stdout: "ignore",
-        stderr: "inherit",
-      });
-      assert.equal(await remove.exited, 0);
+    await Promise.allSettled([...activeDocker]);
+    const failures: unknown[] = [];
+    let fixtureSafe = true;
+    for (const child of [...children]) {
+      try {
+        await stop(child);
+      } catch (error) {
+        failures.push(error);
+        fixtureSafe = false;
+      }
     }
-    await fixture.close();
+    if (dockerExitUnresolved) {
+      failures.push(new Error("Docker exit unconfirmed; owned fixture retained"));
+      fixtureSafe = false;
+    } else {
+      if (dockerContainer) {
+        try {
+          const id = (
+            await docker(
+              ["ps", "--all", "--filter", `name=^/${dockerContainer}$`, "--format", "{{.ID}}"],
+              240000,
+              true,
+            )
+          ).trim();
+          if (id) await docker(["rm", "--force", "--volumes", id], 240000, true);
+        } catch (error) {
+          failures.push(error);
+          fixtureSafe = false;
+        }
+      }
+      if (!dockerExitUnresolved && dockerBuilt && dockerImage) {
+        try {
+          await docker(["image", "rm", "--force", dockerImage], 240000, true);
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+    }
+    if (fixtureSafe && !dockerExitUnresolved) {
+      try {
+        await fixture.close();
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1)
+      throw new AggregateError(failures, "Owned SPA fixture cleanup failed.");
   })();
   return cleanupPromise;
 }
 const terminate = () => {
-  void cleanup().finally(() => process.exit(143));
+  terminating = true;
+  void cleanup().then(
+    () => process.exit(143),
+    (error) => {
+      console.error(error);
+      process.exit(1);
+    },
+  );
 };
 process.once("SIGTERM", terminate);
+let primaryFailed = false;
+let primaryError: unknown;
 try {
   await command(["run", "frontend:install"], fixture.app, installerEnv);
   await command(["run", "frontend:build"]);
@@ -207,46 +311,41 @@ try {
         ),
       );
     }
-    const build = Bun.spawn(
-      [
-        "docker",
-        "build",
-        "--target",
-        "frontend",
-        "--build-arg",
-        `SPA_PREFIX=${prefix}`,
-        "-t",
-        dockerImage,
-        ".",
-      ],
-      { cwd: fixture.app, env, stdout: "pipe", stderr: "pipe", timeout: 240000 },
-    );
-    const [code, out, err] = await Promise.all([
-      build.exited,
-      new Response(build.stdout).text(),
-      new Response(build.stderr).text(),
+    await docker([
+      "build",
+      ...proxyCaBuildArgs,
+      "--target",
+      "runtime",
+      "--build-arg",
+      `SPA_PREFIX=${prefix}`,
+      "-t",
+      dockerImage,
+      ".",
     ]);
-    assert.equal(code, 0, out + err);
     dockerBuilt = true;
-    const inspect = Bun.spawn(
-      [
-        "docker",
-        "run",
-        "--rm",
-        "--entrypoint",
-        "bun",
-        dockerImage,
-        "-e",
-        "console.log(await Bun.file('dist/index.html').text())",
-      ],
-      { stdout: "pipe", stderr: "pipe" },
-    );
-    const [inspection, errors, inspected] = await Promise.all([
-      new Response(inspect.stdout).text(),
-      new Response(inspect.stderr).text(),
-      inspect.exited,
+    const [image] = JSON.parse(await docker(["image", "inspect", dockerImage]));
+    for (const setting of image.Config.Env as string[]) {
+      assert.ok(
+        !/^(NODE_EXTRA_CA_CERTS|STRATA_DOCKER_PROXY_CA)=/.test(setting),
+        "Build-only CA settings must not persist in runtime image Env",
+      );
+    }
+    assert.ok(dockerContainer);
+    const inspection = await docker([
+      "run",
+      "--rm",
+      "--name",
+      dockerContainer,
+      "--entrypoint",
+      "bun",
+      dockerImage,
+      "-e",
+      `if (process.env.NODE_EXTRA_CA_CERTS !== undefined || process.env.STRATA_DOCKER_PROXY_CA !== undefined)
+        throw new Error("Build-only CA environment leaked into runtime");
+       if (await Bun.file('/run/secrets/proxy_ca').exists())
+        throw new Error("Build-only CA file leaked into runtime");
+       console.log(await Bun.file('frontend/dist/index.html').text());`,
     ]);
-    assert.equal(inspected, 0, errors);
     const assets = [...inspection.matchAll(/(?:src|href)="([^"#]+\.(?:js|css))"/g)];
     assert.ok(assets.length >= 2);
     for (const asset of assets) assert.ok(asset[1]?.startsWith(`${prefix}/`));
@@ -293,10 +392,27 @@ try {
   await document(frontOrigin, `${prefix}/orders/42/edit`, true);
   await stop(preview);
   await stop(backend);
-  console.log(
-    `PASS ${frontend}/${prefix}: generated build, actual assets/router config, nested history, dev/preview, API isolation and secret redaction`,
-  );
+} catch (error) {
+  primaryFailed = true;
+  primaryError = error;
 } finally {
   process.removeListener("SIGTERM", terminate);
-  await cleanup();
 }
+let cleanupFailed = false;
+let cleanupError: unknown;
+try {
+  await cleanup();
+} catch (error) {
+  cleanupFailed = true;
+  cleanupError = error;
+}
+if (primaryFailed && cleanupFailed)
+  throw new AggregateError(
+    [primaryError, cleanupError],
+    "SPA verification and owned cleanup failed.",
+  );
+if (primaryFailed) throw primaryError;
+if (cleanupFailed) throw cleanupError;
+console.log(
+  `PASS ${frontend}/${prefix}: generated build, actual assets/router config, nested history, dev/preview, API isolation and secret redaction`,
+);

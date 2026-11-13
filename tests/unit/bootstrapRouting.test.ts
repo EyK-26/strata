@@ -1,13 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
-import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import {
   routeParams,
   toRouteRequest,
   wrapSecuredRouteModelByKey,
 } from "@getstrata/bootstrap/web/routing";
 import { Policy, PolicyGate } from "@getstrata/core/auth/policy";
-import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
+import { withErrorHandling } from "@getstrata/core/http/response";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 class PublicForumPolicy extends Policy {
@@ -31,29 +29,11 @@ describe("bootstrap web routing", () => {
     const gate = new PolicyGate();
     gate.register("forum", new PublicForumPolicy());
 
-    const container = new ServiceContainer();
-    container.set(CORE_POLICY_GATE_TOKEN, gate);
-    container.set(CORE_AUTH_TOKEN, {
-      resolve: async () => null,
-    });
-
-    setActiveApplicationContext({
-      container,
-      config: {
-        get: <T>() => undefined as T,
-        set: <T>(_key: string, value: T) => value,
-        has: () => false,
-        require: () => {
-          throw new Error("missing");
-        },
-      } as never,
-      dependencies: {
-        container,
-        cache: undefined as never,
-        policyGate: gate,
-        queue: undefined as never,
-      } as never,
-    });
+    const ports = {
+      auth: { resolve: async () => null },
+      authorize: gate.authorize.bind(gate),
+      etagEnabled: true,
+    };
 
     const server = Bun.serve({
       port: 0,
@@ -66,6 +46,7 @@ describe("bootstrap web routing", () => {
           }),
           { resource: "forum", action: "view" },
           async (_request, model) => Response.json(model),
+          ports,
         ),
       },
     });
@@ -99,54 +80,41 @@ describe("bootstrap web routing", () => {
     const gate = new PolicyGate();
     gate.register("forum", new PublicForumPolicy());
 
-    const container = new ServiceContainer();
-    container.set(CORE_POLICY_GATE_TOKEN, gate);
-    container.set(CORE_AUTH_TOKEN, {
-      resolve: async () => null,
-    });
-
-    setActiveApplicationContext({
-      container,
-      config: {
-        get: <T>() => undefined as T,
-        set: <T>(_key: string, value: T) => value,
-        has: () => false,
-        require: () => {
-          throw new Error("missing");
-        },
-      } as never,
-      dependencies: {
-        container,
-        cache: undefined as never,
-        policyGate: gate,
-        queue: undefined as never,
-      } as never,
-    });
+    const ports = {
+      auth: { resolve: async () => null },
+      authorize: gate.authorize.bind(gate),
+      etagEnabled: true,
+    };
 
     const server = Bun.serve({
       port: 0,
       routes: {
-        "/forum/:category/:slug": wrapSecuredRouteModelByKey(
-          "slug",
-          async () => null,
-          { resource: "forum", action: "view" },
-          async () => new Response("<html>ok</html>"),
+        "/forum/:category/:slug": withErrorHandling(
+          wrapSecuredRouteModelByKey(
+            "slug",
+            async () => null,
+            { resource: "forum", action: "view" },
+            async () => new Response("<html>ok</html>"),
+            ports,
+          ),
         ),
       },
     });
 
-    const response = await fetch(`http://localhost:${server.port}/forum/nope/nope`, {
-      headers: { accept: "text/html" },
-    });
-    const html = await response.text();
+    try {
+      const response = await fetch(`http://localhost:${server.port}/forum/nope/nope`, {
+        headers: { accept: "text/html" },
+      });
+      const html = await response.text();
 
-    expect(response.status).toBe(404);
-    expect(html).toContain("<!doctype html>");
-    expect(html).toContain('href="/assets/app.css"');
-    expect(html).toContain("Not Found");
-    expect(response.headers.get("etag")).toBeNull();
-
-    server.stop(true);
+      expect(response.status).toBe(404);
+      expect(html).toContain("<!doctype html>");
+      expect(html).toContain('href="/assets/app.css"');
+      expect(html).toContain("Not Found");
+      expect(response.headers.get("etag")).toBeNull();
+    } finally {
+      await server.stop(true);
+    }
   });
 
   test("toRouteRequest normalizes params on the native request", async () => {

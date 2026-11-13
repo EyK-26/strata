@@ -6,13 +6,15 @@ import {
   type ServiceDeclaration,
   service,
 } from "@getstrata/core/contracts/services";
-import { createServiceToken } from "@getstrata/core/contracts/token";
+import { assertServiceToken, createServiceToken } from "@getstrata/core/contracts/token";
 import { PersistenceError } from "@getstrata/core/database/errors";
 import { DATABASE_MANAGER_TOKEN, DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
+import { createDatabaseOwnership, DATABASE_OWNERSHIP_TOKEN } from "#strata-orm-internal";
 import { copyApplicationConfig } from "../config/configSnapshot";
 import type { OpenOutcome } from "../contracts/application";
 import type { DatabaseConnectionOptions, DatabaseDefinition, RawPool } from "./driverPorts";
 import { DatabaseManager } from "./manager";
+import { type PreparedRegistry, prepareRegistry, snapshotRegistry } from "./modelRegistry";
 import { createRawMysqlPool } from "./rawMysql";
 import { createRawPostgresPool } from "./rawPostgres";
 import { openRawSqlitePool } from "./rawSqlite";
@@ -75,7 +77,14 @@ function connectionOptions(input: unknown): DatabaseConnectionOptions {
   return options as DatabaseConnectionOptions;
 }
 function snapshotDatabaseDefinition(input: DatabaseDefinition): DatabaseDefinition {
-  const definition = record(input, ["default", "connections"]);
+  const definition = record(input, [
+    "default",
+    "connections",
+    "repositories",
+    "models",
+    "repositoryEffects",
+    "preparation",
+  ]);
   nonempty(definition.default);
   const connections = record(definition.connections);
   const copied: Record<string, DatabaseConnectionOptions> = Object.create(null);
@@ -87,7 +96,7 @@ function snapshotDatabaseDefinition(input: DatabaseDefinition): DatabaseDefiniti
   return copyApplicationConfig({
     default: definition.default,
     connections: copied,
-  }) as DatabaseDefinition;
+  }) as unknown as DatabaseDefinition;
 }
 async function openPool(options: DatabaseConnectionOptions): Promise<OpenOutcome<RawPool>> {
   switch (options.driver) {
@@ -103,6 +112,20 @@ async function openPool(options: DatabaseConnectionOptions): Promise<OpenOutcome
 /** Every configured pool has its own declaration and journal acquisition. */
 function createDatabaseBindings(definition: DatabaseDefinition): readonly ServiceDeclaration[] {
   const snapshot = snapshotDatabaseDefinition(definition);
+  const registrySnapshot = snapshotRegistry(
+    definition.repositories,
+    definition.models,
+    definition.repositoryEffects,
+  );
+  const preparation = definition.preparation ?? [];
+  if (!Array.isArray(preparation)) invalid();
+  const preparationTokens = Array.from({ length: preparation.length }, (_, index) => {
+    const descriptor = Object.getOwnPropertyDescriptor(preparation, String(index));
+    if (!descriptor || !("value" in descriptor)) return invalid();
+    assertServiceToken(descriptor.value);
+    return descriptor.value;
+  });
+  const preparedToken = createServiceToken<PreparedRegistry>("core.database.registry");
   const entries = Object.entries(snapshot.connections).map(([name, options]) => ({
     name,
     options,
@@ -112,7 +135,7 @@ function createDatabaseBindings(definition: DatabaseDefinition): readonly Servic
   const declarations: ServiceDeclaration[] = entries.map(({ name, options, token }) =>
     resourceService(token, {
       lifetime: "application",
-      dependencies: [] as const,
+      dependencies: [preparedToken] as const,
       create: () => ({
         name: `core.database.pool.${name}`,
         open: () => openPool(options),
@@ -120,14 +143,36 @@ function createDatabaseBindings(definition: DatabaseDefinition): readonly Servic
       }),
     }),
   );
+  declarations.unshift(
+    service(DATABASE_OWNERSHIP_TOKEN, {
+      lifetime: "application",
+      dependencies: [] as const,
+      create: () => createDatabaseOwnership(snapshot.connections),
+    }),
+    service(preparedToken, {
+      lifetime: "application",
+      dependencies: [
+        DATABASE_OWNERSHIP_TOKEN,
+        ...registrySnapshot.dependencies,
+        ...preparationTokens,
+      ] as const,
+      create: (ownership, ...values) =>
+        prepareRegistry(
+          registrySnapshot,
+          values.slice(0, registrySnapshot.dependencies.length),
+          ownership.app,
+        ),
+    }),
+  );
   declarations.push(
     service(DATABASE_MANAGER_TOKEN, {
       lifetime: "application",
-      dependencies: poolTokens,
-      create: (...pools) =>
+      dependencies: [DATABASE_OWNERSHIP_TOKEN, ...poolTokens] as const,
+      create: (ownership, ...pools) =>
         new DatabaseManager(
           snapshot.default,
           entries.map(({ name }, index) => [name, pools[index] as RawPool] as const),
+          ownership,
         ),
     }),
   );
@@ -136,12 +181,13 @@ function createDatabaseBindings(definition: DatabaseDefinition): readonly Servic
       lifetime: "execution",
       dependencies: [
         DATABASE_MANAGER_TOKEN,
+        preparedToken,
         CORE_EXECUTION_CONTEXT_TOKEN,
         CORE_EXECUTION_OPERATIONS_TOKEN,
         CORE_EXECUTION_OWNERSHIP_TOKEN,
       ] as const,
-      create: (manager, context, operations, ownership) =>
-        createDatabaseSession(manager, context, operations, ownership),
+      create: (manager, prepared, context, operations, ownership) =>
+        createDatabaseSession(manager, context, operations, ownership, prepared),
     }),
   );
   return Object.freeze(declarations);

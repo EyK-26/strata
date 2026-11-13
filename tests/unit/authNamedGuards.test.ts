@@ -5,28 +5,43 @@ import { AuthManager, DatabaseTokenGuard } from "@getstrata/core/auth/guard";
 import { signJwt, verifyJwt } from "@getstrata/core/auth/jwt";
 import { JwtGuard } from "@getstrata/core/auth/jwtGuard";
 import { hashPassword } from "@getstrata/core/auth/password";
-import type { AuthUserDirectory } from "@getstrata/core/contracts/authUserDirectory";
-import { CORE_AUTH_USER_DIRECTORY_TOKEN } from "@getstrata/core/contracts/serviceTokens";
-import type { AnyServiceToken } from "@getstrata/core/contracts/token";
-import {
-  bindDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "@getstrata/core/database/boundConnection";
+import { persistConsumedRecoveryHash } from "@getstrata/core/auth/passwordLogin";
+import type {
+  AuthUserDirectory,
+  AuthUserRecord,
+} from "@getstrata/core/contracts/authUserDirectory";
 import { generateRecoveryCodes, hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
+import { withBoundDatabase } from "../helpers/boundRepositoryHarness";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
-function directoryContainer(directory: AuthUserDirectory | null) {
-  return {
-    has(token: string | AnyServiceToken) {
-      return directory !== null && token === CORE_AUTH_USER_DIRECTORY_TOKEN;
+function basic(
+  directory: AuthUserDirectory | null,
+  persistRecovery: (record: AuthUserRecord, hash: string) => Promise<boolean> = async () => false,
+) {
+  // Deliberately malformed JS input retains the existing fail-closed runtime witness.
+  return new BasicAuthGuard({ directory: directory as AuthUserDirectory, persistRecovery });
+}
+async function withRecoverySql<T>(
+  connection: { unsafe: <R>(sql: string, params?: readonly unknown[]) => Promise<R[]> },
+  directory: AuthUserDirectory,
+  work: (guard: BasicAuthGuard) => Promise<T>,
+): Promise<T> {
+  return withBoundDatabase(
+    {
+      definition: {
+        default: "main",
+        connections: { main: { driver: "sqlite", filename: ":memory:" } },
+      },
+      connection,
     },
-    resolve<T>(_key: string | AnyServiceToken): T {
-      if (!directory) {
-        throw new Error("missing directory");
-      }
-      return directory as T;
-    },
-  };
+    async (database) =>
+      work(
+        basic(directory, async (record, hash) => {
+          await persistConsumedRecoveryHash(database, record.id, record.mfa_recovery_codes, hash);
+          return true;
+        }),
+      ),
+  );
 }
 
 function jwtDirectory(
@@ -120,7 +135,10 @@ describe("JWT tokens", () => {
         abilities: ["*"],
         emailVerifiedAt: null,
       });
-      const guard = new JwtGuard({ directory: jwtDirectory() });
+      const guard = new JwtGuard({
+        secret: process.env.JWT_SECRET ?? "explicit-test-secret-at-least-32-characters",
+        directory: jwtDirectory(),
+      });
       const custom = new JwtGuard({
         secret: "a-different-jwt-secret-value",
         directory: jwtDirectory(),
@@ -156,11 +174,15 @@ describe("JWT tokens", () => {
         ),
       ).toEqual({ id: 5 });
       expect(
-        await new JwtGuard().resolve(
+        await new JwtGuard({
+          secret: process.env.JWT_SECRET ?? "explicit-test-secret-at-least-32-characters",
+          directory: undefined as unknown as AuthUserDirectory,
+        }).resolve(
           new Request("http://example.test", { headers: { authorization: `Bearer ${token}` } }),
         ),
       ).toBeNull();
       const enrolled = new JwtGuard({
+        secret: process.env.JWT_SECRET ?? "explicit-test-secret-at-least-32-characters",
         directory: jwtDirectory(() => ({
           id: 9,
           role: "admin",
@@ -179,6 +201,7 @@ describe("JWT tokens", () => {
         emailVerifiedAt: null,
       });
       const revoked = new JwtGuard({
+        secret: process.env.JWT_SECRET ?? "explicit-test-secret-at-least-32-characters",
         directory: jwtDirectory(() => ({
           id: 9,
           role: "admin",
@@ -209,9 +232,15 @@ describe("named auth guards", () => {
           return { id, role: "recruiter" };
         },
       };
-      const auth = new AuthManager(new DatabaseTokenGuard(directoryContainer(directory)));
-      auth.registerGuard("api", new DatabaseTokenGuard(directoryContainer(directory)));
-      auth.registerGuard("jwt", new JwtGuard({ directory }));
+      const auth = new AuthManager(new DatabaseTokenGuard(directory));
+      auth.registerGuard("api", new DatabaseTokenGuard(directory));
+      auth.registerGuard(
+        "jwt",
+        new JwtGuard({
+          secret: process.env.JWT_SECRET ?? "explicit-test-secret-at-least-32-characters",
+          directory,
+        }),
+      );
 
       expect(
         await auth.resolve(
@@ -229,9 +258,15 @@ describe("named auth guards", () => {
       expect(auth.guardNames()).toContain("api");
       expect(auth.use("jwt")).toBeInstanceOf(JwtGuard);
       expect(() => auth.use("missing")).toThrow('Unknown auth guard "missing"');
-      expect(() => auth.registerGuard("  ", new JwtGuard({ directory }))).toThrow(
-        "Auth guard name must not be empty.",
-      );
+      expect(() =>
+        auth.registerGuard(
+          "  ",
+          new JwtGuard({
+            secret: process.env.JWT_SECRET ?? "explicit-test-secret-at-least-32-characters",
+            directory,
+          }),
+        ),
+      ).toThrow("Auth guard name must not be empty.");
 
       const bearerMiss = new AuthManager({
         resolve() {
@@ -262,7 +297,7 @@ describe("named auth guards", () => {
             : null;
         },
       };
-      auth.registerGuard("basic", new BasicAuthGuard(directoryContainer(basicDirectory)));
+      auth.registerGuard("basic", basic(basicDirectory));
       const basicHeader = Buffer.from("basic@hiroapp.test:ok").toString("base64");
       expect(
         await auth.resolve(
@@ -299,7 +334,7 @@ describe("HTTP Basic guard", () => {
         };
       },
     };
-    const guard = new BasicAuthGuard(directoryContainer(directory));
+    const guard = basic(directory);
     const encoded = Buffer.from("admin@hiroapp.test:secret-pass").toString("base64");
     expect(await guard.resolve(new Request("http://example.test"))).toBeNull();
     expect(
@@ -319,7 +354,7 @@ describe("HTTP Basic guard", () => {
         return row ? { ...row, mfa_enabled: true, mfa_secret: "secret" } : null;
       },
     };
-    const mfaGuard = new BasicAuthGuard(directoryContainer(mfaDirectory));
+    const mfaGuard = basic(mfaDirectory);
     expect(
       await mfaGuard.resolve(
         new Request("http://example.test", { headers: { authorization: `Basic ${encoded}` } }),
@@ -355,28 +390,28 @@ describe("HTTP Basic guard", () => {
       },
     };
     let stored = "";
-    bindDatabaseConnection({
-      async unsafe(_query: string, params: readonly unknown[] = []) {
+    const sql = {
+      async unsafe<T>(_query: string, params: readonly unknown[] = []) {
         stored = String(params[0]);
-        return [{ id: 1 }];
+        return [{ id: 1 }] as T[];
       },
-    } as never);
+    };
     try {
-      const guard = new BasicAuthGuard(directoryContainer(directory));
-      const encoded = Buffer.from("admin@hiroapp.test:secret-pass").toString("base64");
-      expect(
-        await guard.resolve(
-          new Request("http://example.test", {
-            headers: {
-              authorization: `Basic ${encoded}`,
-              "x-mfa-code": String(code),
-            },
-          }),
-        ),
-      ).toEqual({ id: 1, role: "admin", emailVerifiedAt: null });
-      expect(JSON.parse(stored)).toEqual([]);
+      await withRecoverySql(sql, directory, async (guard) => {
+        const encoded = Buffer.from("admin@hiroapp.test:secret-pass").toString("base64");
+        expect(
+          await guard.resolve(
+            new Request("http://example.test", {
+              headers: {
+                authorization: `Basic ${encoded}`,
+                "x-mfa-code": String(code),
+              },
+            }),
+          ),
+        ).toEqual({ id: 1, role: "admin", emailVerifiedAt: null });
+        expect(JSON.parse(stored)).toEqual([]);
+      });
     } finally {
-      resetBoundDatabaseConnection();
       restoreEnvVar("TENANCY_DRIVER", previousTenancy);
     }
   });
@@ -402,24 +437,31 @@ describe("HTTP Basic guard", () => {
           }),
           verifyCredentials: async () => ({ id: 1 }),
         };
-        const guard = new BasicAuthGuard(directoryContainer(directory));
         const request = new Request("http://example.test", {
           headers: {
             authorization: `Basic ${Buffer.from("fixture:secret-pass").toString("base64")}`,
             "x-mfa-code": String(code),
           },
         });
-        bindDatabaseConnection({ unsafe: async () => [] } as never);
-        expect(await guard.resolve(request)).toBeNull();
-        bindDatabaseConnection({
-          unsafe: async () => {
-            throw new Error("SQL unavailable");
-          },
-        } as never);
-        await expect(guard.resolve(request)).rejects.toThrow("SQL unavailable");
+        await withRecoverySql({ unsafe: async () => [] }, directory, async (guard) => {
+          expect(await guard.resolve(request)).toBeNull();
+        });
+        await expect(
+          withRecoverySql(
+            {
+              unsafe: async () => {
+                throw new Error("SQL unavailable");
+              },
+            },
+            directory,
+            (guard) => guard.resolve(request),
+          ),
+        ).rejects.toMatchObject({
+          code: "DATABASE_OPERATION_FAILED",
+          cause: { message: "SQL unavailable" },
+        });
       }
     } finally {
-      resetBoundDatabaseConnection();
       restoreEnvVar("TENANCY_DRIVER", before);
     }
   });
@@ -439,7 +481,7 @@ describe("HTTP Basic guard", () => {
         return null;
       },
     };
-    const guard = new BasicAuthGuard(directoryContainer(directory));
+    const guard = basic(directory);
     const encoded = Buffer.from("recruiter@hiroapp.test:ok").toString("base64");
     expect(
       await guard.resolve(
@@ -453,7 +495,7 @@ describe("HTTP Basic guard", () => {
         return { id, role: "recruiter", mfa_enabled: true, mfa_secret: "secret" };
       },
     };
-    const mfaGuard = new BasicAuthGuard(directoryContainer(mfaDirectory));
+    const mfaGuard = basic(mfaDirectory);
     expect(
       await mfaGuard.resolve(
         new Request("http://example.test", { headers: { authorization: `Basic ${encoded}` } }),
@@ -462,7 +504,7 @@ describe("HTTP Basic guard", () => {
   });
 
   test("returns null without a user directory", async () => {
-    const guard = new BasicAuthGuard(directoryContainer(null));
+    const guard = basic(null);
     const encoded = Buffer.from("a:b").toString("base64");
     expect(
       await guard.resolve(
@@ -478,7 +520,7 @@ describe("HTTP Basic guard", () => {
         return { id, role: "admin" };
       },
     };
-    const withoutLookup = new BasicAuthGuard(directoryContainer(emptyDirectory));
+    const withoutLookup = basic(emptyDirectory);
     expect(
       await withoutLookup.resolve(
         new Request("http://example.test", { headers: { authorization: `Basic ${encoded}` } }),
@@ -505,7 +547,7 @@ describe("HTTP Basic guard", () => {
         return null;
       },
     };
-    const guard = new BasicAuthGuard(directoryContainer(directory));
+    const guard = basic(directory);
     expect(
       await guard.resolve(
         new Request("http://example.test", { headers: { authorization: "Basic " } }),
@@ -570,7 +612,7 @@ test("legacy basic directories deny missing, inactive and deleted principals", a
         throw new Error("deleted");
       },
     };
-    expect(await new BasicAuthGuard(directoryContainer(directory)).resolve(request)).toBeNull();
+    expect(await basic(directory).resolve(request)).toBeNull();
     expect(lookups).toBe(user && user.isActive !== false ? 1 : 0);
   }
 });

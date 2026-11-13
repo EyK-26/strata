@@ -13,13 +13,16 @@ import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
 import { ForbiddenError } from "@getstrata/core/errors/http";
-import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
 import {
   configureWebLayoutData,
   resetWebLayoutDataConfigForTests,
   resolveWebLayoutData,
 } from "@getstrata/core/view/webLayoutData";
-import { enableDevAuthHeaders, restoreDevAuthHeaders } from "../helpers/devAuthHeaders";
+import {
+  enableDevAuthHeaders,
+  guestGuardOptions,
+  restoreDevAuthHeaders,
+} from "../helpers/devAuthHeaders";
 import { createMockDependencies } from "./testHelpers";
 
 describe("ability checker vs auth user directory tokens", () => {
@@ -32,7 +35,12 @@ describe("ability checker vs auth user directory tokens", () => {
     const checkerCalls: string[] = [];
 
     const container = new ServiceContainer();
-    container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
+    container.set(
+      CORE_AUTH_TOKEN,
+      new AuthManager(
+        new GuestGuard(guestGuardOptions({ APP_ENV: "local", AUTH_DEV_HEADERS: "true" })),
+      ),
+    );
     container.set(CORE_ABILITY_CHECKER_TOKEN, {
       tokenCan: () => false,
       requireAbility: (_user: unknown, ability: string) => {
@@ -66,7 +74,7 @@ describe("ability checker vs auth user directory tokens", () => {
       ),
     );
 
-    const handler = withMiddleware(...kernel.globalMiddleware())(
+    const handler = kernel.wrapApi(
       kernel.wrapAbility("projects:delete", async () => Response.json({ ok: true })),
     );
 

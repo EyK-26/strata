@@ -4,16 +4,24 @@ import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
 import type { InitializedAppContext } from "@getstrata/bootstrap/context";
 import { routeRegistry } from "@getstrata/bootstrap/routeRegistry";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
+import type { Application } from "@getstrata/core/contracts/application";
 
 const application: {
-  createApp(options: { migrate: false }): Promise<{ context: InitializedAppContext }>;
+  createApp(options: {
+    migrate: false;
+    onConstructed(owner: Application): undefined;
+  }): Promise<{ context: InitializedAppContext; application: Application }>;
 } = await import(new URL("../bootstrap/createApp.ts", import.meta.url).href);
-const database: { closeDatabase(): Promise<void> } = await import(
-  new URL("../bootstrap/database.ts", import.meta.url).href
-);
-const app = await application.createApp({ migrate: false });
+let owner: Application | undefined;
+const failures: unknown[] = [];
 let server: ReturnType<typeof createWebServer> | undefined;
 try {
+  const app = await application.createApp({
+    migrate: false,
+    onConstructed: (application) => {
+      owner = application;
+    },
+  });
   const routes = buildModuleRoutes(app.context.dependencies, {
     apiPrefix: "/contracts/",
     modules: [
@@ -62,14 +70,21 @@ try {
   console.log(
     "PASS installed route alias metadata and existing raw-path precedence over real HTTP",
   );
+} catch (error) {
+  failures.push(error);
 } finally {
   try {
     await server?.stop(true);
-  } finally {
+  } catch (error) {
+    failures.push(error);
+  }
+  if (owner) {
     try {
-      await app.context.dispose();
-    } finally {
-      await database.closeDatabase();
+      assert.ok((await owner.stop()).successful);
+    } catch (error) {
+      failures.push(error);
     }
   }
 }
+if (failures.length === 1) throw failures[0];
+if (failures.length > 1) throw new AggregateError(failures, "Route consumer and cleanup failed");

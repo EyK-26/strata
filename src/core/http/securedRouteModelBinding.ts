@@ -1,17 +1,8 @@
-import { currentAuthUser } from "@getstrata/core/auth/authContext";
+import type { AuthUser } from "@getstrata/core/auth/authContext";
+import type { AuthReader } from "@getstrata/core/auth/authReader";
 import type { Policy } from "@getstrata/core/auth/policy";
 import { BadRequestError, NotFoundError } from "@getstrata/core/errors/http";
-import {
-  resolveApplicationAuth,
-  resolveApplicationPolicyGate,
-} from "@getstrata/core/runtime/applicationRegistry";
-import {
-  applyConditionalGet,
-  assertIfMatch,
-  type EtagVersioned,
-  etagFromResource,
-  isEtagEnabled,
-} from "./etag";
+import { applyConditionalGet, assertIfMatch, type EtagVersioned, etagFromResource } from "./etag";
 import type { RouteRequest } from "./route";
 import { parsePositiveIntParam } from "./validation";
 
@@ -21,6 +12,38 @@ interface RouteModelAuthorization {
   requireIfMatch?: boolean;
   /** Opt in (`true`) or out (`false`) of GET ETags. HTML and composites are off by default. */
   etag?: boolean;
+}
+
+interface RouteModelBindingPorts {
+  readonly auth: Pick<AuthReader, "resolve">;
+  readonly authorize: (
+    resource: string,
+    action: keyof Policy,
+    user: AuthUser | null,
+    model: unknown,
+  ) => void | Promise<void>;
+  readonly etagEnabled: boolean;
+}
+
+function snapshotPorts(ports: RouteModelBindingPorts): RouteModelBindingPorts {
+  const auth = ports?.auth,
+    resolve = auth?.resolve,
+    authorize = ports?.authorize,
+    etagEnabled = ports?.etagEnabled;
+  if (
+    typeof resolve !== "function" ||
+    typeof authorize !== "function" ||
+    typeof etagEnabled !== "boolean"
+  )
+    throw new TypeError(
+      "Secured model binding requires explicit auth, authorization and ETag policy.",
+    );
+  return Object.freeze({
+    auth: Object.freeze({ resolve: (request?: Request) => resolve.call(auth, request) }),
+    authorize: (...args: Parameters<RouteModelBindingPorts["authorize"]>) =>
+      authorize.call(ports, ...args),
+    etagEnabled,
+  });
 }
 
 function isMutatingPolicyAction(action: keyof Policy): boolean {
@@ -75,17 +98,17 @@ function securedBindRouteModel<
   resolver: (id: number, request: RouteRequest<TParams>) => Promise<TModel>,
   authorization: RouteModelAuthorization,
   handler: (request: RouteRequest<TParams>, model: TModel) => Response | Promise<Response>,
+  ports: RouteModelBindingPorts,
 ): (request: RouteRequest<TParams>) => Promise<Response> {
+  const selected = snapshotPorts(ports);
+  authorization = Object.freeze({ ...authorization });
   return async (request: RouteRequest<TParams>) => {
     const id = parsePositiveIntParam(String(request.params[param]), String(param));
     const model = requireResolvedModel(await resolver(id, request));
-    const gate = resolveApplicationPolicyGate();
-    const auth = resolveApplicationAuth();
-    const user = currentAuthUser() ?? (await auth.resolve(request));
+    const user = await selected.auth.resolve(request);
+    await selected.authorize(authorization.resource, authorization.action, user, model);
 
-    gate.authorize(authorization.resource, authorization.action, user, model);
-
-    if (isEtagEnabled() && isMutatingPolicyAction(authorization.action)) {
+    if (selected.etagEnabled && isMutatingPolicyAction(authorization.action)) {
       assertIfMatch(request, etagFromResource(model as EtagVersioned), {
         required: authorization.requireIfMatch ?? true,
       });
@@ -94,11 +117,13 @@ function securedBindRouteModel<
     const response = await handler(request, model);
 
     if (
-      isEtagEnabled() &&
+      selected.etagEnabled &&
       authorization.action === "view" &&
       shouldApplyViewEtag(response, model, authorization)
     ) {
-      return applyConditionalGet(request, response, etagFromResource(model as EtagVersioned));
+      return applyConditionalGet(request, response, etagFromResource(model as EtagVersioned), {
+        etagEnabled: selected.etagEnabled,
+      });
     }
 
     return response;
@@ -114,7 +139,10 @@ function securedBindRouteModelByKey<
   resolver: (key: string, request: RouteRequest<TParams>) => Promise<TModel>,
   authorization: RouteModelAuthorization,
   handler: (request: RouteRequest<TParams>, model: TModel) => Response | Promise<Response>,
+  ports: RouteModelBindingPorts,
 ): (request: RouteRequest<TParams>) => Promise<Response> {
+  const selected = snapshotPorts(ports);
+  authorization = Object.freeze({ ...authorization });
   return async (request: RouteRequest<TParams>) => {
     const key = String(request.params[param] ?? "").trim();
     if (!key) {
@@ -122,13 +150,10 @@ function securedBindRouteModelByKey<
     }
 
     const model = requireResolvedModel(await resolver(key, request));
-    const gate = resolveApplicationPolicyGate();
-    const auth = resolveApplicationAuth();
-    const user = currentAuthUser() ?? (await auth.resolve(request));
+    const user = await selected.auth.resolve(request);
+    await selected.authorize(authorization.resource, authorization.action, user, model);
 
-    gate.authorize(authorization.resource, authorization.action, user, model);
-
-    if (isEtagEnabled() && isMutatingPolicyAction(authorization.action)) {
+    if (selected.etagEnabled && isMutatingPolicyAction(authorization.action)) {
       assertIfMatch(request, etagFromResource(model as EtagVersioned), {
         required: authorization.requireIfMatch ?? true,
       });
@@ -137,16 +162,18 @@ function securedBindRouteModelByKey<
     const response = await handler(request, model);
 
     if (
-      isEtagEnabled() &&
+      selected.etagEnabled &&
       authorization.action === "view" &&
       shouldApplyViewEtag(response, model, authorization)
     ) {
-      return applyConditionalGet(request, response, etagFromResource(model as EtagVersioned));
+      return applyConditionalGet(request, response, etagFromResource(model as EtagVersioned), {
+        etagEnabled: selected.etagEnabled,
+      });
     }
 
     return response;
   };
 }
 
-export type { RouteModelAuthorization };
+export type { RouteModelAuthorization, RouteModelBindingPorts };
 export { securedBindRouteModel, securedBindRouteModelByKey };

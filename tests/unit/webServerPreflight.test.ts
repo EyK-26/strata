@@ -7,6 +7,7 @@ import { convertAppRoutesToBunRoutes, createWebServer } from "@getstrata/bootstr
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { generateOpenApiSpec } from "@getstrata/core/openapi/generator";
+import { guestGuardOptions } from "../helpers/devAuthHeaders";
 import { createMockDependencies } from "./testHelpers";
 
 const keys = ["CORS_ALLOWED_ORIGINS", "CORS_ADDITIONAL_ALLOWED_HEADERS", "TENANCY_DRIVER"];
@@ -38,7 +39,10 @@ function preflight(origin = "https://client.example") {
 describe("native registered-route preflights", () => {
   test("generated authenticated method maps admit approved preflights without executing business handlers", async () => {
     const dependencies = createMockDependencies(new ServiceContainer());
-    dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard()));
+    dependencies.container.set(
+      CORE_AUTH_TOKEN,
+      new AuthManager(new GuestGuard(guestGuardOptions())),
+    );
     let writes = 0;
     const routes = buildModuleRoutes(dependencies, {
       modules: [

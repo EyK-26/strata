@@ -16,7 +16,10 @@
       "@getstrata/core": ["../../src/framework/public-api.ts"],
       "@getstrata/core/*": ["../../src/core/*"],
       "@getstrata/bootstrap": ["../../src/bootstrap/public-api.ts"],
-      "@getstrata/bootstrap/*": ["../../src/bootstrap/*"]
+      "@getstrata/bootstrap/*": ["../../src/bootstrap/*"],
+      "#strata-orm-internal": ["../../src/core/database/ormInternal.ts"],
+      "#strata-orm-runtime": ["../../src/core/database/ormRuntime.ts"],
+      "#strata-http-route": ["../../src/bootstrap/ownedHttpRoute.ts"]
     }
   },
   "include": ["../../src/bootstrap/public-api.ts", "../../src/bootstrap/**/*.ts"]

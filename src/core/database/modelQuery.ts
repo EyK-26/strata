@@ -1,14 +1,10 @@
 import { NotFoundError } from "@getstrata/core/errors/http";
+import { getBindingPorts } from "#strata-orm-internal";
 import type { CursorPaginatedResult, KeysetCursor, KeysetOptions } from "../pagination/index.ts";
 import type BaseRepository from "./baseRepository.ts";
-import type { Model } from "./model.ts";
+import { type BoundModelFacade, getModelBinding, type Model, runObservers } from "./model.ts";
 import { applyCasts, hydrateValue } from "./modelAttributes.ts";
-import {
-  ensureBooted,
-  getModelObservers,
-  resolveModelRepository,
-  runObservers,
-} from "./modelRegistry.ts";
+import { snapshotQueryPlan } from "./queryPlanSnapshot.ts";
 import type { AnyRelationQuery } from "./relationQuery.ts";
 import type {
   BelongsToManyRelation,
@@ -19,11 +15,11 @@ import type {
   MorphOneRelation,
   MorphToRelation,
 } from "./relationships.ts";
-import type { RepositoryQuery } from "./repositoryQuery.ts";
+import { type RepositoryQuery, snapshotRepositoryQuery } from "./repositoryQuery.ts";
 import type { ModelWhere, QueryLockOptions, QueryOptions, QueryWhere } from "./types.ts";
 
-function modelStatics(model: object): typeof Model {
-  return model as typeof Model;
+function modelStatics(model: object): BoundModelFacade<Record<string, unknown>, "id", AnyModel> {
+  return model as BoundModelFacade<Record<string, unknown>, "id", AnyModel>;
 }
 
 type AnyModel = Model<Record<string, unknown>, "id">;
@@ -105,6 +101,7 @@ async function eagerLoadOnModels(
   }>,
   paths: string[],
   knownAbsentMorphRoots: ReadonlyMap<object, ReadonlySet<string>> = new Map(),
+  preparedRoots: ReadonlyMap<object, ReadonlyMap<string, AnyRelationQuery>> = new Map(),
 ): Promise<void> {
   if (models.length === 0 || paths.length === 0) {
     return;
@@ -150,7 +147,8 @@ async function eagerLoadOnModels(
 
       const first = unloaded[0];
       if (first) {
-        const relationQuery = resolveModelRelation(first, head);
+        const relationQuery =
+          preparedRoots.get(first)?.get(head) ?? resolveModelRelation(first, head);
         const query = first.getRepository().query();
         relationQuery.applyEagerLoad(query, head);
         const attached = await query.attachToRows(
@@ -209,8 +207,16 @@ async function loadNested(
     setLoaded: (name: string, value: unknown) => unknown;
   },
   path: string,
+  preparedRoot?: AnyRelationQuery,
 ): Promise<void> {
-  await eagerLoadOnModels([model], [path]);
+  await eagerLoadOnModels(
+    [model],
+    [path],
+    new Map(),
+    preparedRoot
+      ? new Map([[model, new Map([[path.split(".")[0] ?? path, preparedRoot]])]])
+      : new Map(),
+  );
 }
 
 function castPluckedValue(modelClass: object, column: string, value: unknown): unknown {
@@ -225,6 +231,7 @@ class ModelProjection<TEntity extends object, K extends keyof TEntity & string> 
     private readonly page: (
       options: KeysetOptions<TEntity>,
     ) => Promise<CursorPaginatedResult<Pick<TEntity, K>, KeysetCursor>>,
+    private readonly firstValue: () => Promise<Pick<TEntity, K> | null>,
   ) {}
   keysetPaginate(options: KeysetOptions<TEntity>) {
     return this.page(options);
@@ -232,11 +239,14 @@ class ModelProjection<TEntity extends object, K extends keyof TEntity & string> 
   get(): Promise<Array<Pick<TEntity, K>>> {
     return this.load();
   }
-  async first(): Promise<Pick<TEntity, K> | null> {
-    return (await this.load(1))[0] ?? null;
+  first(): Promise<Pick<TEntity, K> | null> {
+    return this.firstValue();
   }
 }
 
+let snapshotModelQuery: <M extends object, C extends string>(
+  query: ModelQuery<M, C>,
+) => ModelQuery<M, C>;
 class ModelQuery<TModel extends object = AnyModel, TCounts extends string = never> {
   private readonly eager: Array<{ name: string; path: string; relationQuery: AnyRelationQuery }> =
     [];
@@ -246,9 +256,42 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
     readonly query: RepositoryQuery<Record<string, unknown>, "id">,
   ) {}
 
+  static {
+    snapshotModelQuery = (query) => query.snapshot();
+  }
+  private snapshot(): ModelQuery<TModel, TCounts> {
+    getBindingPorts(modelStatics(this.modelClass).binding).assertActive();
+    const plan = new ModelQuery<TModel, TCounts>(
+      this.modelClass,
+      snapshotRepositoryQuery(this.query),
+    );
+    plan.eager.push(
+      ...this.eager.map((item) => ({ ...item, relationQuery: item.relationQuery.snapshot() })),
+    );
+    return plan;
+  }
+
+  private terminal<V, A = undefined>(
+    work: (plan: ModelQuery<TModel, TCounts>, input: A) => Promise<V>,
+    input?: A,
+  ): Promise<V> {
+    const facade = modelStatics(this.modelClass);
+    let plan: ModelQuery<TModel, TCounts>;
+    let captured: A;
+    try {
+      getBindingPorts(facade.binding).assertActive();
+      captured = snapshotQueryPlan(input as A);
+      plan = this.snapshot();
+    } catch (error) {
+      return facade.binding.run(() => {
+        throw error;
+      });
+    }
+    return facade.binding.run(() => work(plan, captured));
+  }
+
   with(...relations: RelationNameInput[]): this {
     const statics = modelStatics(this.modelClass);
-    ensureBooted(this.modelClass);
     const dummy = statics.newFromRecord({}, false);
 
     for (const path of flattenRelationNames(relations)) {
@@ -307,29 +350,53 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
     ...columns: readonly K[]
   ): ModelProjection<ModelAttributes<TModel>, K> {
     return new ModelProjection(
-      async (limit) => {
-        const rows = await this.query.project(columns, limit);
-        return rows.map(
-          (row) =>
-            applyCasts(row, modelStatics(this.modelClass).$casts, "hydrate") as Pick<
-              ModelAttributes<TModel>,
-              K
-            >,
-        );
-      },
-      async (options) => {
-        const page = await this.query.projectKeyset(columns, options as never);
-        return {
-          ...page,
-          data: page.data.map(
-            (row) =>
-              applyCasts(row, modelStatics(this.modelClass).$casts, "hydrate") as Pick<
-                ModelAttributes<TModel>,
-                K
-              >,
-          ),
-        };
-      },
+      (limit) =>
+        this.terminal(
+          async (plan, captured) => {
+            const rows = await plan.query.project(captured.columns, captured.limit);
+            return rows.map(
+              (row) =>
+                applyCasts(row, modelStatics(plan.modelClass).$casts, "hydrate") as Pick<
+                  ModelAttributes<TModel>,
+                  K
+                >,
+            );
+          },
+          { columns, limit },
+        ),
+      (options) =>
+        this.terminal(
+          async (plan, captured) => {
+            const page = await plan.query.projectKeyset(
+              captured.columns,
+              captured.options as never,
+            );
+            return {
+              ...page,
+              data: page.data.map(
+                (row) =>
+                  applyCasts(row, modelStatics(plan.modelClass).$casts, "hydrate") as Pick<
+                    ModelAttributes<TModel>,
+                    K
+                  >,
+              ),
+            };
+          },
+          { columns, options },
+        ),
+      () =>
+        this.terminal(
+          async (plan, captured) => {
+            const row = (await plan.query.project(captured.columns, 1))[0];
+            return row
+              ? (applyCasts(row, modelStatics(plan.modelClass).$casts, "hydrate") as Pick<
+                  ModelAttributes<TModel>,
+                  K
+                >)
+              : null;
+          },
+          { columns },
+        ),
     );
   }
 
@@ -404,12 +471,15 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
     return this;
   }
 
-  async paginate(options: { page: number; perPage: number }): Promise<{
+  paginate(options: { page: number; perPage: number }): Promise<{
     data: ModelQueryResult<TModel, TCounts>[];
     meta: Awaited<ReturnType<RepositoryQuery<Record<string, unknown>, "id">["paginate"]>>["meta"];
   }> {
-    const { data, meta } = await this.query.paginate(options);
-    return { data: await this.hydrateRows(data), meta };
+    return this.terminal(async (plan, captured) => {
+      const eager = [...plan.eager];
+      const { data, meta } = await plan.query.paginate(captured);
+      return { data: await plan.hydrateRows(data, eager), meta };
+    }, options);
   }
 
   whereExists(sql: string, params: readonly unknown[] = []): this {
@@ -602,31 +672,38 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
     return this;
   }
 
-  async get(): Promise<ModelQueryResult<TModel, TCounts>[]> {
-    return await this.hydrateRows(await this.query.get());
+  get(): Promise<ModelQueryResult<TModel, TCounts>[]> {
+    return this.terminal(async (plan) => {
+      const eager = [...plan.eager];
+      return await plan.hydrateRows(await plan.query.get(), eager);
+    });
   }
 
-  async keysetPaginate(options: KeysetOptions<ModelAttributes<TModel>>) {
-    const page = await this.query.keysetPaginate(options as never);
-    return { ...page, data: await this.hydrateRows(page.data) };
+  keysetPaginate(options: KeysetOptions<ModelAttributes<TModel>>) {
+    return this.terminal(async (plan, captured) => {
+      const eager = [...plan.eager];
+      const page = await plan.query.keysetPaginate(captured as never);
+      return { ...page, data: await plan.hydrateRows(page.data, eager) };
+    }, options);
   }
 
   private async hydrateRows(
     rows: readonly Record<string, unknown>[],
+    eager = [...this.eager],
   ): Promise<ModelQueryResult<TModel, TCounts>[]> {
     const statics = modelStatics(this.modelClass);
     const models: AnyModel[] = [];
     const knownAbsentMorphRoots = new Map<object, Set<string>>();
-    const nested = this.eager.filter((item) => item.path.includes(".")).map((item) => item.path);
+    const nested = eager.filter((item) => item.path.includes(".")).map((item) => item.path);
     const nestedRoots = new Set(
-      this.eager.filter((item) => item.path.includes(".")).map((item) => item.name),
+      eager.filter((item) => item.path.includes(".")).map((item) => item.name),
     );
 
     for (const row of rows) {
       const model = statics.newFromRecord(row, true) as AnyModel;
       const absentMorphRoots = new Set<string>();
 
-      for (const { name, relationQuery } of this.eager) {
+      for (const { name, relationQuery } of eager) {
         const value = relationQuery.hydrateEager(row, name, nestedRoots.has(name));
         model.setLoaded(name, value);
         if (relationQuery.kind === "morphTo" && value === undefined) absentMorphRoots.add(name);
@@ -641,7 +718,7 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
       models.map((model) => {
         // Observer objects may expose callback getters. Inspect only the owned
         // list, leaving user callbacks to runObservers and preserving reloads.
-        if (getModelObservers(model.constructor)?.length) {
+        if (getBindingPorts(getModelBinding(model)).observers.length) {
           knownAbsentMorphRoots.delete(model);
         }
         return runObservers(model as AnyModel, "retrieved");
@@ -652,60 +729,77 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
     return models as unknown as ModelQueryResult<TModel, TCounts>[];
   }
 
-  async first(): Promise<ModelQueryResult<TModel, TCounts> | null> {
-    this.query.limit(1);
-    const models = await this.get();
-    return models[0] ?? null;
+  first(): Promise<ModelQueryResult<TModel, TCounts> | null> {
+    return this.terminal(async (plan) => {
+      plan.query.limit(1);
+      const models = await plan.get();
+      return models[0] ?? null;
+    });
   }
 
-  async count(): Promise<number> {
-    return this.query.count();
+  count(): Promise<number> {
+    return this.terminal(async (plan) => {
+      return plan.query.count();
+    });
   }
 
   async pluck(column: string): Promise<unknown[]>;
   async pluck(column: string, keyBy: string): Promise<Map<unknown, unknown>>;
-  async pluck(column: string, keyBy?: string): Promise<unknown[] | Map<unknown, unknown>> {
-    if (keyBy === undefined) {
-      const values = await this.query.pluck(column);
-      return values.map((value) => castPluckedValue(this.modelClass, column, value));
-    }
+  pluck(column: string, keyBy?: string): Promise<unknown[] | Map<unknown, unknown>> {
+    return this.terminal(async (plan) => {
+      if (keyBy === undefined) {
+        const values = await plan.query.pluck(column);
+        return values.map((value) => castPluckedValue(plan.modelClass, column, value));
+      }
 
-    const keyed = await this.query.pluck(column, keyBy);
-    const result = new Map<unknown, unknown>();
+      const keyed = await plan.query.pluck(column, keyBy);
+      const result = new Map<unknown, unknown>();
 
-    for (const [key, value] of keyed) {
-      result.set(
-        castPluckedValue(this.modelClass, keyBy, key),
-        castPluckedValue(this.modelClass, column, value),
-      );
-    }
+      for (const [key, value] of keyed) {
+        result.set(
+          castPluckedValue(plan.modelClass, keyBy, key),
+          castPluckedValue(plan.modelClass, column, value),
+        );
+      }
 
-    return result;
+      return result;
+    });
   }
 
-  async value(column: string): Promise<unknown> {
-    const value = await this.query.value(column);
-    return castPluckedValue(this.modelClass, column, value);
+  value(column: string): Promise<unknown> {
+    return this.terminal(async (plan) => {
+      const value = await plan.query.value(column);
+      return castPluckedValue(plan.modelClass, column, value);
+    });
   }
 
-  async find(id: ModelIdentifier<TModel>): Promise<ModelQueryResult<TModel, TCounts> | null> {
-    const primaryKey = resolveModelRepository(this.modelClass).getTable().primaryKey;
-    return this.whereDynamic({ [primaryKey]: id } as QueryWhere<object>).first();
+  find(id: ModelIdentifier<TModel>): Promise<ModelQueryResult<TModel, TCounts> | null> {
+    return this.terminal(async (plan, captured) => {
+      const primaryKey = modelStatics(plan.modelClass).repository().getTable().primaryKey;
+      return plan.whereDynamic({ [primaryKey]: captured } as QueryWhere<object>).first();
+    }, id);
   }
 
-  async findOrFail(
+  findOrFail(
     id: ModelIdentifier<TModel>,
     errorFactory?: (id: unknown) => Error,
   ): Promise<ModelQueryResult<TModel, TCounts>> {
-    const model = await this.find(id);
+    return this.terminal(
+      async (plan, captured) => {
+        const model = await plan.find(captured.id);
 
-    if (model) {
-      return model;
-    }
+        if (model) {
+          return model;
+        }
 
-    throw (
-      errorFactory?.(id) ??
-      new NotFoundError(`${(this.modelClass as { name: string }).name} ${String(id)} not found.`)
+        throw (
+          captured.errorFactory?.(captured.id) ??
+          new NotFoundError(
+            `${(plan.modelClass as { name: string }).name} ${String(captured.id)} not found.`,
+          )
+        );
+      },
+      { id, errorFactory },
     );
   }
 
@@ -723,8 +817,7 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
   ): ModelQuery<TModel, TCounts | TAlias>;
   withCount(name: string, alias = `${name}_count`): this {
     const statics = modelStatics(this.modelClass);
-    ensureBooted(this.modelClass);
-    const repository = resolveModelRepository(this.modelClass);
+    const repository = modelStatics(this.modelClass).repository();
     const dummy = statics.newFromRecord({});
     const method = (dummy as unknown as Record<string, unknown>)[name];
 
@@ -756,8 +849,7 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
     not: boolean,
   ): this {
     const statics = modelStatics(this.modelClass);
-    ensureBooted(this.modelClass);
-    const repository = resolveModelRepository(this.modelClass);
+    const repository = modelStatics(this.modelClass).repository();
     const dummy = statics.newFromRecord({});
     const method = (dummy as unknown as Record<string, unknown>)[name];
 
@@ -777,4 +869,4 @@ class ModelQuery<TModel extends object = AnyModel, TCounts extends string = neve
 }
 
 export type { AnyModel, ModelAttributes, ModelIdentifier, RelationNameInput };
-export { flattenRelationNames, loadNested, ModelProjection, ModelQuery };
+export { flattenRelationNames, loadNested, ModelProjection, ModelQuery, snapshotModelQuery };

@@ -1,7 +1,14 @@
+import type {
+  AnyRepositoryDefinition,
+  RepositoryDefinition,
+} from "@getstrata/core/database/definitions";
+import { getBindingPorts } from "#strata-orm-internal";
 import type { KeysetOptions, PaginatedResult } from "../pagination/index.ts";
 import type BaseRepository from "./baseRepository.ts";
+import { getRepositoryBinding } from "./baseRepository.ts";
 import { projectPluck, uniqueColumnSelect } from "./pluck.ts";
 import { parseQualifiedColumn } from "./query.ts";
+import { snapshotQueryPlan } from "./queryPlanSnapshot";
 import type {
   BelongsToManyRelation,
   BelongsToRelation,
@@ -58,14 +65,27 @@ type StoredEagerLoad<TEntity extends object> = {
     kind: Kind;
     as: string;
     relation: StoredRelations<TEntity>[Kind];
-    repository: StoredRepository;
+    repository: AnyRepositoryDefinition;
     options?: StoredOptions;
     morphOptions?: ReadonlyMap<string, QueryOptions<LoadedRow>>;
-    morphRepositories?: ReadonlyMap<string, StoredRepository>;
+    morphRepositories?: ReadonlyMap<string, AnyRepositoryDefinition>;
   };
 }[keyof StoredRelations<TEntity>];
 
+let snapshotRepositoryQuery: <R extends object, K extends keyof R & string>(
+  query: RepositoryQuery<R, K>,
+) => RepositoryQuery<R, K>;
+
 class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
+  static {
+    snapshotRepositoryQuery = <R extends object, K extends keyof R & string>(
+      query: RepositoryQuery<R, K>,
+    ): RepositoryQuery<R, K> => {
+      getBindingPorts(getRepositoryBinding(query.repository)).assertActive();
+      return query.snapshot();
+    };
+  }
+
   private readonly eagerLoads: StoredEagerLoad<TEntity>[] = [];
   private readonly whereNodes: WhereNode<TEntity>[] = [];
   private readonly protectedWhere: WhereNode<TEntity>[] = [];
@@ -120,7 +140,11 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
   lockForUpdate(options: QueryLockOptions = {}): this {
     this.queryOptions = {
       ...this.queryOptions,
-      lock: { ...options, of: options.of ? [...options.of] : undefined, mode: "update" },
+      lock: {
+        ...options,
+        of: options.of ? [...options.of] : undefined,
+        mode: "update",
+      },
     };
     return this;
   }
@@ -128,7 +152,11 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
   sharedLock(options: QueryLockOptions = {}): this {
     this.queryOptions = {
       ...this.queryOptions,
-      lock: { ...options, of: options.of ? [...options.of] : undefined, mode: "share" },
+      lock: {
+        ...options,
+        of: options.of ? [...options.of] : undefined,
+        mode: "share",
+      },
     };
     return this;
   }
@@ -225,7 +253,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
       kind: "hasMany",
       as,
       relation,
-      repository: childRepository as unknown as StoredRepository,
+      repository: this.relatedDefinition(childRepository),
       options: options as StoredOptions,
     });
     return this;
@@ -246,7 +274,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
       kind: "belongsTo",
       as,
       relation,
-      repository: parentRepository as unknown as StoredRepository,
+      repository: this.relatedDefinition(parentRepository),
       options: options as StoredOptions,
     });
     return this;
@@ -268,7 +296,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
       kind: "morphMany",
       as,
       relation,
-      repository: childRepository as unknown as StoredRepository,
+      repository: this.relatedDefinition(childRepository),
       options: options as StoredOptions,
     });
     return this;
@@ -290,7 +318,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
       kind: "morphOne",
       as,
       relation,
-      repository: childRepository as unknown as StoredRepository,
+      repository: this.relatedDefinition(childRepository),
       options: options as StoredOptions,
     });
     return this;
@@ -313,8 +341,13 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
       morphOptions: optionsByType as ReadonlyMap<string, QueryOptions<LoadedRow>> | undefined,
       as,
       relation,
-      repository: this.repository as unknown as StoredRepository,
-      morphRepositories: repositoriesByType as ReadonlyMap<string, StoredRepository>,
+      repository: this.relatedDefinition(this.repository),
+      morphRepositories: new Map(
+        [...repositoriesByType].map(([type, repository]) => [
+          type,
+          this.relatedDefinition(repository),
+        ]),
+      ),
       options: options as StoredOptions,
     });
     return this;
@@ -346,7 +379,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
       kind: "belongsToMany",
       as,
       relation,
-      repository: relatedRepository as unknown as StoredRepository,
+      repository: this.relatedDefinition(relatedRepository),
       options: options as StoredOptions,
     });
     return this;
@@ -367,7 +400,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
       kind: "hasManyThrough",
       as,
       relation,
-      repository: farRepository as unknown as StoredRepository,
+      repository: this.relatedDefinition(farRepository),
       options: options as StoredOptions,
     });
     return this;
@@ -383,166 +416,290 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     return this;
   }
 
-  async update(changes: UpdateValues<TEntity, PrimaryKey>): Promise<number> {
-    this.assertNoMutationEagerLoads();
-    return this.repository.updateWhere(changes, this.buildOptions());
+  update(changes: UpdateValues<TEntity, PrimaryKey>): Promise<number> {
+    return this.runTerminal([changes] as [typeof changes], async (plan, changes) => {
+      plan.assertNoMutationEagerLoads();
+      return plan.repository.updateWhere(changes, plan.buildOptions());
+    });
   }
 
-  async updateReturning<K extends keyof TEntity & string>(
+  updateReturning<K extends keyof TEntity & string>(
     changes: UpdateValues<TEntity, PrimaryKey>,
     ...columns: K[]
   ): Promise<Pick<TEntity, K>[]> {
-    this.assertNoMutationEagerLoads();
-    return this.repository.updateWhereReturning(changes, columns, this.buildOptions());
+    return this.runTerminal(
+      [changes, columns] as [typeof changes, typeof columns],
+      async (plan, changes, columns) => {
+        plan.assertNoMutationEagerLoads();
+        return plan.repository.updateWhereReturning(changes, columns, plan.buildOptions());
+      },
+    );
   }
 
-  async delete(): Promise<number> {
-    this.assertNoMutationEagerLoads();
-    return this.repository.deleteWhere(this.buildOptions());
+  delete(): Promise<number> {
+    return this.runTerminal([] as [], async (plan) => {
+      plan.assertNoMutationEagerLoads();
+      return plan.repository.deleteWhere(plan.buildOptions());
+    });
   }
 
   private assertNoMutationEagerLoads(): void {
     if (this.eagerLoads.length) throw new Error("Conditional writes do not support eager loading.");
   }
 
-  async get(): Promise<Array<TEntity & LoadedRow>> {
-    const rows = await this.repository.findAll(this.buildOptions());
-    return await this.attach(rows);
+  get(): Promise<Array<TEntity & LoadedRow>> {
+    return this.runTerminal([] as [], async (plan) => {
+      const rows = await plan.repository.findAll(plan.buildOptions());
+      return await plan.attach(rows);
+    });
   }
 
-  async first(): Promise<(TEntity & LoadedRow) | null> {
-    const rows = await this.repository.findAll({ ...this.buildOptions(), limit: 1 });
-    const attached = await this.attach(rows);
-    return attached[0] ?? null;
+  first(): Promise<(TEntity & LoadedRow) | null> {
+    return this.runTerminal([] as [], async (plan) => {
+      const rows = await plan.repository.findAll({
+        ...plan.buildOptions(),
+        limit: 1,
+      });
+      const attached = await plan.attach(rows);
+      return attached[0] ?? null;
+    });
   }
 
-  async sumBy<K extends keyof TEntity & string>(
+  sumBy<K extends keyof TEntity & string>(
     groupColumn: K,
     column: keyof TEntity & string,
   ): Promise<Array<{ value: TEntity[K] | null; sum: string | null }>> {
-    if (this.eagerLoads.length) throw new TypeError("Grouped sums do not support eager loading.");
-    return this.repository.sumBy(groupColumn, column, this.buildOptions());
-  }
-
-  async count(): Promise<number> {
-    return await this.repository.count(this.buildOptions());
-  }
-
-  async pluck<K extends keyof TEntity & string>(column: K): Promise<Array<TEntity[K]>>;
-  async pluck<K extends keyof TEntity & string, KK extends keyof TEntity & string>(
-    column: K,
-    keyBy: KK,
-  ): Promise<Map<TEntity[KK], TEntity[K]>>;
-  async pluck<K extends keyof TEntity & string>(
-    column: K,
-    keyBy?: keyof TEntity & string,
-  ): Promise<Array<TEntity[K]> | Map<TEntity[keyof TEntity & string], TEntity[K]>> {
-    const rows = await this.repository.findAll({
-      ...this.buildOptions(),
-      select: uniqueColumnSelect(
-        this.repository.getTable().name,
-        keyBy === undefined || keyBy === column ? [column] : [column, keyBy],
-      ),
-    });
-
-    if (keyBy === undefined) {
-      return projectPluck(rows, column);
-    }
-
-    return projectPluck(rows, column, keyBy);
-  }
-
-  async value<K extends keyof TEntity & string>(column: K): Promise<TEntity[K] | null> {
-    const rows = await this.repository.findAll({
-      ...this.buildOptions(),
-      select: uniqueColumnSelect(this.repository.getTable().name, [column]),
-      limit: 1,
-    });
-    const row = rows[0];
-
-    if (row === undefined) {
-      return null;
-    }
-
-    return row[column];
-  }
-
-  /** Plain selected records, never complete entities or hydrated models. */
-  async project<K extends keyof TEntity & string>(
-    columns: readonly K[],
-    limit?: number,
-  ): Promise<Array<Pick<TEntity, K>>> {
-    if (columns.length === 0) throw new RangeError("A projection requires at least one column.");
-    const table = this.repository.getTable();
-    for (const column of columns)
-      if (!table.columns.includes(column))
-        throw new TypeError(`Unknown projection column: ${column}`);
-    return await this.repository.findAll({
-      ...this.buildOptions(),
-      ...(limit === undefined ? {} : { limit }),
-      select: uniqueColumnSelect(table.name, columns),
-    });
-  }
-
-  async attachToRows(rows: readonly TEntity[]): Promise<Array<TEntity & LoadedRow>> {
-    return await this.attach(rows);
-  }
-
-  async paginate(options: { page: number; perPage: number }): Promise<PaginatedResult<TEntity>> {
-    const page = await this.repository.paginate({
-      ...this.buildOptions(),
-      page: options.page,
-      perPage: options.perPage,
-    });
-    return { ...page, data: await this.attach(page.data) };
-  }
-
-  async chunk(
-    count: number,
-    callback: (rows: Array<TEntity & LoadedRow>) => Promise<boolean | void>,
-  ): Promise<void> {
-    await this.repository.chunk(
-      count,
-      async (rows) => callback(await this.attach(rows)),
-      this.buildOptions(),
+    return this.runTerminal(
+      [groupColumn, column] as [typeof groupColumn, typeof column],
+      async (plan, groupColumn, column) => {
+        if (plan.eagerLoads.length)
+          throw new TypeError("Grouped sums do not support eager loading.");
+        return plan.repository.sumBy(groupColumn, column, plan.buildOptions());
+      },
     );
   }
 
-  async cursorPaginate(options: { perPage: number; cursor?: TEntity[PrimaryKey] }) {
-    const page = await this.repository.cursorPaginate({ ...this.buildOptions(), ...options });
-    return { ...page, data: await this.attach(page.data) };
+  count(): Promise<number> {
+    return this.runTerminal([] as [], async (plan) => {
+      return await plan.repository.count(plan.buildOptions());
+    });
   }
 
-  async keysetPaginate(options: KeysetOptions<TEntity>) {
-    const page = await this.repository.keysetPaginate({ ...this.buildOptions(), ...options });
-    return { ...page, data: await this.attach(page.data) };
+  pluck<K extends keyof TEntity & string>(column: K): Promise<Array<TEntity[K]>>;
+  pluck<K extends keyof TEntity & string, KK extends keyof TEntity & string>(
+    column: K,
+    keyBy: KK,
+  ): Promise<Map<TEntity[KK], TEntity[K]>>;
+  pluck<K extends keyof TEntity & string>(
+    column: K,
+    keyBy?: keyof TEntity & string,
+  ): Promise<Array<TEntity[K]> | Map<TEntity[keyof TEntity & string], TEntity[K]>> {
+    return this.runTerminal(
+      [column, keyBy] as [typeof column, typeof keyBy],
+      async (plan, column, keyBy) => {
+        const rows = await plan.repository.findAll({
+          ...plan.buildOptions(),
+          select: uniqueColumnSelect(
+            plan.repository.getTable().name,
+            keyBy === undefined || keyBy === column ? [column] : [column, keyBy],
+          ),
+        });
+
+        if (keyBy === undefined) {
+          return projectPluck(rows, column);
+        }
+
+        return projectPluck(rows, column, keyBy);
+      },
+    );
   }
 
-  async projectKeyset<K extends keyof TEntity & string>(
+  value<K extends keyof TEntity & string>(column: K): Promise<TEntity[K] | null> {
+    return this.runTerminal([column] as [typeof column], async (plan, column) => {
+      const rows = await plan.repository.findAll({
+        ...plan.buildOptions(),
+        select: uniqueColumnSelect(plan.repository.getTable().name, [column]),
+        limit: 1,
+      });
+      const row = rows[0];
+
+      if (row === undefined) {
+        return null;
+      }
+
+      return row[column];
+    });
+  }
+
+  /** Plain selected records, never complete entities or hydrated models. */
+  project<K extends keyof TEntity & string>(
+    columns: readonly K[],
+    limit?: number,
+  ): Promise<Array<Pick<TEntity, K>>> {
+    return this.runTerminal(
+      [columns, limit] as [typeof columns, typeof limit],
+      async (plan, columns, limit) => {
+        if (columns.length === 0)
+          throw new RangeError("A projection requires at least one column.");
+        const table = plan.repository.getTable();
+        for (const column of columns)
+          if (!table.columns.includes(column))
+            throw new TypeError(`Unknown projection column: ${column}`);
+        return await plan.repository.findAll({
+          ...plan.buildOptions(),
+          ...(limit === undefined ? {} : { limit }),
+          select: uniqueColumnSelect(table.name, columns),
+        });
+      },
+    );
+  }
+
+  attachToRows(rows: readonly TEntity[]): Promise<Array<TEntity & LoadedRow>> {
+    return this.runTerminal([rows] as [typeof rows], async (plan, rows) => {
+      return await plan.attach(rows);
+    });
+  }
+
+  paginate(options: { page: number; perPage: number }): Promise<PaginatedResult<TEntity>> {
+    return this.runTerminal([options] as [typeof options], async (plan, options) => {
+      const page = await plan.repository.paginate({
+        ...plan.buildOptions(),
+        page: options.page,
+        perPage: options.perPage,
+      });
+      return { ...page, data: await plan.attach(page.data) };
+    });
+  }
+
+  chunk(
+    count: number,
+    callback: (rows: Array<TEntity & LoadedRow>) => Promise<boolean | void>,
+  ): Promise<void> {
+    return this.runTerminal(
+      [count, callback] as [typeof count, typeof callback],
+      async (plan, count, callback) => {
+        await plan.repository.chunk(
+          count,
+          async (rows) => callback(await plan.attach(rows)),
+          plan.buildOptions(),
+        );
+      },
+    );
+  }
+
+  cursorPaginate(options: { perPage: number; cursor?: TEntity[PrimaryKey] }) {
+    return this.runTerminal([options] as [typeof options], async (plan, options) => {
+      const page = await plan.repository.cursorPaginate({
+        ...plan.buildOptions(),
+        ...options,
+      });
+      return { ...page, data: await plan.attach(page.data) };
+    });
+  }
+
+  keysetPaginate(options: KeysetOptions<TEntity>) {
+    return this.runTerminal([options] as [typeof options], async (plan, options) => {
+      const page = await plan.repository.keysetPaginate({
+        ...plan.buildOptions(),
+        ...options,
+      });
+      return { ...page, data: await plan.attach(page.data) };
+    });
+  }
+
+  projectKeyset<K extends keyof TEntity & string>(
     columns: readonly K[],
     options: KeysetOptions<TEntity>,
   ) {
-    if (
-      !columns.length ||
-      columns.some((column) => !this.repository.getTable().columns.includes(column))
-    )
-      throw new TypeError("Keyset projections require declared columns.");
-    const page = await this.repository.keysetPaginate({
-      ...this.buildOptions(),
-      ...options,
-      select: uniqueColumnSelect(this.repository.getTable().name, columns),
-    });
-    return { ...page, data: page.data as Array<Pick<TEntity, K>> };
+    return this.runTerminal(
+      [columns, options] as [typeof columns, typeof options],
+      async (plan, columns, options) => {
+        if (
+          !columns.length ||
+          columns.some((column) => !plan.repository.getTable().columns.includes(column))
+        )
+          throw new TypeError("Keyset projections require declared columns.");
+        const page = await plan.repository.keysetPaginate({
+          ...plan.buildOptions(),
+          ...options,
+          select: uniqueColumnSelect(plan.repository.getTable().name, columns),
+        });
+        return { ...page, data: page.data as Array<Pick<TEntity, K>> };
+      },
+    );
   }
 
   /** Compiled query filters for batched relationship loaders. */
   getOptions(): QueryOptions<TEntity> {
-    return this.buildOptions();
+    return snapshotQueryPlan(this.buildOptions());
   }
 
-  private buildOptions(): QueryOptions<TEntity> & { whereNodes?: WhereNode<TEntity>[] } {
+  private relatedDefinition<R extends object, K extends keyof R & string>(
+    repository: BaseRepository<R, K>,
+  ): AnyRepositoryDefinition {
+    const owner = getBindingPorts(getRepositoryBinding(this.repository));
+    const related = getBindingPorts(getRepositoryBinding(repository));
+    owner.assertActive();
+    related.assertActive();
+    if (owner.app !== related.app || owner.pool !== related.pool || owner.branch !== related.branch)
+      throw new TypeError("Eager repositories must belong to the exact same live session.");
+    return related.definition;
+  }
+
+  private resolveRepository(definition: AnyRepositoryDefinition): StoredRepository {
+    return getBindingPorts(getRepositoryBinding(this.repository)).repository(
+      definition as unknown as RepositoryDefinition<LoadedRow, string, StoredRepository>,
+    );
+  }
+
+  private snapshot(): RepositoryQuery<TEntity, PrimaryKey> {
+    const plan = new RepositoryQuery(
+      this.repository,
+      snapshotQueryPlan(this.whereClause),
+      snapshotQueryPlan(this.queryOptions),
+    );
+    plan.whereNodes.push(...snapshotQueryPlan(this.whereNodes));
+    plan.protectedWhere.push(...snapshotQueryPlan(this.protectedWhere));
+    // Definition identities are authority, and must never be copied as metadata.
+    for (const load of this.eagerLoads)
+      plan.eagerLoads.push({
+        ...load,
+        relation: snapshotQueryPlan(load.relation),
+        options: snapshotQueryPlan(load.options),
+        morphOptions: snapshotQueryPlan(load.morphOptions),
+        morphRepositories: load.morphRepositories ? new Map(load.morphRepositories) : undefined,
+      } as StoredEagerLoad<TEntity>);
+    return plan;
+  }
+
+  private runTerminal<A extends unknown[], V>(
+    args: A,
+    work: (plan: RepositoryQuery<TEntity, PrimaryKey>, ...args: A) => V | Promise<V>,
+  ): Promise<V> {
+    const binding = getRepositoryBinding(this.repository);
+    let plan: RepositoryQuery<TEntity, PrimaryKey>;
+    let inputs: A;
+    try {
+      getBindingPorts(binding).assertActive();
+      plan = this.snapshot();
+      inputs = snapshotQueryPlan(args);
+    } catch (error) {
+      return binding.run(() => {
+        throw error;
+      });
+    }
+    return binding.run(() => work(plan, ...inputs));
+  }
+
+  private buildOptions(): QueryOptions<TEntity> & {
+    whereNodes?: WhereNode<TEntity>[];
+  } {
     if (this.protectedWhere.length === 0) {
-      return { ...this.queryOptions, where: this.whereClause, whereNodes: this.whereNodes };
+      return {
+        ...this.queryOptions,
+        where: this.whereClause,
+        whereNodes: this.whereNodes,
+      };
     }
     return {
       ...this.queryOptions,
@@ -599,9 +756,11 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
   ): Promise<void> {
     if (load.kind === "hasMany") {
       const relation = load.relation;
-      const grouped = await load.repository
-        .withConnection(this.repository.getConnection())
-        .loadHasManyForParents(rows, relation, load.options);
+      const grouped = await this.resolveRepository(load.repository).loadHasManyForParents(
+        rows,
+        relation,
+        load.options,
+      );
       for (const row of result) {
         (row as LoadedRow)[load.as] = getByRelationKey(grouped, row[relation.localKey]) ?? [];
       }
@@ -610,9 +769,11 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
 
     if (load.kind === "morphMany") {
       const relation = load.relation;
-      const grouped = await load.repository
-        .withConnection(this.repository.getConnection())
-        .loadMorphManyForParents(rows, relation, load.options);
+      const grouped = await this.resolveRepository(load.repository).loadMorphManyForParents(
+        rows,
+        relation,
+        load.options,
+      );
       for (const row of result) {
         (row as LoadedRow)[load.as] = getByRelationKey(grouped, row[relation.localKey]) ?? [];
       }
@@ -621,9 +782,11 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
 
     if (load.kind === "morphOne") {
       const relation = load.relation;
-      const grouped = await load.repository
-        .withConnection(this.repository.getConnection())
-        .loadMorphOneForParents(rows, relation, load.options);
+      const grouped = await this.resolveRepository(load.repository).loadMorphOneForParents(
+        rows,
+        relation,
+        load.options,
+      );
       for (const row of result) {
         (row as LoadedRow)[load.as] = getByRelationKey(grouped, row[relation.localKey]);
       }
@@ -632,9 +795,11 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
 
     if (load.kind === "hasManyThrough") {
       const relation = load.relation;
-      const grouped = await load.repository
-        .withConnection(this.repository.getConnection())
-        .loadHasManyThroughForParents(rows, relation, load.options);
+      const grouped = await this.resolveRepository(load.repository).loadHasManyThroughForParents(
+        rows,
+        relation,
+        load.options,
+      );
       for (const row of result) {
         (row as LoadedRow)[load.as] = getByRelationKey(grouped, row[relation.localKey]) ?? [];
       }
@@ -646,7 +811,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
       const grouped = await this.repository.loadBelongsToManyForParents(
         rows,
         relation,
-        load.repository,
+        this.resolveRepository(load.repository),
         load.options,
       );
       for (const row of result) {
@@ -680,7 +845,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
           const grouped = await this.repository.loadMorphToForChildren(
             partition.rows,
             relation,
-            new Map([[type, repository]]),
+            new Map([[type, this.resolveRepository(repository)]]),
             load.morphOptions?.get(type) ?? load.options,
           );
           for (const row of partition.targets) {
@@ -698,7 +863,7 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
     const grouped = await this.repository.loadBelongsToForParents(
       rows,
       relation,
-      load.repository,
+      this.resolveRepository(load.repository),
       load.options,
     );
     for (const row of result) {
@@ -711,4 +876,4 @@ class RepositoryQuery<TEntity extends object, PrimaryKey extends keyof TEntity &
 }
 
 export { projectPluck, uniqueColumnSelect } from "./pluck.ts";
-export { RepositoryQuery };
+export { RepositoryQuery, snapshotRepositoryQuery };

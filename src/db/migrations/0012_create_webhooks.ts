@@ -1,12 +1,10 @@
-import { resolveDatabaseDriver, Schema } from "../../framework/public-api.ts";
-import { asMigrationDatabase } from "./migrationDatabase.ts";
+import { Schema } from "../../framework/public-api.ts";
 import type { Migration } from "./types";
 
 const migration: Migration = {
   name: "0012_create_webhooks",
   async up(db) {
-    const migrationDb = asMigrationDatabase(db);
-    await Schema.run(migrationDb, resolveDatabaseDriver(), (schema) => {
+    await Schema.run(db, "pgsql", (schema) => {
       schema.create("webhook", (table) => {
         table.id();
         table.foreignId("organization_id").nullable().constrained("organization").cascadeOnDelete();
@@ -28,8 +26,7 @@ const migration: Migration = {
     });
   },
   async down(db) {
-    const migrationDb = asMigrationDatabase(db);
-    await Schema.run(migrationDb, resolveDatabaseDriver(), (schema) => {
+    await Schema.run(db, "pgsql", (schema) => {
       schema.drop("webhook_delivery");
       schema.drop("webhook");
     });

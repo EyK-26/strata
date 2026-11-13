@@ -1,12 +1,10 @@
-import { resolveDatabaseDriver, Schema } from "../../framework/public-api.ts";
-import { asMigrationDatabase } from "./migrationDatabase.ts";
+import { Schema } from "../../framework/public-api.ts";
 import type { Migration } from "./types";
 
 const migration: Migration = {
   name: "0027_create_task_attachments",
   async up(db) {
-    const migrationDb = asMigrationDatabase(db);
-    await Schema.run(migrationDb, resolveDatabaseDriver(), (schema) => {
+    await Schema.run(db, "pgsql", (schema) => {
       schema.create("task_attachment", (table) => {
         table.id();
         table.foreignId("task_id").constrained("task").cascadeOnDelete();
@@ -24,8 +22,7 @@ const migration: Migration = {
     });
   },
   async down(db) {
-    const migrationDb = asMigrationDatabase(db);
-    await Schema.run(migrationDb, resolveDatabaseDriver(), (schema) => {
+    await Schema.run(db, "pgsql", (schema) => {
       schema.drop("task_attachment");
     });
   },

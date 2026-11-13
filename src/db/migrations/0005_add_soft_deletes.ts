@@ -1,5 +1,4 @@
-import { resolveDatabaseDriver, Schema } from "../../framework/public-api.ts";
-import { asMigrationDatabase } from "./migrationDatabase.ts";
+import { Schema } from "../../framework/public-api.ts";
 import type { Migration } from "./types";
 
 const tables = ["organization", "project", "task", "comment"] as const;
@@ -7,8 +6,7 @@ const tables = ["organization", "project", "task", "comment"] as const;
 const migration: Migration = {
   name: "0005_add_soft_deletes",
   async up(db) {
-    const migrationDb = asMigrationDatabase(db);
-    await Schema.run(migrationDb, resolveDatabaseDriver(), (schema) => {
+    await Schema.run(db, "pgsql", (schema) => {
       for (const tableName of tables) {
         schema.table(tableName, (table) => {
           table.softDeletes();
@@ -18,8 +16,7 @@ const migration: Migration = {
     });
   },
   async down(db) {
-    const migrationDb = asMigrationDatabase(db);
-    await Schema.run(migrationDb, resolveDatabaseDriver(), (schema) => {
+    await Schema.run(db, "pgsql", (schema) => {
       for (const tableName of [...tables].reverse()) {
         schema.table(tableName, (table) => {
           table.dropSoftDeletes();

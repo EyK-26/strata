@@ -42,14 +42,17 @@ function sortedQueryString(params: URLSearchParams): string {
   return new URLSearchParams(entries).toString();
 }
 
-function signCanonicalPayload(path: string, query: string): string {
-  return createHmac("sha256", resolveSignedUrlSecret()).update(`${path}\n${query}`).digest("hex");
+function signCanonicalPayload(path: string, query: string, secret?: string): string {
+  return createHmac("sha256", secret ?? resolveSignedUrlSecret())
+    .update(`${path}\n${query}`)
+    .digest("hex");
 }
 
 function buildSignedSearchParams(
   path: string,
   query: Record<string, string | number> = {},
   expiresAt?: number,
+  secret?: string,
 ): URLSearchParams {
   const params = new URLSearchParams();
 
@@ -65,14 +68,18 @@ function buildSignedSearchParams(
     params.set("expires", String(expiresAt));
   }
 
-  params.set("signature", signCanonicalPayload(path, sortedQueryString(params)));
+  params.set("signature", signCanonicalPayload(path, sortedQueryString(params), secret));
 
   return params;
 }
 
-function signedUrl(path: string, query: Record<string, string | number> = {}): string {
+function signedUrl(
+  path: string,
+  query: Record<string, string | number> = {},
+  secret?: string,
+): string {
   const normalizedPath = normalizeSignedPath(path);
-  const params = buildSignedSearchParams(normalizedPath, query);
+  const params = buildSignedSearchParams(normalizedPath, query, undefined, secret);
 
   return `${normalizedPath}?${params.toString()}`;
 }
@@ -81,6 +88,7 @@ function temporarySignedUrl(
   path: string,
   expiresInSeconds: number,
   query: Record<string, string | number> = {},
+  secret?: string,
 ): string {
   if (!Number.isInteger(expiresInSeconds) || expiresInSeconds <= 0) {
     throw new Error("Signed URL expiry must be a positive integer number of seconds.");
@@ -88,7 +96,7 @@ function temporarySignedUrl(
 
   const normalizedPath = normalizeSignedPath(path);
   const expiresAt = Math.floor(Date.now() / 1000) + expiresInSeconds;
-  const params = buildSignedSearchParams(normalizedPath, query, expiresAt);
+  const params = buildSignedSearchParams(normalizedPath, query, expiresAt, secret);
 
   return `${normalizedPath}?${params.toString()}`;
 }
@@ -98,8 +106,9 @@ function absoluteTemporarySignedUrl(
   expiresInSeconds: number,
   query: Record<string, string | number> = {},
   origin = resolveSignedUrlOrigin(),
+  secret?: string,
 ): string {
-  return `${origin.replace(/\/$/, "")}${temporarySignedUrl(path, expiresInSeconds, query)}`;
+  return `${origin.replace(/\/$/, "")}${temporarySignedUrl(path, expiresInSeconds, query, secret)}`;
 }
 
 function readSignedRequestUrl(input: Request | URL | string): URL {
@@ -114,7 +123,7 @@ function readSignedRequestUrl(input: Request | URL | string): URL {
   return new URL(input.url);
 }
 
-function hasValidSignature(input: Request | URL | string): boolean {
+function hasValidSignature(input: Request | URL | string, secret?: string): boolean {
   const url = readSignedRequestUrl(input);
   const signature = url.searchParams.get("signature");
 
@@ -134,20 +143,21 @@ function hasValidSignature(input: Request | URL | string): boolean {
     return false;
   }
 
-  const expected = signCanonicalPayload(url.pathname, sortedQueryString(url.searchParams));
+  const expected = signCanonicalPayload(url.pathname, sortedQueryString(url.searchParams), secret);
 
   return timingSafeCompareString(signature, expected);
 }
 
-function assertValidSignature(input: Request | URL | string): void {
-  if (!hasValidSignature(input)) {
+function assertValidSignature(input: Request | URL | string, secret?: string): void {
+  if (!hasValidSignature(input, secret)) {
     throw new ForbiddenError("Invalid or expired signed URL.");
   }
 }
 
-function createValidateSignatureMiddleware(): Middleware {
+function createValidateSignatureMiddleware(options?: { readonly secret: string }): Middleware {
+  const secret = options?.secret ?? resolveSignedUrlSecret();
   return async (request, next) => {
-    assertValidSignature(request);
+    assertValidSignature(request, secret);
     return await next();
   };
 }

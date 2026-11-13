@@ -1,15 +1,14 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { AuditExportSql } from "@getstrata/core/audit/exportAuditLogs";
 import {
+  createAuditExporter,
   exportPendingAuditLogs,
   resolveAuditExportConfig,
 } from "@getstrata/core/audit/exportAuditLogs";
-import { hasActiveDatabaseConnection } from "@getstrata/core/database/connectionContext";
-import { hasActiveTransaction } from "@getstrata/core/database/transaction";
 import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/security/safeUrl";
-import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { SQL } from "bun";
-import db from "../../src/db/connection";
-import { clearPendingAuditLogs } from "./testHelpers";
+import { createPersistenceInvocation } from "../../src/bootstrap/persistenceInvocation";
+import { createNativePersistenceApplication } from "../helpers/nativePersistenceApplication";
 
 const originalFetch = globalThis.fetch;
 
@@ -17,25 +16,36 @@ function mockPublicDns(): void {
   setDnsLookupForTests(async () => [{ address: "1.1.1.1", family: 4 }]);
 }
 
-async function createPendingAudit(action: string): Promise<number> {
-  const [created] = (await runWithMigrationBypass(
-    async () => db`
-      INSERT INTO audit_log (user_id, action, subject_type, subject_id, payload, tenant_id, created_at)
-      VALUES (1, ${action}, 'task', 99, ${JSON.stringify({ title: "Export boundary" })}::jsonb, 1, NOW())
-      RETURNING id
-    `,
-  )) as Array<{ id: number }>;
-  expect(created).toBeDefined();
-  if (!created) throw new Error("The audit fixture row must exist.");
-  return created.id;
+let owner: Awaited<ReturnType<typeof createNativePersistenceApplication>> | undefined;
+let runSql: AuditExportSql;
+let activeScopes = 0;
+let backendPid = 0;
+const databaseUrl =
+  process.env.RLS_TEST_DATABASE_URL ?? process.env.APP_DATABASE_URL ?? process.env.DATABASE_URL;
+async function createPendingAudit(
+  action: string,
+  subjectId = 99,
+  title = "Export boundary",
+): Promise<number> {
+  return runSql(async (selected) => {
+    const [created] = await selected.execute<{ id: number }>({
+      text: "INSERT INTO audit_log(user_id,action,subject_type,subject_id,payload,tenant_id,created_at) VALUES(1,$1,'task',$2,$3::jsonb,1,NOW()) RETURNING id",
+      params: [action, subjectId, { title }],
+    });
+    expect(created).toBeDefined();
+    if (!created) throw Error("The audit fixture row must exist.");
+    return created.id;
+  });
 }
-
-async function exportedAt(id: number): Promise<Date | null | undefined> {
-  const [row] = (await runWithMigrationBypass(
-    async () => db`SELECT exported_at FROM audit_log WHERE id = ${id}`,
-  )) as Array<{ exported_at: Date | null }>;
-  expect(row).toBeDefined();
-  return row?.exported_at;
+async function exportedAt(id: number) {
+  return runSql(async (selected) => {
+    const [row] = await selected.execute<{ exported_at: Date | null }>({
+      text: "SELECT exported_at FROM audit_log WHERE id=$1",
+      params: [id],
+    });
+    expect(row).toBeDefined();
+    return row?.exported_at;
+  });
 }
 
 afterEach(async () => {
@@ -45,7 +55,8 @@ afterEach(async () => {
   delete process.env.SIEM_EXPORT_FORMAT;
   delete process.env.SIEM_EXPORT_BATCH_SIZE;
   delete process.env.SIEM_EXPORT_TOKEN;
-  await clearPendingAuditLogs();
+  await owner?.close();
+  owner = undefined;
 });
 
 describe("resolveAuditExportConfig", () => {
@@ -90,10 +101,47 @@ describe("resolveAuditExportConfig", () => {
 });
 
 describe("exportPendingAuditLogs", () => {
+  beforeEach(async () => {
+    if (!databaseUrl) throw Error("A real PostgreSQL runtime fixture is required.");
+    owner = await createNativePersistenceApplication({
+      default: "main",
+      connections: { main: { driver: "pgsql", url: databaseUrl, max: 1 } },
+    });
+    const invoke = createPersistenceInvocation(owner.application, "main");
+    activeScopes = 0;
+    runSql = (work) =>
+      invoke(
+        { kind: "command", actor: { kind: "system", policy: "audit.export" } },
+        ({ database, policy }) =>
+          policy.run(database, { kind: "bypass" }, async (selected) => {
+            activeScopes++;
+            try {
+              const [backend] = await selected.execute<{ pid: number }>({
+                params: [],
+                text: "SELECT pg_backend_pid() AS pid",
+              });
+              if (!backend) throw Error("Native PostgreSQL backend receipt is required.");
+              backendPid = backend.pid;
+              return await work(selected);
+            } finally {
+              activeScopes--;
+            }
+          }),
+      );
+    await runSql((selected) =>
+      selected.execute({
+        params: [],
+        text: `CREATE TEMP TABLE audit_log (
+      id SERIAL PRIMARY KEY,user_id BIGINT,action TEXT,subject_type TEXT,subject_id BIGINT,
+      payload JSONB,tenant_id BIGINT,created_at TIMESTAMPTZ,exported_at TIMESTAMPTZ,
+      trace_id TEXT,ip_address TEXT,user_agent TEXT,checksum TEXT)`,
+      }),
+    );
+  });
+
   test("releases its own RLS transaction before the outbound HTTP boundary", async () => {
     const previousTenancy = process.env.TENANCY_DRIVER;
     process.env.TENANCY_DRIVER = "rls";
-    const databaseUrl = process.env.DATABASE_URL;
     expect(databaseUrl).toBeDefined();
     if (!databaseUrl) throw new Error("The real Postgres fixture is required.");
     const observer = new SQL(databaseUrl);
@@ -106,13 +154,12 @@ describe("exportPendingAuditLogs", () => {
         | { transaction: boolean; connection: boolean; idleInTransaction: boolean }
         | undefined;
       globalThis.fetch = mock(async () => {
-        const transaction = hasActiveTransaction();
-        const connection = hasActiveDatabaseConnection();
-        const [backend] = (await db`SELECT pg_backend_pid() AS pid`) as Array<{ pid: number }>;
-        expect(backend?.pid).toBeGreaterThan(0);
+        const transaction = activeScopes > 0;
+        const connection = activeScopes > 0;
+        expect(backendPid).toBeGreaterThan(0);
         const [activity] = await observer.unsafe<Array<{ state: string }>>(
           "SELECT state FROM pg_stat_activity WHERE pid = $1",
-          [backend?.pid],
+          [backendPid],
         );
         expect(activity?.state).toBeDefined();
         observed = {
@@ -123,7 +170,7 @@ describe("exportPendingAuditLogs", () => {
         return new Response("accepted", { status: 200 });
       }) as unknown as typeof fetch;
 
-      expect(await exportPendingAuditLogs()).toBe(1);
+      expect(await exportPendingAuditLogs(runSql)).toBe(1);
       expect(observed).toEqual({ transaction: false, connection: false, idleInTransaction: false });
     } finally {
       await observer.close();
@@ -142,7 +189,7 @@ describe("exportPendingAuditLogs", () => {
       return new Response("accepted", { status: 200 });
     }) as unknown as typeof fetch;
 
-    expect(await exportPendingAuditLogs()).toBe(1);
+    expect(await exportPendingAuditLogs(runSql)).toBe(1);
     expect(await exportedAt(selected)).not.toBeNull();
     expect(arriving).toBeDefined();
     if (arriving === undefined) throw new Error("The concurrent audit fixture row must exist.");
@@ -157,7 +204,9 @@ describe("exportPendingAuditLogs", () => {
       async () => new Response("unavailable", { status: 503 }),
     ) as unknown as typeof fetch;
 
-    await expect(exportPendingAuditLogs()).rejects.toThrow("SIEM export failed with status 503.");
+    await expect(exportPendingAuditLogs(runSql)).rejects.toThrow(
+      "SIEM export failed with status 503.",
+    );
     expect(await exportedAt(selected)).toBeNull();
   });
 
@@ -167,17 +216,17 @@ describe("exportPendingAuditLogs", () => {
     const selected = await createPendingAudit("caller.owned");
     let accepted = 0;
     globalThis.fetch = mock(async () => {
-      expect(hasActiveTransaction()).toBe(true);
-      expect(hasActiveDatabaseConnection()).toBe(true);
+      expect(activeScopes > 0).toBe(true);
+      expect(activeScopes > 0).toBe(true);
       accepted++;
       return new Response("accepted", { status: 200 });
     }) as unknown as typeof fetch;
     const rollback = new Error("caller rollback after external acceptance");
 
     await expect(
-      runWithMigrationBypass(async () => {
-        expect(await exportPendingAuditLogs()).toBe(1);
-        expect(hasActiveTransaction()).toBe(true);
+      runSql(async (selected) => {
+        expect(await exportPendingAuditLogs((work) => work(selected))).toBe(1);
+        expect(activeScopes > 0).toBe(true);
         throw rollback;
       }),
     ).rejects.toBe(rollback);
@@ -186,33 +235,20 @@ describe("exportPendingAuditLogs", () => {
   });
 
   test("returns zero when export is disabled", async () => {
-    await expect(exportPendingAuditLogs()).resolves.toBe(0);
+    await expect(exportPendingAuditLogs(runSql)).resolves.toBe(0);
   });
 
   test("returns zero when there are no pending audit logs", async () => {
     process.env.SIEM_EXPORT_URL = "http://hooks.example.com/siem-empty";
 
-    await expect(exportPendingAuditLogs()).resolves.toBe(0);
+    await expect(exportPendingAuditLogs(runSql)).resolves.toBe(0);
   });
 
   test("exports pending audit logs as json without an auth token", async () => {
     mockPublicDns();
     process.env.SIEM_EXPORT_URL = "http://hooks.example.com/siem-json-no-token";
 
-    await runWithMigrationBypass(async () => {
-      await db`
-        INSERT INTO audit_log (user_id, action, subject_type, subject_id, payload, tenant_id, created_at)
-        VALUES (
-          1,
-          'task.created',
-          'task',
-          13,
-          ${JSON.stringify({ title: "No token export" })}::jsonb,
-          1,
-          NOW()
-        )
-      `;
-    });
+    await createPendingAudit("task.created", 13, "No token export");
 
     let authorization = "unset";
 
@@ -221,7 +257,7 @@ describe("exportPendingAuditLogs", () => {
       return Promise.resolve(new Response("accepted", { status: 200 }));
     }) as unknown as typeof fetch;
 
-    const exported = await exportPendingAuditLogs();
+    const exported = await exportPendingAuditLogs(runSql);
 
     expect(exported).toBe(1);
     expect(authorization).toBe("");
@@ -232,22 +268,7 @@ describe("exportPendingAuditLogs", () => {
     process.env.SIEM_EXPORT_URL = "http://hooks.example.com/siem-json";
     process.env.SIEM_EXPORT_TOKEN = "export-token";
 
-    const inserted = (await runWithMigrationBypass(
-      async () =>
-        db`
-      INSERT INTO audit_log (user_id, action, subject_type, subject_id, payload, tenant_id, created_at)
-      VALUES (
-        1,
-        'task.created',
-        'task',
-        10,
-        ${JSON.stringify({ title: "Export me" })}::jsonb,
-        1,
-        NOW()
-      )
-      RETURNING id
-    `,
-    )) as Array<{ id: number }>;
+    const inserted = await createPendingAudit("task.created", 10, "Export me");
 
     let requestBody = "";
     let authorization = "";
@@ -258,23 +279,15 @@ describe("exportPendingAuditLogs", () => {
       return Promise.resolve(new Response("accepted", { status: 200 }));
     }) as unknown as typeof fetch;
 
-    const exported = await exportPendingAuditLogs();
+    const exporter = createAuditExporter({ runSql, environment: process.env });
+    process.env.SIEM_EXPORT_TOKEN = "different-application-token";
+    const exported = await exporter();
 
     expect(exported).toBe(1);
     expect(authorization).toBe("Bearer export-token");
     expect(JSON.parse(requestBody).events).toHaveLength(1);
 
-    const row = (await runWithMigrationBypass(
-      async () =>
-        db`
-      SELECT exported_at
-      FROM audit_log
-      WHERE id = ${inserted[0]!.id}
-      LIMIT 1
-    `,
-    )) as Array<{ exported_at: Date | null }>;
-
-    expect(row[0]?.exported_at).not.toBeNull();
+    expect(await exportedAt(inserted)).not.toBeNull();
   });
 
   test("exports pending audit logs as cef", async () => {
@@ -282,20 +295,7 @@ describe("exportPendingAuditLogs", () => {
     process.env.SIEM_EXPORT_URL = "http://hooks.example.com/siem-cef-export";
     process.env.SIEM_EXPORT_FORMAT = "cef";
 
-    await runWithMigrationBypass(async () => {
-      await db`
-        INSERT INTO audit_log (user_id, action, subject_type, subject_id, payload, tenant_id, created_at)
-        VALUES (
-          1,
-          'task.updated',
-          'task',
-          11,
-          ${JSON.stringify({ title: "CEF export" })}::jsonb,
-          1,
-          NOW()
-        )
-      `;
-    });
+    await createPendingAudit("task.updated", 11, "CEF export");
 
     let contentType = "";
 
@@ -304,7 +304,7 @@ describe("exportPendingAuditLogs", () => {
       return Promise.resolve(new Response("accepted", { status: 200 }));
     }) as unknown as typeof fetch;
 
-    const exported = await exportPendingAuditLogs();
+    const exported = await exportPendingAuditLogs(runSql);
 
     expect(exported).toBe(1);
     expect(contentType).toBe("text/plain");
@@ -314,25 +314,14 @@ describe("exportPendingAuditLogs", () => {
     mockPublicDns();
     process.env.SIEM_EXPORT_URL = "http://hooks.example.com/siem-failure";
 
-    await runWithMigrationBypass(async () => {
-      await db`
-        INSERT INTO audit_log (user_id, action, subject_type, subject_id, payload, tenant_id, created_at)
-        VALUES (
-          1,
-          'task.deleted',
-          'task',
-          12,
-          ${JSON.stringify({ title: "Failure export" })}::jsonb,
-          1,
-          NOW()
-        )
-      `;
-    });
+    await createPendingAudit("task.deleted", 12, "Failure export");
 
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response("fail", { status: 503 })),
     ) as unknown as typeof fetch;
 
-    await expect(exportPendingAuditLogs()).rejects.toThrow("SIEM export failed with status 503.");
+    await expect(exportPendingAuditLogs(runSql)).rejects.toThrow(
+      "SIEM export failed with status 503.",
+    );
   });
 });

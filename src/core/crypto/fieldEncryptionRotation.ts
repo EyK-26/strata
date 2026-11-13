@@ -1,18 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
-import { BaseRepository } from "../database/baseRepository";
-import { getBoundDatabaseConnection } from "../database/boundConnection";
+import { defineRepository, type RepositoryDefinition } from "@getstrata/core/database/definitions";
+import { BaseRepository } from "#strata-orm-runtime";
 import { guardMigrationRollback } from "../database/migrations/rollbackGuard";
 import type { Migration } from "../database/migrations/types";
-import {
-  repositoryConnection,
-  resolveRepositoryConnection,
-} from "../database/repositoryConnection";
 import { type DatabaseDriver, Schema } from "../database/schema";
+import type { DatabaseSession, TransactionSession } from "../database/session";
 import { defineTable } from "../database/table";
-import { runInTransaction } from "../database/transaction";
 import type { QueryWhere, UpdateValues } from "../database/types";
 import { enableTenantRlsSql } from "../tenant/enableTenantRls";
-import { currentTenant } from "../tenant/tenantContext";
 import { type FieldEncryptionKeyring, normalizeEmail } from "./fieldEncryption";
 
 type RotationCheckpoint = {
@@ -38,6 +33,12 @@ const checkpointTable = defineTable<RotationCheckpoint, "run_id">({
     "claim_token",
     "completed",
   ],
+});
+const fieldEncryptionRotationRepository = defineRepository({
+  name: "core.fieldEncryptionRotation",
+  table: checkpointTable,
+  dependencies: [] as const,
+  create: (binding) => new BaseRepository(binding),
 });
 function createFieldEncryptionRotationMigration(
   name: string,
@@ -78,8 +79,12 @@ function createFieldEncryptionRotationMigration(
 interface FieldEncryptionRotationOptions<
   TEntity extends object,
   PK extends keyof TEntity & string,
+  TRepository extends BaseRepository<TEntity, PK> = BaseRepository<TEntity, PK>,
 > {
-  repository: BaseRepository<TEntity, PK>;
+  session: DatabaseSession | TransactionSession;
+  repository: RepositoryDefinition<TEntity, PK, TRepository>;
+  /** Established tenant scope; caller supplies the selected session with its policy applied. */
+  tenantId: number | null;
   /** A distinct durable run identity per table, tenant/filter scope and audit pass. */
   runId: string;
   scopeId: string;
@@ -105,12 +110,17 @@ interface FieldEncryptionRotationBatch {
 async function runFieldEncryptionRotationBatch<
   TEntity extends object,
   PK extends keyof TEntity & string,
->(options: FieldEncryptionRotationOptions<TEntity, PK>): Promise<FieldEncryptionRotationBatch> {
-  const table = options.repository.getTable();
+  TRepository extends BaseRepository<TEntity, PK>,
+>(
+  options: FieldEncryptionRotationOptions<TEntity, PK, TRepository>,
+): Promise<FieldEncryptionRotationBatch> {
+  const table = options.repository.table;
   const batchSize = options.batchSize ?? 100;
   const mode = options.mode ?? "rotate";
   if (
     options.maintenanceMode !== true ||
+    (options.tenantId !== null &&
+      (!Number.isSafeInteger(options.tenantId) || options.tenantId < 1)) ||
     !/^[A-Za-z0-9_-]{1,64}$/.test(options.runId) ||
     !/^[A-Za-z0-9_-]{1,64}$/.test(options.scopeId) ||
     !Number.isSafeInteger(batchSize) ||
@@ -141,20 +151,13 @@ async function runFieldEncryptionRotationBatch<
     )
   )
     throw new TypeError("Invalid encryption rotation fields.");
-  const connection = options.repository.getConnection();
-  if (
-    connection !== repositoryConnection &&
-    connection !== resolveRepositoryConnection() &&
-    connection !== getBoundDatabaseConnection()
-  )
-    throw new Error("Encryption rotation requires the framework-bound repository connection.");
   const definition = createHash("sha256")
     .update(
       JSON.stringify({
         table: table.name,
         primaryKey: table.primaryKey,
         scope: options.scopeId,
-        tenant: currentTenant()?.id ?? null,
+        tenant: options.tenantId,
         fields,
         mode,
         target: options.target.activeKeyId,
@@ -164,12 +167,12 @@ async function runFieldEncryptionRotationBatch<
   const marker = `strata:rotation:${definition}`;
   try {
     options.signal?.throwIfAborted();
-    return await runInTransaction(async (transaction) => {
-      const checkpoints = new BaseRepository(checkpointTable, transaction);
+    return await options.session.transaction(async (transaction) => {
+      const checkpoints = transaction.repository(fieldEncryptionRotationRepository);
       await checkpoints.upsert(
         {
           run_id: options.runId,
-          tenant_id: currentTenant()?.id ?? null,
+          tenant_id: options.tenantId,
           definition_hash: definition,
           probe: options.target.encrypt(marker, "rotation"),
           lookup_probe: options.target.lookup(marker),
@@ -208,7 +211,7 @@ async function runFieldEncryptionRotationBatch<
         )) !== 1
       )
         throw new Error("Checkpoint ownership changed");
-      const repository = options.repository.withConnection(transaction);
+      const repository = transaction.repository(options.repository);
       const where: QueryWhere<TEntity> = {};
       if (savedCursor !== null) Object.assign(where, { [table.primaryKey]: { gt: savedCursor } });
       const columns = Array.from(new Set([table.primaryKey, ...writable]));
@@ -309,4 +312,8 @@ async function runFieldEncryptionRotationBatch<
 }
 
 export type { FieldEncryptionRotationBatch, FieldEncryptionRotationOptions };
-export { createFieldEncryptionRotationMigration, runFieldEncryptionRotationBatch };
+export {
+  createFieldEncryptionRotationMigration,
+  fieldEncryptionRotationRepository,
+  runFieldEncryptionRotationBatch,
+};

@@ -3,9 +3,28 @@ import {
   completePasswordLogin,
   persistConsumedRecoveryHash,
 } from "@getstrata/core/auth/passwordLogin";
-import { runWithSqlDialect } from "@getstrata/core/database/dialect";
+import type { DatabaseSession } from "@getstrata/core/database/session";
 import { generateRecoveryCodes, hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
 import { generateTotp, generateTotpSecret } from "@getstrata/core/security/totp";
+import { withBoundDatabase } from "../helpers/boundRepositoryHarness";
+
+async function withSql<T>(
+  connection: { unsafe: <R>(query: string, params?: readonly unknown[]) => Promise<R[]> },
+  driver: "pgsql" | "mysql",
+  work: (database: DatabaseSession) => Promise<T>,
+): Promise<T> {
+  return withBoundDatabase(
+    {
+      definition: {
+        default: "main",
+        connections: { main: { driver: "sqlite", filename: ":memory:" } },
+      },
+      connection,
+      driver,
+    },
+    (database) => work(database),
+  );
+}
 
 describe("completePasswordLogin", () => {
   test("allows users without MFA", () => {
@@ -74,7 +93,9 @@ describe("completePasswordLogin", () => {
         throw new Error("should not write");
       },
     };
-    await persistConsumedRecoveryHash(sql, 1, "[]", undefined);
+    await withSql(sql, "pgsql", (database) =>
+      persistConsumedRecoveryHash(database, 1, "[]", undefined),
+    );
   });
 
   test("persistConsumedRecoveryHash removes the consumed hash", async () => {
@@ -82,12 +103,14 @@ describe("completePasswordLogin", () => {
     const used = hashRecoveryCode("used-code");
     let stored = "";
     const sql = {
-      async unsafe(_query: string, params: readonly unknown[] = []) {
+      async unsafe<T>(_query: string, params: readonly unknown[] = []) {
         stored = String(params[0]);
-        return [{ id: 4 }];
+        return [{ id: 4 }] as T[];
       },
     };
-    await persistConsumedRecoveryHash(sql, 4, JSON.stringify([keep, used]), used);
+    await withSql(sql, "pgsql", (database) =>
+      persistConsumedRecoveryHash(database, 4, JSON.stringify([keep, used]), used),
+    );
     expect(JSON.parse(stored)).toEqual([keep]);
   });
   test("recovery persistence rejects malformed or stale claims without accepting an unchecked write", async () => {
@@ -97,40 +120,43 @@ describe("completePasswordLogin", () => {
       },
     };
     for (const raw of [null, undefined, "[]", "invalid", "[1]"]) {
-      await expect(persistConsumedRecoveryHash(sql, 1, raw, "used")).rejects.toMatchObject({
+      await expect(
+        withSql(sql, "pgsql", (database) => persistConsumedRecoveryHash(database, 1, raw, "used")),
+      ).rejects.toMatchObject({
         status: 422,
         message: "mfa_invalid",
       });
     }
     for (const rows of [[], [null], [{}], [{ affectedRows: 0 }], [{ affectedRows: 2 }]]) {
-      const empty = { unsafe: async () => rows };
-      await runWithSqlDialect("mysql", async () => {
+      const empty = { unsafe: async <T>() => rows as T[] };
+      await withSql(empty, "mysql", async (database) => {
         await expect(
-          persistConsumedRecoveryHash(empty, 1, '["used"]', "used"),
+          persistConsumedRecoveryHash(database, 1, '["used"]', "used"),
         ).rejects.toMatchObject({ status: 422 });
       });
     }
-    await runWithSqlDialect("mysql", async () => {
-      const sql = { unsafe: async () => [{ affectedRows: 1 }] };
-      await persistConsumedRecoveryHash(sql, 1, '["used"]', "used");
-    });
-    await runWithSqlDialect("pgsql", async () => {
+    await withSql({ unsafe: async <T>() => [{ affectedRows: 1 }] as T[] }, "mysql", (database) =>
+      persistConsumedRecoveryHash(database, 1, '["used"]', "used"),
+    );
+    await withSql({ unsafe: async () => [] }, "pgsql", async (database) => {
       await expect(
-        persistConsumedRecoveryHash({ unsafe: async () => [] }, 1, '["used"]', "used"),
+        persistConsumedRecoveryHash(database, 1, '["used"]', "used"),
       ).rejects.toMatchObject({ status: 422 });
     });
     await expect(
-      persistConsumedRecoveryHash(
+      withSql(
         {
           unsafe: async () => {
             throw new Error("database unavailable");
           },
         },
-        1,
-        '["used"]',
-        "used",
+        "pgsql",
+        (database) => persistConsumedRecoveryHash(database, 1, '["used"]', "used"),
       ),
-    ).rejects.toThrow("database unavailable");
+    ).rejects.toMatchObject({
+      code: "DATABASE_OPERATION_FAILED",
+      cause: { message: "database unavailable" },
+    });
   });
 });
 

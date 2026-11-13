@@ -4,7 +4,7 @@
  * Run: bun scripts/sync-package-subpaths.ts
  */
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import {
   bootstrapSubpathExternalFlags,
@@ -23,6 +23,8 @@ const CORE_SUBPATHS = [
   "auth/accessControl",
   "auth/abilityChecker",
   "auth/authContext",
+  "auth/authReader",
+  "auth/abilityCatalog",
   "auth/emailVerification",
   "auth/guard",
   "auth/jwt",
@@ -63,6 +65,7 @@ const CORE_SUBPATHS = [
   "config/envSchema",
   "config/applicationConfig",
   "contracts/token",
+  "contracts/application",
   "contracts/services",
   "contracts/executionContext",
   "contracts/executionOperations",
@@ -71,6 +74,8 @@ const CORE_SUBPATHS = [
   "contracts/authUserDirectory",
   "contracts/container",
   "contracts/di",
+  "contracts/persistence",
+  "contracts/membership",
   "crypto/fieldEncryption",
   "crypto/fieldEncryptionRotation",
   "crypto/mfaSecret",
@@ -78,6 +83,8 @@ const CORE_SUBPATHS = [
   "database/acquisitionMetrics",
   "database/baseRepository",
   "database/bindings",
+  "database/definitions",
+  "database/ownedReadOnlyObservation",
   "database/session",
   "database/tokens",
   "database/bindConnection",
@@ -103,7 +110,6 @@ const CORE_SUBPATHS = [
   "database/schema",
   "database/sqliteConnection",
   "database/table",
-  "database/transaction",
   "database/types",
   "database/whereBuilder",
   "errors/http",
@@ -180,6 +186,8 @@ const CORE_SUBPATHS = [
   "queue/jobRegistry",
   "queue/jobRunner",
   "queue/queueMetrics",
+  "queue/queueServices",
+  "queue/queueWorkerTransport",
   "queue/publicQueue",
   "queue/redisQueue",
   "queue/types",
@@ -206,6 +214,9 @@ const CORE_SUBPATHS = [
   "security/totp",
   "storage/storage",
   "tenant/tenancyConfig",
+  "tenant/scopedDatabasePolicy",
+  "tenant/publicTenantHost",
+  "tenant/resolveTenant",
   "tenant/tenantContext",
   "tenant/tenantDatabaseScope",
   "tenant/databaseTenantContext",
@@ -239,6 +250,9 @@ const BOOTSTRAP_SUBPATHS = [
   "health",
   "http/securedRouteModelBinding",
   "httpKernel",
+  "persistenceContracts",
+  "persistenceInvocation",
+  "databaseReadiness",
   "listeners/invalidateCacheOnModelWrite",
   "membershipService",
   "metricsRoutes",
@@ -246,6 +260,8 @@ const BOOTSTRAP_SUBPATHS = [
   "providers",
   "providers/view",
   "providers/cache",
+  "providers/events",
+  "providers/auth",
   "routeRegistry",
   "schedule",
   "secretsGuard",
@@ -257,6 +273,8 @@ const BOOTSTRAP_SUBPATHS = [
 ] as const;
 
 function resolveCoreTypesPath(subpath: string): string {
+  if (["database/baseRepository", "database/model", "database/repositoryQuery"].includes(subpath))
+    return `./dist/entries/${subpath}.d.ts`;
   const indexModules = new Set([
     "database",
     "database/schema",
@@ -337,6 +355,10 @@ async function writeEntryFiles(
 
   for (const subpath of subpaths) {
     if (srcLayer === "core" && CORE_SHARED_SUBPATH_SET.has(subpath)) {
+      if (
+        ["database/baseRepository", "database/model", "database/repositoryQuery"].includes(subpath)
+      )
+        await rm(join(entriesDir, `${subpath}.ts`), { force: true });
       continue;
     }
 
@@ -392,6 +414,7 @@ async function updatePackageJson(
   const packageJsonPath = join(packageDir, "package.json");
   const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as {
     exports: Record<string, unknown>;
+    imports?: Record<string, unknown>;
     scripts: Record<string, string>;
   };
 
@@ -409,8 +432,11 @@ async function updatePackageJson(
   const standaloneExternal = CORE_STANDALONE_SUBPATHS.map(
     (subpath) => ` --external @getstrata/core/${subpath}`,
   ).join("");
+  const privateExternal = packageDir.includes("strata-core")
+    ? " --external '#strata-orm-internal' --external '#strata-orm-runtime'"
+    : " --external '#strata-http-route'";
   packageJson.scripts["build:bundle"] =
-    `bun build index.ts --outdir dist --target bun --external bun${telemetryExternals} --external eta --external mysql2${optionalPeerExternals}${standaloneExternal}`;
+    `bun build index.ts --outdir dist --target bun --external bun${telemetryExternals} --external eta --external mysql2${optionalPeerExternals}${standaloneExternal}${privateExternal}`;
   packageJson.scripts["build:shims"] = packageDir.includes("strata-core")
     ? "bun ../../scripts/write-core-shared-shims.ts"
     : "true";
@@ -421,18 +447,42 @@ async function updatePackageJson(
     ? ` ${bootstrapSubpathExternalFlags(BOOTSTRAP_SUBPATHS, CORE_SUBPATHS)}`
     : "";
   packageJson.scripts["build:subpaths"] = relativeEntries
-    ? `bun build ${relativeEntries} --outdir dist --root . --target bun --external bun${telemetryExternals} --external eta --external mysql2${packageDir.includes("strata-core") ? " --external @node-saml/node-saml" : ""}${coreExternal}${bootstrapExternal}`
+    ? `bun build ${relativeEntries} --outdir dist --root . --target bun --external bun${telemetryExternals} --external eta --external mysql2${packageDir.includes("strata-core") ? " --external @node-saml/node-saml" : ""}${coreExternal}${bootstrapExternal}${privateExternal}`
     : "true";
   packageJson.scripts["build:types"] = packageDir.includes("bootstrap")
     ? "tsc -p tsconfig.types.json && bun ../../scripts/prune-bootstrap-dist-types.ts"
     : "tsc -p tsconfig.types.json";
   if (packageDir.includes("strata-core")) {
+    // Package-private identity shared by root and subpath bundles, never exported.
+    packageJson.imports = {
+      ...packageJson.imports,
+      "#strata-orm-internal": {
+        types: "./dist/core/database/ormInternal.d.ts",
+        default: "./dist/internal/ormInternal.js",
+      },
+      "#strata-orm-runtime": {
+        types: "./dist/core/database/ormRuntime.d.ts",
+        default: "./dist/internal/ormRuntime.js",
+      },
+    };
+    packageJson.scripts["build:internal"] =
+      `bun build internal/ormInternal.ts internal/ormRuntime.ts --outdir dist/internal --target bun${coreExternal}${privateExternal}`;
     packageJson.scripts["build:verify-standalone"] =
       "bun ../../scripts/verify-core-standalone-subpaths.ts";
+  } else {
+    packageJson.imports = {
+      ...packageJson.imports,
+      "#strata-http-route": {
+        types: "./dist/bootstrap/ownedHttpRoute.d.ts",
+        default: "./dist/internal/ownedHttpRoute.js",
+      },
+    };
+    packageJson.scripts["build:internal"] =
+      `bun build internal/ownedHttpRoute.ts --outdir dist/internal --target bun${bootstrapExternal}${privateExternal}`;
   }
   // Clear dist so removed subpaths do not linger in the tarball.
   packageJson.scripts["build"] =
-    "rm -rf dist && bun run build:bundle && bun run build:shims && bun run build:subpaths && bun run build:types";
+    "rm -rf dist && bun run build:internal && bun run build:bundle && bun run build:shims && bun run build:subpaths && bun run build:types";
 
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
 }

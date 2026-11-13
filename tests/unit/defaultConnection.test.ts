@@ -2,12 +2,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
 import {
   getDefaultDatabasePool,
   getDefaultDatabaseQuery,
   registerDefaultDatabasePool,
 } from "@getstrata/core/database/defaultConnection";
+import type { SqlDatabaseConnection } from "../../src/core/database/connectionContracts";
 import { getDatabase } from "../../src/db/connection";
 
 const DEFAULT_CONNECTION_KEY = Symbol.for("@getstrata/defaultDatabaseConnection");

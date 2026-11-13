@@ -1,40 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
-  consumeSamlAssertion,
+  createSqlSamlAssertionReplayStore,
   InMemorySamlAssertionReplayStore,
   REPLAY_RETENTION_MS,
-  resetSamlReplayCacheForTests,
-  setSamlAssertionReplayStoreForTests,
 } from "@getstrata/core/auth/saml/samlServiceProvider";
-import type { SqlDatabaseConnection } from "@getstrata/core/database/baseRepository";
-import {
-  getDefaultDatabasePool,
-  registerDefaultDatabasePool,
-  resetDefaultDatabasePoolForTests,
-} from "@getstrata/core/database/defaultConnection";
-import { runWithSqlDialect } from "@getstrata/core/database/dialect";
-import { getDatabase } from "../../src/db/connection";
+import { PersistenceError } from "@getstrata/core/database/errors";
+import { withPolicyPersistence } from "../helpers/policyPersistence";
 
-function currentPoolOrNull(): SqlDatabaseConnection | null {
-  try {
-    return getDefaultDatabasePool();
-  } catch {
-    return null;
-  }
-}
-
-function restorePool(previous: SqlDatabaseConnection | null): void {
-  if (previous) {
-    registerDefaultDatabasePool(previous);
-    return;
-  }
-  resetDefaultDatabasePoolForTests();
-  if (process.env.DATABASE_URL) {
-    getDatabase();
-  }
-}
-
-function fakePool(calls: string[], uniqueOn = ""): SqlDatabaseConnection {
+function fakePool(calls: string[], uniqueOn = "") {
   const seen = new Set<string>();
   const pool = Object.assign(async () => [] as unknown[], {
     async begin<T>(callback: (tx: typeof pool) => Promise<T>) {
@@ -56,92 +29,77 @@ function fakePool(calls: string[], uniqueOn = ""): SqlDatabaseConnection {
       return [] as T[];
     },
   });
-  return pool as SqlDatabaseConnection;
+  return pool;
 }
 
-describe("SqlSamlAssertionReplayStore", () => {
+// SQL-shape fault fixture uses genuine canonical selection with explicitly synthetic native ACKs.
+describe("selected SQL SAML replay store", () => {
   test("formats both stored and retention cutoff timestamps for MySQL", async () => {
-    const restored = currentPoolOrNull();
     const calls: string[] = [];
-    registerDefaultDatabasePool(fakePool(calls));
-    setSamlAssertionReplayStoreForTests(null);
-    try {
-      await runWithSqlDialect("mysql", () => consumeSamlAssertion("mysql-timestamp"));
-      expect(calls).toHaveLength(2);
-      for (const call of calls) {
-        expect(call).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
-        expect(call).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
-        expect(call).toContain("?");
-      }
-    } finally {
-      resetSamlReplayCacheForTests();
-      restorePool(restored);
-    }
+    await withPolicyPersistence(
+      fakePool(calls),
+      async ({ database }) => {
+        const store = createSqlSamlAssertionReplayStore(database);
+        await store.consume("mysql-timestamp");
+        expect(calls).toHaveLength(2);
+        for (const call of calls) {
+          expect(call).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
+          expect(call).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
+          expect(call).toContain("?");
+        }
+      },
+      { driver: "mysql" },
+    );
   });
   test("inserts consumed_at and garbage-collects stale rows after a live insert", async () => {
-    const restored = currentPoolOrNull();
     const calls: string[] = [];
-    registerDefaultDatabasePool(fakePool(calls));
-    setSamlAssertionReplayStoreForTests(null);
-    try {
-      await consumeSamlAssertion("assert-live");
+    await withPolicyPersistence(fakePool(calls), async ({ database }) => {
+      const store = createSqlSamlAssertionReplayStore(database);
+      await store.consume("assert-live");
       expect(calls[0]).toContain("INSERT INTO auth_saml_assertions");
       expect(calls[0]).toContain("consumed_at");
       expect(calls[1]).toContain("DELETE FROM auth_saml_assertions");
       expect(calls[1]).toContain("consumed_at <");
-    } finally {
-      resetSamlReplayCacheForTests();
-      restorePool(restored);
-    }
+    });
   });
 
   test("treats a unique constraint as replay", async () => {
-    const restored = currentPoolOrNull();
     const calls: string[] = [];
-    registerDefaultDatabasePool(fakePool(calls, "assert-dup"));
-    setSamlAssertionReplayStoreForTests(null);
-    try {
-      await expect(consumeSamlAssertion("assert-dup")).rejects.toThrow("replay");
+    await withPolicyPersistence(fakePool(calls, "assert-dup"), async ({ database }) => {
+      await expect(
+        createSqlSamlAssertionReplayStore(database).consume("assert-dup"),
+      ).rejects.toThrow("replay");
       expect(calls.some((line) => line.includes("DELETE"))).toBe(false);
-    } finally {
-      resetSamlReplayCacheForTests();
-      restorePool(restored);
-    }
+    });
   });
 
   test("in-memory store still detects replay after a typical NotOnOrAfter window", async () => {
     const store = new InMemorySamlAssertionReplayStore();
-    setSamlAssertionReplayStoreForTests(store);
     const now = Date.now();
     const originalNow = Date.now;
     Date.now = () => now;
     try {
-      await consumeSamlAssertion("assert-ttl");
+      await store.consume("assert-ttl");
       Date.now = () => now + 11 * 60 * 1000;
-      await expect(consumeSamlAssertion("assert-ttl")).rejects.toThrow("replay");
+      await expect(store.consume("assert-ttl")).rejects.toThrow("replay");
     } finally {
       Date.now = originalNow;
-      resetSamlReplayCacheForTests();
-      restorePool(currentPoolOrNull());
     }
   });
 
   test("in-memory store expires the id after the same retention as SQL", async () => {
     const store = new InMemorySamlAssertionReplayStore();
-    setSamlAssertionReplayStoreForTests(store);
     const now = Date.now();
     const originalNow = Date.now;
     Date.now = () => now;
     try {
       expect(REPLAY_RETENTION_MS).toBe(60 * 60 * 1000);
-      await consumeSamlAssertion("assert-gc");
+      await store.consume("assert-gc");
       Date.now = () => now + REPLAY_RETENTION_MS;
-      await consumeSamlAssertion("assert-gc");
-      await expect(consumeSamlAssertion("assert-gc")).rejects.toThrow("replay");
+      await store.consume("assert-gc");
+      await expect(store.consume("assert-gc")).rejects.toThrow("replay");
     } finally {
       Date.now = originalNow;
-      resetSamlReplayCacheForTests();
-      restorePool(currentPoolOrNull());
     }
   });
 });
@@ -164,18 +122,35 @@ test("expired replay entries are evicted while current duplicates still fail clo
 });
 
 test("replay-store infrastructure failures retain their original error", async () => {
-  const previous = currentPoolOrNull();
   const failure = new Error("replay database unavailable");
   const pool = fakePool([]);
   pool.unsafe = async () => {
     throw failure;
   };
-  registerDefaultDatabasePool(pool);
-  setSamlAssertionReplayStoreForTests(null);
-  try {
-    await expect(consumeSamlAssertion("must-not-authorize")).rejects.toBe(failure);
-  } finally {
-    setSamlAssertionReplayStoreForTests(null);
-    restorePool(previous);
-  }
+  const error = await withPolicyPersistence(pool, async ({ database }) => {
+    await createSqlSamlAssertionReplayStore(database).consume("must-not-authorize");
+  }).then(
+    () => {
+      throw new Error("Expected infrastructure failure");
+    },
+    (error) => error,
+  );
+  expect(error).toBeInstanceOf(PersistenceError);
+  expect(error.code).toBe("DATABASE_OPERATION_FAILED");
+  expect(error.cause).toBe(failure);
+});
+
+test("explicit in-memory replay clear reopens only its own consumed IDs once", async () => {
+  const first = new InMemorySamlAssertionReplayStore();
+  const second = new InMemorySamlAssertionReplayStore();
+  const untouched = new InMemorySamlAssertionReplayStore();
+  await first.consume("shared");
+  await second.consume("shared");
+  untouched.clear();
+  await expect(first.consume("shared")).rejects.toThrow("replay");
+  await expect(second.consume("shared")).rejects.toThrow("replay");
+  first.clear();
+  await first.consume("shared");
+  await expect(first.consume("shared")).rejects.toThrow("replay");
+  await expect(second.consume("shared")).rejects.toThrow("replay");
 });

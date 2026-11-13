@@ -5,7 +5,7 @@ import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
 import { type AppDependencies, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { type AuthUser, createAuthMiddleware, currentAuthUser } from "@getstrata/core";
-import { createStorageDriver, StorageManager } from "@getstrata/core/storage/storage";
+import { createMockDependencies } from "./testHelpers";
 
 function createDependencies(authUser: AuthUser | null): AppDependencies {
   const container = new ServiceContainer();
@@ -13,17 +13,7 @@ function createDependencies(authUser: AuthUser | null): AppDependencies {
     resolve: async () => authUser,
   });
 
-  return {
-    container,
-    cache: {
-      remember: async (_key, callback) => callback(),
-      tags: () => ({
-        remember: async (_key, callback) => callback(),
-        flush: async () => 0,
-      }),
-    },
-    storage: new StorageManager(createStorageDriver()),
-  } as AppDependencies;
+  return createMockDependencies(container);
 }
 
 describe("bootstrap auth context", () => {

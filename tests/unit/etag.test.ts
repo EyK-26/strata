@@ -126,3 +126,25 @@ describe("applyConditionalGet", () => {
     expect(response.headers.get("etag")).toBe(etag);
   });
 });
+
+test("explicit conditional GET policy bypasses later ambient feature changes", () => {
+  const previous = process.env.FEATURE_ETAG;
+  try {
+    const request = new Request("https://etag.example.test", {
+      headers: { "if-none-match": 'W/"owned"' },
+    });
+    process.env.FEATURE_ETAG = "false";
+    expect(
+      applyConditionalGet(request, Response.json({ id: 1 }), 'W/"owned"', { etagEnabled: true })
+        .status,
+    ).toBe(304);
+    process.env.FEATURE_ETAG = "true";
+    const unchanged = Response.json({ id: 1 });
+    expect(applyConditionalGet(request, unchanged, 'W/"owned"', { etagEnabled: false })).toBe(
+      unchanged,
+    );
+  } finally {
+    if (previous === undefined) delete process.env.FEATURE_ETAG;
+    else process.env.FEATURE_ETAG = previous;
+  }
+});

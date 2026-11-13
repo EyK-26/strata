@@ -1,26 +1,14 @@
-import { BaseRepository } from "../database/baseRepository";
-import { defineTable } from "../database/table";
-import { isTenancyEnabled } from "./tenancyConfig";
+import type { DatabaseSession, TransactionSession } from "../database/session";
 import type { TenantContext } from "./tenantContext";
-
-const tenants = new BaseRepository(
-  defineTable<{ id: number; slug: string }, "id">({
-    name: "tenant",
-    primaryKey: "id",
-    columns: ["id", "slug"],
-  }),
-);
-
-async function resolveTenant(tenantId: number): Promise<TenantContext | null> {
-  if (!isTenancyEnabled()) {
-    return {
-      id: tenantId,
-      slug: "default",
-    };
-  }
-
-  const row = await tenants.findById(tenantId);
+export async function resolveTenant(
+  selected: DatabaseSession | TransactionSession,
+  tenantId: number,
+): Promise<TenantContext | null> {
+  const q = selected.dialect.quoteIdentifier.bind(selected.dialect);
+  const rows = await selected.execute<{ id: number; slug: string }>({
+    text: `SELECT ${q("id")}, ${q("slug")} FROM ${q("tenant")} WHERE ${q("id")} = ${selected.dialect.placeholder(1)}`,
+    params: [tenantId],
+  });
+  const row = rows[0];
   return row ? { id: row.id, slug: row.slug } : null;
 }
-
-export { resolveTenant };

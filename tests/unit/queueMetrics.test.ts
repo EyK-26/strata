@@ -40,7 +40,7 @@ describe("collectQueueMetrics", () => {
     process.env.QUEUE_DRIVER = "sync";
 
     try {
-      const metrics = await collectQueueMetrics();
+      const metrics = await collectQueueMetrics({ listRecent: async () => [] });
 
       expect(metrics.driver).toBe("sync");
       expect(metrics.pending).toEqual({

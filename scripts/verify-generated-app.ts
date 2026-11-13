@@ -13,14 +13,18 @@
  * Run: bun scripts/verify-generated-app.ts
  */
 
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "bun";
 import { verifyModelRepositoryRejections } from "../tests/helpers/modelRepositoryTypeContract";
 
 const ROOT = join(import.meta.dir, "..");
+const evidenceDirectory = process.env.STRATA_GENERATED_TYPEGATE_EVIDENCE_DIR;
+if (evidenceDirectory) await mkdir(evidenceDirectory);
+let commandSequence = 0;
 
 const PACKAGE_DIRS = [
   "packages/strata-core",
@@ -126,7 +130,13 @@ async function run(
     new Response(proc.stderr).text(),
     proc.exited,
   ]);
-  return { exitCode, output: `${stdout}${stderr}` };
+  const result = { exitCode, output: `${stdout}${stderr}` };
+  if (evidenceDirectory)
+    await writeFile(
+      join(evidenceDirectory, `command-${++commandSequence}.json`),
+      JSON.stringify({ command, cwd, ...result }, null, 2),
+    );
+  return result;
 }
 
 async function packPackages(destination: string): Promise<Record<string, string>> {
@@ -147,6 +157,18 @@ async function packPackages(destination: string): Promise<Record<string, string>
       throw new Error(`npm pack produced no tarball for ${dir}`);
     }
     tarballs[manifest.name] = join(destination, file);
+  }
+  if (evidenceDirectory) {
+    const archives = await Promise.all(
+      Object.entries(tarballs).map(async ([name, path]) => ({
+        name,
+        path,
+        sha256: createHash("sha256")
+          .update(await readFile(path))
+          .digest("hex"),
+      })),
+    );
+    await writeFile(join(evidenceDirectory, "archives.json"), JSON.stringify(archives, null, 2));
   }
   return tarballs;
 }
@@ -193,28 +215,47 @@ try {
     await useTarballs(appDir, tarballs);
     // Exercise the emitted public DI declarations, including rejected mismatches,
     // outside the monorepo's source-path aliases on every supported compiler.
-    // The Postgres query proxy is callable; unsafe-only adapters must stay honest.
+    // Every emitted driver consumes the same explicit selected-session SQL surface.
     await writeFile(
       join(appDir, "src/database-query.contract.ts"),
-      `import { getSql } from "./bootstrap/database.ts";
-export async function queryContract(): Promise<void> {
-  ${testCase.flags.includes("postgres") || testCase.flags.includes("--database=postgres") ? "" : "// @ts-expect-error This generated adapter does not expose tagged SQL."}
-  await getSql()\`SELECT 1 AS value WHERE 1 = \${1}\`;
-  const rows: Array<{value: number}> = await getSql().unsafe<{value: number}>("SELECT 1 AS value");
-  void rows;
+      `import type { DatabaseSession, SqlStatement } from "@getstrata/core/database/session";
+import * as generatedDatabase from "./bootstrap/database.ts";
+export async function queryContract(database: DatabaseSession): Promise<void> {
+  const statement: SqlStatement = { text: "SELECT 1 AS value WHERE 1 = ?", params: [1] };
+  const rows: readonly {value: number}[] = await database.execute<{value: number}>(statement);
+  const value: number | undefined = rows[0]?.value;
+  void value;
+  // @ts-expect-error Typed SQL results remain readonly.
+  const mutableRows: Array<{value: number}> = rows;
+  void mutableRows;
+  // @ts-expect-error SQL results retain their declared row shape.
+  rows[0]?.missing;
+  // @ts-expect-error Generated database configuration exposes no implicit SQL owner.
+  generatedDatabase.getSql();
+  // @ts-expect-error Selected sessions are never callable/tagged SQL proxies.
+  database\`SELECT 1 AS value\`;
+  // @ts-expect-error Selected sessions expose no unsafe/global routing facade.
+  database.unsafe("SELECT 1 AS value");
+  // @ts-expect-error SQL execution requires an explicit statement object.
+  database.execute("SELECT 1 AS value");
+  // @ts-expect-error Parameter binding is explicit, including the empty array.
+  database.execute({ text: "SELECT 1 AS value" });
 }
 `,
     );
     await writeFile(
       join(appDir, "src/after-commit.contract.ts"),
-      `import { afterCommit } from "@getstrata/core/database/transaction";
-export async function commitContract(): Promise<void> {
-  await afterCommit(() => {});
-  await afterCommit(async () => {});
+      `import type { DatabaseSession, TransactionSession } from "@getstrata/core/database/session";
+export function commitContract(database: DatabaseSession, transaction: TransactionSession): void {
+  const registered: void = transaction.afterCommit(() => {});
+  transaction.afterCommit(async () => {});
+  void registered;
   // @ts-expect-error Commit callbacks must not require arguments.
-  await afterCommit((request: Request) => {});
+  transaction.afterCommit((request: Request) => {});
   // @ts-expect-error Commit callbacks return void, not a deferred response.
-  await afterCommit(() => new Response());
+  transaction.afterCommit(() => new Response());
+  // @ts-expect-error The root execution session cannot register a transaction callback.
+  database.afterCommit(() => {});
 }
 `,
     );
@@ -245,6 +286,14 @@ export async function commitContract(): Promise<void> {
     await writeFile(
       join(appDir, "src/model-repository.contract.ts"),
       await readFile(join(ROOT, "tests/types/modelRepository.contract.ts"), "utf8"),
+    );
+    await writeFile(
+      join(appDir, "src/transaction-acquisition.contract.ts"),
+      await readFile(join(ROOT, "tests/types/transactionAcquisition.contract.ts"), "utf8"),
+    );
+    await writeFile(
+      join(appDir, "src/legacy-public-retirement.contract.ts"),
+      await readFile(join(ROOT, "tests/types/legacyPublicRetirement.contract.ts"), "utf8"),
     );
 
     await writeFile(
@@ -311,6 +360,26 @@ export async function commitContract(): Promise<void> {
         continue;
       }
 
+      const compilerManifestPath = join(appDir, "node_modules/typescript/package.json");
+      const compilerManifest = await Bun.file(compilerManifestPath).json();
+      if (compilerManifest.version !== version) {
+        failures.push(
+          `${testCase.name}: expected TypeScript ${version}, installed ${compilerManifest.version}`,
+        );
+        continue;
+      }
+      if (evidenceDirectory) {
+        const inputDirectory = join(evidenceDirectory, `${testCase.name}-ts-${version}`);
+        await mkdir(inputDirectory);
+        for (const file of ["package.json", "bun.lock", "tsconfig.json"]) {
+          await writeFile(join(inputDirectory, file), await readFile(join(appDir, file)));
+        }
+        await writeFile(
+          join(inputDirectory, "compiler-package.json"),
+          await readFile(compilerManifestPath),
+        );
+      }
+
       if (!migrationScaffolded) {
         const scaffold = await run(
           ["bun", "x", "--no-install", "strata", "make:migration", "schema_contract_probe"],
@@ -352,12 +421,40 @@ export async function commitContract(): Promise<void> {
       const models = await import("@getstrata/core/database/model");
       const database = await import("@getstrata/core/database");
       if (core.Model !== models.Model || database.Model !== models.Model) throw new Error("Model import identity differs");
-      if (core.defineModel !== models.defineModel || core.bootModels !== models.bootModels) throw new Error("Model registries differ");
-      await import("./src/bootstrap/preload.ts");
-      const { Note } = await import("./src/models/Note.ts");
-      if (!(Note.prototype instanceof core.Model)) throw new Error("Generated model is not discoverable");
-      core.bootModels([Note]);
-      if (Note.repository().getTable().name !== "notes") throw new Error("Missing default model repository");
+      if (core.defineModel !== models.defineModel || database.defineModel !== models.defineModel) throw new Error("Model definition factories differ");
+      const { createApplication } = await import("@getstrata/core/runtime/application");
+      const { createDatabaseBindings } = await import("@getstrata/core/database/bindings");
+      const { DATABASE_SESSION_TOKEN } = await import("@getstrata/core/database/tokens");
+      const { Note, NoteEntity, NoteRepository } = await import("./src/models/Note.ts");
+      const { modelDefinitions, repositoryDefinitions } = await import("./src/models/register.ts");
+      if (!(NoteEntity.prototype instanceof core.Model)) throw new Error("Generated entity constructor identity differs");
+      // The neutral definitions bind in a real owned SQLite app; emitted native drivers are typechecked above.
+      const application = createApplication({providers:[],services:createDatabaseBindings({
+        default:"main",connections:{main:{driver:"sqlite",filename:":memory:"}},models:modelDefinitions,repositories:repositoryDefinitions,
+      })});
+      const probeFailures = [];
+      try {
+        await application.start();
+        await application.run({kind:"command",actor:{kind:"system",policy:"generated.model-startup-proof"}},async scope=>{
+          const selected=scope.resolve(DATABASE_SESSION_TOKEN);
+          const rows=await selected.execute({text:"SELECT 1 AS value",params:[]});
+          if (rows[0]?.value !== 1) throw new Error("Owned SQLite startup query failed");
+          const bound=selected.model(Note);
+          const entity=bound.newRecord({body:"startup proof"});
+          if (bound.definition !== Note || !(entity instanceof NoteEntity) || !(entity instanceof core.Model)) throw new Error("Generated model binding/constructor identity differs");
+          if (bound.repository() !== selected.repository(NoteRepository) || bound.repository().getTable().name !== "notes") throw new Error("Missing selected default model repository");
+        });
+      } catch (error) {
+        probeFailures.push(error);
+      }
+      try {
+        const stopped=await application.stop({reason:"model startup proof complete"});
+        if (!stopped.successful) throw new Error("Owned model startup cleanup failed", {cause:stopped});
+      } catch (error) {
+        probeFailures.push(error);
+      }
+      if (probeFailures.length === 1) throw probeFailures[0];
+      if (probeFailures.length > 1) throw new AggregateError(probeFailures, "Owned model startup and cleanup failed", {cause:probeFailures[0]});
     `,
       ],
       appDir,
@@ -381,7 +478,12 @@ export async function commitContract(): Promise<void> {
     }
   }
 } finally {
-  await rm(workspace, { recursive: true, force: true });
+  if (evidenceDirectory) {
+    await writeFile(join(evidenceDirectory, "workspace.txt"), `${workspace}\n`);
+    console.log(`Retained generated gate workspace: ${workspace}`);
+  } else {
+    await rm(workspace, { recursive: true, force: true });
+  }
 }
 
 if (failures.length > 0) {

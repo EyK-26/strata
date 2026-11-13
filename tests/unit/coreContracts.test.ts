@@ -9,6 +9,11 @@ import {
   resolveService,
   type ServiceProvider,
 } from "@getstrata/core/contracts/di";
+import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
+
+const invoke: PersistenceInvocation = async () => {
+  throw new Error("Persistence is not used by this contract fixture.");
+};
 
 describe("@getstrata/core contracts", () => {
   test("ServiceContainer resolves singleton and transient bindings", () => {
@@ -52,7 +57,7 @@ describe("@getstrata/core contracts", () => {
     container.set("typed.counter", { count: 11 });
     expect(container.resolve(token).count).toBe(10);
     expect(container.resolve<{ count: number }>("typed.counter").count).toBe(11);
-    const dependencies = { container, cache: {} as never, storage: {} as never };
+    const dependencies = { container, invoke, cache: {} as never, storage: {} as never };
     expect(resolveService(dependencies, token).count).toBe(10);
     expect(() => container.resolve(createServiceToken<number>("missing"))).toThrow(
       'Service "missing" is not registered.',
@@ -64,11 +69,22 @@ describe("@getstrata/core contracts", () => {
 
   test("assertAppDependenciesComplete requires cache and storage", () => {
     const container = new ServiceContainer();
-    const dependencies = { container } as never;
+    const dependencies = { container, invoke } as never;
 
     expect(() => assertAppDependenciesComplete(dependencies)).toThrow(
       'Required dependency "cache" is not registered.',
     );
+  });
+
+  test("dependency validation rejects missing or malformed invocation before certifying a complete app", () => {
+    const base = { container: new ServiceContainer(), cache: {} as never, storage: {} as never };
+    expect(() => assertAppDependenciesComplete(base)).toThrow(
+      'Required dependency "invoke" is not registered.',
+    );
+    expect(() => assertAppDependenciesComplete({ ...base, invoke: null } as never)).toThrow(
+      "Application persistence invocation must be a function.",
+    );
+    expect(() => assertAppDependenciesComplete({ ...base, invoke })).not.toThrow();
   });
 
   test("resolveService reads from the app dependency container", () => {
@@ -79,6 +95,7 @@ describe("@getstrata/core contracts", () => {
       resolveService<string>(
         {
           container,
+          invoke,
           cache: {} as never,
           storage: {} as never,
         },
@@ -107,7 +124,13 @@ describe("@getstrata/core contracts", () => {
 
     const container = new ServiceContainer();
     const config = new ConfigStore();
-    provider.register?.({ container, config, dependencies: { container }, onCleanup() {} });
+    provider.register?.({
+      container,
+      config,
+      invoke,
+      dependencies: { container, invoke },
+      onCleanup() {},
+    });
 
     expect(config.has("demo")).toBe(true);
     expect(config.getRequired<boolean>("demo")).toBe(true);

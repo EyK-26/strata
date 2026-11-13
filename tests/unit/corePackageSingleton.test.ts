@@ -56,14 +56,42 @@ describe("@getstrata/core published bundle singletons", () => {
     expect(main.resetMysqlLoaderForTests).toBe(subpath.resetMysqlLoaderForTests);
   });
 
-  test("main and outbox subpath share durable infrastructure and transaction identity", async () => {
+  test("main and outbox subpath retain durable identity without ambient owners", async () => {
     const main = await import(join(CORE_DIST, "index.js"));
     const outbox = await import(join(CORE_DIST, "entries/events/outbox.js"));
-    const transaction = await import(join(CORE_DIST, "entries/database/transaction.js"));
     expect(typeof outbox.SqlOutbox).toBe("function");
     expect(outbox.SqlOutbox).toBe(main.SqlOutbox);
     expect(outbox.createOutboxMigration).toBe(main.createOutboxMigration);
-    expect(transaction.hasActiveTransaction).toBe(main.hasActiveTransaction);
+    for (const name of [
+      "hasActiveTransaction",
+      "runInTransaction",
+      "afterCommit",
+      "requestTransactionRollback",
+      "eventBus",
+      "readSharedEventBus",
+      "dispatchModelEvent",
+      "runWithDeferredModelEvents",
+    ])
+      expect(name in main).toBe(false);
+    const events = await import(join(CORE_DIST, "entries/events.js"));
+    expect(events.EventBus).toBe(main.EventBus);
+    expect(events.modelEventName).toBe(main.modelEventName);
+    const bus = new events.EventBus();
+    let calls = 0;
+    const name = events.modelEventName("installed", "created");
+    bus.listen(name, () => {
+      calls++;
+    });
+    await bus.dispatch(name, {});
+    expect(calls).toBe(1);
+    for (const name of [
+      "eventBus",
+      "readSharedEventBus",
+      "dispatchModelEvent",
+      "runWithDeferredModelEvents",
+    ])
+      expect(name in events).toBe(false);
+    expect(await Bun.file(join(CORE_DIST, "entries/database/transaction.js")).exists()).toBe(false);
   });
 
   test("main and view subpath share configureWebErrorView", async () => {

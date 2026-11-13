@@ -2,25 +2,18 @@ import {
   installGracefulShutdownSignals,
   LifecycleCoordinator,
 } from "@getstrata/core/lifecycle/gracefulShutdown";
-import { createFailedJobService, createQueueWorker } from "@getstrata/core/queue/createAppQueue";
 
-type QueueWorkerBoot = () => unknown | Promise<unknown>;
-type QueueWorkerClose = () => unknown | Promise<unknown>;
+import type { QueueCommandApplication } from "./queueFailed";
+
+type QueueWorkerBoot = () => QueueCommandApplication | Promise<QueueCommandApplication>;
 
 async function runQueueWorkerCommand(options: {
   boot: QueueWorkerBoot;
-  close?: QueueWorkerClose;
-  flush?: QueueWorkerClose;
-  drain?: QueueWorkerClose;
   lifecycle?: LifecycleCoordinator;
-  failedJobs?: ReturnType<typeof createFailedJobService>;
 }): Promise<void> {
-  const redisUrl = process.env.REDIS_URL;
-  if (!redisUrl) throw new Error("queue:work requires REDIS_URL to be set.");
   const lifecycle = options.lifecycle ?? new LifecycleCoordinator();
   if (lifecycle.isShuttingDown) throw new Error("Cannot start a worker during shutdown.");
-  let worker: ReturnType<typeof createQueueWorker> | undefined;
-  let running: Promise<void> | undefined;
+  let application: QueueCommandApplication | undefined;
   let booting: Promise<unknown> | undefined;
   let stopping = false;
   const name = `queue:${crypto.randomUUID()}`;
@@ -28,7 +21,10 @@ async function runQueueWorkerCommand(options: {
     `${name}:stop`,
     () => {
       stopping = true;
-      worker?.requestStop();
+      return application?.application.stop().then((result) => {
+        if (!result.successful)
+          throw new Error("Queue application shutdown did not complete cleanly.");
+      });
     },
     "stop",
   );
@@ -37,51 +33,39 @@ async function runQueueWorkerCommand(options: {
     async () => {
       // Completion, including failed startup/run, means no admitted worker remains.
       await booting?.catch(() => {});
-      await running?.catch(() => {});
-      if (running) console.log("[queue:work] Polling stopped.");
-      await options.drain?.();
     },
     "drain",
   );
   lifecycle.register(
     `${name}:flush`,
     async () => {
-      await options.flush?.();
+      // Canonical application owns provider flushing.
     },
     "flush",
   );
   lifecycle.register(
     `${name}:close`,
     async () => {
-      try {
-        await worker?.close?.();
-      } finally {
-        await options.close?.();
-      }
+      const result = await application?.application.stop();
+      if (result && !result.successful)
+        throw new Error("Queue application shutdown did not complete cleanly.");
     },
     "close",
-  );
-  lifecycle.register(
-    `${name}:force`,
-    () => {
-      worker?.requestStop();
-      worker?.close?.();
-    },
-    "force",
   );
   const uninstall = installGracefulShutdownSignals(undefined, lifecycle);
   let failure: unknown;
   let failed = false;
   try {
     booting = (async () => {
-      await options.boot();
+      application = await options.boot();
     })();
     await booting;
     if (!stopping && !lifecycle.isShuttingDown) {
-      worker = createQueueWorker(redisUrl, options.failedJobs ?? createFailedJobService());
+      if (!application) throw new Error("Queue boot did not return its application.");
+      if (!application.worker)
+        throw new Error("Queue boot must configure an application-owned worker transport.");
       console.log("[queue:work] Starting Redis queue polling; idle until jobs are available.");
-      running = worker.run();
-      await running;
+      await application.worker.start();
     }
   } catch (error) {
     failed = true;
@@ -97,5 +81,5 @@ async function runQueueWorkerCommand(options: {
   if (failed) throw failure;
 }
 
-export type { QueueWorkerBoot, QueueWorkerClose };
+export type { QueueWorkerBoot };
 export { runQueueWorkerCommand };

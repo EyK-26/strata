@@ -1,26 +1,22 @@
-import { applyMiddlewareToRoutes, type Middleware } from "@getstrata/core/http/middleware";
+type ModuleCallback = (...args: never[]) => unknown;
 
-function wrapCallback(path: string, callback: unknown, middleware: Middleware[]): unknown {
-  return applyMiddlewareToRoutes({ [path]: callback }, middleware)[path];
-}
-
-/** Module callbacks must receive middleware even when inert fields share their method map. */
-function applyModuleRouteMiddleware(
+/** All three internal issuers provide the owned entry adapter; inert/native values stay intact. */
+function enterModuleRoutes(
   routes: Record<string, unknown>,
-  middleware: Middleware[],
+  enter: (callback: ModuleCallback) => unknown,
 ): Record<string, unknown> {
   const wrapped: Record<string, unknown> = {};
   for (const [path, value] of Object.entries(routes)) {
     if (value instanceof Response) {
       const methods: Record<string, unknown> = {};
       for (const method of ["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]) {
-        methods[method] = wrapCallback(path, () => value.clone(), middleware);
+        methods[method] = enter(() => value.clone());
       }
       wrapped[path] = methods;
       continue;
     }
     if (typeof value === "function") {
-      wrapped[path] = wrapCallback(path, value, middleware);
+      wrapped[path] = enter(value as ModuleCallback);
       continue;
     }
     if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -33,7 +29,7 @@ function applyModuleRouteMiddleware(
             const callback = handler instanceof Response ? () => handler.clone() : handler;
             return [
               method,
-              typeof callback === "function" ? wrapCallback(path, callback, middleware) : callback,
+              typeof callback === "function" ? enter(callback as ModuleCallback) : callback,
             ];
           }),
         );
@@ -46,4 +42,4 @@ function applyModuleRouteMiddleware(
   return wrapped;
 }
 
-export { applyModuleRouteMiddleware };
+export { enterModuleRoutes };

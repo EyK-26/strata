@@ -4,13 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
 import { hashPassword } from "@getstrata/core/auth/password";
+import type {
+  ExecutionPersistence,
+  ScopedPolicy,
+  SelectedSession,
+} from "@getstrata/core/contracts/persistence";
 import { revealMfaSecret } from "@getstrata/core/crypto/mfaSecret";
-import { resetBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
-import { resetDefaultDatabasePoolForTests } from "@getstrata/core/database/defaultConnection";
-import { resetSqlDialect } from "@getstrata/core/database/dialect";
+import type { Model } from "@getstrata/core/database/model";
 import { hashRecoveryCode } from "@getstrata/core/security/recoveryCodes";
 import { generateTotp } from "@getstrata/core/security/totp";
-import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { SQL } from "bun";
 import {
   generateProject,
@@ -24,6 +26,17 @@ import {
 import { jsonCsrfHeaders, mergeCookies } from "../../helpers/jsonCsrf";
 import { installGeneratedAppDependencies, repoRoot } from "./helpers";
 
+type FixtureUserRow = Record<string, unknown> & {
+  id: number;
+  name: string;
+  email: string;
+  password: string;
+  mfa_secret: string | null;
+  mfa_recovery_codes: string;
+  mfa_enabled: number | boolean;
+  session_valid_after: Date | string | null;
+  tenant_id: number;
+};
 const original = { ...process.env };
 const adminSource = process.env.MIGRATION_DATABASE_URL;
 const runtimeSource = process.env.RLS_TEST_DATABASE_URL ?? process.env.APP_DATABASE_URL;
@@ -31,9 +44,6 @@ afterEach(() => {
   process.chdir(repoRoot);
   for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];
   Object.assign(process.env, original);
-  resetSqlDialect();
-  resetBoundDatabaseConnection();
-  resetDefaultDatabasePoolForTests();
   resetDiscoverModulesForTests();
 });
 
@@ -112,6 +122,15 @@ async function withApp(
     await control?.close();
     await rm(root, { recursive: true, force: true });
   }
+}
+
+async function fixturePort(): Promise<number> {
+  const probe = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response(null) });
+  const port = probe.port;
+  await probe.stop(true);
+  if (!port) throw new Error("Missing fixture port");
+  process.env.APP_URL = `http://127.0.0.1:${port}`;
+  return port;
 }
 
 function recoveryCodes(html: string): string[] {
@@ -199,55 +218,77 @@ test(
   "generated SQLite enrollment rolls back every write boundary and recovers an unreceived success without replaying secrets",
   async () =>
     withApp("sqlite", async (app) => {
-      const { bootstrapApp, createAppServer } = await import(
-        join(app, "src/bootstrap/createApp.ts")
-      );
-      const { getSql, closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
+      const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
       const { User } = await import(join(app, "src/models/User.ts"));
-      const boot = await bootstrapApp();
-      const server = createAppServer(boot.routes, 0, undefined, { hostname: "127.0.0.1" });
+      const port = await fixturePort();
+      const boot = await bootstrapApp({
+        mode: "http",
+        server: { port, native: { hostname: "127.0.0.1" } },
+      });
+      const selectedUsers = (database: SelectedSession) =>
+        database.model<FixtureUserRow, "id", Model<FixtureUserRow, "id">>(User);
+      const run = <T>(
+        work: (database: SelectedSession, policy: ScopedPolicy) => T | Promise<T>,
+      ): Promise<T> =>
+        boot.invoke(
+          { kind: "command", actor: { kind: "system", policy: "fixture.mfa-enrollment" } },
+          ({ database, policy }: ExecutionPersistence) =>
+            process.env.TENANCY_DRIVER === "rls"
+              ? policy.run(database, { kind: "bypass" }, (child) => work(child, policy))
+              : work(database, policy),
+        );
+      const server = boot.server;
+      if (!server) throw new Error("Expected owned HTTP server");
       const origin = `http://127.0.0.1:${server.port}`;
-      process.env.APP_URL = origin;
       let proxy: ReturnType<typeof Bun.serve> | undefined;
       let release = () => {};
       let attempt: Promise<Response> | undefined;
       let abort: AbortController | undefined;
       try {
         const password = "Initial!Password123";
-        const user = await User.create({
-          name: "Fixture",
-          email: "mfa@example.test",
-          password: await hashPassword(password),
-          is_admin: false,
-          email_verified_at: new Date().toISOString(),
-        });
+        const user = await run(async (database) =>
+          selectedUsers(database).create({
+            name: "Fixture",
+            email: "mfa@example.test",
+            password: await hashPassword(password),
+            is_admin: false,
+            email_verified_at: new Date().toISOString(),
+          }),
+        );
         const id = Number(user.get("id"));
-        const neighbor = await User.create({
-          name: "Neighbor",
-          email: "neighbor@example.test",
-          password: await hashPassword(password),
-          is_admin: false,
-          email_verified_at: new Date().toISOString(),
-        });
+        const neighbor = await run(async (database) =>
+          selectedUsers(database).create({
+            name: "Neighbor",
+            email: "neighbor@example.test",
+            password: await hashPassword(password),
+            is_admin: false,
+            email_verified_at: new Date().toISOString(),
+          }),
+        );
         const actor = await client(origin, user.get("email"), password);
         const other = await client(origin, neighbor.get("email"), password);
         expect((await actor.confirm()).status).toBe(302);
         const secret = await actor.setup();
-        const before = await User.find(id);
+        const before = await run(async (database) => selectedUsers(database).findOrFail(id));
         for (const [table, operation, predicate] of [
           ["users", "UPDATE", `OLD.id=${id}`],
           ["sessions", "DELETE", `OLD.user_id=${id}`],
           ["api_tokens", "DELETE", `OLD.user_id=${id}`],
         ]) {
-          await getSql().unsafe(
-            `CREATE TRIGGER reject_enrollment BEFORE ${operation} ON ${table} WHEN ${predicate} BEGIN SELECT RAISE(ABORT,'injected enrollment failure'); END`,
+          await run(async (database) =>
+            database.execute({
+              text: `CREATE TRIGGER reject_enrollment BEFORE ${operation} ON ${table} WHEN ${predicate} BEGIN SELECT RAISE(ABORT,'injected enrollment failure'); END`,
+              params: [],
+            }),
           );
           try {
             expect((await actor.submit(secret)).status).toBe(400);
           } finally {
-            await getSql().unsafe("DROP TRIGGER reject_enrollment");
+            await run(async (database) =>
+              database.execute({ text: "DROP TRIGGER reject_enrollment", params: [] }),
+            );
           }
-          const row = await User.find(id);
+          const row = await run(async (database) => selectedUsers(database).findOrFail(id));
           for (const key of [
             "mfa_enabled",
             "mfa_secret",
@@ -308,7 +349,7 @@ test(
         }
         expect(status).toBe(200);
         expect(hasCodes).toBe(true);
-        const committed = await User.find(id);
+        const committed = await run(async (database) => selectedUsers(database).findOrFail(id));
         expect(revealMfaSecret(committed.get("mfa_secret"))).toBe(secret);
         abort.abort();
         expect(await outcome).toBe("aborted");
@@ -316,16 +357,18 @@ test(
         expect(forwards).toBe(1);
         expect(await actor.statuses()).toEqual([401, 401, 401]);
         expect((await actor.submit(secret)).status).toBe(302);
-        expect((await User.find(id)).get("mfa_recovery_codes")).toBe(
-          committed.get("mfa_recovery_codes"),
-        );
+        expect(
+          (await run(async (database) => selectedUsers(database).findOrFail(id))).get(
+            "mfa_recovery_codes",
+          ),
+        ).toBe(committed.get("mfa_recovery_codes"));
         const fresh = await client(origin, user.get("email"), password, secret);
         expect((await fresh.confirm()).status).toBe(302);
         const replacementSecret = await fresh.setup();
         const replacement = await fresh.submit(replacementSecret);
         expect(replacement.status).toBe(200);
         const codes = recoveryCodes(await replacement.text());
-        const final = await User.find(id);
+        const final = await run(async (database) => selectedUsers(database).findOrFail(id));
         expect(revealMfaSecret(final.get("mfa_secret"))).toBe(replacementSecret);
         expect(JSON.parse(final.get("mfa_recovery_codes"))).toEqual(codes.map(hashRecoveryCode));
         expect(final.get("mfa_recovery_codes")).not.toBe(committed.get("mfa_recovery_codes"));
@@ -339,9 +382,7 @@ test(
         abort?.abort();
         await attempt?.catch(() => {});
         await proxy?.stop(true);
-        server.stop(true);
         await boot.context.dispose();
-        await closeDatabase();
       }
     }),
   30000,
@@ -352,27 +393,47 @@ test.skipIf(!adminSource || !runtimeSource)(
   async () =>
     withApp("postgres", async (app, admin) => {
       if (!admin) throw new Error("Owned Postgres required");
-      const { bootstrapApp, createAppServer } = await import(
-        join(app, "src/bootstrap/createApp.ts")
-      );
-      const { getSql, closeDatabase } = await import(join(app, "src/bootstrap/database.ts"));
+      const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
       const { User } = await import(join(app, "src/models/User.ts"));
-      const boot = await bootstrapApp();
-      const server = createAppServer(boot.routes, 0, undefined, { hostname: "127.0.0.1" }),
-        origin = `http://127.0.0.1:${server.port}`;
-      process.env.APP_URL = origin;
+      const port = await fixturePort();
+      const boot = await bootstrapApp({
+        mode: "http",
+        server: { port, native: { hostname: "127.0.0.1" } },
+      });
+      const selectedUsers = (database: SelectedSession) =>
+        database.model<FixtureUserRow, "id", Model<FixtureUserRow, "id">>(User);
+      const run = <T>(
+        work: (database: SelectedSession, policy: ScopedPolicy) => T | Promise<T>,
+      ): Promise<T> =>
+        boot.invoke(
+          { kind: "command", actor: { kind: "system", policy: "fixture.mfa-enrollment" } },
+          ({ database, policy }: ExecutionPersistence) =>
+            process.env.TENANCY_DRIVER === "rls"
+              ? policy.run(database, { kind: "bypass" }, (child) => work(child, policy))
+              : work(database, policy),
+        );
+      const server = boot.server;
+      if (!server) throw new Error("Expected owned HTTP server");
+      const origin = `http://127.0.0.1:${server.port}`;
       let release = () => {};
       let held: Promise<unknown> | undefined;
       let attempts: Promise<Response[]> | undefined;
       try {
-        const [role] = await getSql().unsafe(
-          "SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user",
+        const [role] = await run(async (database) =>
+          database.execute<{ rolsuper: boolean; rolbypassrls: boolean }>({
+            text: "SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user",
+            params: [],
+          }),
         );
+        if (!role) throw new Error("Missing restricted fixture role");
         expect(role.rolsuper).toBe(false);
         expect(role.rolbypassrls).toBe(false);
+        await admin.unsafe(
+          "INSERT INTO tenant (id,slug) VALUES (1,'guest'),(2,'race-initial'),(3,'neighbor'),(4,'race-replacement')",
+        );
         const password = "Initial!Password123";
-        const neighbor = await runWithMigrationBypass(async () =>
-          User.create({
+        const neighbor = await run(async (database) =>
+          selectedUsers(database).create({
             name: "Neighbor",
             tenant_id: 3,
             email: "neighbor@example.test",
@@ -381,11 +442,28 @@ test.skipIf(!adminSource || !runtimeSource)(
             email_verified_at: new Date().toISOString(),
           }),
         );
+        // URL/header hints cannot establish a tenant or grant an unscoped SQL read.
+        expect(
+          (
+            await fetch(`${origin}/api/user?tenant_id=3&bypass_rls=true`, {
+              headers: { "x-tenant-id": "3" },
+            })
+          ).status,
+        ).toBe(401);
+        const denied = await boot.invoke(
+          { kind: "command", actor: { kind: "system", policy: "fixture.no-url-tenant-grant" } },
+          ({ database }: ExecutionPersistence) =>
+            database.execute({ text: "SELECT id FROM users", params: [] }),
+        );
+        expect(denied).toEqual([]);
+        expect(
+          await admin.unsafe("SELECT id FROM users WHERE id=$1", [neighbor.get("id")]),
+        ).toHaveLength(1);
         const other = await client(origin, neighbor.get("email"), password);
         for (const replacement of [false, true]) {
           const email = `race-${replacement}@example.test`;
-          const user = await runWithMigrationBypass(async () =>
-            User.create({
+          const user = await run(async (database) =>
+            selectedUsers(database).create({
               name: "Race",
               tenant_id: replacement ? 4 : 2,
               email,
@@ -452,7 +530,7 @@ test.skipIf(!adminSource || !runtimeSource)(
             winningSecret = secrets[winner];
           if (!winningBody || !winningSecret) throw new Error("Missing winning setup response");
           const codes = recoveryCodes(winningBody);
-          const row = await runWithMigrationBypass(() => User.find(id));
+          const row = await run((database) => selectedUsers(database).findOrFail(id));
           expect(row.get("tenant_id")).toBe(replacement ? 4 : 2);
           expect(revealMfaSecret(row.get("mfa_secret"))).toBe(winningSecret);
           expect(JSON.parse(row.get("mfa_recovery_codes"))).toEqual(codes.map(hashRecoveryCode));
@@ -465,9 +543,7 @@ test.skipIf(!adminSource || !runtimeSource)(
         release();
         await held?.catch(() => {});
         await attempts?.catch(() => {});
-        server.stop(true);
         await boot.context.dispose();
-        await closeDatabase();
       }
     }),
   30000,

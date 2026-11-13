@@ -1,14 +1,11 @@
 import { describe, expect, mock, test } from "bun:test";
-import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
 import MembershipService, {
   resolveMembershipService,
 } from "@getstrata/core/auth/membershipService";
 import { ForbiddenError } from "@getstrata/core/errors/http";
-import { setActiveApplicationContext } from "@getstrata/core/runtime/applicationRegistry";
 import MembershipImplementation from "../../src/core/auth/membershipServiceImplementation";
 import { resolveMembershipService as resolveDirect } from "../../src/core/auth/resolveMembershipService";
-import { createMockCache, createMockDependencies } from "./testHelpers";
 
 const membershipRepository = {
   listForUser: mock(async (userId: number) =>
@@ -159,30 +156,19 @@ describe("MembershipService", () => {
     expect(membershipRepository.updateMemberRole).toHaveBeenCalledWith(5, 3, "admin");
   });
 
-  test("resolveMembershipService returns container service when registered", () => {
-    const container = new ServiceContainer();
-    const registered = new MembershipService();
-    container.set("core.membership", registered);
-
-    setActiveApplicationContext({
-      container,
-      config: new ConfigStore(),
-      dependencies: createMockDependencies(container, createMockCache()),
+  test("resolveMembershipService uses the supplied lookup without application fallback", async () => {
+    const allowed = resolveMembershipService(membershipRepository);
+    const denied = resolveMembershipService({
+      ...membershipRepository,
+      findMembership: async () => null,
     });
-
-    expect(resolveMembershipService()).toBe(registered);
-  });
-
-  test("resolveMembershipService falls back to a new service instance", () => {
-    const container = new ServiceContainer();
-
-    setActiveApplicationContext({
-      container,
-      config: new ConfigStore(),
-      dependencies: createMockDependencies(container, createMockCache()),
-    });
-
-    expect(resolveMembershipService()).toBeInstanceOf(MembershipService);
+    await expect(allowed.requireOrgAccess(5, "member", { id: 2, role: "member" })).resolves.toBe(
+      "admin",
+    );
+    await expect(denied.requireOrgAccess(5, "member", { id: 2, role: "member" })).rejects.toThrow(
+      ForbiddenError,
+    );
+    expect(allowed).not.toBe(denied);
   });
 });
 

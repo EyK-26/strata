@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
 import { buildWebModuleRoutes } from "@getstrata/bootstrap/buildWebModuleRoutes";
 import type { InitializedAppContext } from "@getstrata/bootstrap/context";
+import type { BusinessRequestPorts } from "@getstrata/bootstrap/persistenceContracts";
 import { routeParams, toRouteRequest } from "@getstrata/bootstrap/web/routing";
 import { createWebServer } from "@getstrata/bootstrap/web/server";
+import type { Application } from "@getstrata/core/contracts/application";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
 import type { BunRequest, Server } from "bun";
@@ -12,17 +14,38 @@ import type { BunRequest, Server } from "bun";
 const template = new Response("static body", { status: 201, headers: { "x-static": "yes" } });
 const seen: string[] = [];
 let admitted: Request | undefined;
-const handler = (request: BunRequest<"/things/:id">, native?: Server<unknown>) => {
+const businessHandler = async (request: BunRequest<"/things/:id">, ports: BusinessRequestPorts) => {
   assert.equal(request, admitted);
-  return Response.json({ id: request.params.id, port: native?.port });
+  assert.equal(typeof ports.database.execute, "function");
+  assert.equal(typeof ports.policy.run, "function");
+  assert.ok(ports.auth);
+  assert.ok(ports.established);
+  assert.deepEqual(await ports.auth.resolveWithSource(request), ports.established.auth);
+  assert.equal(
+    (await ports.database.execute<{ value: number }>({ text: "SELECT 1 AS value", params: [] }))[0]
+      ?.value,
+    1,
+  );
+  return Response.json({ id: request.params.id, livePorts: true });
 };
 // This URL resolves only after copying into the generated app. Its bootstrap is
 // typechecked there; use its real providers and the already migrated runtime URL.
 const application: {
-  createApp(options: { migrate: false }): Promise<{ context: InitializedAppContext }>;
+  createApp(options: {
+    migrate: false;
+    onConstructed(owner: Application): undefined;
+  }): Promise<{ context: InitializedAppContext; application: Application }>;
 } = await import(new URL("../bootstrap/createApp.ts", import.meta.url).href);
-const app = await application.createApp({ migrate: false });
+let owner: Application | undefined;
+const moduleFailures: unknown[] = [];
+let moduleServer: ReturnType<typeof createWebServer> | undefined;
 try {
+  const app = await application.createApp({
+    migrate: false,
+    onConstructed: (application) => {
+      owner = application;
+    },
+  });
   const file = Bun.file(new URL("../bootstrap/createApp.ts", import.meta.url));
   const routes = buildModuleRoutes(app.context.dependencies, {
     modules: [
@@ -31,7 +54,7 @@ try {
         routes: () => ({
           "/module": new Response("module body", { status: 201 }),
           "/mixed": { GET: new Response("mixed body"), POST: new Response("mixed write") },
-          "/wrapped/:id": { GET: handler },
+          "/wrapped/:id": { GET: businessHandler },
           "/file": file,
           "/partial": {
             GET: () => new Response("partial read"),
@@ -50,7 +73,7 @@ try {
       },
     ],
   });
-  const moduleServer = createWebServer({
+  const selectedModuleServer = createWebServer({
     port: 0,
     native: { hostname: "127.0.0.1" },
     routes: { ...routes, ...web },
@@ -58,52 +81,73 @@ try {
       admitted = request;
     },
   });
-  try {
-    assert.equal(routes["/file"], file);
-    assert.equal(web["/web-file"], file);
-    assert.equal(routes["/partial"].inert, false);
-    const partialRejection = await fetch(new URL("/partial", moduleServer.url), { method: "POST" });
-    assert.equal(partialRejection.status, 403);
-    assert.deepEqual(await partialRejection.json(), { error: "Invalid or missing CSRF token." });
-    const read = await fetch(new URL("/module", moduleServer.url));
-    assert.equal(read.status, 201);
-    assert.equal(await read.text(), "module body");
-    assert.ok(read.headers.get("x-request-id"));
-    const csrfCookie = read.headers.getSetCookie()[0]?.split(";")[0];
-    assert.ok(csrfCookie);
-    const rejected = await fetch(new URL("/module", moduleServer.url), { method: "POST" });
-    assert.equal(rejected.status, 403);
-    assert.deepEqual(await rejected.json(), { error: "Invalid or missing CSRF token." });
-    const csrfHeaders = {
-      cookie: csrfCookie,
-      "x-csrf-token": decodeURIComponent(csrfCookie.slice(csrfCookie.indexOf("=") + 1)),
-      origin: moduleServer.url.origin,
-    };
-    for (const [path, body] of [
-      ["/module", "module body"],
-      ["/mixed", "mixed write"],
-      ["/partial", "partial write"],
-    ] as const) {
-      const result = await fetch(new URL(path, moduleServer.url), {
-        method: "POST",
-        headers: csrfHeaders,
-      });
-      assert.ok(result.headers.get("x-request-id"));
-      assert.equal(await result.text(), body);
-    }
-    assert.deepEqual(await (await fetch(new URL("/wrapped/12", moduleServer.url))).json(), {
-      id: "12",
-      port: moduleServer.port,
+  moduleServer = selectedModuleServer;
+  assert.equal(routes["/file"], file);
+  assert.equal(web["/web-file"], file);
+  assert.equal(routes["/partial"].inert, false);
+  const partialRejection = await fetch(new URL("/partial", selectedModuleServer.url), {
+    method: "POST",
+  });
+  assert.equal(partialRejection.status, 403);
+  assert.deepEqual(await partialRejection.json(), { error: "Invalid or missing CSRF token." });
+  const read = await fetch(new URL("/module", selectedModuleServer.url));
+  assert.equal(read.status, 201);
+  assert.equal(await read.text(), "module body");
+  assert.ok(read.headers.get("x-request-id"));
+  const csrfCookie = read.headers.getSetCookie()[0]?.split(";")[0];
+  assert.ok(csrfCookie);
+  const rejected = await fetch(new URL("/module", selectedModuleServer.url), { method: "POST" });
+  assert.equal(rejected.status, 403);
+  assert.deepEqual(await rejected.json(), { error: "Invalid or missing CSRF token." });
+  const csrfHeaders = {
+    cookie: csrfCookie,
+    "x-csrf-token": decodeURIComponent(csrfCookie.slice(csrfCookie.indexOf("=") + 1)),
+    origin: selectedModuleServer.url.origin,
+  };
+  for (const [path, body] of [
+    ["/module", "module body"],
+    ["/mixed", "mixed write"],
+    ["/partial", "partial write"],
+  ] as const) {
+    const result: Response = await fetch(new URL(path, selectedModuleServer.url), {
+      method: "POST",
+      headers: csrfHeaders,
     });
-    const webRead = await fetch(new URL("/web-static", moduleServer.url));
-    assert.equal(await webRead.text(), "web body");
-    assert.ok(webRead.headers.get("x-request-id"));
-  } finally {
-    await moduleServer.stop(true);
+    assert.ok(result.headers.get("x-request-id"));
+    assert.equal(await result.text(), body);
   }
+  assert.deepEqual(await (await fetch(new URL("/wrapped/12", selectedModuleServer.url))).json(), {
+    id: "12",
+    livePorts: true,
+  });
+  const webRead = await fetch(new URL("/web-static", selectedModuleServer.url));
+  assert.equal(await webRead.text(), "web body");
+  assert.ok(webRead.headers.get("x-request-id"));
+} catch (error) {
+  moduleFailures.push(error);
 } finally {
-  await app.context.dispose();
+  try {
+    await moduleServer?.stop(true);
+  } catch (error) {
+    moduleFailures.push(error);
+  }
+  if (owner) {
+    try {
+      assert.ok((await owner.stop()).successful);
+    } catch (error) {
+      moduleFailures.push(error);
+    }
+  }
 }
+if (moduleFailures.length === 1) throw moduleFailures[0];
+if (moduleFailures.length > 1)
+  throw new AggregateError(moduleFailures, "Module consumer and cleanup failed");
+
+const rawNativeHandler = (request: BunRequest<"/things/:id">, native: Server<unknown>) => {
+  assert.equal(request, admitted);
+  assert.equal(native, server);
+  return Response.json({ id: request.params.id, port: native.port });
+};
 
 const server = createWebServer({
   port: 0,
@@ -114,8 +158,8 @@ const server = createWebServer({
       PATCH: new Response("patched", { status: 202 }),
       OPTIONS: new Response("explicit", { status: 203 }),
     },
-    "/things/:id": handler,
-    "/posted/:id": { POST: handler },
+    "/things/:id": rawNativeHandler,
+    "/posted/:id": { POST: rawNativeHandler },
     "/encoded/:id": (request: BunRequest<"/encoded/:id">) => {
       const nativeParams = request.params;
       const native = { ...request.params };

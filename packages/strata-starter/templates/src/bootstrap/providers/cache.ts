@@ -1,32 +1,12 @@
 import { CORE_CACHE_TOKEN } from "@getstrata/bootstrap/config";
-import { createCacheStore } from "@getstrata/core/cache/createCacheStore";
-import { CacheRepository } from "@getstrata/core/cache/repository";
-import type { ServiceProvider } from "@getstrata/core/contracts/di";
-
-const cacheProvider: ServiceProvider = {
-  name: "starter.cache",
-  register({ container, config, dependencies, onCleanup }) {
-    const namespace = `${process.env.APP_KEY_PREFIX?.trim() || "strata"}:cache:v3:`;
-    container.singleton(CORE_CACHE_TOKEN, () => {
-      const ttlMs = config.get<number>("cache.ttlMs") ?? 3_600_000;
-      const maxEntries = config.get<number>("cache.maxEntries") ?? 100;
-      const driver = config.get<"array" | "redis">("cache.driver") ?? "array";
-
-      const cache = new CacheRepository(
-        createCacheStore({
-          driver,
-          ttlMs,
-          maxEntries,
-          redisUrl: process.env.REDIS_URL,
-          namespace,
-        }),
-      );
-      onCleanup(() => cache.close());
-      return cache;
-    });
-
-    Reflect.set(dependencies, "cache", container.resolve(CORE_CACHE_TOKEN));
-  },
-};
-
-export default cacheProvider;
+import type { AppDependencies, ServiceProvider } from "@getstrata/bootstrap/contracts";
+/** Adapt the already graph-owned cache; this provider never creates or closes it. */
+export function createCacheProvider(cache: AppDependencies["cache"]): ServiceProvider {
+  return {
+    name: "starter.cache",
+    register({ container, dependencies }) {
+      container.set(CORE_CACHE_TOKEN, cache);
+      dependencies.cache = cache;
+    },
+  };
+}

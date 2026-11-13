@@ -41,8 +41,8 @@ function renderInitialAdminCommand(layers: StarterLayers): string | null {
   );
   return `import { runInitialAdminCommand } from "@getstrata/cli/initialAdmin";
 import { hashPassword } from "@getstrata/core/auth/password";
-import { runInTransaction } from "@getstrata/core/database/transaction";
-${rls ? 'import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";\nimport { isRlsTenancy } from "@getstrata/core/tenant/tenancyConfig";\nimport { assertRlsLiveDatabaseRole } from "@getstrata/bootstrap/secretsGuard";\n' : ""}import { getSql, closeDatabase } from "../bootstrap/database.ts";
+import type { TransactionSession } from "@getstrata/core/database/session";
+${rls ? 'import { assertRlsLiveDatabaseRole } from "@getstrata/bootstrap/secretsGuard";\n' : ""}import { bootstrapApp } from "../bootstrap/createApp.ts";
 
 export async function initialAdminCommand(...args: string[]): Promise<void> {
   await runInitialAdminCommand(args, {
@@ -50,30 +50,32 @@ export async function initialAdminCommand(...args: string[]): Promise<void> {
     async provision(input) {
       // Hash before acquiring the database claim; only the official auth helper owns crypto.
       const passwordHash = await hashPassword(input.password);
+      const app = await bootstrapApp({ migrate: false, mode: "command" });
       try {
-        getSql();
-${rls ? '        if (!isRlsTenancy()) throw new Error("RLS configuration is required.");\n        await assertRlsLiveDatabaseRole();\n' : ""}        const provision = () => runInTransaction(async db => {
+        await app.invoke({ kind: "command", actor: { kind: "system", policy: "cli.initial-admin" } }, async ports => {
+${rls ? '          await assertRlsLiveDatabaseRole({ ...process.env }, async () => { const rows = await ports.database.execute<{rolname:string;rolsuper:boolean;rolbypassrls:boolean}>({text:"SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user",params:[]});return rows[0] ?? null; });\n' : ""}        const provision = async (db: TransactionSession) => {
           // The singleton primary key serializes bootstrap commands across all tenants/processes.
-          await db.unsafe("INSERT INTO initial_admin_provisioning (id, email) VALUES (1, ${placeholder})", [input.email]);
-          if ((await db.unsafe("SELECT id FROM users WHERE is_admin = ${layers.database === "postgres" ? "TRUE" : "1"} LIMIT 1")).length) {
+          await db.execute({text:"INSERT INTO initial_admin_provisioning (id, email) VALUES (1, ${placeholder})",params:[input.email]});
+          if ((await db.execute({text:"SELECT id FROM users WHERE is_admin = ${layers.database === "postgres" ? "TRUE" : "1"} LIMIT 1",params:[]})).length) {
             throw new Error("An admin already exists.");
           }
-          if ((await db.unsafe("SELECT id FROM users WHERE LOWER(email) = ${placeholder}", [input.email])).length) {
+          if ((await db.execute({text:"SELECT id FROM users WHERE LOWER(email) = ${placeholder}",params:[input.email]})).length) {
             throw new Error("The account already exists; provisioning never promotes accounts.");
           }
 ${
   tenant
-    ? `          if (!(await db.unsafe("SELECT id FROM tenant WHERE id = ${placeholder}", [input.tenantId])).length) {
+    ? `          if (!(await db.execute({text:"SELECT id FROM tenant WHERE id = ${placeholder}",params:[input.tenantId]})).length) {
             throw new Error("The tenant does not exist.");
           }
 `
     : ""
-}          await db.unsafe("INSERT INTO users (${fields.join(", ")}) VALUES (${placeholders.join(", ")})", [input.name, input.email, passwordHash, ${layers.database === "postgres" ? "true" : "1"}${tenant ? ", input.tenantId" : ""}]);
+}          await db.execute({text:"INSERT INTO users (${fields.join(", ")}) VALUES (${placeholders.join(", ")})",params:[input.name, input.email, passwordHash, ${layers.database === "postgres" ? "true" : "1"}${tenant ? ", input.tenantId" : ""}]});
           // Verification and MFA stay unenrolled; normal application flows remain authoritative.
+        };
+        await ${rls ? 'ports.policy.run(ports.database, {kind:"bypass"}, provision)' : "ports.database.transaction(provision)"};
         });
-        await ${rls ? "runWithMigrationBypass(provision)" : "provision()"};
       } finally {
-        await closeDatabase();
+        await app.context.dispose();
       }
     },
   });

@@ -88,15 +88,15 @@ describe("makeModuleCommand", () => {
     });
   });
 
-  test("appends a registerModelClass hint when src/models/register.ts exists", async () => {
+  test("preserves application-owned definition arrays and emits explicit registration guidance", async () => {
     await withTempWorkspace(async (workspace) => {
       const registerPath = join(workspace, "src", "models", "register.ts");
       await ensureDirectory(join(workspace, "src", "models"));
       await writeFile(
         registerPath,
-        `import { registerModelClass } from "@getstrata/core/database/model";
-import "./Note.ts";
-void registerModelClass;
+        `import { Note, NoteRepository } from "./Note.ts";
+export const modelDefinitions = [Note];
+export const repositoryDefinitions = [NoteRepository];
 `,
       );
       const { makeModuleCommand } = await import("../../../src/cli/commands/makeModule");
@@ -109,8 +109,19 @@ void registerModelClass;
       }
 
       const register = await Bun.file(registerPath).text();
-      expect(register).toContain('registerModelClass("Invoice"');
-      expect(output.logs.some((line) => line.includes("src/models/register.ts"))).toBe(true);
+      expect(register).toBe(`import { Note, NoteRepository } from "./Note.ts";
+export const modelDefinitions = [Note];
+export const repositoryDefinitions = [NoteRepository];
+`);
+      const repository = await Bun.file(
+        join(workspace, "src/modules/invoice/repository.ts"),
+      ).text();
+      expect(repository).toContain("defineRepository({");
+      expect(repository).toContain("invoiceRepository");
+      expect(repository).not.toContain("registerModelClass");
+      expect(output.logs).toContain(
+        "Register the generated repository definition in application database bindings.",
+      );
     });
   });
 

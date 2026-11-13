@@ -1,37 +1,31 @@
-import { resolveAuthUserDirectory } from "@getstrata/core/contracts/serviceTokens";
 import { UnauthorizedError } from "@getstrata/core/errors/http";
-import type { ServiceContainerLike } from "../contracts/serviceContainer";
+import type { AuthUserDirectory } from "../contracts/authUserDirectory";
 import { authorizationScheme, readBearerToken } from "../http/statelessAuth";
-import { envFlagEnabled, isProductionEnv } from "../runtime/appEnv";
 import { timingSafeCompareString } from "../security/timingSafeCompare";
-import { abilityCatalog } from "./abilityCatalog";
 import { isAuthUserActive } from "./accountState";
 import type { AuthUser, CredentialSource } from "./authContext";
 import { currentAuthUser } from "./authContext";
 import { BasicAuthGuard } from "./basicAuthGuard";
 import { JwtGuard } from "./jwtGuard";
 
-function devHeaderAbilities(role: string | null): string[] {
-  const catalog = abilityCatalog();
-
-  if (role === "admin") {
-    return [...catalog.admin];
-  }
-
-  return [...catalog.member];
-}
-
 interface AuthGuard {
   resolve(request: Request): AuthUser | null | Promise<AuthUser | null>;
 }
 
 class GuestGuard implements AuthGuard {
+  constructor(
+    private readonly options: {
+      production: boolean;
+      allowDevHeaders: boolean;
+      abilities: { admin: readonly string[]; member: readonly string[] };
+    },
+  ) {}
   resolve(request: Request): AuthUser | null {
-    if (isProductionEnv()) {
+    if (this.options.production) {
       return null;
     }
 
-    if (!envFlagEnabled(process.env.AUTH_DEV_HEADERS)) {
+    if (!this.options.allowDevHeaders) {
       return null;
     }
 
@@ -46,7 +40,9 @@ class GuestGuard implements AuthGuard {
 
     return {
       id: userId,
-      abilities: devHeaderAbilities(role),
+      abilities: [
+        ...(role === "admin" ? this.options.abilities.admin : this.options.abilities.member),
+      ],
       ...(role ? { role } : {}),
       emailVerifiedAt: verified === "true" ? new Date(0) : null,
     };
@@ -73,7 +69,7 @@ class ApiTokenGuard implements AuthGuard {
 }
 
 class DatabaseTokenGuard implements AuthGuard {
-  constructor(private readonly container: ServiceContainerLike) {}
+  constructor(private readonly directory: AuthUserDirectory) {}
 
   async resolve(request: Request): Promise<AuthUser | null> {
     const token = readBearerToken(request);
@@ -82,7 +78,7 @@ class DatabaseTokenGuard implements AuthGuard {
       return null;
     }
 
-    const tokenService = resolveAuthUserDirectory(this.container);
+    const tokenService = this.directory;
 
     if (!tokenService || typeof tokenService.resolveUserFromToken !== "function") {
       return null;
@@ -97,15 +93,17 @@ class CompositeGuard implements AuthGuard {
   constructor(private readonly guards: AuthGuard[]) {}
 
   async resolve(request: Request): Promise<AuthUser | null> {
+    return (await this.resolveWithSource(request)).user;
+  }
+  async resolveWithSource(
+    request: Request,
+  ): Promise<{ user: AuthUser | null; credentialSource: CredentialSource }> {
     for (const guard of this.guards) {
-      const user = await Promise.resolve(guard.resolve(request));
-
-      if (user && isAuthUserActive(user)) {
-        return user;
-      }
+      const user = await guard.resolve(request);
+      if (user && isAuthUserActive(user))
+        return { user, credentialSource: guard instanceof GuestGuard ? "guest" : "session" };
     }
-
-    return null;
+    return { user: null, credentialSource: null };
   }
 }
 
@@ -274,6 +272,11 @@ class AuthManager {
       }
 
       seen.add(named);
+      if (source === "session" && named instanceof CompositeGuard) {
+        const result = await named.resolveWithSource(request);
+        if (result.user) return { user: result.user, credentialSource: result.credentialSource };
+        continue;
+      }
       const user = await this.resolveGuard(named, request);
 
       if (user) {

@@ -1,3 +1,5 @@
+import { ADMIN_ABILITIES, MEMBER_ABILITIES } from "@getstrata/core/auth/abilityCatalog";
+import { type EnvRecord, isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { restoreEnvVar } from "./restoreEnv";
 
 const envSnapshots: Array<{ appEnv: string | undefined; nodeEnv: string | undefined }> = [];
@@ -23,3 +25,12 @@ function restoreDevAuthHeaders(previous: string | undefined): void {
 }
 
 export { enableDevAuthHeaders, restoreDevAuthHeaders };
+
+/** Test entrypoint adapter: snapshot explicit guard configuration before requests. */
+export function guestGuardOptions(env: EnvRecord = process.env) {
+  return Object.freeze({
+    production: isProductionEnv(env),
+    allowDevHeaders: env.AUTH_DEV_HEADERS === "true",
+    abilities: { admin: ADMIN_ABILITIES, member: MEMBER_ABILITIES },
+  });
+}

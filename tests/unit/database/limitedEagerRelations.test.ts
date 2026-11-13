@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
-import { runWithSqlDialect } from "@getstrata/core/database/dialect";
-import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineRepository, type RepositoryBinding } from "@getstrata/core/database/definitions";
 import { defineTable } from "@getstrata/core/database/table";
-import type { QueryOptions, QueryWhere } from "@getstrata/core/database/types";
+import type { QueryOptions } from "@getstrata/core/database/types";
+import { withBoundDatabase } from "../../helpers/boundRepositoryHarness";
 
 type Child = {
   id: number;
@@ -32,48 +32,66 @@ async function fixture(
     reads: { count: number };
   }) => Promise<void>,
 ) {
-  const db = createSqliteConnection(":memory:");
   const queries: string[] = [],
     reads = { count: 0 };
-  const observed: DatabaseConnection = {
-    async unsafe<T>(query: string, params: readonly unknown[] = []) {
-      queries.push(query);
-      return db.unsafe<T>(query, params);
-    },
-  };
   class VisibleChildren extends BaseRepository<Child, "id"> {
     #visible = "keep";
-    constructor(connection: DatabaseConnection) {
-      super(childTable, connection);
-    }
-    protected override cloneWithConnection(connection: DatabaseConnection): this {
-      return new VisibleChildren(connection) as this;
-    }
-    protected override findWhere(
-      where: QueryWhere<Child>,
-      options: Omit<QueryOptions<Child>, "where"> = {},
-    ) {
+    applyScope(options: QueryOptions<Child>): QueryOptions<Child> {
       reads.count++;
-      return super.findWhere(where, {
+      return {
         ...options,
         whereNodes: [
           ...(options.whereNodes ?? []),
           { kind: "and", where: { kind: this.#visible } },
         ],
-      });
+      };
     }
   }
-  try {
-    await runWithSqlDialect("sqlite", async () => {
+  const plain = defineRepository({
+    name: "PlainChildren",
+    table: childTable,
+    dependencies: [],
+    create: (binding) => new BaseRepository(binding),
+  });
+  const pivots = defineRepository({
+    name: "Pivots",
+    table: pivotTable,
+    dependencies: [],
+    create: (binding) => new BaseRepository(binding),
+  });
+  const visible = defineRepository({
+    name: "VisibleChildren",
+    table: childTable,
+    dependencies: [],
+    create: (binding) => new VisibleChildren(binding),
+    hooks: { transformQuery: visiblePlan },
+  });
+  function visiblePlan(
+    plan: QueryOptions<Child>,
+    binding: RepositoryBinding<Child, "id">,
+  ): QueryOptions<Child> {
+    return binding.session.repository(visible).applyScope(plan);
+  }
+  await withBoundDatabase(
+    {
+      definition: {
+        default: "main",
+        connections: { main: { driver: "sqlite", filename: ":memory:" } },
+        repositories: [plain, pivots, visible],
+      },
+      observe: (statement) => queries.push(statement.text),
+    },
+    async (database) => {
+      const execute = (text: string) => database.execute({ text, params: [] });
       // Schema-only fixtures; rows and relationship reads use public repositories.
-      await db.unsafe(
+      await execute(
         "CREATE TABLE limited_children(id INTEGER PRIMARY KEY,owner_id INTEGER,kind TEXT,score INTEGER,deleted_at TEXT)",
       );
-      await db.unsafe(
+      await execute(
         "CREATE TABLE limited_pivot(id INTEGER PRIMARY KEY,owner_id INTEGER,child_id INTEGER)",
       );
-      const children = new BaseRepository(childTable, db),
-        pivot = new BaseRepository(pivotTable, db);
+      const children = database.repository(plain),
+        pivot = database.repository(pivots);
       for (let id = 1; id <= 7; id++) {
         const owner_id = id <= 3 || id === 7 ? 1 : 2;
         await children.create({
@@ -86,11 +104,9 @@ async function fixture(
         await pivot.create({ id, owner_id, child_id: id });
       }
       queries.length = 0;
-      await check({ children: new VisibleChildren(db).withConnection(observed), queries, reads });
-    });
-  } finally {
-    await db.close();
-  }
+      await check({ children: database.repository(visible), queries, reads });
+    },
+  );
 }
 
 const parents = [{ id: 1 }, { id: 2 }, { id: 3 }];

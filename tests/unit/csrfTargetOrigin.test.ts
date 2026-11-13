@@ -233,7 +233,15 @@ test("the root config provider binds only an explicitly supplied CSRF target", a
   const container = new ServiceContainer();
   const config = new ConfigStore();
   delete process.env.CSRF_TARGET_ORIGIN;
-  const context = { container, config, dependencies: { container }, onCleanup: () => {} };
+  const context = {
+    container,
+    config,
+    dependencies: { container },
+    invoke: () => {
+      throw new Error("This structural provider test must not invoke persistence.");
+    },
+    onCleanup: () => {},
+  };
   await configProvider.register?.(context);
   expect(config.get("http.csrf.targetOrigin")).toBeUndefined();
   process.env.CSRF_TARGET_ORIGIN = targetOrigin;

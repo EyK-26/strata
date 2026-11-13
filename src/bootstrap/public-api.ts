@@ -88,6 +88,7 @@ export type { CreateHealthRoutesOptions } from "./health.ts";
 export { checkDatabase, checkRedis, createHealthRoutes, pingDatabase } from "./health.ts";
 export {
   type RouteModelAuthorization,
+  type RouteModelBindingPorts,
   securedBindRouteModel,
   securedBindRouteModelByKey,
 } from "./http/securedRouteModelBinding.ts";

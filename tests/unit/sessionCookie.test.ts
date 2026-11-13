@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { createHmac } from "node:crypto";
 import {
   clearSessionCookie,
   createSessionCookie,
   createSessionCookieDetails,
+  createSessionReader,
   isSessionInvalidated,
   readSession,
   readSessionUserId,
@@ -382,4 +384,31 @@ describe("sessionCookie", () => {
     expect(isSessionInvalidated(100, new Date(100).toISOString())).toBe(false);
     expect(isSessionInvalidated(99, new Date(100).toISOString())).toBe(true);
   });
+});
+
+test("session reader rejects invalid captured TTL and preserves valid configuration before decoding", () => {
+  const secret = "explicit-reader-fixture-secret";
+  for (const ttlSeconds of [0, -1, 0.5, Number.NaN])
+    expect(() =>
+      createSessionReader({ cookieName: "captured_session", secret, ttlSeconds }),
+    ).toThrow("Invalid session reader configuration");
+  const configuration = { cookieName: "captured_session", secret, ttlSeconds: 60 };
+  const reader = createSessionReader(configuration);
+  configuration.ttlSeconds = 0;
+  configuration.cookieName = "changed_session";
+  configuration.secret = "changed-secret";
+  const issuedAt = Date.now() - 1000;
+  const payload = `42.${issuedAt}`;
+  const signature = createHmac("sha256", secret).update(payload).digest("hex");
+  const encoded = encodeURIComponent(`${payload}.${signature}`);
+  expect(
+    reader(
+      new Request("http://example.test", { headers: { cookie: `captured_session=${encoded}` } }),
+    ),
+  ).toEqual({ userId: 42, issuedAt });
+  expect(
+    reader(
+      new Request("http://example.test", { headers: { cookie: `changed_session=${encoded}` } }),
+    ),
+  ).toBeNull();
 });

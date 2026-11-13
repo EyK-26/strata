@@ -1,10 +1,16 @@
 import { expect, test } from "bun:test";
+import { valueService } from "@getstrata/core/contracts/services";
+import { createServiceToken } from "@getstrata/core/contracts/token";
 import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import {
+  type AfterCommitRepositoryListener,
+  defineRepository,
+  type TransactionalRepositoryListener,
+} from "@getstrata/core/database/definitions";
 import { currentSqlDialect, runWithSqlDialect } from "@getstrata/core/database/dialect";
 import { buildConditionalWriteQuery } from "@getstrata/core/database/query";
 import { defineTable } from "@getstrata/core/database/table";
-import { modelEventName } from "@getstrata/core/events";
-import { eventBus } from "@getstrata/core/events/eventBus";
+import { withRepositories } from "../../helpers/boundRepositoryHarness";
 
 const table = defineTable<
   { id: number; owner: string; stock: number; deleted_at: Date | null },
@@ -28,115 +34,166 @@ test("conditional mutation binding and RETURNING across dialects", () => {
 });
 test("empty predicates and unsupported selection options are rejected before mutation", async () => {
   let writes = 0;
-  const repo = new BaseRepository(table, {
+  const connection = {
     async unsafe<T>(): Promise<T[]> {
       writes++;
       return [];
     },
+  };
+  const definition = defineRepository({
+    name: "Stock",
+    table,
+    dependencies: [],
+    create: (binding) => new BaseRepository(binding),
   });
-  await expect(repo.query().update({ stock: 2 })).rejects.toThrow("predicate");
-  await expect(repo.query().where({}).delete()).rejects.toThrow("predicate");
-  for (const options of [
-    { limit: 1 },
-    { orderBy: { column: "id" as const } },
-    { lock: { mode: "update" as const } },
-    { groupBy: "id" },
-    { select: [] },
-  ])
-    await expect(repo.updateWhere({ stock: 2 }, { where: { id: 1 }, ...options })).rejects.toThrow(
-      "do not support",
-    );
-  expect(writes).toBe(0);
-  expect(() =>
-    buildConditionalWriteQuery(currentSqlDialect(), table, "update", {}, { where: { id: 1 } }),
-  ).toThrow("value");
-  for (const changes of [JSON.parse('{"id":2}'), JSON.parse('{"stock;DROP":2}')])
-    expect(() =>
-      buildConditionalWriteQuery(currentSqlDialect(), table, "update", changes, {
-        where: { id: 1 },
-      }),
-    ).toThrow("non-primary");
-  expect(() =>
-    buildConditionalWriteQuery(
-      currentSqlDialect(),
-      table,
-      "update",
-      { stock: 2 },
-      { where: { id: 1 } },
-      [],
-    ),
-  ).toThrow("nonempty");
-  runWithSqlDialect("mysql", () =>
-    expect(() =>
-      buildConditionalWriteQuery(
-        currentSqlDialect(),
-        table,
-        "update",
-        { stock: 2 },
-        { where: { id: 1 } },
-        ["stock"],
-      ),
-    ).toThrow("not supported"),
+  await withRepositories(
+    connection,
+    [definition] as const,
+    async ([repo]) => {
+      await expect(repo.query().update({ stock: 2 })).rejects.toThrow("predicate");
+      await expect(repo.query().where({}).delete()).rejects.toThrow("predicate");
+      for (const options of [
+        { limit: 1 },
+        { orderBy: { column: "id" as const } },
+        { lock: { mode: "update" as const } },
+        { groupBy: "id" },
+        { select: [] },
+      ])
+        await expect(
+          repo.updateWhere({ stock: 2 }, { where: { id: 1 }, ...options }),
+        ).rejects.toThrow("do not support");
+      expect(writes).toBe(0);
+      expect(() =>
+        buildConditionalWriteQuery(currentSqlDialect(), table, "update", {}, { where: { id: 1 } }),
+      ).toThrow("value");
+      for (const changes of [JSON.parse('{"id":2}'), JSON.parse('{"stock;DROP":2}')])
+        expect(() =>
+          buildConditionalWriteQuery(currentSqlDialect(), table, "update", changes, {
+            where: { id: 1 },
+          }),
+        ).toThrow("non-primary");
+      expect(() =>
+        buildConditionalWriteQuery(
+          currentSqlDialect(),
+          table,
+          "update",
+          { stock: 2 },
+          { where: { id: 1 } },
+          [],
+        ),
+      ).toThrow("nonempty");
+      runWithSqlDialect("mysql", () =>
+        expect(() =>
+          buildConditionalWriteQuery(
+            currentSqlDialect(),
+            table,
+            "update",
+            { stock: 2 },
+            { where: { id: 1 } },
+            ["stock"],
+          ),
+        ).toThrow("not supported"),
+      );
+    },
+    "pgsql",
   );
 });
-test("protected predicates survive OR, and deletes respect soft-deletion scopes", () => {
-  const repo = new BaseRepository({ ...table, softDeletes: true });
-  const options = repo
-    .query()
-    .where({ owner: "tenant-owner" })
-    .protectWhere()
-    .where({ id: 1 })
-    .orWhere({ id: 2 })
-    .getOptions();
-  const query = buildConditionalWriteQuery(
-    currentSqlDialect(),
-    repo.getTable(),
-    "delete",
-    {},
-    options,
+test("protected predicates survive OR, and deletes respect soft-deletion scopes", async () => {
+  const definition = defineRepository({
+    name: "SoftStock",
+    table: { ...table, softDeletes: true },
+    dependencies: [],
+    create: (binding) => new BaseRepository(binding),
+  });
+  await withRepositories(
+    {
+      async unsafe<T>() {
+        return [] as T[];
+      },
+    },
+    [definition] as const,
+    async ([repo], database) => {
+      const options = repo
+        .query()
+        .where({ owner: "tenant-owner" })
+        .protectWhere()
+        .where({ id: 1 })
+        .orWhere({ id: 2 })
+        .getOptions();
+      const query = buildConditionalWriteQuery(
+        database.dialect,
+        repo.getTable(),
+        "delete",
+        {},
+        options,
+      );
+      expect(query.text).toStartWith('UPDATE "stock" SET "deleted_at" = $1');
+      expect(query.text).toContain('"stock"."deleted_at" IS NULL');
+      expect(query.params.slice(1)).toEqual(["tenant-owner", 1, 2]);
+      expect(query.text).toContain("AND (");
+      expect(
+        buildConditionalWriteQuery(database.dialect, table, "delete", {}, { where: { id: 1 } })
+          .text,
+      ).toStartWith("DELETE FROM");
+    },
   );
-  expect(query.text).toStartWith('UPDATE "stock" SET "deleted_at" = $1');
-  expect(query.text).toContain('"stock"."deleted_at" IS NULL');
-  expect(query.params.slice(1)).toEqual(["tenant-owner", 1, 2]);
-  expect(query.text).toContain("AND (");
-  expect(
-    buildConditionalWriteQuery(currentSqlDialect(), table, "delete", {}, { where: { id: 1 } }).text,
-  ).toStartWith("DELETE FROM");
 });
 test("MySQL affectedRows metadata is used rather than result array length", async () => {
   await runWithSqlDialect("mysql", async () => {
-    const repo = new BaseRepository(table, {
+    const connection = {
       async unsafe<T>(): Promise<T[]> {
         return JSON.parse('[{"affectedRows":0}]');
       },
+    };
+    const definition = defineRepository({
+      name: "Stock",
+      table,
+      dependencies: [],
+      create: (binding) => new BaseRepository(binding),
     });
-    expect(await repo.query().where({ owner: "stale" }).update({ stock: 2 })).toBe(0);
+    await withRepositories(
+      connection,
+      [definition] as const,
+      async ([repo]) => {
+        expect(await repo.query().where({ owner: "stale" }).update({ stock: 2 })).toBe(0);
+      },
+      "mysql",
+    );
   });
 });
 
 test("bulk writes do not synthesize row observer or transactional-listener events", async () => {
   let calls = 0;
-  const stop = eventBus.listen(modelEventName(table.name, "updated"), () => {
-    calls++;
+  type Row = { id: number; owner: string; stock: number; deleted_at: Date | null };
+  const immediate = createServiceToken<AfterCommitRepositoryListener<Row>>("row");
+  const transactional =
+    createServiceToken<TransactionalRepositoryListener<Row, "id">>("transactional");
+  const definition = defineRepository({
+    name: "StockEvents",
+    table,
+    dependencies: [],
+    create: (binding) => new BaseRepository(binding),
+    effects: [{ action: "updated", afterCommit: immediate, transactional }],
   });
-  const stopTransactional = eventBus.listenTransactional(
-    modelEventName(table.name, "updated"),
-    () => {
-      calls++;
-    },
-  );
-  try {
-    const repo = new BaseRepository(table, {
-      async unsafe<T>(): Promise<T[]> {
-        return JSON.parse('[{"id":1}]');
+  await withRepositories(
+    {
+      async unsafe<T>() {
+        return [{ id: 1 }] as T[];
       },
-    });
-    expect(
-      await runWithSqlDialect("pgsql", () => repo.query().where({ id: 1 }).update({ stock: 1 })),
-    ).toBe(1);
-    expect(calls).toBe(0);
-  } finally {
-    stop();
-    stopTransactional();
-  }
+    },
+    [definition] as const,
+    async ([repo]) => {
+      expect(await repo.query().where({ id: 1 }).update({ stock: 1 })).toBe(1);
+      expect(calls).toBe(0);
+    },
+    "pgsql",
+    [
+      valueService(immediate, () => {
+        calls++;
+      }),
+      valueService(transactional, () => {
+        calls++;
+      }),
+    ],
+  );
 });

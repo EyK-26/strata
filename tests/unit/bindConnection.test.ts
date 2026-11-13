@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { DatabaseConnection } from "@getstrata/core/database/baseRepository";
 import {
   bindDatabaseConnection,
   getBoundDatabaseConnection,
@@ -10,6 +9,7 @@ import {
   repositoryConnection as db,
   resolveRepositoryConnection,
 } from "@getstrata/core/database/repositoryConnection";
+import type { DatabaseConnection } from "../../src/core/database/connectionContracts";
 
 describe("bindDatabaseConnection", () => {
   afterEach(() => {

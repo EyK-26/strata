@@ -9,6 +9,7 @@ if (process.env.DATABASE_URL) {
 }
 
 if (!skipFixtureBootstrap && (await pingDatabase())) {
-  assertSafeTestDatabaseReset();
-  await freshDatabase({ seed: true });
+  const target = { ...process.env };
+  assertSafeTestDatabaseReset(target);
+  await freshDatabase({ seed: true, databaseUrl: target.DATABASE_URL });
 }

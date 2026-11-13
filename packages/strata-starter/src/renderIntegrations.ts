@@ -147,12 +147,8 @@ function sqlParams(database: DatabaseLayer, count: number): string {
 function renderDispatchOutboundWebhookJob(layers: StarterLayers): string {
   const values = sqlParams(layers.database, 6);
   return `import { Job, type JobContext } from "@getstrata/core/queue";
-import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
-import { webhookSignatureHeader } from "@getstrata/core/runtime/appKeyPrefix";
 import { safeFetch } from "@getstrata/core/security/safeFetch";
 import { signWebhookBody } from "@getstrata/core/security/webhookSignature";
-import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
-import { getSql } from "../bootstrap/database.ts";
 
 interface DispatchOutboundWebhookPayload {
   webhookId: number;
@@ -160,13 +156,16 @@ interface DispatchOutboundWebhookPayload {
   url: string;
   secret: string;
   body: string;
+  allowPrivate: boolean;
+  signatureHeader: string;
 }
 
 class DispatchOutboundWebhookJob extends Job<DispatchOutboundWebhookPayload> {
-  static readonly jobName = "webhook.dispatch";
+  static override readonly jobName = "webhook.dispatch";
 
   override async handle(payload: DispatchOutboundWebhookPayload, context?: JobContext): Promise<void> {
-    const allowPrivate = !isProductionEnv() && process.env.WEBHOOK_ALLOW_PRIVATE === "true";
+    if (!context?.database) throw new Error("Webhook delivery requires an owned queue invocation.");
+    const allowPrivate = payload.allowPrivate === true;
     let responseStatus: number | null = null;
     let error: string | null = null;
     let failure: Error | undefined;
@@ -177,10 +176,10 @@ class DispatchOutboundWebhookJob extends Job<DispatchOutboundWebhookPayload> {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            [webhookSignatureHeader()]: signWebhookBody(payload.secret, payload.body),
+            [payload.signatureHeader]: signWebhookBody(payload.secret, payload.body),
           },
           body: payload.body,
-          signal: context?.signal,
+          signal: context.signal,
         },
         { timeoutMs: 10_000, maxRedirects: 0, allowPrivate, allowHttp: allowPrivate },
       );
@@ -197,12 +196,12 @@ class DispatchOutboundWebhookJob extends Job<DispatchOutboundWebhookPayload> {
       failure = caught instanceof Error ? caught : new Error(error, { cause: caught });
     }
 
-    try { await runWithMigrationBypass(async () => {
-      await getSql().unsafe(
-        "INSERT INTO webhook_deliveries (webhook_id, event, payload, response_status, attempt, error) VALUES (${values})",
-        [payload.webhookId, payload.event, payload.body, responseStatus, context?.attempt ?? 1, error],
-      );
-    }); } catch (recordingFailure) {
+    try {
+      await context.database.execute({
+        text: "INSERT INTO webhook_deliveries (webhook_id, event, payload, response_status, attempt, error) VALUES (${values})",
+        params: [payload.webhookId, payload.event, payload.body, responseStatus, context.attempt ?? 1, error],
+      });
+    } catch (recordingFailure) {
       if (failure) throw new AggregateError([failure, recordingFailure], \`Webhook delivery failed: \${failure.message}; recording also failed.\`, { cause: failure });
       throw recordingFailure;
     }
@@ -218,46 +217,57 @@ export type { DispatchOutboundWebhookPayload };
 }
 
 function renderNoteCreatedWebhookListener(): string {
-  return `import { eventBus, modelEventName } from "@getstrata/core/events";
-import { resolveApplicationQueue } from "@getstrata/core/runtime/applicationRegistry";
-import { getSql } from "../bootstrap/database.ts";
+  return `import type { ListenerDeclarations } from "@getstrata/bootstrap/discoverListeners";
+import { service } from "@getstrata/core/contracts/services";
+import { createServiceToken } from "@getstrata/core/contracts/token";
+import { repositoryEffects, type AfterCommitRepositoryListener } from "@getstrata/core/database/definitions";
+import { STARTER_QUEUE_TOKEN, STARTER_WEBHOOK_OPTIONS_TOKEN } from "../bootstrap/providers/index.ts";
+import { NoteRepository, type NoteRecord } from "../models/Note.ts";
 import DispatchOutboundWebhookJob from "../jobs/dispatchOutboundWebhookJob.ts";
 
-function registerNoteCreatedWebhookListener(): void {
-  eventBus.listen(modelEventName("notes", "created"), async (payload) => {
-    const rows = await getSql().unsafe<{
-      id: number;
-      url: string;
-      secret: string;
-      active: number | boolean;
-      events: string;
-    }>("SELECT id, url, secret, active, events FROM webhooks");
-    const queue = resolveApplicationQueue();
-    const event = "notes.created";
-    const body = JSON.stringify({ event, data: payload });
-    for (const hook of rows) {
-      // The generated schema supports a literal event name or the explicit
-      // wildcard. Other values do not implicitly subscribe to every event.
-      if (!hook.active || (hook.events !== "*" && hook.events !== event)) {
-        continue;
+const noteCreated = createServiceToken<AfterCommitRepositoryListener<NoteRecord>>("starter.webhooks.note-created");
+const declarations: ListenerDeclarations = Object.freeze({
+  services: Object.freeze([service(noteCreated, {
+    lifetime: "application",
+    dependencies: [STARTER_QUEUE_TOKEN, STARTER_WEBHOOK_OPTIONS_TOKEN],
+    create: (queue, options) => async (payload, { database }) => {
+      const rows = await database.execute<{
+        id: number;
+        url: string;
+        secret: string;
+        active: number | boolean;
+        events: string;
+      }>({text: "SELECT id, url, secret, active, events FROM webhooks", params: []});
+      const event = "notes.created";
+      const body = JSON.stringify({ event, data: payload });
+      for (const hook of rows) {
+        // Only the named event or explicit wildcard subscribes to this event.
+        if (!hook.active || (hook.events !== "*" && hook.events !== event)) continue;
+        await queue.dispatch(new DispatchOutboundWebhookJob(), {
+          webhookId: hook.id,
+          event,
+          url: hook.url,
+          secret: hook.secret,
+          body,
+          allowPrivate: options.allowPrivate,
+          signatureHeader: options.signatureHeader,
+        });
       }
-      await queue.dispatch(new DispatchOutboundWebhookJob(), {
-        webhookId: hook.id,
-        event,
-        url: hook.url,
-        secret: hook.secret,
-        body,
-      });
-    }
-  });
-}
+    },
+  })]),
+  repositoryEffects: Object.freeze([repositoryEffects(NoteRepository, [
+    {action: "created", afterCommit: noteCreated},
+  ])]),
+});
 
-export default registerNoteCreatedWebhookListener;
+export default declarations;
 `;
 }
 
 function renderApplyStripeWebhook(): string {
-  return `interface StripeWebhookEvent {
+  return `import type { BusinessRequestPorts } from "@getstrata/bootstrap/persistenceContracts";
+
+interface StripeWebhookEvent {
   id?: string;
   type?: string;
   data?: { object?: Record<string, unknown> };
@@ -265,10 +275,10 @@ function renderApplyStripeWebhook(): string {
 
 /**
  * Called after the Stripe signature verifies. The default does nothing.
- * Plan and tenant updates belong in this function, not in framework core.
- * Stripe POSTs have no tenant ALS. See docs/INTEGRATIONS.md before writing tenant tables.
+ * Plan and tenant updates belong here. Use the explicit ports to establish a
+ * database policy from verified account data before writing tenant tables.
  */
-async function applyStripeWebhook(_event: StripeWebhookEvent): Promise<void> {
+async function applyStripeWebhook(_event: StripeWebhookEvent, _ports: BusinessRequestPorts): Promise<void> {
   return;
 }
 
@@ -280,80 +290,63 @@ export { applyStripeWebhook };
 function renderBillingModule(layers: StarterLayers): string {
   const tenancyOn = usesTenantTable(layers.tenancy);
   const tenantPlaceholder = layers.database === "postgres" ? "$1" : "?";
-  const tenantImport = tenancyOn
-    ? `import { currentTenant } from "@getstrata/core/tenant/tenantContext";\n`
-    : "";
   const subscriptionQuery = tenancyOn
-    ? `        const tenant = currentTenant();
+    ? `        const tenant = ports.established.tenant;
         if (!tenant) {
           return jsonResponse({ error: "Tenant context is required." }, { status: 500 });
         }
-        const rows = await getSql().unsafe<Record<string, unknown>>(
-          "SELECT plan, status, stripe_subscription_id, current_period_end FROM subscription WHERE tenant_id = ${tenantPlaceholder} LIMIT 1",
-          [tenant.id],
-        );`
-    : `        const rows = await getSql().unsafe<Record<string, unknown>>(
-          "SELECT plan, status, stripe_subscription_id, current_period_end FROM subscription LIMIT 1",
-        );`;
+        const rows = await ports.database.execute<Record<string, unknown>>({
+          text: "SELECT plan, status, stripe_subscription_id, current_period_end FROM subscription WHERE tenant_id = ${tenantPlaceholder} LIMIT 1",
+          params: [tenant.id],
+        });`
+    : `        const rows = await ports.database.execute<Record<string, unknown>>({
+          text: "SELECT plan, status, stripe_subscription_id, current_period_end FROM subscription LIMIT 1",
+          params: [],
+        });`;
 
   return `import type { AppModule } from "@getstrata/bootstrap/contracts";
-import { jsonResponse, withJsonErrorHandling } from "@getstrata/core/http/response";
+import { jsonResponse } from "@getstrata/core/http/response";
 import { verifyStripeWebhookSignature } from "@getstrata/core/security/stripeWebhook";
 import { applyStripeWebhook } from "../../billing/applyStripeWebhook.ts";
-${tenantImport}import { getSql } from "../../bootstrap/database.ts";
-
-function billingEnabled(): boolean {
-  return process.env.FEATURE_BILLING === "true";
-}
+import { STARTER_BILLING_OPTIONS_TOKEN } from "../../bootstrap/providers/index.ts";
 
 const billingModule: AppModule = {
   name: "billing",
   order: 40,
-  routes({ kernel }) {
+  routes({ kernel, dependencies }) {
+    const {enabled:billingEnabled,stripeSecret:secret} = dependencies.container.get(STARTER_BILLING_OPTIONS_TOKEN);
     return {
       "/billing/webhooks/stripe": {
-        POST: kernel.wrap(
-          "api",
-          withJsonErrorHandling(async (request) => {
-            if (!billingEnabled()) {
-              return new Response("Not found", { status: 404 });
-            }
-            const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
-            if (!secret) {
-              return jsonResponse({ error: "STRIPE_WEBHOOK_SECRET is not set." }, { status: 503 });
-            }
-            const rawBody = await request.text();
-            verifyStripeWebhookSignature(rawBody, request.headers.get("stripe-signature"), secret);
-            let event: { id?: string; type?: string; data?: { object?: Record<string, unknown> } };
-            try {
-              event = JSON.parse(rawBody) as typeof event;
-            } catch {
-              return jsonResponse({ error: "Invalid JSON." }, { status: 400 });
-            }
-            await applyStripeWebhook(event);
-            return jsonResponse({ received: true, id: event.id ?? null, type: event.type ?? null });
-          }),
-        ),
+        POST: kernel.wrap("api", kernel.wrapIdentity(async (request, ports) => {
+          if (!billingEnabled) return new Response("Not found", { status: 404 });
+          if (!secret) {
+            return jsonResponse({ error: "STRIPE_WEBHOOK_SECRET is not set." }, { status: 503 });
+          }
+          const rawBody = await request.text();
+          verifyStripeWebhookSignature(rawBody, request.headers.get("stripe-signature"), secret);
+          let event: { id?: string; type?: string; data?: { object?: Record<string, unknown> } };
+          try {
+            event = JSON.parse(rawBody) as typeof event;
+          } catch {
+            return jsonResponse({ error: "Invalid JSON." }, { status: 400 });
+          }
+          await applyStripeWebhook(event, ports);
+          return jsonResponse({ received: true, id: event.id ?? null, type: event.type ?? null });
+        })),
       },
       "/api/v1/billing/subscription": {
-        GET: kernel.wrapApi(
-          withJsonErrorHandling(async () => {
-            if (!billingEnabled()) {
-              return new Response("Not found", { status: 404 });
-            }
+        GET: kernel.wrapApi(async (_request, ports) => {
+          if (!billingEnabled) return new Response("Not found", { status: 404 });
 ${subscriptionQuery}
-            const row = rows[0];
-            if (!row) {
-              return jsonResponse({ plan: "free", status: "none" });
-            }
-            return jsonResponse({
-              plan: row.plan ?? "free",
-              status: row.status ?? "none",
-              stripe_subscription_id: row.stripe_subscription_id ?? null,
-              current_period_end: row.current_period_end ?? null,
-            });
-          }),
-        ),
+          const row = rows[0];
+          if (!row) return jsonResponse({ plan: "free", status: "none" });
+          return jsonResponse({
+            plan: row.plan ?? "free",
+            status: row.status ?? "none",
+            stripe_subscription_id: row.stripe_subscription_id ?? null,
+            current_period_end: row.current_period_end ?? null,
+          });
+        }),
       },
     };
   },

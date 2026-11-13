@@ -1,4 +1,4 @@
-import { type StarterLayers, usesTenantTable } from "./types.ts";
+import { authNeedsUsers, authUsesToken, type StarterLayers, usesTenantTable } from "./types.ts";
 
 function renderNoteModel(layers: StarterLayers): string {
   const tenancyOn = usesTenantTable(layers.tenancy);
@@ -8,7 +8,9 @@ function renderNoteModel(layers: StarterLayers): string {
     : "";
   const tenantColumn = tenancyOn ? ', "tenant_id"' : "";
   const fillable = tenancyOn ? '["body", "tenant_id"]' : '["body"]';
-  return `import { defineModel } from "@getstrata/core/database/model";
+  return `import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineModel, defineRepository } from "@getstrata/core/database/definitions";
+import { Model } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 
 interface NoteRecord {
@@ -24,15 +26,22 @@ const notesTable = defineTable<NoteRecord, "id">({
   defaultOrderBy: { column: "id", direction: "ASC" },
 });
 
-class Note extends defineModel(notesTable) {
-  static $fillable = ${fillable} as const;
-  // created_at uses the table default. Sending a JS Date from $timestamps
-  // is rejected by SQLite bindings.
-  static $timestamps = false;
-}
+class NoteEntity extends Model<NoteRecord, "id"> {}
+type Note = NoteEntity;
+
+const NoteRepository = defineRepository<NoteRecord, "id", BaseRepository<NoteRecord, "id">, readonly []>({
+  name: "NoteRepository", table: notesTable, dependencies: [],
+  create: binding => new BaseRepository(binding),
+});
+const Note = defineModel<NoteRecord, "id", NoteEntity, BaseRepository<NoteRecord, "id">, readonly []>({
+  name: "Note", repository: NoteRepository, dependencies: [],
+  // created_at uses the table default; no client timestamp is sent.
+  attributes: { fillable: ${fillable}, timestamps: false },
+  construct: (state, binding) => new NoteEntity(state, binding),
+});
 
 export type { NoteRecord };
-export { Note };
+export { Note, NoteEntity, NoteRepository };
 `;
 }
 
@@ -72,7 +81,9 @@ function renderUserModel(layers: StarterLayers): string {
   const fillableLiteral = `[${fillable.map((column) => `"${column}"`).join(", ")}]`;
   const hiddenLiteral = `[${hidden.map((column) => `"${column}"`).join(", ")}]`;
   const columnsLiteral = columns.map((column) => `"${column}"`).join(", ");
-  return `import { defineModel } from "@getstrata/core/database/model";
+  return `import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineModel, defineRepository } from "@getstrata/core/database/definitions";
+import { Model } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 
 interface UserRecord {
@@ -95,21 +106,29 @@ const usersTable = defineTable<UserRecord, "id">({
   defaultOrderBy: { column: "id", direction: "ASC" },
 });
 
-class User extends defineModel(usersTable) {
-  static $fillable = ${fillableLiteral} as const;
-  static $hidden = ${hiddenLiteral} as const;
-  // created_at uses the table default. Sending a JS Date from $timestamps
-  // is rejected by SQLite bindings.
-  static $timestamps = false;
-}
+class UserEntity extends Model<UserRecord, "id"> {}
+type User = UserEntity;
+
+const UserRepository = defineRepository<UserRecord, "id", BaseRepository<UserRecord, "id">, readonly []>({
+  name: "UserRepository", table: usersTable, dependencies: [],
+  create: binding => new BaseRepository(binding),
+});
+const User = defineModel<UserRecord, "id", UserEntity, BaseRepository<UserRecord, "id">, readonly []>({
+  name: "User", repository: UserRepository, dependencies: [],
+  // created_at uses the table default; no client timestamp is sent.
+  attributes: { fillable: ${fillableLiteral}, hidden: ${hiddenLiteral}, timestamps: false },
+  construct: (state, binding) => new UserEntity(state, binding),
+});
 
 export type { UserRecord };
-export { User };
+export { User, UserEntity, UserRepository };
 `;
 }
 
 function renderApiTokenModel(): string {
-  return `import { defineModel } from "@getstrata/core/database/model";
+  return `import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineModel, defineRepository } from "@getstrata/core/database/definitions";
+import { Model } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 
 interface ApiTokenRecord {
@@ -130,20 +149,29 @@ const apiTokensTable = defineTable<ApiTokenRecord, "id">({
   defaultOrderBy: { column: "id", direction: "ASC" },
 });
 
-class ApiToken extends defineModel(apiTokensTable) {
-  static $fillable = ["user_id", "name", "token_hash", "abilities", "expires_at", "last_used_at"] as const;
-  // created_at uses the table default. Sending a JS Date from $timestamps
-  // is rejected by SQLite bindings.
-  static $timestamps = false;
-}
+class ApiTokenEntity extends Model<ApiTokenRecord, "id"> {}
+type ApiToken = ApiTokenEntity;
+
+const ApiTokenRepository = defineRepository<ApiTokenRecord, "id", BaseRepository<ApiTokenRecord, "id">, readonly []>({
+  name: "ApiTokenRepository", table: apiTokensTable, dependencies: [],
+  create: binding => new BaseRepository(binding),
+});
+const ApiToken = defineModel<ApiTokenRecord, "id", ApiTokenEntity, BaseRepository<ApiTokenRecord, "id">, readonly []>({
+  name: "ApiToken", repository: ApiTokenRepository, dependencies: [],
+  // created_at uses the table default; no client timestamp is sent.
+  attributes: { fillable: ["user_id", "name", "token_hash", "abilities", "expires_at", "last_used_at"], timestamps: false },
+  construct: (state, binding) => new ApiTokenEntity(state, binding),
+});
 
 export type { ApiTokenRecord };
-export { ApiToken };
+export { ApiToken, ApiTokenEntity, ApiTokenRepository };
 `;
 }
 
 function renderAuthOneTimeTokenModel(): string {
-  return `import { defineModel } from "@getstrata/core/database/model";
+  return `import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineModel, defineRepository } from "@getstrata/core/database/definitions";
+import { Model } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 
 interface AuthOneTimeTokenRecord {
@@ -162,21 +190,32 @@ const authOneTimeTokensTable = defineTable<AuthOneTimeTokenRecord, "id">({
   defaultOrderBy: { column: "id", direction: "ASC" },
 });
 
-class AuthOneTimeToken extends defineModel(authOneTimeTokensTable) {
-  static $fillable = ["purpose", "user_id", "token_hash", "expires_at", "consumed_at"] as const;
-  static $timestamps = false;
-}
+class AuthOneTimeTokenEntity extends Model<AuthOneTimeTokenRecord, "id"> {}
+type AuthOneTimeToken = AuthOneTimeTokenEntity;
+
+const AuthOneTimeTokenRepository = defineRepository<AuthOneTimeTokenRecord, "id", BaseRepository<AuthOneTimeTokenRecord, "id">, readonly []>({
+  name: "AuthOneTimeTokenRepository", table: authOneTimeTokensTable, dependencies: [],
+  create: binding => new BaseRepository(binding),
+});
+const AuthOneTimeToken = defineModel<AuthOneTimeTokenRecord, "id", AuthOneTimeTokenEntity, BaseRepository<AuthOneTimeTokenRecord, "id">, readonly []>({
+  name: "AuthOneTimeToken", repository: AuthOneTimeTokenRepository, dependencies: [],
+  attributes: { fillable: ["purpose", "user_id", "token_hash", "expires_at", "consumed_at"], timestamps: false },
+  construct: (state, binding) => new AuthOneTimeTokenEntity(state, binding),
+});
 
 export type { AuthOneTimeTokenRecord };
-export { AuthOneTimeToken };
+export { AuthOneTimeToken, AuthOneTimeTokenEntity, AuthOneTimeTokenRepository };
 `;
 }
 
-function renderModelsRegister(_layers: StarterLayers): string {
-  return `import { discoverModels } from "@getstrata/bootstrap/discoverModels";
+function renderModelsRegister(layers: StarterLayers): string {
+  const names = ["Note"];
+  if (authNeedsUsers(layers.auth)) names.push("User", "AuthOneTimeToken");
+  if (authUsesToken(layers.auth)) names.push("ApiToken");
+  return `${names.map((name) => `import { ${name}, ${name}Repository } from "./${name}";`).join("\n")}
 
-// Discovery binds default repositories and registers every name before model boot.
-await discoverModels(import.meta.dir);
+export const repositoryDefinitions = Object.freeze([${names.map((name) => `${name}Repository`).join(", ")}]);
+export const modelDefinitions = Object.freeze([${names.join(", ")}]);
 `;
 }
 

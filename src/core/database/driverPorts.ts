@@ -31,6 +31,10 @@ type DatabaseConnectionOptions =
 type DatabaseDefinition = Readonly<{
   default: string;
   connections: Readonly<Record<string, DatabaseConnectionOptions>>;
+  repositories?: readonly import("./definitions").AnyRepositoryDefinition[];
+  models?: readonly import("./definitions").AnyModelDefinition[];
+  repositoryEffects?: readonly import("./definitions").RepositoryEffectsDeclaration[];
+  preparation?: readonly import("../contracts/token").AnyServiceToken[];
 }>;
 type TransactionOptions = Readonly<{
   acquisitionSignal?: AbortSignal;

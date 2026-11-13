@@ -1,18 +1,13 @@
 import { expect, test } from "bun:test";
-import { createBunSqlPool } from "@getstrata/core/database/bunSql";
-import { runWithSqlDialect } from "@getstrata/core/database/dialect";
-import FailedJobRepository from "@getstrata/core/queue/failedJobRepository";
+import { failedJobRepository } from "@getstrata/core/queue/failedJobRepository";
 import FailedJobService from "@getstrata/core/queue/failedJobService";
+import { createQueuePersistenceFixture } from "../helpers/queuePersistence";
 
 test("native SQLite stores and replays the declared JSON payload and failure timestamp", async () => {
-  const sql = createBunSqlPool({ url: "sqlite::memory:" });
+  const fixture = await createQueuePersistenceFixture();
   try {
-    await runWithSqlDialect("sqlite", async () => {
-      // Fixture schema; recording, reads, admission and deletion use the public service/repository.
-      await sql.unsafe(
-        "CREATE TABLE failed_job(id INTEGER PRIMARY KEY,job_name TEXT NOT NULL,job_id TEXT,payload TEXT NOT NULL,exception TEXT NOT NULL,failed_at DATETIME NOT NULL)",
-      );
-      const repository = new FailedJobRepository().withConnection(sql);
+    await fixture.run(async (database) => {
+      const repository = database.repository(failedJobRepository);
       const service = new FailedJobService(repository);
       const payload = { event: "orders.created", nested: { message: "Préparation", count: 3 } };
       const record = await service.recordFailure({
@@ -49,6 +44,6 @@ test("native SQLite stores and replays the declared JSON payload and failure tim
       expect(await service.listRecent()).toEqual([]);
     });
   } finally {
-    await sql.close();
+    expect((await fixture.application.stop()).successful).toBe(true);
   }
 });

@@ -21,11 +21,11 @@ export function createAuthRenderingContext(layers: StarterLayers) {
   const tenantInsert = usesTenantTable(layers.tenancy);
   const tenantCreateField = tenantInsert
     ? `
-                tenant_id: currentTenantId(),`
+                tenant_id: establishedTenantId(ports),`
     : "";
   const samlTenantCreateField = tenantInsert
     ? `
-                  tenant_id: currentTenantId(),`
+                  tenant_id: establishedTenantId(ports),`
     : "";
 
   return {

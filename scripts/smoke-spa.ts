@@ -23,8 +23,37 @@ function assert(condition: unknown, message: string): asserts condition {
   }
 }
 
+type ApplicationOwner = import("@getstrata/core/contracts/application").Application;
+type ChildOwner = Pick<ReturnType<typeof Bun.spawn>, "exited" | "kill">;
+
+async function runChild(cmd: string[], cwd: string, children: Set<ChildOwner>): Promise<void> {
+  const child = Bun.spawn({ cmd, cwd, stdout: "pipe", stderr: "pipe", timeout: 120_000 });
+  children.add(child);
+  // Observe exit and both output streams together so output cannot block termination.
+  const results = await Promise.allSettled([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  const exit = results[0];
+  if (exit.status === "fulfilled") children.delete(child);
+  const errors = results.flatMap((result) => (result.status === "rejected" ? [result.reason] : []));
+  if (exit.status === "fulfilled" && exit.value !== 0) {
+    const stdout = results[1].status === "fulfilled" ? results[1].value : "";
+    const stderr = results[2].status === "fulfilled" ? results[2].value : "";
+    errors.push(new Error(`${cmd.join(" ")} failed (exit ${exit.value}):\n${stdout}\n${stderr}`));
+  }
+  if (errors.length) throw new AggregateError(errors, "Smoke child failed.");
+}
+
 async function main(): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "strata-spa-smoke-"));
+  const children = new Set<ChildOwner>();
+  let application: ApplicationOwner | undefined;
+  let failed = false;
+  let primary: unknown;
+  const cleanupErrors: unknown[] = [];
+  let terminationConfirmed = true;
   try {
     const flags = parseCreateStrataArgs([
       "spa-smoke",
@@ -51,41 +80,18 @@ async function main(): Promise<void> {
     pkg.dependencies["@getstrata/cli"] = `file:${join(repoRoot, "packages/strata-cli")}`;
     await writeFile(join(app, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
 
-    const install = Bun.spawnSync({
-      cmd: ["bun", "install"],
-      cwd: app,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    if (install.exitCode !== 0) {
-      throw new Error(`bun install failed in generated app:\n${install.stderr.toString()}`);
-    }
-
-    const frontendInstall = Bun.spawnSync({
-      cmd: ["bun", "run", "frontend:install"],
-      cwd: app,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    if (frontendInstall.exitCode !== 0) {
-      throw new Error(`frontend:install failed:\n${frontendInstall.stderr.toString()}`);
-    }
-
-    const frontendBuild = Bun.spawnSync({
-      cmd: ["bun", "run", "frontend:build"],
-      cwd: app,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    if (frontendBuild.exitCode !== 0) {
-      throw new Error(
-        `frontend:build failed:\n${frontendBuild.stdout.toString()}\n${frontendBuild.stderr.toString()}`,
-      );
-    }
+    await runChild(["bun", "install"], app, children);
+    await runChild(["bun", "run", "frontend:install"], app, children);
+    await runChild(["bun", "run", "frontend:build"], app, children);
 
     await mkdir(join(app, "storage"), { recursive: true });
-    process.env.DATABASE_URL = `sqlite:${join(app, "storage/app.sqlite")}`;
+    const databaseUrl = `sqlite:${join(app, "storage/app.sqlite")}`;
+    process.env.DATABASE_URL = databaseUrl;
+    process.env.APP_DATABASE_URL = databaseUrl;
+    process.env.MIGRATION_DATABASE_URL = databaseUrl;
+    process.env.DB_CONNECTION = "sqlite";
     process.env.APP_ENV = "local";
+    process.env.APP_URL = "http://127.0.0.1:3000";
     process.env.FRONTEND_MODE = "hybrid";
     process.env.SPA_PREFIX = "/app";
     process.env.AUTH_DEV_HEADERS = "true";
@@ -94,32 +100,80 @@ async function main(): Promise<void> {
     process.env.CACHE_DRIVER = "array";
     process.env.QUEUE_DRIVER = "sync";
 
-    const { bootstrapApp, createAppServer } = await import(
-      `${join(app, "src/bootstrap/createApp.ts")}`
-    );
-    const { closeDatabase } = await import(`${join(app, "src/bootstrap/database.ts")}`);
-    const { routes } = await bootstrapApp();
-    const server = createAppServer(routes, 0, undefined, { hostname: "127.0.0.1" });
+    const { createAppServer } = await import(`${join(app, "src/bootstrap/createApp.ts")}`);
+    const bootstrapped = await createAppServer({
+      migrate: true,
+      server: { port: 0, native: { hostname: "127.0.0.1" } },
+      onConstructed(owner: ApplicationOwner) {
+        application = owner;
+        return undefined;
+      },
+    });
+    assert(application === bootstrapped.application, "Bootstrap must preserve the captured owner");
+    const server = bootstrapped.server;
+    assert(server, "HTTP bootstrap did not return its acquired server");
     const origin = server.url.origin;
 
-    try {
-      const spa = await fetch(`${origin}/app`);
-      const html = await spa.text();
-      assert(spa.status === 200, `GET /app status ${spa.status}: ${html.slice(0, 180)}`);
-      assert(
-        !html.includes("SPA build not found"),
-        "GET /app still reports a missing frontend build",
-      );
-      assert(html.includes('id="root"'), "GET /app did not serve the SPA document");
-    } finally {
-      server.stop();
-      await closeDatabase();
-    }
-
-    console.log("Hybrid SPA smoke passed (frontend:build then GET /app).");
+    const spa = await fetch(`${origin}/app`);
+    const html = await spa.text();
+    assert(spa.status === 200, `GET /app status ${spa.status}: ${html.slice(0, 180)}`);
+    assert(
+      !html.includes("SPA build not found"),
+      "GET /app still reports a missing frontend build",
+    );
+    assert(html.includes('id="root"'), "GET /app did not serve the SPA document");
+  } catch (error) {
+    failed = true;
+    primary = error;
   } finally {
-    await rm(root, { recursive: true, force: true });
+    // Independent owners are joined even when startup or another cleanup failed.
+    if (application) {
+      try {
+        const result = await application.stop({ reason: "SMOKE_COMPLETE" });
+        if (!result.successful) {
+          terminationConfirmed = false;
+          cleanupErrors.push(
+            new AggregateError(
+              result.snapshot.errors.map((diagnostic) => diagnostic.error),
+              `Smoke application cleanup incomplete; retained: ${result.snapshot.retainedResources.join(", ")}`,
+            ),
+          );
+        }
+      } catch (error) {
+        terminationConfirmed = false;
+        cleanupErrors.push(error);
+      }
+    }
+    for (const child of children) {
+      try {
+        child.kill("SIGTERM");
+        await child.exited;
+        children.delete(child);
+      } catch (error) {
+        terminationConfirmed = false;
+        cleanupErrors.push(error);
+      }
+    }
+    if (terminationConfirmed) {
+      try {
+        await rm(root, { recursive: true, force: true });
+      } catch (error) {
+        cleanupErrors.push(error);
+      }
+    } else {
+      console.error(
+        `Smoke resources could not be confirmed terminated; fixture retained at ${root}`,
+      );
+    }
   }
+  if (cleanupErrors.length) {
+    throw new AggregateError(
+      [...(failed ? [primary] : []), ...cleanupErrors],
+      "Smoke execution and cleanup failed.",
+    );
+  }
+  if (failed) throw primary;
+  console.log("Hybrid SPA smoke passed (frontend:build then GET /app).");
 }
 
 await main();

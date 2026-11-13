@@ -5,27 +5,37 @@ import type { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShu
 import { assertUrlPathUnderRoot } from "@getstrata/core/security/safePath";
 import { notFoundHtmlResponse } from "@getstrata/core/view";
 import type { BunRequest, Serve, Server } from "bun";
+import { dispatchOwnedRoute } from "#strata-http-route";
 import type { AppRouteMap } from "../contracts.ts";
+import type { BusinessRequestPorts, BusinessRouteHandler } from "../persistenceContracts";
 
 export type NativeServerOptions<T = unknown> = Omit<Serve.HostnamePortServeOptions<T>, "port"> & {
   websocket?: Bun.WebSocketHandler<T>;
 };
 
+// biome-ignore lint/suspicious/noConfusingVoidType: native request hooks may return no interception.
+type RequestInterception = Response | void;
+
 export interface WebServerOptions<T = unknown> {
   port: number;
+  enter?: (request: Request, handler: BusinessRouteHandler) => Promise<Response>;
   handle?: (
     request: Request,
     server: Server<T>,
+    ports?: BusinessRequestPorts,
   ) => Promise<Response | null | undefined> | Response | null | undefined;
   /** Bun transport options. Framework dispatch and route composition remain owned here. */
   native?: NativeServerOptions<T>;
-  lifecycle?: LifecycleCoordinator;
+  lifecycle?: Pick<LifecycleCoordinator, "isShuttingDown" | "register">;
   routes?: AppRouteMap;
   publicDir?: string;
   /** Additional approved headers for synthesized route preflights; origins still use framework policy. */
   cors?: CorsOptions;
-  // biome-ignore lint/suspicious/noConfusingVoidType: existing void callbacks remain compatible.
-  onRequest?: (request: Request, server: Server<T>) => Promise<void | Response> | void | Response;
+  onRequest?: (
+    request: Request,
+    server: Server<T>,
+    ports?: BusinessRequestPorts,
+  ) => Promise<RequestInterception> | RequestInterception;
 }
 
 type TrackRequest = <T>(work: () => Promise<T>) => Promise<T>;
@@ -35,7 +45,11 @@ type BunRouteHandler<T = unknown> = (
   server: Server<T>,
 ) => Response | Promise<Response>;
 
-type NativeRouteCallback<T> = (request: Request, server: Server<T>) => unknown;
+type NativeRouteCallback<T> = (
+  request: Request,
+  server: Server<T>,
+  ports?: BusinessRequestPorts,
+) => unknown;
 
 function socketAddress<T>(server: Server<T> | undefined, request: Request): string | null {
   const address = server?.requestIP(request)?.address;
@@ -51,6 +65,8 @@ function wrapRouteHandler<T>(
   path: string,
   onRequest?: WebServerOptions<T>["onRequest"],
   track: TrackRequest = (work) => work(),
+  enter?: WebServerOptions<T>["enter"],
+  validate?: (request: Request, server: Server<T>) => Response | undefined,
 ): BunRouteHandler<T> {
   return async (request, server) => {
     return await track(
@@ -65,10 +81,19 @@ function wrapRouteHandler<T>(
             userAgent: request.headers.get("user-agent"),
           },
           async () => {
-            const intercepted = await onRequest?.(request, server);
-            if (intercepted instanceof Response) return intercepted;
-            const response = await handler(request, server);
-            return (response as Response | null | undefined) ?? (await missingHtmlResponse());
+            const invalid = validate?.(request, server);
+            if (invalid) return invalid;
+            const owned = await dispatchOwnedRoute(handler, request, (ports) =>
+              onRequest?.(request, server, ports),
+            );
+            if (owned) return owned;
+            const work = async (_request: Request, ports?: BusinessRequestPorts) => {
+              const intercepted = await onRequest?.(request, server, ports);
+              if (intercepted instanceof Response) return intercepted;
+              const response = await handler(request, server, ports);
+              return (response as Response | null | undefined) ?? (await missingHtmlResponse());
+            };
+            return enter ? enter(request, work) : work(request);
           },
         ),
     );
@@ -80,6 +105,8 @@ function convertAppRoutesToBunRoutes<T = unknown>(
   cors: CorsOptions = {},
   onRequest?: WebServerOptions<T>["onRequest"],
   track?: TrackRequest,
+  enter?: WebServerOptions<T>["enter"],
+  validate?: (request: Request, server: Server<T>) => Response | undefined,
 ): Record<string, Record<string, BunRouteHandler<T>>> {
   const bunRoutes: Record<string, Record<string, BunRouteHandler<T>>> = {};
   const middleware = createCorsMiddleware(cors);
@@ -90,17 +117,31 @@ function convertAppRoutesToBunRoutes<T = unknown>(
     if (handler instanceof Response) {
       const methods: Record<string, BunRouteHandler<T>> = {};
       for (const method of ["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH"]) {
-        methods[method] = wrapRouteHandler(() => handler.clone(), path, onRequest, track);
+        methods[method] = wrapRouteHandler(
+          () => handler.clone(),
+          path,
+          onRequest,
+          track,
+          enter,
+          validate,
+        );
       }
-      methods.OPTIONS = wrapRouteHandler(preflight, path, onRequest, track);
+      methods.OPTIONS = wrapRouteHandler(preflight, path, onRequest, track, enter, validate);
       bunRoutes[path] = methods;
       continue;
     }
 
     if (typeof handler === "function") {
       bunRoutes[path] = {
-        GET: wrapRouteHandler(handler as NativeRouteCallback<T>, path, onRequest, track),
-        OPTIONS: wrapRouteHandler(preflight, path, onRequest, track),
+        GET: wrapRouteHandler(
+          handler as NativeRouteCallback<T>,
+          path,
+          onRequest,
+          track,
+          enter,
+          validate,
+        ),
+        OPTIONS: wrapRouteHandler(preflight, path, onRequest, track, enter, validate),
       };
       continue;
     }
@@ -115,6 +156,8 @@ function convertAppRoutesToBunRoutes<T = unknown>(
             path,
             onRequest,
             track,
+            enter,
+            validate,
           );
           continue;
         }
@@ -127,11 +170,13 @@ function convertAppRoutesToBunRoutes<T = unknown>(
           path,
           onRequest,
           track,
+          enter,
+          validate,
         );
       }
 
       if (Object.keys(methods).length > 0) {
-        methods.OPTIONS ??= wrapRouteHandler(preflight, path, onRequest, track);
+        methods.OPTIONS ??= wrapRouteHandler(preflight, path, onRequest, track, enter, validate);
         bunRoutes[path] = methods;
       }
     }
@@ -141,9 +186,17 @@ function convertAppRoutesToBunRoutes<T = unknown>(
 }
 
 export function createWebServer<T = unknown>(options: WebServerOptions<T>): Server<T> {
+  return openWebServer(options);
+}
+
+/** Private acquisition witness; no application callbacks run between return and capture. */
+function openWebServer<T>(
+  options: WebServerOptions<T>,
+  ownership?: { acquired(server: Server<T>): void; bindRejected(): void },
+): Server<T> {
   if (options.lifecycle?.isShuttingDown) throw new Error("Cannot start HTTP during shutdown.");
   let abortedDuringShutdown = 0;
-  const onRequest: WebServerOptions<T>["onRequest"] = (request, server) => {
+  const validate = (request: Request, _server: Server<T>): Response | undefined => {
     if (options.lifecycle?.isShuttingDown)
       return new Response("Service Unavailable", { status: 503 });
     // Bun can expose a relative URL for a malformed wire Host. Reject it before
@@ -168,8 +221,8 @@ export function createWebServer<T = unknown>(options: WebServerOptions<T>): Serv
         { once: true },
       );
     }
-    return options.onRequest?.(request, server);
   };
+  const onRequest = options.onRequest;
   // Defend ownership even when callers bypass TypeScript (JS/config spreads).
   for (const field of ["fetch", "routes", "port", "unix"])
     if (options.native && field in options.native)
@@ -188,7 +241,14 @@ export function createWebServer<T = unknown>(options: WebServerOptions<T>): Serv
   };
   const publicDir = options.publicDir ?? "./public";
   const bunRoutes = options.routes
-    ? convertAppRoutesToBunRoutes(options.routes, options.cors, onRequest, track)
+    ? convertAppRoutesToBunRoutes(
+        options.routes,
+        options.cors,
+        onRequest,
+        track,
+        options.enter,
+        validate,
+      )
     : undefined;
 
   const { websocket, ...native } = options.native ?? {};
@@ -209,11 +269,14 @@ export function createWebServer<T = unknown>(options: WebServerOptions<T>): Serv
               userAgent: request.headers.get("user-agent"),
             },
             async () => {
-              const intercepted = await onRequest(request, server);
-              if (intercepted instanceof Response) return intercepted;
-
+              const invalid = validate(request, server);
+              if (invalid) return invalid;
               const url = new URL(request.url);
+              let assetAdmission = false;
               if (url.pathname.startsWith("/assets/")) {
+                const intercepted = await onRequest?.(request, server);
+                if (intercepted instanceof Response) return intercepted;
+                assetAdmission = true;
                 try {
                   const filePath = assertUrlPathUnderRoot(publicDir, url.pathname);
                   const file = Bun.file(filePath);
@@ -226,7 +289,29 @@ export function createWebServer<T = unknown>(options: WebServerOptions<T>): Serv
               }
 
               if (options.handle) {
-                const response = await options.handle(request, server);
+                const owned = await dispatchOwnedRoute(options.handle, request, (ports) =>
+                  assetAdmission ? undefined : onRequest?.(request, server, ports),
+                );
+                if (owned) return owned;
+                if (websocket && !options.enter) {
+                  const intercepted = assetAdmission
+                    ? undefined
+                    : await onRequest?.(request, server);
+                  if (intercepted instanceof Response) return intercepted;
+                  return (await options.handle(request, server)) ?? undefined;
+                }
+                const work = async (_request: Request, ports?: BusinessRequestPorts) => {
+                  const intercepted = assetAdmission
+                    ? undefined
+                    : await onRequest?.(request, server, ports);
+                  if (intercepted instanceof Response) return intercepted;
+                  return (
+                    (await options.handle?.(request, server, ports)) ??
+                    (await missingHtmlResponse())
+                  );
+                };
+                if (options.enter) return options.enter(request, work);
+                const response = await work(request);
                 if (response === undefined && websocket) return undefined;
                 return response ?? (await missingHtmlResponse());
               }
@@ -237,14 +322,34 @@ export function createWebServer<T = unknown>(options: WebServerOptions<T>): Serv
       );
     },
   };
-  const server = websocket
-    ? Bun.serve<T, string>({ ...configuration, websocket })
-    : Bun.serve<T, string>({
+  // Construct/spread user configuration before the native-only failure boundary.
+  const nativeOptions = websocket
+    ? { ...configuration, websocket }
+    : {
         ...configuration,
-        async fetch(request, server) {
+        async fetch(request: Request, server: Server<T>) {
           return (await configuration.fetch(request, server)) ?? (await missingHtmlResponse());
         },
-      });
+      };
+  // Only scalar caller options establish that the native call cannot execute a
+  // nested accessor/coercion which spoofs listen metadata. TLS/WebSocket/callback
+  // configuration remains supported, but failed acquisition there stays unknown.
+  const provenScalarOptions =
+    typeof configuration.port === "number" &&
+    Number.isSafeInteger(configuration.port) &&
+    configuration.port >= 0 &&
+    configuration.port <= 65535 &&
+    websocket === undefined &&
+    scalarNativeOptions(native);
+  let server: Server<T>;
+  try {
+    server = Bun.serve<T, string>(nativeOptions);
+  } catch (error) {
+    if (provenScalarOptions && isNativeListenConflict(error)) ownership?.bindRejected();
+    throw error;
+  }
+  ownership?.acquired(server);
+
   if (options.lifecycle) {
     const lifecycle = options.lifecycle;
     const name = `http:${crypto.randomUUID()}`;
@@ -277,3 +382,109 @@ export function createWebServer<T = unknown>(options: WebServerOptions<T>): Serv
 }
 
 export { convertAppRoutesToBunRoutes };
+
+function scalarNativeOptions(options: object): boolean {
+  try {
+    for (const key of Reflect.ownKeys(options)) {
+      const descriptor = Object.getOwnPropertyDescriptor(options, key);
+      if (!descriptor || !("value" in descriptor)) return false;
+      const value: unknown = descriptor.value;
+      if (
+        value !== null &&
+        value !== undefined &&
+        !["string", "number", "boolean"].includes(typeof value)
+      )
+        return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Read only own data metadata: arbitrary errors may contain accessors/proxies. */
+function isNativeListenConflict(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  try {
+    const code = Object.getOwnPropertyDescriptor(error, "code");
+    const syscall = Object.getOwnPropertyDescriptor(error, "syscall");
+    return (
+      code !== undefined &&
+      "value" in code &&
+      code.value === "EADDRINUSE" &&
+      syscall !== undefined &&
+      "value" in syscall &&
+      syscall.value === "listen"
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Native transport descriptor owned by the same Application journal as persistence. */
+export function webServerResource<T = unknown>(
+  options: Omit<WebServerOptions<T>, "lifecycle">,
+): import("@getstrata/core/contracts/application").ResourceSpec<Server<T>> {
+  type Hook = Parameters<LifecycleCoordinator["register"]>[1];
+  type Phase = NonNullable<Parameters<LifecycleCoordinator["register"]>[2]>;
+  const hooks = new Map<Phase, Hook[]>();
+  let stopping = false;
+  const lifecycle: Pick<LifecycleCoordinator, "isShuttingDown" | "register"> = {
+    get isShuttingDown() {
+      return stopping;
+    },
+    register(_name, handler, phase = "close") {
+      const group = hooks.get(phase) ?? [];
+      group.push(handler);
+      hooks.set(phase, group);
+      return () => {
+        const index = group.indexOf(handler);
+        if (index >= 0) group.splice(index, 1);
+      };
+    },
+  };
+  const run = async (
+    phase: Phase,
+    context: import("@getstrata/core/contracts/application").CleanupContext,
+  ) => {
+    for (const hook of hooks.get(phase) ?? []) await hook(context);
+  };
+  return {
+    name: "http.server",
+    open: async () => {
+      let acquired: Server<T> | undefined;
+      let bindRejected = false;
+      try {
+        const server = openWebServer(
+          { ...options, lifecycle },
+          {
+            acquired: (server) => {
+              acquired = server;
+            },
+            bindRejected: () => {
+              bindRejected = true;
+            },
+          },
+        );
+        return { ok: true, value: server };
+      } catch (error) {
+        if (acquired) {
+          try {
+            await acquired.stop(true);
+            return { ok: false, error, disposition: "cleaned" };
+          } catch (cleanupError) {
+            return { ok: false, error, disposition: "unknown", cleanupErrors: [cleanupError] };
+          }
+        }
+        if (bindRejected) return { ok: false, error, disposition: "not-acquired" };
+        throw error;
+      }
+    },
+    stop: async (_server, context) => {
+      stopping = true;
+      await run("stop", context);
+    },
+    drain: (_server, context) => run("drain", context),
+    close: (_server, context) => run("close", context),
+  };
+}

@@ -4,6 +4,7 @@ import {
   authUsesJwt,
   authUsesToken,
   type StarterLayers,
+  usesTenantTable,
 } from "./types.ts";
 
 function renderAuthDirectory(layers: StarterLayers): string | null {
@@ -18,8 +19,8 @@ function renderAuthDirectory(layers: StarterLayers): string | null {
       return null;
     }
     const hashed = hashApiToken(token);
-    const tokenRow = await runWithMigrationBypassForIdentifier(hashed, async () => {
-      return await ApiToken.where({ token_hash: hashed }).first();
+    const tokenRow = await withAuthIdentifier(ports, hashed, async (database) => {
+      return await database.model(ApiToken).where({ token_hash: hashed }).first();
     });
     if (!tokenRow) {
       return null;
@@ -29,8 +30,8 @@ function renderAuthDirectory(layers: StarterLayers): string | null {
       return null;
     }
     const user_id = Number(tokenRow.get("user_id"));
-    const user = await runWithMigrationBypassForIdentifier(user_id, async () => {
-      return await User.find(user_id);
+    const user = await withAuthIdentifier(ports, user_id, async (database) => {
+      return await database.model(User).find(user_id);
     });
     if (!user) {
       return null;
@@ -85,9 +86,9 @@ function asNullableString(value: unknown): string | null {
 
   return `import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { verifyPassword } from "@getstrata/core/auth/password";
-import { runInTransaction } from "@getstrata/core/database/transaction";
+import type { SelectedSession, ScopedPolicy } from "@getstrata/core/contracts/persistence";
 ${hashImport}import type { AuthUserDirectory, AuthUserRecord } from "@getstrata/core/contracts/authUserDirectory";
-import { runWithMigrationBypassForIdentifier } from "@getstrata/core/tenant/databaseTenantContext";
+
 ${apiTokenImport}import { User } from "../models/User.ts";
 
 type LoadedUser = {
@@ -122,9 +123,17 @@ function mapUserRow(user: LoadedUser): StarterAuthUserRecord {
   };
 }
 
+export interface StarterAuthPersistence { readonly database: SelectedSession; readonly policy: ScopedPolicy }
+
+export function withAuthIdentifier<T>(ports: StarterAuthPersistence, identifier: string | number, work: (database: SelectedSession) => T | Promise<T>): Promise<T> {
+  if (!(typeof identifier === "number" ? Number.isSafeInteger(identifier) && identifier > 0 : typeof identifier === "string" && identifier.trim().length > 0)) throw new TypeError("Auth operation requires a validated row identifier.");
+  return ${layers.tenancy === "rls" ? 'ports.policy.run(ports.database, {kind: "identifier", identifier}, work)' : "ports.database.transaction(work)"};
+}
+
+export function createStarterAuthDirectory(ports: StarterAuthPersistence) {
 async function findUserById(id: number) {
-  return await runWithMigrationBypassForIdentifier(id, async () => {
-    const user = await User.find(id);
+  return await withAuthIdentifier(ports, id, async (database) => {
+    const user = await database.model(User).find(id);
     if (!user) {
       throw new Error(\`User \${id} not found.\`);
     }
@@ -134,20 +143,13 @@ async function findUserById(id: number) {
 
 async function findUserByEmail(email: string) {
   email = email.trim().toLowerCase();
-  return await runWithMigrationBypassForIdentifier(email, async () => {
-    const user = await User.where({ email }).first();
+  return await withAuthIdentifier(ports, email, async (database) => {
+    const user = await database.model(User).where({ email }).first();
     return user ? mapUserRow(user) : null;
   });
 }
 
-export async function runWithLockedAuthUser<T>(id: number, operation: (record: StarterAuthUserRecord | null) => Promise<T>): Promise<T> {
-  return runWithMigrationBypassForIdentifier(id, () => runInTransaction(async () => {
-    const user = await User.where({ id })${layers.database === "sqlite" ? "" : ".lockForUpdate()"}.first();
-    return operation(user ? mapUserRow(user) : null);
-  }));
-}
-
-export const starterAuthDirectory = {
+return {
 ${tokenLookup}
 
   findByIdOrThrow: findUserById,
@@ -171,116 +173,124 @@ ${tokenLookup}
     };
   },
 } satisfies AuthUserDirectory;
+}
+
+export async function runWithLockedAuthUser<T>(ports: StarterAuthPersistence, id: number, operation: (record: StarterAuthUserRecord | null, child: StarterAuthPersistence) => Promise<T>): Promise<T> {
+  return withAuthIdentifier(ports, id, async (database) => {
+    const user = await database.model(User).where({ id })${layers.database === "sqlite" ? "" : ".lockForUpdate()"}.first();
+    return operation(user ? mapUserRow(user) : null, { ...ports, database });
+  });
+}
 `;
 }
 
 function renderAuthProvider(layers: StarterLayers): string {
-  if (layers.auth === "headers") {
-    return `import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
-import { createTokenAbilityChecker } from "@getstrata/core/auth/tokenAbilityChecker";
-import { CORE_ABILITY_CHECKER_TOKEN } from "@getstrata/core/contracts/serviceTokens";
-import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
-import type { ServiceProvider } from "@getstrata/core/contracts/di";
-import { envFlagEnabled } from "@getstrata/core/runtime/appEnv";
-
-const authProvider: ServiceProvider = {
-  name: "starter.auth",
-  register({ container }) {
-    const guard = envFlagEnabled(process.env.AUTH_DEV_HEADERS)
-      ? new GuestGuard()
-      : { resolve: () => null };
-    container.set(CORE_AUTH_TOKEN, new AuthManager(guard));
-    container.set(CORE_ABILITY_CHECKER_TOKEN, createTokenAbilityChecker());
-  },
-};
-
-export default authProvider;
-`;
-  }
-
-  const cookieBlock = authUsesCookie(layers.auth)
-    ? `    const auth = createCookieSessionAuthManager({
-      secret: sessionSecret(),
-      cookieName: "strata_session",
-      mapUser: (user) => ({
-        id: user.id,
-        authVersion: user.auth_version,
-        isActive: user.is_active,
-        role: user.is_admin ? "admin" : "member",
-        ...(user.email_verified_at !== undefined ? { emailVerifiedAt: user.email_verified_at } : {}),
-      }),
+  const users = authNeedsUsers(layers.auth);
+  const cookie = authUsesCookie(layers.auth);
+  const mechanisms = [
+    ...(authUsesToken(layers.auth) ? ["api", "basic"] : []),
+    ...(authUsesJwt(layers.auth) ? ["jwt", ...(authUsesToken(layers.auth) ? [] : ["basic"])] : []),
+    ...(cookie ? ["session"] : []),
+  ];
+  return `import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
+import type { ServiceProvider } from "@getstrata/bootstrap/contracts";
+import type { MetadataFactory } from "@getstrata/bootstrap/persistenceContracts";
+${users ? 'import { createMetadataAuthManager, type MetadataAuthOptions } from "@getstrata/bootstrap/providers/auth";' : 'import type { MetadataAuthOptions } from "@getstrata/bootstrap/providers/auth";'}
+${cookie ? 'import { createCookieSessionAuthManager, type CookieSessionAuthManager } from "@getstrata/bootstrap/web/session";\n' : ""}import { establishedAuthReader } from "@getstrata/core/auth/authReader";
+${users ? 'import { persistConsumedRecoveryHash } from "@getstrata/core/auth/passwordLogin";\n' : 'import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";\n'}import { createTokenAbilityChecker } from "@getstrata/core/auth/tokenAbilityChecker";
+import { csrfTokenOptionsFromEnvironment } from "@getstrata/core/http/csrfToken";
+import type { OAuthStateOptions } from "@getstrata/core/security/oauthState";
+${cookie ? 'import { createSamlServiceProvider, createSqlSamlAssertionReplayStore, readSamlEnvOptions, type SamlServiceProvider, type SamlServiceProviderConfig } from "@getstrata/core/auth/saml/samlServiceProvider";\n' : ""}${users ? 'import { Mailer, createMailDriver } from "@getstrata/core/mail/mailer";\nimport { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";\n' : ""}
+import { ${cookie ? "passwordConfirmCookieName, passwordConfirmTtlSeconds, " : ""}type PasswordConfirmWriteOptions } from "@getstrata/core/auth/passwordConfirmCookie";
+${cookie && layers.extras.mfa ? 'import { createPendingMfaHelpers } from "../pendingMfa.ts";\n' : ""}import { CORE_ABILITY_CHECKER_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import { createServiceToken } from "@getstrata/core/contracts/token";
+import type { ExecutionPersistence } from "@getstrata/core/contracts/persistence";
+${usesTenantTable(layers.tenancy) ? 'import { resolveTenant } from "@getstrata/core/tenant/resolveTenant";\n' : ""}${users ? 'import { createStarterAuthDirectory, withAuthIdentifier, type StarterAuthPersistence } from "../authDirectory.ts";\n' : ""}${usesTenantTable(layers.tenancy) && users ? 'import { User } from "../../models/User.ts";\n' : ""}
+export type StarterAuthServicesOptions = Omit<MetadataAuthOptions, "mechanisms" | "sessionGuard"> & { readonly environment:Readonly<Record<string,string|undefined>>; readonly sessionSecret?: string; readonly signatureSecret?:string; readonly oauthStateSecret?:string; readonly passwordConfirmation?:PasswordConfirmWriteOptions };
+export interface StarterAuthRuntime {
+  readonly registrationEnabled: boolean;
+  readonly scimEnabled: boolean;
+  readonly redisUrl: string | undefined;
+  readonly samlEnabled: boolean;
+  readonly oauthEnabled: boolean;
+  readonly appName: string;
+  readonly appUrl: string;${cookie ? "\n  readonly saml: Readonly<SamlServiceProviderConfig> | undefined;" : ""}
+  readonly github: Readonly<{clientId:string;clientSecret:string;redirectUri:string}>;
+  readonly oidc: Readonly<{issuer:string;clientId:string;clientSecret:string;redirectUri:string}>;
+  readonly tokenExpiryDays: number | null;
+  readonly jwtTtlSeconds: number;
+  readonly jwtSecret: string;
+  readonly signatureSecret: string;
+  readonly oauth: OAuthStateOptions;
+  readonly passwordConfirmation: PasswordConfirmWriteOptions;
+}
+export interface StarterAuthServices {
+  readonly config: StarterAuthRuntime;${users ? "\n  readonly mail: Mailer;" : ""}${cookie ? "\n  readonly saml: (ports:StarterAuthPersistence) => SamlServiceProvider;" : ""}${cookie && layers.extras.mfa ? "\n  readonly pendingMfa: ReturnType<typeof createPendingMfaHelpers>;" : ""}
+  readonly csrf: ReturnType<typeof csrfTokenOptionsFromEnvironment>;
+  readonly metadata: MetadataFactory;${users ? "\n  readonly directory: (ports: StarterAuthPersistence) => ReturnType<typeof createStarterAuthDirectory>;" : ""}${cookie ? "\n  readonly session: (ports: StarterAuthPersistence) => CookieSessionAuthManager;" : ""}
+}
+export const STARTER_AUTH_SERVICES = createServiceToken<StarterAuthServices>("starter.auth.services");
+export function createStarterAuthServices(options: StarterAuthServicesOptions): StarterAuthServices {
+  const env = Object.freeze({...options.environment});
+  const snapshot = Object.freeze({ ...options, abilities: Object.freeze({ admin: Object.freeze([...options.abilities.admin]), member: Object.freeze([...options.abilities.member]) }) });
+  ${users ? "const secretsEnv = Object.freeze({...env,...(snapshot.sessionSecret ? {SESSION_SECRET:snapshot.sessionSecret} : {})});" : ""}
+  ${authUsesJwt(layers.auth) ? 'if (!snapshot.jwtSecret.trim()) throw new TypeError("An explicit JWT secret is required.");' : ""}
+  const configuredAppUrl = env.APP_URL ?? "http://localhost:3000";
+  const appUrl = configuredAppUrl.endsWith("/") ? configuredAppUrl.slice(0, -1) : configuredAppUrl;
+  const config: StarterAuthRuntime = Object.freeze({
+    registrationEnabled: (env.FEATURE_REGISTRATION ?? "true") !== "false",
+    scimEnabled: (env.FEATURE_SCIM ?? "false") === "true", redisUrl:env.REDIS_URL,
+    samlEnabled: env.FEATURE_SAML === "true",
+    oauthEnabled: env.FEATURE_OAUTH === "true",
+    appName: env.APP_NAME ?? "Strata", appUrl,${cookie ? '\n    saml: env.FEATURE_SAML === "true" ? Object.freeze(readSamlEnvOptions(env)) : undefined,' : ""}
+    github: Object.freeze({clientId:env.GITHUB_CLIENT_ID?.trim() ?? "",clientSecret:env.GITHUB_CLIENT_SECRET?.trim() ?? "",redirectUri:env.GITHUB_REDIRECT_URI?.trim() || appUrl + "/auth/github/callback"}),
+    oidc: Object.freeze({issuer:env.OIDC_ISSUER?.trim() ?? "",clientId:env.OIDC_CLIENT_ID?.trim() ?? "",clientSecret:env.OIDC_CLIENT_SECRET?.trim() ?? "",redirectUri:env.OIDC_REDIRECT_URI?.trim() || appUrl + "/auth/oidc/callback"}),
+    tokenExpiryDays: ${authUsesToken(layers.auth) ? '(() => { const days=Number.parseInt(env.API_TOKEN_DEFAULT_EXPIRY_DAYS?.trim() ?? "",10); return Number.isInteger(days) && days > 0 ? days : null; })()' : "null"},
+    jwtTtlSeconds: ${authUsesJwt(layers.auth) ? '(() => { const ttl=Number.parseInt(env.JWT_TTL_SECONDS ?? "",10); return Number.isInteger(ttl) && ttl > 0 ? ttl : 3600; })()' : "3600"}, jwtSecret:snapshot.jwtSecret,
+    signatureSecret: ${users ? 'options.signatureSecret ?? requireConfiguredSecret(["SIGNED_URL_SECRET","SESSION_SECRET","OAUTH_STATE_SECRET"],"signed-url-secret",secretsEnv)' : "options.signatureSecret ?? snapshot.jwtSecret"},
+    oauth: Object.freeze({secret:${cookie ? 'options.oauthStateSecret ?? requireConfiguredSecret(["OAUTH_STATE_SECRET","SESSION_SECRET"],"oauth-state-secret",secretsEnv)' : "options.oauthStateSecret ?? snapshot.jwtSecret"},production:snapshot.production}),
+    passwordConfirmation: Object.freeze(options.passwordConfirmation ? {...options.passwordConfirmation} : {secret:${cookie ? 'requireConfiguredSecret(["SESSION_SECRET","OAUTH_STATE_SECRET"],"session-secret",secretsEnv)' : "snapshot.jwtSecret"},cookieName:${cookie ? "passwordConfirmCookieName(env)" : JSON.stringify("strata_password_confirmed")},ttlSeconds:${cookie ? "passwordConfirmTtlSeconds(env)" : "10800"},production:snapshot.production}),
+  });
+  ${cookie ? `if (!snapshot.sessionSecret?.trim()) throw new TypeError("SESSION_SECRET is required for cookie authentication.");\n  const session = (ports: StarterAuthPersistence) => createCookieSessionAuthManager({ selected: ports.database, policy: ports.policy, secret: snapshot.sessionSecret!, production: snapshot.production, rls: ${String(layers.tenancy === "rls")}, cookieName: "strata_session", mapUser: user => ({ id: user.id, name: user.name, email: user.email, authVersion: user.auth_version, isActive: user.is_active, role: user.is_admin ? "admin" : "member", ...(user.email_verified_at !== undefined ? {emailVerifiedAt:user.email_verified_at} : {}) }) });` : ""}
+  const metadata: MetadataFactory = (${users || usesTenantTable(layers.tenancy) ? "ports" : "_ports"}: ExecutionPersistence) => {
+    ${
+      users
+        ? `const directory = createStarterAuthDirectory(ports);
+    const auth = createMetadataAuthManager(directory, { ...snapshot, mechanisms: ${JSON.stringify(mechanisms)}${cookie ? ", sessionGuard: session(ports)" : ""} }, async (record, hash) => {
+      await withAuthIdentifier(ports, record.id, database => persistConsumedRecoveryHash(database, record.id, record.mfa_recovery_codes, hash));
+      return true;
     });`
-    : `    const fallback = ${
-        authUsesToken(layers.auth) ? "new DatabaseTokenGuard(container)" : "new JwtGuard(container)"
-      };
-    const auth = new AuthManager(fallback);`;
-
-  const tokenRegs = authUsesToken(layers.auth)
-    ? `    const apiGuard = new DatabaseTokenGuard(container);
-    auth.registerGuard("api", apiGuard);
-    auth.registerGuard("access_token", apiGuard);
-    auth.registerGuard("token", apiGuard);`
-    : "";
-
-  const jwtReg = authUsesJwt(layers.auth)
-    ? `    auth.registerGuard("jwt", new JwtGuard(container));`
-    : "";
-
-  const basicReg =
-    authUsesToken(layers.auth) || authUsesJwt(layers.auth)
-      ? `    auth.registerGuard("basic", new BasicAuthGuard(container));`
-      : "";
-
-  const ability = `    container.set(CORE_ABILITY_CHECKER_TOKEN, createTokenAbilityChecker());`;
-
-  const imports: string[] = [`import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";`];
-  if (authUsesCookie(layers.auth)) {
-    imports.push(
-      `import { createCookieSessionAuthManager } from "@getstrata/bootstrap/web/session";`,
-    );
-  }
-  if (authUsesToken(layers.auth) || authUsesJwt(layers.auth)) {
-    imports.push(`import { BasicAuthGuard } from "@getstrata/core/auth/basicAuthGuard";`);
-  }
-  if (!authUsesCookie(layers.auth) && authUsesToken(layers.auth)) {
-    imports.push(`import { AuthManager, DatabaseTokenGuard } from "@getstrata/core/auth/guard";`);
-  } else if (!authUsesCookie(layers.auth) && authUsesJwt(layers.auth)) {
-    imports.push(`import { AuthManager } from "@getstrata/core/auth/guard";`);
-  } else if (authUsesCookie(layers.auth) && authUsesToken(layers.auth)) {
-    imports.push(`import { DatabaseTokenGuard } from "@getstrata/core/auth/guard";`);
-  }
-  if (authUsesJwt(layers.auth)) {
-    imports.push(`import { JwtGuard } from "@getstrata/core/auth/jwtGuard";`);
-  }
-  imports.push(
-    `import { createTokenAbilityChecker } from "@getstrata/core/auth/tokenAbilityChecker";`,
-  );
-  imports.push(`import type { ServiceProvider } from "@getstrata/core/contracts/di";`);
-  const tokenImports = ["CORE_ABILITY_CHECKER_TOKEN", "CORE_AUTH_USER_DIRECTORY_TOKEN"];
-  imports.push(
-    `import {\n  ${tokenImports.join(",\n  ")},\n} from "@getstrata/core/contracts/serviceTokens";`,
-  );
-  imports.push(`import { starterAuthDirectory } from "../authDirectory.ts";`);
-  if (authUsesCookie(layers.auth)) {
-    imports.push(`import { sessionSecret } from "../config.ts";`);
-  }
-
-  return `${imports.join("\n")}
-
-const authProvider: ServiceProvider = {
-  name: "starter.auth",
-  register({ container }) {
-    container.set(CORE_AUTH_USER_DIRECTORY_TOKEN, starterAuthDirectory);
-${cookieBlock}
-${tokenRegs}
-${jwtReg}
-${basicReg}
-${ability}
-    container.set(CORE_AUTH_TOKEN, auth);
-  },
-};
-
-export default authProvider;
+        : "const auth = new AuthManager(new GuestGuard(snapshot));"
+    }
+    return {
+      authenticate: request => auth.resolveWithSource(request),
+      // The starter schema has no organization-membership table.
+      memberships: async () => Object.freeze([]),
+      userTenantId: ${
+        usesTenantTable(layers.tenancy) && users
+          ? `id => withAuthIdentifier(ports, id, async database => {
+        const user = await database.model(User).findOrFail(id);
+        const tenant = Number(user.get("tenant_id"));
+        if (!Number.isSafeInteger(tenant) || tenant <= 0) throw new Error("Account tenant identity is invalid.");
+        return tenant;
+      })`
+          : "async () => 1"
+      },
+      tenant: ${usesTenantTable(layers.tenancy) ? "id => resolveTenant(ports.database, id)" : 'async id => ({id,slug:"default"})'},
+    };
+  };
+  return Object.freeze({ config, metadata, csrf:csrfTokenOptionsFromEnvironment(env)${users ? ", mail: new Mailer(createMailDriver(env))" : ""}${cookie ? ', saml: (ports:StarterAuthPersistence) => { if(!config.saml) throw new Error("SAML is not configured.");return createSamlServiceProvider({...config.saml,replayStore:createSqlSamlAssertionReplayStore(ports.database)}); }' : ""}${cookie && layers.extras.mfa ? ", pendingMfa: createPendingMfaHelpers({secret:snapshot.sessionSecret!,production:snapshot.production})" : ""}${users ? ", directory: createStarterAuthDirectory" : ""}${cookie ? ", session" : ""} });
+}
+export function createStarterAuthProvider(services: StarterAuthServices): ServiceProvider {
+  return {
+    name: "starter.auth",
+    register({ container }) {
+      container.set(STARTER_AUTH_SERVICES, services);
+      container.set(CORE_AUTH_TOKEN, establishedAuthReader);
+      container.set(CORE_ABILITY_CHECKER_TOKEN, createTokenAbilityChecker());
+    },
+  };
+}
 `;
 }
 

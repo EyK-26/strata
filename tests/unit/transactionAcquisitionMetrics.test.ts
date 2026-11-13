@@ -1,147 +1,247 @@
-import { afterEach, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
-import type { DatabaseConnection } from "@getstrata/core/database/baseRepository";
-import {
-  bindDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "@getstrata/core/database/boundConnection";
+import { resourceService } from "@getstrata/core/contracts/services";
+import type { ServiceToken } from "@getstrata/core/contracts/token";
 import {
   createTransactionAcquisitionMetrics,
+  observeTransactionAcquisition,
   renderTransactionAcquisitionMetrics,
-  runInTransaction,
-} from "@getstrata/core/database/transaction";
-import { observeTransactionAcquisition } from "../../src/core/database/acquisitionMetrics";
+} from "@getstrata/core/database/acquisitionMetrics";
+import { createDatabaseBindings } from "@getstrata/core/database/bindings";
+import type { RawPool } from "@getstrata/core/database/driverPorts";
+import { PersistenceError } from "@getstrata/core/database/errors";
+import { createRawPostgresPoolFromNative } from "@getstrata/core/database/rawPostgres";
+import type { DatabaseSession } from "@getstrata/core/database/session";
+import { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
+import { createApplication } from "@getstrata/core/runtime/application";
 
-afterEach(() => resetBoundDatabaseConnection());
-function fixture(acquire?: () => Promise<void>) {
+// Synthetic native replies exercise the existing PG adapter+owner; not native acceptance.
+async function fixture(
+  work: (f: {
+    calls: string[];
+    run: <T>(body: (database: DatabaseSession) => T | Promise<T>) => Promise<T>;
+  }) => Promise<void>,
+  acquire?: () => Promise<void>,
+  unsupported = false,
+) {
   const calls: string[] = [];
-  const tx: DatabaseConnection = {
-    async unsafe<T>(sql: string) {
-      calls.push(sql);
-      return [] as T[];
+  const native = {
+    async unsafe(text: string) {
+      calls.push(text);
+      return Object.assign([], {
+        command: text.startsWith("ROLLBACK")
+          ? "ROLLBACK"
+          : text.startsWith("RELEASE")
+            ? "RELEASE"
+            : text.startsWith("SAVEPOINT")
+              ? "SAVEPOINT"
+              : text,
+      });
     },
-  };
-  const reserved = {
-    ...tx,
-    async begin<T>(run: (db: DatabaseConnection) => Promise<T>) {
-      calls.push("begin");
-      try {
-        return await run(tx);
-      } finally {
-        calls.push("settled");
-      }
-    },
-    release() {
-      calls.push("release");
-    },
-  };
-  bindDatabaseConnection({
-    ...reserved,
     async reserve() {
       calls.push("reserve");
       await acquire?.();
-      return reserved;
+      return {
+        ...native,
+        release() {
+          calls.push("release");
+        },
+        async close() {
+          calls.push("discard");
+        },
+      };
     },
+    async close() {
+      calls.push("pool.close");
+    },
+  };
+  const declarations = createDatabaseBindings({
+    default: "main",
+    connections: { main: { driver: "sqlite", filename: ":memory:" } },
   });
-  return calls;
+  const resource = declarations.find((item) => item.kind === "resource");
+  if (resource?.kind !== "resource") throw Error("Missing resource");
+  const app = createApplication({
+    providers: [],
+    services: declarations,
+    overrides: unsupported
+      ? []
+      : [
+          resourceService(resource.token as ServiceToken<RawPool>, {
+            lifetime: "application",
+            dependencies: resource.dependencies,
+            create: () => ({
+              name: "synthetic-native-PG",
+              open: () => ({ ok: true, value: createRawPostgresPoolFromNative(native) }),
+              close: (pool) => pool.close(),
+            }),
+          }),
+        ],
+  });
+  const failures: unknown[] = [];
+  try {
+    await app.start();
+    await work({
+      calls,
+      run: (body) => app.run((scope) => body(scope.resolve(DATABASE_SESSION_TOKEN))),
+    });
+  } catch (error) {
+    failures.push(error);
+  } finally {
+    try {
+      const stop = await app.stop();
+      if (!stop.successful)
+        failures.push(new Error("Metric fixture cleanup failed", { cause: stop }));
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length) throw new AggregateError(failures, "Metric fixture and cleanup failed");
+}
+function exactCause(error: unknown, marker: unknown): boolean {
+  if (error === marker) return true;
+  if (error instanceof AggregateError)
+    return error.errors.length > 0 && error.errors.every((item) => exactCause(item, marker));
+  return (
+    error instanceof PersistenceError &&
+    Object.hasOwn(error, "cause") &&
+    exactCause(error.cause, marker)
+  );
 }
 
-test("measured checkout releases once, excludes business duration and nested savepoints", async () => {
+test("measured canonical checkout releases once, excludes business duration and nested savepoints", async () => {
   const metrics = createTransactionAcquisitionMetrics();
-  const calls = fixture();
-  await runInTransaction(
-    async (db) => {
-      const before = metrics.snapshot();
-      expect(before.inflight).toBe(0);
-      expect(before.outcomes[0]?.count).toBe(1);
-      await Bun.sleep(20);
-      await runInTransaction(async (nested) => nested.unsafe("nested"), {
-        acquisitionMetrics: metrics,
-      });
-      await db.unsafe("outer");
-      expect(metrics.snapshot()).toEqual(before);
-    },
-    { acquisitionMetrics: metrics },
-  );
-  expect(calls.filter((call) => call === "reserve")).toHaveLength(1);
-  expect(calls.filter((call) => call === "release")).toHaveLength(1);
-  expect(calls.some((call) => call.startsWith("SAVEPOINT "))).toBe(true);
-});
-
-test("native checkout failure preserves error identity and records failed duration", async () => {
-  const error = new Error("connection-secret");
-  const calls = fixture(async () => {
-    throw error;
+  await fixture(async ({ calls, run }) => {
+    await run((database) =>
+      database.transaction(
+        async (selected) => {
+          const before = metrics.snapshot();
+          expect(before.inflight).toBe(0);
+          expect(before.outcomes[0]?.count).toBe(1);
+          await Bun.sleep(20);
+          await selected.transaction((child) =>
+            child.execute({ text: "SELECT nested", params: [] }),
+          );
+          await selected.execute({ text: "SELECT outer", params: [] });
+          expect(metrics.snapshot()).toEqual(before);
+        },
+        { acquisitionMetrics: metrics },
+      ),
+    );
+    expect(calls.filter((call) => call === "reserve")).toHaveLength(1);
+    expect(calls.filter((call) => call === "release")).toHaveLength(1);
+    expect(calls.some((call) => call.startsWith("SAVEPOINT "))).toBe(true);
   });
-  const metrics = createTransactionAcquisitionMetrics();
-  await expect(runInTransaction(async () => {}, { acquisitionMetrics: metrics })).rejects.toBe(
-    error,
-  );
-  expect(metrics.snapshot().inflight).toBe(0);
-  expect(metrics.snapshot().outcomes[1]?.count).toBe(1);
-  expect(calls).toEqual(["reserve"]);
-  expect(renderTransactionAcquisitionMetrics(metrics.snapshot())).not.toContain("secret");
 });
-
-test("cancelled native wait is observed, pre-abort and unsupported admission are not checkout attempts", async () => {
+test("canonical native checkout failure retains exact infrastructure cause and failed duration", async () => {
+  const marker = new Error("connection-secret");
+  const metrics = createTransactionAcquisitionMetrics();
+  await fixture(
+    async ({ calls, run }) => {
+      let failure: unknown;
+      try {
+        await run((database) => database.transaction(() => {}, { acquisitionMetrics: metrics }));
+      } catch (error) {
+        failure = error;
+      }
+      expect(exactCause(failure, marker)).toBe(true);
+      expect(metrics.snapshot().inflight).toBe(0);
+      expect(metrics.snapshot().outcomes[1]?.count).toBe(1);
+      expect(calls).toEqual(["reserve"]);
+      expect(renderTransactionAcquisitionMetrics(metrics.snapshot())).not.toContain("secret");
+    },
+    async () => {
+      throw marker;
+    },
+  );
+});
+test("canonical cancelled wait is observed; pre-abort and unsupported admission do not count checkout", async () => {
   const controller = new AbortController();
-  const reason = new Error("abort-secret");
+  const marker = new Error("abort-secret");
   const metrics = createTransactionAcquisitionMetrics();
-  fixture(async () => {
-    controller.abort(reason);
-    throw reason;
-  });
-  await expect(
-    runInTransaction(async () => {}, {
-      acquisitionMetrics: metrics,
-      acquisitionSignal: controller.signal,
-    }),
-  ).rejects.toBe(reason);
-  expect(metrics.snapshot().outcomes[2]?.count).toBe(1);
-  await expect(
-    runInTransaction(async () => {}, {
-      acquisitionMetrics: metrics,
-      acquisitionSignal: controller.signal,
-    }),
-  ).rejects.toBe(reason);
-  expect(metrics.snapshot().outcomes[2]?.count).toBe(1);
-  bindDatabaseConnection({
-    async unsafe() {
-      return [];
+  await fixture(
+    async ({ run, calls }) => {
+      let failure: unknown;
+      try {
+        await run((database) =>
+          database.transaction(() => {}, {
+            acquisitionMetrics: metrics,
+            acquisitionSignal: controller.signal,
+          }),
+        );
+      } catch (error) {
+        failure = error;
+      }
+      expect(controller.signal.aborted).toBe(true);
+      expect(exactCause(failure, marker)).toBe(true);
+      expect(metrics.snapshot().outcomes[2]?.count).toBe(1);
+      await expect(
+        run((database) =>
+          database.transaction(() => {}, {
+            acquisitionMetrics: metrics,
+            acquisitionSignal: controller.signal,
+          }),
+        ),
+      ).rejects.toBe(marker);
+      expect(metrics.snapshot().outcomes[2]?.count).toBe(1);
+      expect(calls).toEqual(["reserve"]);
     },
-    async begin(run) {
-      return run(this);
+    async () => {
+      controller.abort(marker);
+      throw marker;
     },
-  });
-  await expect(runInTransaction(async () => {}, { acquisitionMetrics: metrics })).rejects.toThrow(
-    "observable transaction acquisition",
   );
-  expect(metrics.snapshot().outcomes.map((state) => state.count)).toEqual([0, 0, 1]);
+  await fixture(
+    async ({ run, calls }) => {
+      await expect(
+        run((database) => database.transaction(() => {}, { acquisitionMetrics: metrics })),
+      ).rejects.toMatchObject({ code: "DATABASE_UNSUPPORTED_CAPABILITY" });
+      expect(calls).toEqual([]);
+      expect(metrics.snapshot().outcomes.map((state) => state.count)).toEqual([0, 0, 1]);
+    },
+    undefined,
+    true,
+  );
 });
-
-test("business failure and admission cancellation after successful reservation do not become checkout failures", async () => {
+test("canonical admission cancellation and business failure after checkout remain acquired observations", async () => {
   const metrics = createTransactionAcquisitionMetrics();
   const controller = new AbortController();
-  const calls = fixture(async () => {
-    controller.abort();
+  const cancellation = new Error("cancelled before callback");
+  await fixture(
+    async ({ run, calls }) => {
+      await expect(
+        run((database) =>
+          database.transaction(
+            () => {
+              throw Error("must not admit");
+            },
+            { acquisitionMetrics: metrics, acquisitionSignal: controller.signal },
+          ),
+        ),
+      ).rejects.toBe(cancellation);
+      expect(calls).toEqual(["reserve", "BEGIN", "ROLLBACK", "release"]);
+      expect(metrics.snapshot().outcomes.map((state) => state.count)).toEqual([1, 0, 0]);
+    },
+    async () => {
+      controller.abort(cancellation);
+    },
+  );
+  await fixture(async ({ run, calls }) => {
+    const marker = new Error("business");
+    await expect(
+      run((database) =>
+        database.transaction(
+          () => {
+            throw marker;
+          },
+          { acquisitionMetrics: metrics },
+        ),
+      ),
+    ).rejects.toBe(marker);
+    expect(calls).toEqual(["reserve", "BEGIN", "ROLLBACK", "release"]);
+    expect(metrics.snapshot().outcomes.map((state) => state.count)).toEqual([2, 0, 0]);
   });
-  await expect(
-    runInTransaction(async () => {}, {
-      acquisitionMetrics: metrics,
-      acquisitionSignal: controller.signal,
-    }),
-  ).rejects.toBeDefined();
-  expect(calls).toEqual(["reserve", "release"]);
-  fixture();
-  await expect(
-    runInTransaction(
-      async () => {
-        throw new Error("business");
-      },
-      { acquisitionMetrics: metrics },
-    ),
-  ).rejects.toThrow("business");
-  expect(metrics.snapshot().outcomes.map((state) => state.count)).toEqual([2, 0, 0]);
 });
 
 test("concurrent waits have fixed bookkeeping and snapshot mutation cannot corrupt state", async () => {

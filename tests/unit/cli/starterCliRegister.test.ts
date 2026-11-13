@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadAppCommands, resolveApp, runCli } from "@getstrata/cli";
@@ -75,11 +75,12 @@ describe("generated src/cli/register.ts", () => {
   test("queue:work boots the app, not coreProviders", () => {
     const register = renderCliRegisterTs();
     const queueWork = renderCliQueueWorkTs();
-    expect(queueWork).toContain("bootstrapApp({ migrate: false })");
-    expect(queueWork).toContain('await import("../bootstrap/createApp.ts")');
+    expect(queueWork).toContain('bootstrapApp({migrate:false,mode:"worker"})');
+    expect(queueWork).toContain('import { bootstrapApp } from "../bootstrap/createApp.ts";');
     expect(queueWork).toContain("runQueueWorkerCommand");
     expect(queueWork).toContain("@getstrata/cli/queueWorker");
-    expect(queueWork).toContain("closeDatabase");
+    expect(queueWork).not.toContain("closeDatabase");
+    expect(queueWork).not.toContain("new RedisQueue");
     expect(register).toContain('"queue:work"');
     expect(register).toContain("make:module");
     expect(register).toContain("make:job");
@@ -107,7 +108,7 @@ describe("generated src/cli/register.ts", () => {
       scripts: Record<string, string>;
     };
 
-    expect(queueWork).toContain("bootstrapApp({ migrate: false })");
+    expect(queueWork).toContain('bootstrapApp({migrate:false,mode:"worker"})');
     expect(register).not.toContain("coreProviders");
     expect(register).not.toContain("collectProviders");
     expect(register).not.toContain("@getstrata/bootstrap/context");
@@ -185,29 +186,63 @@ describe("generated src/cli/register.ts", () => {
 
   test("queue:work fails closed without REDIS_URL before booting", async () => {
     const root = await tempDir();
-    const app = generateFromArgs(root, ["cli-register-redis", "--yes"]);
-    const previousRedisUrl = process.env.REDIS_URL;
-    delete process.env.REDIS_URL;
-
-    const output = captureConsole();
-    try {
-      const code = await runCli({
-        cwd: app,
-        argv: ["queue:work"],
-        skipBoot: true,
-        exitProcess: false,
-      });
-      expect(code).toBe(1);
-    } finally {
-      output.restore();
-      if (previousRedisUrl === undefined) {
-        delete process.env.REDIS_URL;
-      } else {
-        process.env.REDIS_URL = previousRedisUrl;
-      }
-    }
-
-    expect(output.errors.join("\n")).toContain("queue:work requires REDIS_URL to be set.");
+    const app = generateFromArgs(root, [
+      "cli-register-redis",
+      "--database=sqlite",
+      "--auth=headers",
+      "--frontend=api",
+      "--yes",
+    ]);
+    await symlink(join(repoRoot, "node_modules"), join(app, "node_modules"), "dir");
+    const configPath = join(app, "tsconfig.json");
+    const config = JSON.parse(await readFile(configPath, "utf8"));
+    const sourceConfig = JSON.parse(await readFile(join(repoRoot, "tsconfig.json"), "utf8"));
+    const paths: Record<string, string[]> = {};
+    for (const [key, values] of Object.entries(sourceConfig.compilerOptions.paths))
+      paths[key] = (values as string[]).map((value) => join(repoRoot, value));
+    paths["@getstrata/core/database/migrations"] = [
+      join(repoRoot, "src/core/database/migrations/runner.ts"),
+    ];
+    config.compilerOptions.paths = paths;
+    await writeFile(configPath, JSON.stringify(config));
+    await writeFile(
+      join(app, "queue-probe.ts"),
+      `import assert from "node:assert/strict";
+import { queueWorkCommand } from "./src/cli/queueWork.ts";
+import { bootstrapApp } from "./src/bootstrap/createApp.ts";
+let constructed = 0;
+await assert.rejects(queueWorkCommand(), {message:"queue:work requires REDIS_URL."});
+await assert.rejects(bootstrapApp({migrate:false,mode:"worker",onConstructed:()=>{constructed++;return undefined;}}), {message:"queue:work requires REDIS_URL."});
+assert.equal(constructed,0,"Missing Redis must reject before the Application is constructed or started");
+console.log("missing-redis-before-application");
+`,
+    );
+    const env: Record<string, string | undefined> = {
+      ...process.env,
+      APP_ENV: "local",
+      NODE_ENV: "test",
+      DATABASE_URL: "sqlite://:memory:",
+      APP_DATABASE_URL: "sqlite://:memory:",
+      CACHE_DRIVER: "array",
+      QUEUE_DRIVER: "sync",
+      SESSION_SECRET: "generator-contracts-fixed-fixture-secret",
+    };
+    delete env.REDIS_URL;
+    const child = Bun.spawn([process.execPath, "queue-probe.ts"], {
+      cwd: app,
+      env,
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 10000,
+      killSignal: "SIGKILL",
+    });
+    const [exit, stdout, stderr] = await Promise.all([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ]);
+    expect({ exit, stderr }).toEqual({ exit: 0, stderr: "" });
+    expect(stdout).toContain("missing-redis-before-application");
   });
 
   test("all three generated example profiles ship the same CLI registrar as the renderer", async () => {

@@ -1,6 +1,11 @@
+import type { DatabaseSession } from "@getstrata/core/database/session";
 import type { OutboxDeliverySnapshot, SqlOutbox } from "@getstrata/core/events/outbox";
-export async function inspectDeliveryContract(outbox: SqlOutbox) {
-  const delivery: OutboxDeliverySnapshot | null = await outbox.getDelivery("event", "listener");
+export async function inspectDeliveryContract(outbox: SqlOutbox, selected: DatabaseSession) {
+  const delivery: OutboxDeliverySnapshot | null = await outbox.getDelivery(
+    selected,
+    "event",
+    "listener",
+  );
   if (delivery) {
     const attempts: number = delivery.attempts;
     // @ts-expect-error Inspection does not expose private payloads.

@@ -7,15 +7,15 @@ import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModul
 import { signJwt } from "@getstrata/core/auth/jwt";
 import { oidcAccessTokenHash } from "@getstrata/core/auth/oauth/oidcIdToken";
 import { hashPassword } from "@getstrata/core/auth/password";
+import type {
+  ExecutionPersistence,
+  ScopedPolicy,
+  SelectedSession,
+} from "@getstrata/core/contracts/persistence";
 import { protectMfaSecret } from "@getstrata/core/crypto/mfaSecret";
-import { BaseRepository } from "@getstrata/core/database/baseRepository";
-import { resetBoundDatabaseConnection } from "@getstrata/core/database/boundConnection";
-import { resetDefaultDatabasePoolForTests } from "@getstrata/core/database/defaultConnection";
-import { resetSqlDialect } from "@getstrata/core/database/dialect";
-import { defineTable } from "@getstrata/core/database/table";
+import type { Model } from "@getstrata/core/database/model";
 
 import { generateTotp } from "@getstrata/core/security/totp";
-import { runWithMigrationBypass } from "@getstrata/core/tenant/databaseTenantContext";
 import { SQL } from "bun";
 import {
   generateProject,
@@ -29,6 +29,44 @@ import {
 import { jsonCsrfHeaders, mergeCookies } from "../helpers/jsonCsrf";
 import { installGeneratedAppDependencies, repoRoot } from "../unit/cli/helpers";
 
+type FixtureUserRow = Record<string, unknown> & {
+  id: number;
+  name: string;
+  email: string;
+  password: string;
+  auth_version: number;
+  is_active: boolean | number;
+  tenant_id: number;
+  mfa_secret: string | null;
+  mfa_recovery_codes: string;
+};
+async function installObserverFixture(app: string): Promise<void> {
+  const path = join(app, "src/models/User.ts");
+  let source = await readFile(path, "utf8");
+  source =
+    'import {createServiceToken} from "@getstrata/core/contracts/token";\nimport {valueService} from "@getstrata/core/contracts/services";\nimport type {ModelObserver} from "@getstrata/core/database/definitions";\n' +
+    source;
+  source = source
+    .replace(
+      "const User = defineModel",
+      'const FixtureObserver=createServiceToken<ModelObserver<UserEntity>>("fixture.user.observer");\nexport function fixtureObserverService(observer:ModelObserver<UserEntity>){return valueService(FixtureObserver,observer); }\nconst User = defineModel',
+    )
+    .replace(
+      "  attributes: { fillable:",
+      "  observers:[FixtureObserver],\n  attributes: { fillable:",
+    );
+  if (!source.includes("observers:[FixtureObserver]"))
+    throw new Error("Generated observer fixture did not match the immutable User declaration.");
+  await writeFile(path, source);
+}
+async function fixturePort(): Promise<number> {
+  const probe = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response(null) });
+  const port = probe.port;
+  await probe.stop(true);
+  if (!port) throw new Error("Missing fixture port");
+  process.env.APP_URL = `http://127.0.0.1:${port}`;
+  return port;
+}
 const original = { ...process.env };
 const adminSource = process.env.MIGRATION_DATABASE_URL;
 const runtimeSource = process.env.RLS_TEST_DATABASE_URL ?? process.env.APP_DATABASE_URL;
@@ -36,9 +74,6 @@ afterEach(() => {
   process.chdir(repoRoot);
   for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];
   Object.assign(process.env, original);
-  resetSqlDialect();
-  resetBoundDatabaseConnection();
-  resetDefaultDatabasePoolForTests();
   resetDiscoverModulesForTests();
 });
 
@@ -71,6 +106,7 @@ async function withApp(
       templateRoot: resolveTemplateRoot(),
       overlayRoot: resolveOverlayRoot(),
     });
+    await installObserverFixture(app);
     const pkg = JSON.parse(await readFile(join(app, "package.json"), "utf8"));
     for (const part of ["core", "bootstrap", "cli"])
       pkg.dependencies[`@getstrata/${part}`] = `file:${join(repoRoot, `packages/strata-${part}`)}`;
@@ -143,48 +179,152 @@ for (const driver of ["sqlite", "postgres"] as const) {
     `generated ${driver} suspension fences every credential, replay and concurrent issuance without losing tenant isolation`,
     async () =>
       withApp(driver, async (app, admin) => {
-        const { bootstrapApp, createAppServer } = await import(
-          join(app, "src/bootstrap/createApp.ts")
-        );
-        const { closeDatabase, getSql } = await import(join(app, "src/bootstrap/database.ts"));
-        const { User } = await import(join(app, "src/models/User.ts"));
+        const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
+        const { User, fixtureObserverService } = await import(join(app, "src/models/User.ts"));
         const { runWithLockedAuthUser } = await import(join(app, "src/bootstrap/authDirectory.ts"));
-        const boot = await bootstrapApp();
-        const server = createAppServer(boot.routes, 0),
-          origin = `http://127.0.0.1:${server.port}`;
-        process.env.APP_URL = origin;
+        let reject = false;
+        let observedUserId: number | undefined;
         process.env.JWT_SECRET = "fixture-account-state-jwt-secret-at-least-32-characters";
         process.env.JWT_TTL_SECONDS = "3600";
         process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS = "1";
+        const port = await fixturePort();
+        const origin = `http://127.0.0.1:${port}`;
+        let idp: ReturnType<typeof Bun.serve> | undefined;
+        const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+        const challenges = new Map<string, string>();
+        idp = Bun.serve({
+          port: 0,
+          async fetch(request) {
+            const url = new URL(request.url),
+              issuer = idp?.url.origin;
+            if (url.pathname === "/.well-known/openid-configuration")
+              return Response.json({
+                issuer,
+                authorization_endpoint: `${issuer}/authorize`,
+                token_endpoint: `${issuer}/token`,
+                jwks_uri: `${issuer}/jwks`,
+              });
+            if (url.pathname === "/jwks")
+              return Response.json({
+                keys: [
+                  {
+                    ...publicKey.export({ format: "jwk" }),
+                    kid: "fixture",
+                    alg: "RS256",
+                    use: "sig",
+                  },
+                ],
+              });
+            if (url.pathname !== "/token") return new Response("missing", { status: 404 });
+            const form = await request.formData(),
+              code = String(form.get("code"));
+            const verifier = createHash("sha256")
+              .update(String(form.get("code_verifier")))
+              .digest("base64url");
+            if (challenges.get(code) !== verifier)
+              return new Response("PKCE failed", { status: 400 });
+            challenges.delete(code);
+            const now = Math.floor(Date.now() / 1000);
+            const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "fixture" })).toString(
+              "base64url",
+            );
+            const payload = Buffer.from(
+              JSON.stringify({
+                iss: issuer,
+                aud: "fixture",
+                sub: "fixture-target",
+                email: "TARGET@EXAMPLE.TEST",
+                email_verified: true,
+                name: "Target",
+                nonce: code,
+                at_hash: oidcAccessTokenHash("fixture-access"),
+                iat: now,
+                exp: now + 300,
+              }),
+            ).toString("base64url");
+            const input = `${header}.${payload}`;
+            const signature = createSign("RSA-SHA256").update(input).sign(privateKey, "base64url");
+            return Response.json({
+              access_token: "fixture-access",
+              id_token: `${input}.${signature}`,
+            });
+          },
+        });
+        process.env.FEATURE_OAUTH = "true";
+        process.env.OIDC_ISSUER = idp.url.origin;
+        process.env.OIDC_CLIENT_ID = "fixture";
+        process.env.OIDC_CLIENT_SECRET = "fixture-secret";
+        process.env.OIDC_REDIRECT_URI = `${origin}/auth/oidc/callback`;
+        const boot = await bootstrapApp({
+          mode: "http",
+          server: { port, native: { hostname: "127.0.0.1" } },
+          services: [
+            fixtureObserverService({
+              updated(model: { get(key: string): unknown }) {
+                if (reject && model.get("id") === observedUserId)
+                  throw new Error("injected account-state observer failure");
+              },
+            }),
+          ],
+        });
+        const server = boot.server;
+        if (!server) throw new Error("Expected owned HTTP server");
+        expect(`http://127.0.0.1:${server.port}`).toBe(origin);
+        const selectedUsers = (database: SelectedSession) =>
+          database.model<FixtureUserRow, "id", Model<FixtureUserRow, "id">>(User);
+        const run = <T>(
+          work: (database: SelectedSession, policy: ScopedPolicy) => T | Promise<T>,
+        ): Promise<T> =>
+          boot.invoke(
+            { kind: "command", actor: { kind: "system", policy: "fixture.account-state" } },
+            ({ database, policy }: ExecutionPersistence) =>
+              driver === "postgres"
+                ? policy.run(database, { kind: "bypass" }, (child) => work(child, policy))
+                : work(database, policy),
+          );
         const password = "Initial!Password123",
           secret = "JBSWY3DPEHPK3PXP";
-        const tenants = new BaseRepository(
-          defineTable<{ id: number; slug: string }, "id">({
-            name: "tenant",
-            primaryKey: "id",
-            columns: ["id", "slug"],
-          }),
-        );
-        let idp: ReturnType<typeof Bun.serve> | undefined;
         let release = () => {};
         let blocked: Promise<unknown> | undefined;
         const concurrent: Promise<unknown>[] = [];
         try {
           if (driver === "postgres") {
-            const [role] = await getSql().unsafe(
-              "SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user",
+            const [role] = await run((database) =>
+              database.execute<{
+                rolsuper: boolean;
+                rolbypassrls: boolean;
+                relforcerowsecurity: boolean;
+              }>({
+                text: "SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user",
+                params: [],
+              }),
             );
+            if (!role) throw new Error("Missing restricted fixture role");
             expect(role.rolsuper).toBe(false);
             expect(role.rolbypassrls).toBe(false);
-            const [table] = await getSql().unsafe(
-              "SELECT relforcerowsecurity FROM pg_class WHERE relname='users'",
+            const [table] = await run((database) =>
+              database.execute<{
+                rolsuper: boolean;
+                rolbypassrls: boolean;
+                relforcerowsecurity: boolean;
+              }>({
+                text: "SELECT relforcerowsecurity FROM pg_class WHERE relname='users'",
+                params: [],
+              }),
             );
+            if (!table) throw new Error("Missing RLS fixture table");
             expect(table.relforcerowsecurity).toBe(true);
           }
-          const { target, neighbor } = await runWithMigrationBypass(async () => {
-            await tenants.create({ slug: "one" });
-            await tenants.create({ slug: "two" });
-            const target = await User.create({
+          const { target, neighbor } = await run(async (database) => {
+            await database.execute({
+              text: `INSERT INTO tenant (slug) VALUES (${database.dialect.placeholder(1)})`,
+              params: ["one"],
+            });
+            await database.execute({
+              text: `INSERT INTO tenant (slug) VALUES (${database.dialect.placeholder(1)})`,
+              params: ["two"],
+            });
+            const target = await selectedUsers(database).create({
               name: "Original",
               email: "target@example.test",
               password: await hashPassword(password),
@@ -193,7 +333,7 @@ for (const driver of ["sqlite", "postgres"] as const) {
               mfa_enabled: true,
               mfa_secret: protectMfaSecret(secret),
             });
-            const neighbor = await User.create({
+            const neighbor = await selectedUsers(database).create({
               name: "Neighbor",
               email: "neighbor@example.test",
               password: await hashPassword(password),
@@ -203,6 +343,7 @@ for (const driver of ["sqlite", "postgres"] as const) {
             return { target, neighbor };
           });
           const id = Number(target.get("id"));
+          observedUserId = id;
           const csrf = await jsonCsrfHeaders(origin);
           async function post(path: string, body: object | URLSearchParams, cookie = csrf.cookie) {
             const form = body instanceof URLSearchParams;
@@ -275,74 +416,7 @@ for (const driver of ["sqlite", "postgres"] as const) {
             const body = await responseObject(response);
             return { status: response.status, body };
           }
-          const read = () => runWithMigrationBypass(() => User.find(id));
-          const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-          const challenges = new Map<string, string>();
-          idp = Bun.serve({
-            port: 0,
-            async fetch(request) {
-              const url = new URL(request.url),
-                issuer = idp?.url.origin;
-              if (url.pathname === "/.well-known/openid-configuration")
-                return Response.json({
-                  issuer,
-                  authorization_endpoint: `${issuer}/authorize`,
-                  token_endpoint: `${issuer}/token`,
-                  jwks_uri: `${issuer}/jwks`,
-                });
-              if (url.pathname === "/jwks")
-                return Response.json({
-                  keys: [
-                    {
-                      ...publicKey.export({ format: "jwk" }),
-                      kid: "fixture",
-                      alg: "RS256",
-                      use: "sig",
-                    },
-                  ],
-                });
-              if (url.pathname !== "/token") return new Response("missing", { status: 404 });
-              const form = await request.formData(),
-                code = String(form.get("code"));
-              const verifier = createHash("sha256")
-                .update(String(form.get("code_verifier")))
-                .digest("base64url");
-              if (challenges.get(code) !== verifier)
-                return new Response("PKCE failed", { status: 400 });
-              challenges.delete(code);
-              const now = Math.floor(Date.now() / 1000);
-              const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "fixture" })).toString(
-                "base64url",
-              );
-              const payload = Buffer.from(
-                JSON.stringify({
-                  iss: issuer,
-                  aud: "fixture",
-                  sub: "fixture-target",
-                  email: "TARGET@EXAMPLE.TEST",
-                  email_verified: true,
-                  name: "Target",
-                  nonce: code,
-                  at_hash: oidcAccessTokenHash("fixture-access"),
-                  iat: now,
-                  exp: now + 300,
-                }),
-              ).toString("base64url");
-              const input = `${header}.${payload}`;
-              const signature = createSign("RSA-SHA256")
-                .update(input)
-                .sign(privateKey, "base64url");
-              return Response.json({
-                access_token: "fixture-access",
-                id_token: `${input}.${signature}`,
-              });
-            },
-          });
-          process.env.FEATURE_OAUTH = "true";
-          process.env.OIDC_ISSUER = idp.url.origin;
-          process.env.OIDC_CLIENT_ID = "fixture";
-          process.env.OIDC_CLIENT_SECRET = "fixture-secret";
-          process.env.OIDC_REDIRECT_URI = `${origin}/auth/oidc/callback`;
+          const read = () => run((database) => selectedUsers(database).findOrFail(id));
           async function sso() {
             const begin = await fetch(`${origin}/auth/oidc`, { redirect: "manual" });
             expect(begin.status).toBe(302);
@@ -398,8 +472,15 @@ for (const driver of ["sqlite", "postgres"] as const) {
               `CREATE TRIGGER reject_account_session_delete BEFORE DELETE ON sessions FOR EACH ROW WHEN (OLD.user_id=${id}) EXECUTE FUNCTION reject_account_session_delete()`,
             );
           } else
-            await getSql().unsafe(
-              `CREATE TRIGGER reject_account_session_delete BEFORE DELETE ON sessions WHEN OLD.user_id=${id} BEGIN SELECT RAISE(ABORT,'injected credential delete failure'); END`,
+            await run((database) =>
+              database.execute<{
+                rolsuper: boolean;
+                rolbypassrls: boolean;
+                relforcerowsecurity: boolean;
+              }>({
+                text: `CREATE TRIGGER reject_account_session_delete BEFORE DELETE ON sessions WHEN OLD.user_id=${id} BEGIN SELECT RAISE(ABORT,'injected credential delete failure'); END`,
+                params: [],
+              }),
             );
           try {
             expect((await scim(false)).status).toBe(driver === "sqlite" ? 400 : 500);
@@ -407,17 +488,18 @@ for (const driver of ["sqlite", "postgres"] as const) {
             if (admin) {
               await admin.unsafe("DROP TRIGGER reject_account_session_delete ON sessions");
               await admin.unsafe("DROP FUNCTION reject_account_session_delete()");
-            } else await getSql().unsafe("DROP TRIGGER reject_account_session_delete");
+            } else
+              await run((database) =>
+                database.execute<{
+                  rolsuper: boolean;
+                  rolbypassrls: boolean;
+                  relforcerowsecurity: boolean;
+                }>({ text: "DROP TRIGGER reject_account_session_delete", params: [] }),
+              );
           }
           expect((await read()).get("auth_version")).toBe(0);
           expect(await statuses(initial)).toEqual([200, 200, 200]);
-          let reject = true;
-          User.observe({
-            updated(model: { get(key: string): unknown }) {
-              if (reject && model.get("id") === id)
-                throw new Error("injected account-state observer failure");
-            },
-          });
+          reject = true;
           try {
             expect((await scim(false)).status).toBe(500);
           } finally {
@@ -492,10 +574,12 @@ for (const driver of ["sqlite", "postgres"] as const) {
           const held = new Promise<void>((resolve) => {
             release = resolve;
           });
-          blocked = runWithLockedAuthUser(id, async () => {
-            entered();
-            await held;
-          });
+          blocked = run((database, policy) =>
+            runWithLockedAuthUser({ database, policy }, id, async () => {
+              entered();
+              await held;
+            }),
+          );
           await ready;
           let completed = false;
           const disable = scim(false).then((result) => {
@@ -536,8 +620,10 @@ for (const driver of ["sqlite", "postgres"] as const) {
           expect((await scim(true)).status).toBe(200);
           expect(await statuses(fresh)).toEqual([401, 401, 401]);
           if (racedToken) expect(await authStatus(undefined, racedToken)).toBe(401);
-          await runWithMigrationBypass(async () => {
-            expect((await User.find(neighbor.get("id"))).get("name")).toBe("Neighbor");
+          await run(async (database) => {
+            expect((await selectedUsers(database).findOrFail(neighbor.get("id"))).get("name")).toBe(
+              "Neighbor",
+            );
           });
           const created = await fetch(`${origin}/scim/v2/Users`, {
             method: "POST",
@@ -566,8 +652,11 @@ for (const driver of ["sqlite", "postgres"] as const) {
             (await Promise.all([scim(true), scim(true)])).map((result) => result.status),
           ).toEqual([200, 200]);
           expect((await read()).get("auth_version")).toBe(6);
-          await runWithMigrationBypass(async () => {
-            const inactive = await User.where({ email: "inactive@example.test" }).first();
+          await run(async (database) => {
+            const inactive = await selectedUsers(database)
+              .where({ email: "inactive@example.test" })
+              .first();
+            if (!inactive) throw new Error("Missing inactive fixture user");
             expect(inactive.get("is_active") === false || inactive.get("is_active") === 0).toBe(
               true,
             );
@@ -578,9 +667,7 @@ for (const driver of ["sqlite", "postgres"] as const) {
           await blocked?.catch(() => {});
           await Promise.allSettled(concurrent);
           idp?.stop(true);
-          server.stop(true);
           await boot.context.dispose();
-          await closeDatabase();
         }
       }),
     60000,

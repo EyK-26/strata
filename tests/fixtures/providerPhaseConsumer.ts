@@ -19,32 +19,35 @@ const dependencies: ServiceProvider = {
 for (const phase of ["drain", "flush"] as const) {
   const order: string[] = [];
   let admissionError: unknown;
-  const context = await createAppContext([
-    dependencies,
-    {
-      name: "qualification.phase-admission",
-      register({ onCleanup }) {
-        onCleanup(() => {
-          order.push(phase);
-          try {
-            onCleanup(() => {
-              order.push("stranded");
-            }, phase);
-          } catch (error) {
-            admissionError = error;
-          }
-          if (phase === "drain") {
-            onCleanup(() => {
-              order.push("later-flush");
-            }, "flush");
-            onCleanup(() => {
-              order.push("close");
-            });
-          }
-        }, phase);
+  const context = await createAppContext(
+    [
+      dependencies,
+      {
+        name: "qualification.phase-admission",
+        register({ onCleanup }) {
+          onCleanup(() => {
+            order.push(phase);
+            try {
+              onCleanup(() => {
+                order.push("stranded");
+              }, phase);
+            } catch (error) {
+              admissionError = error;
+            }
+            if (phase === "drain") {
+              onCleanup(() => {
+                order.push("later-flush");
+              }, "flush");
+              onCleanup(() => {
+                order.push("close");
+              });
+            }
+          }, phase);
+        },
       },
-    },
-  ]);
+    ],
+    { definition: { providers: [], services: [] }, connection: "unused-cleanup-fixture" },
+  );
   try {
     await context[phase]();
     assert.deepEqual(order, [phase]);

@@ -4,7 +4,11 @@ import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { UnauthorizedError } from "@getstrata/core/errors/http";
 import { composeMiddleware } from "@getstrata/core/http/middleware";
 import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebAuthMiddleware";
-import { enableDevAuthHeaders, restoreDevAuthHeaders } from "../helpers/devAuthHeaders";
+import {
+  enableDevAuthHeaders,
+  guestGuardOptions,
+  restoreDevAuthHeaders,
+} from "../helpers/devAuthHeaders";
 
 describe("createRequireWebAuthMiddleware", () => {
   let previousHeaders: string | undefined;
@@ -15,7 +19,7 @@ describe("createRequireWebAuthMiddleware", () => {
     restoreDevAuthHeaders(previousHeaders);
   });
   test("allows authenticated requests through", async () => {
-    const auth = new AuthManager(new GuestGuard());
+    const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
     const handler = composeMiddleware(createRequireWebAuthMiddleware(auth))(async () => {
       expect(currentAuthUser()?.id).toBe("1");
       return Response.json({ ok: true });
@@ -34,7 +38,7 @@ describe("createRequireWebAuthMiddleware", () => {
   });
 
   test("rejects guests with UnauthorizedError for JSON requests", async () => {
-    const auth = new AuthManager(new GuestGuard());
+    const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
     const handler = composeMiddleware(createRequireWebAuthMiddleware(auth))(async () =>
       Response.json({ ok: true }),
     );
@@ -49,7 +53,7 @@ describe("createRequireWebAuthMiddleware", () => {
   });
 
   test("redirects guests to login for HTML requests", async () => {
-    const auth = new AuthManager(new GuestGuard());
+    const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
     const handler = composeMiddleware(createRequireWebAuthMiddleware(auth))(async () =>
       Response.json({ ok: true }),
     );

@@ -56,4 +56,9 @@ export type {
   OpenApiRouteMap,
   OpenApiSchema,
 } from "@getstrata/core/openapi/registeredRoute";
+export type {
+  BusinessRequestPorts,
+  BusinessRouteHandler,
+  HttpPersistenceOptions,
+} from "./persistenceContracts";
 export type { AppModule, ModuleRouteContext };

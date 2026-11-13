@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
+import { guestGuardOptions } from "../helpers/devAuthHeaders";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 async function withMode(mode: string, callback: () => Promise<void>) {
@@ -18,8 +19,11 @@ for (const name of ["default", "web", "session", "api", "token", "jwt", "basic"]
     withMode("local", async () => {
       const auth =
         name === "default"
-          ? new AuthManager(new GuestGuard())
-          : new AuthManager({ resolve: () => null }).registerGuard(name, new GuestGuard());
+          ? new AuthManager(new GuestGuard(guestGuardOptions()))
+          : new AuthManager({ resolve: () => null }).registerGuard(
+              name,
+              new GuestGuard(guestGuardOptions()),
+            );
       const headers = new Headers({
         "x-authenticated-user-id": "42",
         "x-authenticated-user-role": "member",
@@ -53,7 +57,7 @@ for (const [name, scheme, source] of [
 for (const mode of ["production", "staging"])
   test(`named GuestGuard refuses ${mode} even when dev headers are enabled`, () =>
     withMode(mode, async () => {
-      const auth = new AuthManager(new GuestGuard());
+      const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
       expect(
         await auth.resolveWithSource(
           new Request("https://app.example.test/", {

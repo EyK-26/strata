@@ -44,15 +44,16 @@ export { ${moduleIdentifier}Table };
     [
       "repository.ts",
       `import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineRepository } from "@getstrata/core/database/definitions";
 import { ${moduleIdentifier}Table } from "./table";
 import type { ${moduleName}Record } from "./types";
 
-class ${moduleName}Repository extends BaseRepository<${moduleName}Record, "id"> {
-  constructor() {
-    super(${moduleIdentifier}Table);
-  }
-}
-
+class ${moduleName}Repository extends BaseRepository<${moduleName}Record, "id"> {}
+const ${moduleIdentifier}Repository = defineRepository({
+  name: "${moduleSlug}.repository", table: ${moduleIdentifier}Table, dependencies: [] as const,
+  create: binding => new ${moduleName}Repository(binding),
+});
+export { ${moduleIdentifier}Repository };
 export default ${moduleName}Repository;
 `,
     ],
@@ -122,26 +123,16 @@ export default ${moduleName}Policy;
       "provider.ts",
       `import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import { CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
-import ${moduleName}Repository from "./repository";
-import ${moduleName}Service from "./service";
 import ${moduleName}Policy from "./policy";
 
-const ${moduleIdentifier}RepositoryToken = "${moduleSlug}.repository";
-const ${moduleIdentifier}ServiceToken = "${moduleSlug}.service";
 const ${moduleIdentifier}PolicyToken = "${moduleSlug}.policy";
 
 const ${moduleIdentifier}Provider: ServiceProvider = {
   name: "${moduleSlug}.provider",
   register({ container }) {
-    container.singleton(${moduleIdentifier}RepositoryToken, () => new ${moduleName}Repository());
     container.singleton(${moduleIdentifier}PolicyToken, () => new ${moduleName}Policy());
   },
   boot({ container }) {
-    container.singleton(${moduleIdentifier}ServiceToken, () => {
-      const repository = container.resolve<${moduleName}Repository>(${moduleIdentifier}RepositoryToken);
-      return new ${moduleName}Service(repository);
-    });
-
     const gate = container.resolve<{ register: (resource: string, policy: unknown) => void }>(
       CORE_POLICY_GATE_TOKEN,
     );
@@ -152,8 +143,6 @@ const ${moduleIdentifier}Provider: ServiceProvider = {
 export default ${moduleIdentifier}Provider;
 export {
   ${moduleIdentifier}PolicyToken,
-  ${moduleIdentifier}RepositoryToken,
-  ${moduleIdentifier}ServiceToken,
 };
 `,
     ],
@@ -277,15 +266,15 @@ export type { ${moduleName}Resource };
     ],
     [
       "controller.ts",
-      `import type { AppDependencies, CachedJson } from "@getstrata/core/contracts/di";
-import { resolveService } from "@getstrata/core/contracts/di";
+      `import type { BusinessRequestPorts } from "@getstrata/bootstrap/contracts";
+import type { CachedJson } from "@getstrata/core/contracts/di";
 import { bindRouteModel } from "@getstrata/core/http/routeModelBinding";
 import { buildRequestCacheKey } from "@getstrata/core/http/validation";
-import { securedBindRouteModel } from "@getstrata/core/http/securedRouteModelBinding";
+import {type RouteModelBindingPorts, securedBindRouteModel } from "@getstrata/core/http/securedRouteModelBinding";
 import type { RouteRequest } from "@getstrata/core/http/route";
-import { createdResponse, jsonResponse, noContentResponse, withErrorHandling } from "@getstrata/core/http/response";
+import { createdResponse, jsonResponse, noContentResponse } from "@getstrata/core/http/response";
 import ${moduleName}Service from "./service";
-import { ${moduleIdentifier}ServiceToken } from "./provider";
+import { ${moduleIdentifier}Repository } from "./repository";
 import {
   parseCreate${moduleName}Body,
   parse${moduleName}ListQuery,
@@ -301,15 +290,21 @@ const ${moduleIdentifier.toUpperCase()}_CACHE_TAG = "${pluralSlug}";
 
 class ${moduleName}Controller {
   constructor(
-    private readonly dependencies: AppDependencies,
+    private readonly database: BusinessRequestPorts["database"],
     private readonly cachedJson: CachedJson,
-  ) {}
+    binding: RouteModelBindingPorts,
+  ) {
+    this.update=this.bindUpdate(binding);
+    this.destroy=this.bindDestroy(binding);
+  }
+  readonly update:(request:RouteRequest<${moduleName}IdParams>)=>Promise<Response>;
+  readonly destroy:(request:RouteRequest<${moduleName}IdParams>)=>Promise<Response>;
 
   private get service(): ${moduleName}Service {
-    return resolveService(this.dependencies, ${moduleIdentifier}ServiceToken);
+    return new ${moduleName}Service(this.database.repository(${moduleIdentifier}Repository));
   }
 
-  readonly index = withErrorHandling(async (request?: Request) => {
+  readonly index = (async (request?: Request) => {
     const query = parse${moduleName}ListQuery(request);
     const cacheKey = buildRequestCacheKey("/${pluralSlug}", request);
 
@@ -324,24 +319,23 @@ class ${moduleName}Controller {
     );
   });
 
-  readonly show = withErrorHandling(
+  readonly show = (
     bindRouteModel(
       "id",
       (id) => this.service.findByIdOrThrow(id),
       async (_request: RouteRequest<${moduleName}IdParams>, record) => {
         return jsonResponse(to${moduleName}Resource(record));
       },
-    ),
+    )
   );
 
-  readonly store = withErrorHandling(async (request: Request) => {
+  readonly store = (async (request: Request) => {
     const body = await parseCreate${moduleName}Body(request);
     const record = await this.service.create(body);
     return createdResponse(to${moduleName}Resource(record));
   });
 
-  readonly update = withErrorHandling(
-    securedBindRouteModel(
+  private bindUpdate(binding:RouteModelBindingPorts) {return securedBindRouteModel(
       "id",
       (id) => this.service.findByIdOrThrow(id),
       { resource: "${moduleSlug}", action: "update" },
@@ -350,11 +344,11 @@ class ${moduleName}Controller {
         const updated = await this.service.update(record.id, body);
         return jsonResponse(to${moduleName}Resource(updated));
       },
-    ),
-  );
+      binding,
+    );
+  }
 
-  readonly destroy = withErrorHandling(
-    securedBindRouteModel(
+  private bindDestroy(binding:RouteModelBindingPorts) {return securedBindRouteModel(
       "id",
       (id) => this.service.findByIdOrThrow(id),
       { resource: "${moduleSlug}", action: "delete" },
@@ -362,8 +356,9 @@ class ${moduleName}Controller {
         await this.service.delete(record.id);
         return noContentResponse();
       },
-    ),
-  );
+      binding,
+    );
+  }
 }
 
 export default ${moduleName}Controller;
@@ -372,6 +367,9 @@ export default ${moduleName}Controller;
     [
       "routes.ts",
       `import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
+import type { BusinessRequestPorts } from "@getstrata/bootstrap/contracts";
+import type { RouteRequest } from "@getstrata/core/http/route";
+import type { ${moduleName}IdParams } from "./requests";
 import type { AppDependencies, CachedJson } from "@getstrata/core/contracts/di";
 ${withWeb ? 'import { apiPrefix } from "@getstrata/core/runtime/appKeyPrefix";\n' : ""}import ${moduleName}Controller from "./controller";
 
@@ -380,26 +378,27 @@ function create${moduleName}Routes(
   cachedJson: CachedJson,
   kernel: HttpKernel,
 ) {
-  const controller = new ${moduleName}Controller(dependencies, cachedJson);
+  void dependencies;
+  const controller = (ports: BusinessRequestPorts) => new ${moduleName}Controller(ports.database, cachedJson, kernel.routeModelBindingPorts(ports.auth));
 ${withWeb ? `  const apiBase = \`\${apiPrefix()}/${pluralSlug}\`;\n` : ""}
 
   return {
     ${withWeb ? "[apiBase]" : `"/${pluralSlug}"`}: {
-      GET: controller.index,
+      GET: kernel.wrapApi((request: Request, ports: BusinessRequestPorts) => controller(ports).index(request)),
       POST: kernel.wrapAbility(
         "${pluralSlug}:create",
-        controller.store,
+        (request: Request, ports: BusinessRequestPorts) => controller(ports).store(request),
       ),
     },
     ${withWeb ? `[\`\${apiBase}/:id\`]` : `"/${pluralSlug}/:id"`}: {
-      GET: controller.show,
+      GET: kernel.wrapApi((request: RouteRequest<${moduleName}IdParams>, ports: BusinessRequestPorts) => controller(ports).show(request)),
       PATCH: kernel.wrapAbility(
         "${pluralSlug}:update",
-        controller.update,
+        (request: RouteRequest<${moduleName}IdParams>, ports: BusinessRequestPorts) => controller(ports).update(request),
       ),
       DELETE: kernel.wrapAbility(
         "${pluralSlug}:delete",
-        controller.destroy,
+        (request: RouteRequest<${moduleName}IdParams>, ports: BusinessRequestPorts) => controller(ports).destroy(request),
       ),
     },
   };
@@ -413,8 +412,6 @@ export { create${moduleName}Routes };
       `import { type AppModule } from "@getstrata/bootstrap/contracts";
 import ${moduleName}Controller from "./controller";
 import ${moduleIdentifier}Provider, {
-  ${moduleIdentifier}RepositoryToken,
-  ${moduleIdentifier}ServiceToken,
 } from "./provider";
 import { create${moduleName}Routes } from "./routes";${
         withWeb
@@ -445,8 +442,6 @@ const ${moduleVariable}: AppModule = {
 export default ${moduleVariable};
 export {
   ${moduleIdentifier}Provider,
-  ${moduleIdentifier}RepositoryToken,
-  ${moduleIdentifier}ServiceToken,
 };
 export { ${moduleName}Controller };
 export { parse${moduleName}IdParams, parse${moduleName}ListQuery } from "./requests";
@@ -461,7 +456,7 @@ export { create${moduleName}Routes } from "./routes";${
 export { create${moduleName}WebRoutes } from "./webRoutes";`
           : ""
       }
-export { default as ${moduleName}Repository } from "./repository";
+export { default as ${moduleName}Repository, ${moduleIdentifier}Repository } from "./repository";
 export { default as ${moduleName}Service } from "./service";
 export { ${moduleIdentifier}Table } from "./table";
 export type { ${moduleName}Record } from "./types";
@@ -485,26 +480,26 @@ export type { ${moduleName}Record } from "./types";
 
     webFiles.set(
       "webController.ts",
-      `import type { AppDependencies } from "@getstrata/core/contracts/di";
+      `import type { BusinessRequestPorts } from "@getstrata/bootstrap/contracts";
+import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
-import { withErrorHandling } from "@getstrata/core/http/response";
 import { CORE_VIEW_RENDERER_TOKEN, type NamespacedViewRenderer } from "@getstrata/core/view";
-import { ${moduleIdentifier}ServiceToken } from "./provider";
+import { ${moduleIdentifier}Repository } from "./repository";
 import { parse${moduleName}ListQuery } from "./requests";
-import type ${moduleName}Service from "./service";
+import ${moduleName}Service from "./service";
 
 class ${moduleName}WebController {
-  constructor(private readonly dependencies: AppDependencies) {}
+  constructor(private readonly dependencies: AppDependencies, private readonly database: BusinessRequestPorts["database"]) {}
 
   private get service(): ${moduleName}Service {
-    return resolveService(this.dependencies, ${moduleIdentifier}ServiceToken);
+    return new ${moduleName}Service(this.database.repository(${moduleIdentifier}Repository));
   }
 
   private get views(): NamespacedViewRenderer {
     return resolveService(this.dependencies, CORE_VIEW_RENDERER_TOKEN).namespace("${pluralSlug}");
   }
 
-  readonly index = withErrorHandling(async (request?: Request) => {
+  readonly index = (async (request?: Request) => {
     const query = parse${moduleName}ListQuery(request);
     const result = await this.service.paginate(query);
 
@@ -525,14 +520,13 @@ export default ${moduleName}WebController;
       "webRoutes.ts",
       `import type { AppDependencies } from "@getstrata/core/contracts/di";
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
+import type { BusinessRequestPorts } from "@getstrata/bootstrap/contracts";
 import ${moduleName}WebController from "./webController";
 
 function create${moduleName}WebRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
-  const controller = new ${moduleName}WebController(dependencies);
-
   return {
     "/${pluralSlug}": {
-      GET: kernel.wrapWebPublicRead(controller.index),
+      GET: kernel.wrapWebPublicRead((request: Request, ports: BusinessRequestPorts) => new ${moduleName}WebController(dependencies, ports.database).index(request)),
     },
   };
 }

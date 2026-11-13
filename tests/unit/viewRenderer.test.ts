@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConfigStore, ServiceContainer } from "@getstrata/core/contracts/container";
+import { createCsrfTokenCookie } from "@getstrata/core/http/csrfToken";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { CORE_VIEW_RENDERER_TOKEN, EtaViewEngine, ViewRenderer } from "@getstrata/core/view";
 import {
@@ -96,21 +97,27 @@ test("two app providers and interleaved requests retain isolated shared data", a
         container,
         config: new ConfigStore(),
         dependencies: { container },
+        invoke: () => {
+          throw new Error("This structural provider test must not invoke persistence.");
+        },
         onCleanup() {},
       });
       expect(container.resolve(CORE_VIEW_TOKEN)).toBeInstanceOf(EtaViewEngine);
     }
     configureWebLayoutData({ extra: { app: "legacy-global" } });
+    const csrf = Array.from({ length: 8 }, () => createCsrfTokenCookie());
     const result = await Promise.all(
-      Array.from({ length: 8 }, (_, index) => {
+      csrf.map((proof, index) => {
         const actor = index % 2 ? `actor${index}` : `actor${index}-slow`;
         return runWithRequestMeta(
           {
             ipAddress: null,
             userAgent: null,
-            request: new Request(`http://test/${actor}`),
+            request: new Request(`http://test/${actor}`, {
+              headers: { cookie: proof.cookie },
+            }),
             cspNonce: `nonce${index}`,
-            csrfToken: `csrf${index}`,
+            csrfToken: proof.token,
             flash: { level: "info", message: `flash${index}` },
           },
           async () => {
@@ -123,8 +130,10 @@ test("two app providers and interleaved requests retain isolated shared data", a
       }),
     );
     result.forEach((body, index) => {
+      const proof = csrf[index];
+      if (!proof) throw new Error("Expected request CSRF proof");
       expect(body).toBe(
-        `<p>actor${index}${index % 2 ? "" : "-slow"}:app${index % 2}:nonce${index}:csrf${index}:flash${index}</p>`,
+        `<p>actor${index}${index % 2 ? "" : "-slow"}:app${index % 2}:nonce${index}:${proof.token}:flash${index}</p>`,
       );
     });
   } finally {

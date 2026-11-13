@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { BaseRepository, type DatabaseConnection } from "@getstrata/core/database/baseRepository";
+import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { defineRepository } from "@getstrata/core/database/definitions";
 import { currentSqlDialect, runWithSqlDialect } from "@getstrata/core/database/dialect";
 import {
   buildIncrementQuery,
@@ -7,6 +8,8 @@ import {
   buildUpsertQuery,
 } from "@getstrata/core/database/query";
 import { defineTable } from "@getstrata/core/database/table";
+import type { DatabaseConnection } from "../../../src/core/database/connectionContracts";
+import { withRepositories } from "../../helpers/boundRepositoryHarness";
 
 type Counter = {
   id: number;
@@ -34,11 +37,13 @@ class FakeConnection implements DatabaseConnection {
   }
 }
 
-class CounterRepository extends BaseRepository<Counter, "id"> {
-  constructor(connection: DatabaseConnection) {
-    super(counterTable, connection);
-  }
-}
+class CounterRepository extends BaseRepository<Counter, "id"> {}
+const CounterRepositoryDefinition = defineRepository({
+  name: "CounterRepository",
+  table: counterTable,
+  dependencies: [],
+  create: (binding) => new CounterRepository(binding),
+});
 
 describe("upsert", () => {
   test("postgres and sqlite use ON CONFLICT DO UPDATE with excluded", () => {
@@ -115,14 +120,20 @@ describe("upsert", () => {
 
   test("the repository returns null when a DO NOTHING upsert changes nothing", async () => {
     const connection = new FakeConnection();
-    const repository = new CounterRepository(connection);
-    connection.queue([]);
 
-    const result = await runWithSqlDialect("pgsql", async () =>
-      repository.upsert({ slug: "a" }, ["slug"], []),
+    await withRepositories(
+      connection,
+      [CounterRepositoryDefinition] as const,
+      async ([repository]) => {
+        connection.queue([]);
+
+        const result = await runWithSqlDialect("pgsql", async () =>
+          repository.upsert({ slug: "a" }, ["slug"], []),
+        );
+
+        expect(result).toBeNull();
+      },
     );
-
-    expect(result).toBeNull();
   });
 });
 
@@ -146,12 +157,18 @@ describe("increment and decrement", () => {
 
   test("decrement passes a negative amount", async () => {
     const connection = new FakeConnection();
-    const repository = new CounterRepository(connection);
-    connection.queue([{ id: 1, slug: "a", hits: 4 }]);
 
-    await runWithSqlDialect("pgsql", async () => repository.decrementById(1, "hits", 5));
+    await withRepositories(
+      connection,
+      [CounterRepositoryDefinition] as const,
+      async ([repository]) => {
+        connection.queue([{ id: 1, slug: "a", hits: 4 }]);
 
-    expect(connection.calls[0]?.params).toEqual([-5, 1]);
+        await runWithSqlDialect("pgsql", async () => repository.decrementById(1, "hits", 5));
+
+        expect(connection.calls[0]?.params).toEqual([-5, 1]);
+      },
+    );
   });
 
   test("an unknown column is rejected", () => {
@@ -201,83 +218,113 @@ describe("subquery counts", () => {
 describe("chunkById", () => {
   test("walks keyset pages and stops when a page is short", async () => {
     const connection = new FakeConnection();
-    const repository = new CounterRepository(connection);
-    connection.queue([
-      { id: 1, slug: "a", hits: 0 },
-      { id: 2, slug: "b", hits: 0 },
-      { id: 3, slug: "c", hits: 0 },
-    ]);
-    connection.queue([{ id: 3, slug: "c", hits: 0 }]);
 
-    const seen: number[][] = [];
-    await runWithSqlDialect("pgsql", async () =>
-      repository.chunkById(2, async (rows) => {
-        seen.push(rows.map((row) => row.id));
-        return undefined;
-      }),
+    await withRepositories(
+      connection,
+      [CounterRepositoryDefinition] as const,
+      async ([repository]) => {
+        connection.queue([
+          { id: 1, slug: "a", hits: 0 },
+          { id: 2, slug: "b", hits: 0 },
+          { id: 3, slug: "c", hits: 0 },
+        ]);
+        connection.queue([{ id: 3, slug: "c", hits: 0 }]);
+
+        const seen: number[][] = [];
+        await runWithSqlDialect("pgsql", async () =>
+          repository.chunkById(2, async (rows) => {
+            seen.push(rows.map((row) => row.id));
+            return undefined;
+          }),
+        );
+
+        expect(seen).toEqual([[1, 2], [3]]);
+      },
     );
-
-    expect(seen).toEqual([[1, 2], [3]]);
   });
 
   test("uses a keyset cursor rather than OFFSET", async () => {
     const connection = new FakeConnection();
-    const repository = new CounterRepository(connection);
-    connection.queue([
-      { id: 1, slug: "a", hits: 0 },
-      { id: 2, slug: "b", hits: 0 },
-      { id: 3, slug: "c", hits: 0 },
-    ]);
-    connection.queue([]);
 
-    await runWithSqlDialect("pgsql", async () => repository.chunkById(2, async () => undefined));
+    await withRepositories(
+      connection,
+      [CounterRepositoryDefinition] as const,
+      async ([repository]) => {
+        connection.queue([
+          { id: 1, slug: "a", hits: 0 },
+          { id: 2, slug: "b", hits: 0 },
+          { id: 3, slug: "c", hits: 0 },
+        ]);
+        connection.queue([]);
 
-    expect(connection.calls[0]?.query).not.toContain("OFFSET");
-    expect(connection.calls[1]?.params).toContain(2);
+        await runWithSqlDialect("pgsql", async () =>
+          repository.chunkById(2, async () => undefined),
+        );
+
+        expect(connection.calls[0]?.query).not.toContain("OFFSET");
+        expect(connection.calls[1]?.params).toContain(2);
+      },
+    );
   });
 
   test("returning false stops the walk", async () => {
     const connection = new FakeConnection();
-    const repository = new CounterRepository(connection);
-    connection.queue([
-      { id: 1, slug: "a", hits: 0 },
-      { id: 2, slug: "b", hits: 0 },
-      { id: 3, slug: "c", hits: 0 },
-    ]);
 
-    let pages = 0;
-    await runWithSqlDialect("pgsql", async () =>
-      repository.chunkById(2, async () => {
-        pages += 1;
-        return false;
-      }),
+    await withRepositories(
+      connection,
+      [CounterRepositoryDefinition] as const,
+      async ([repository]) => {
+        connection.queue([
+          { id: 1, slug: "a", hits: 0 },
+          { id: 2, slug: "b", hits: 0 },
+          { id: 3, slug: "c", hits: 0 },
+        ]);
+
+        let pages = 0;
+        await runWithSqlDialect("pgsql", async () =>
+          repository.chunkById(2, async () => {
+            pages += 1;
+            return false;
+          }),
+        );
+
+        expect(pages).toBe(1);
+        expect(connection.calls).toHaveLength(1);
+      },
     );
-
-    expect(pages).toBe(1);
-    expect(connection.calls).toHaveLength(1);
   });
 
   test("an empty table invokes the callback zero times", async () => {
     const connection = new FakeConnection();
-    const repository = new CounterRepository(connection);
-    connection.queue([]);
 
-    let pages = 0;
-    await runWithSqlDialect("pgsql", async () =>
-      repository.chunkById(2, async () => {
-        pages += 1;
-        return undefined;
-      }),
+    await withRepositories(
+      connection,
+      [CounterRepositoryDefinition] as const,
+      async ([repository]) => {
+        connection.queue([]);
+
+        let pages = 0;
+        await runWithSqlDialect("pgsql", async () =>
+          repository.chunkById(2, async () => {
+            pages += 1;
+            return undefined;
+          }),
+        );
+
+        expect(pages).toBe(0);
+      },
     );
-
-    expect(pages).toBe(0);
   });
 
   test("a non-positive chunk size is rejected", async () => {
-    const repository = new CounterRepository(new FakeConnection());
-
-    await expect(repository.chunkById(0, async () => undefined)).rejects.toThrow(
-      /positive integer/,
+    await withRepositories(
+      new FakeConnection(),
+      [CounterRepositoryDefinition] as const,
+      async ([repository]) => {
+        await expect(repository.chunkById(0, async () => undefined)).rejects.toThrow(
+          /positive integer/,
+        );
+      },
     );
   });
 });

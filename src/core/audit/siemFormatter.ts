@@ -15,22 +15,25 @@ interface SiemAuditEvent {
   payload: Record<string, unknown>;
 }
 
-function formatSiemAuditEvent(input: {
-  action: string;
-  subject_type: string;
-  subject_id: number | null;
-  user_id: number | null;
-  tenant_id?: number | null;
-  trace_id?: string | null;
-  ip_address?: string | null;
-  user_agent?: string | null;
-  checksum?: string | null;
-  payload?: Record<string, unknown>;
-  created_at: Date;
-}): SiemAuditEvent {
+function formatSiemAuditEvent(
+  input: {
+    action: string;
+    subject_type: string;
+    subject_id: number | null;
+    user_id: number | null;
+    tenant_id?: number | null;
+    trace_id?: string | null;
+    ip_address?: string | null;
+    user_agent?: string | null;
+    checksum?: string | null;
+    payload?: Record<string, unknown>;
+    created_at: Date;
+  },
+  eventType = siemEventType(),
+): SiemAuditEvent {
   return {
     timestamp: input.created_at.toISOString(),
-    event_type: siemEventType(),
+    event_type: eventType,
     actor_user_id: input.user_id,
     tenant_id: input.tenant_id ?? null,
     trace_id: input.trace_id ?? null,
@@ -44,7 +47,7 @@ function formatSiemAuditEvent(input: {
   };
 }
 
-function formatCefLine(event: SiemAuditEvent): string {
+function formatCefLine(event: SiemAuditEvent, displayName = appDisplayName()): string {
   const extension = [
     `rt=${event.timestamp}`,
     `suid=${event.actor_user_id ?? "unknown"}`,
@@ -58,7 +61,7 @@ function formatCefLine(event: SiemAuditEvent): string {
     `request=${event.trace_id ?? ""}`,
   ].join(" ");
 
-  return `CEF:0|${appDisplayName()}|API|1.0|${event.action}|${event.subject_type}|5|${extension}`;
+  return `CEF:0|${displayName}|API|1.0|${event.action}|${event.subject_type}|5|${extension}`;
 }
 
 export type { SiemAuditEvent };

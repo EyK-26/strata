@@ -25,14 +25,17 @@ function parseScimTenantTokens(raw: string | undefined): Map<number, string> {
   return tokens;
 }
 
-function resolveScimTenantFromToken(token: string): number | null {
+function resolveScimTenantFromToken(
+  token: string,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): number | null {
   const presented = token.trim();
 
   if (presented.length === 0) {
     return null;
   }
 
-  const tenantTokens = parseScimTenantTokens(process.env.SCIM_TENANT_TOKENS);
+  const tenantTokens = parseScimTenantTokens(env.SCIM_TENANT_TOKENS);
 
   for (const [tenantId, expectedToken] of tenantTokens) {
     if (timingSafeCompareString(presented, expectedToken)) {
@@ -40,7 +43,7 @@ function resolveScimTenantFromToken(token: string): number | null {
     }
   }
 
-  const fallbackToken = process.env.SCIM_BEARER_TOKEN?.trim() ?? "";
+  const fallbackToken = env.SCIM_BEARER_TOKEN?.trim() ?? "";
 
   if (fallbackToken.length === 0) {
     return null;

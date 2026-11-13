@@ -3,7 +3,7 @@
  *
  * Use shared shims when a module owns process-wide singleton state (AsyncLocalStorage,
  * default DB pool, global registries) or when consumers rely on `instanceof` across
- * import paths (HttpError subclasses, Notification base class).
+ * import paths (Notification base class).
  *
  * Synced by: scripts/sync-package-subpaths.ts, scripts/write-core-shared-shims.ts
  * Verified by: scripts/verify-core-shared-subpaths.ts
@@ -19,6 +19,9 @@ export const CORE_STANDALONE_SUBPATHS = [
   "contracts/executionOwnership",
   "database/acquisitionMetrics",
   "database/errors",
+  "errors/http",
+  "database/definitions",
+  "queue/failedJobRepository",
   "database/tokens",
   "cache/tokens",
   "config/applicationConfig",
@@ -35,6 +38,7 @@ export const CORE_SHARED_SUBPATHS = [
   "database/mysqlConnection",
   "database/baseRepository",
   "database/model",
+  "database/repositoryQuery",
   "database/bindConnection",
   "database/boundConnection",
   "database/bunSql",
@@ -43,8 +47,6 @@ export const CORE_SHARED_SUBPATHS = [
   "database/defaultConnection",
   "database/namedConnections",
   "database/repositoryConnection",
-  "database/transaction",
-  "errors/http",
   "events",
   "events/outbox",
   "http",

@@ -1,162 +1,237 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { BaseRepository } from "@getstrata/core/database/baseRepository";
+import { createDatabaseBindings } from "@getstrata/core/database/bindings";
 import {
-  bindDatabaseConnection,
-  resetBoundDatabaseConnection,
-} from "@getstrata/core/database/boundConnection";
-import { runWithDatabaseConnection } from "@getstrata/core/database/connectionContext";
-import { resetSqlDialect, useSqlDialect } from "@getstrata/core/database/dialect";
-import {
-  bootModels,
   defineModel,
-  Model,
-  registerModelRepository,
-} from "@getstrata/core/database/model";
-import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
+  defineRepository,
+  type ModelDefinition,
+} from "@getstrata/core/database/definitions";
+import { Model } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
-import { runInTransaction } from "@getstrata/core/database/transaction";
+import { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
+import { createApplication } from "@getstrata/core/runtime/application";
+import { withBoundDatabase } from "../../helpers/boundRepositoryHarness";
 
-interface Record {
-  sku: string;
-  title: string;
-}
-const table = defineTable<Record, "sku">({
+type Row = { sku: string; title: string };
+const table = defineTable<Row, "sku">({
   name: "definition_products",
   primaryKey: "sku",
   columns: ["sku", "title"],
 });
-const connections: Array<ReturnType<typeof createSqliteConnection>> = [];
-afterEach(() => {
-  for (const connection of connections.splice(0)) connection.close();
-  resetBoundDatabaseConnection();
-  resetSqlDialect();
+const repository = defineRepository({
+  name: "products",
+  table,
+  dependencies: [],
+  create: (binding) => new BaseRepository(binding),
 });
-async function database() {
-  const connection = createSqliteConnection(":memory:");
-  connections.push(connection);
-  useSqlDialect("sqlite");
-  await connection.unsafe(
-    "CREATE TABLE definition_products (sku TEXT PRIMARY KEY, title TEXT NOT NULL)",
-  );
-  return connection;
+class Product extends Model<Row, "sku"> {
+  label() {
+    return this.get("title");
+  }
+}
+const ProductDefinition = defineModel({
+  name: "Product",
+  repository,
+  dependencies: [],
+  attributes: { fillable: ["sku", "title"], timestamps: false },
+  construct: (state, binding) => new Product(state, binding),
+});
+const config = {
+  default: "main",
+  connections: { main: { driver: "sqlite" as const, filename: ":memory:" } },
+  repositories: [repository],
+  models: [ProductDefinition],
+};
+async function schema(db: Parameters<Parameters<typeof withBoundDatabase>[1]>[0]) {
+  await db.execute({
+    text: "CREATE TABLE definition_products (sku TEXT PRIMARY KEY, title TEXT NOT NULL)",
+    params: [],
+  });
 }
 
 describe("declarative model repositories", () => {
-  test("lazily binds once per concrete subclass without opening a database", () => {
-    class DefinedProduct extends defineModel(table) {}
-    class FeaturedProduct extends DefinedProduct {}
-    const repository = DefinedProduct.repository<Record, "sku">();
-    expect(repository.getTable()).toBe(table);
-    expect(DefinedProduct.repository<Record, "sku">()).toBe(repository);
-    expect(FeaturedProduct.repository<Record, "sku">()).not.toBe(repository);
-    expect(FeaturedProduct.repository<Record, "sku">().getTable()).toBe(table);
-  });
-
-  test("preserves concrete models, non-id primary keys and active transaction rollback", async () => {
-    const connection = await database();
-    bindDatabaseConnection(connection);
-    class DefinedProduct extends defineModel(table) {
-      static override $fillable = ["sku", "title"];
-      static override $timestamps = false;
-      label() {
-        return this.get("title");
+  test("immutable definitions do not construct entities before a live facade is selected", async () => {
+    let constructors = 0;
+    class Featured extends Product {
+      #feature = "featured";
+      feature() {
+        return this.#feature;
       }
     }
-    const saved = await DefinedProduct.create({ sku: "first", title: "book" });
-    expect(saved).toBeInstanceOf(DefinedProduct);
-    expect(saved.id).toBe("first");
-    expect(saved.label()).toBe("book");
-    await expect(
-      runInTransaction(async () => {
-        await DefinedProduct.create({ sku: "rollback", title: "rollback" });
-        throw new Error("abort");
-      }),
-    ).rejects.toThrow("abort");
-    expect(await DefinedProduct.find("rollback")).toBeNull();
-    expect((await DefinedProduct.findOrFail("first")).label()).toBe("book");
-  });
-
-  test("one cached repository follows concurrent request connections", async () => {
-    const first = await database();
-    const second = await database();
-    bindDatabaseConnection(first);
-    await first.unsafe("INSERT INTO definition_products VALUES ('shared', 'first tenant')");
-    await second.unsafe("INSERT INTO definition_products VALUES ('shared', 'second tenant')");
-    class ScopedProduct extends defineModel(table) {}
-    ScopedProduct.repository<Record, "sku">();
-    const results = await Promise.all([
-      runWithDatabaseConnection(first, async () => {
-        await Bun.sleep(5);
-        return (await ScopedProduct.findOrFail("shared")).get("title");
-      }),
-      runWithDatabaseConnection(second, async () =>
-        (await ScopedProduct.findOrFail("shared")).get("title"),
-      ),
-    ]);
-    expect(results).toEqual(["first tenant", "second tenant"]);
-  });
-
-  test("explicit custom repositories override defaults before or after initialization", () => {
-    class CustomRepository extends BaseRepository<Record, "sku"> {}
-    class CustomProduct extends defineModel(table) {}
-    const custom = new CustomRepository(table);
-    registerModelRepository(CustomProduct, custom);
-    bootModels([CustomProduct]);
-    expect(CustomProduct.repository<Record, "sku">()).toBe(custom);
-    const replacement = new CustomRepository(table);
-    registerModelRepository(CustomProduct, replacement);
-    expect(CustomProduct.repository<Record, "sku">()).toBe(replacement);
-    class LateProduct extends defineModel(table) {}
-    LateProduct.repository<Record, "sku">();
-    registerModelRepository(LateProduct, replacement);
-    expect(LateProduct.repository<Record, "sku">()).toBe(replacement);
-  });
-
-  test("boots once and makes all names and morph aliases available before hooks", () => {
-    let boots = 0;
-    class DefinitionChild extends defineModel(table) {
-      static override $morphClass = "definition-child";
-    }
-    class DefinitionParent extends defineModel(table) {
-      static override boot() {
-        boots++;
-        DefinitionParent.newFromRecord({ sku: "parent", title: "parent" }).hasMany(
-          "definition-child",
+    const FeaturedDefinition = defineModel({
+      name: "Featured",
+      repository,
+      dependencies: [],
+      attributes: {},
+      construct: (state, binding) => {
+        constructors++;
+        return new Featured(state, binding);
+      },
+    });
+    expect(constructors).toBe(0);
+    expect(Object.isFrozen(FeaturedDefinition)).toBe(true);
+    await withBoundDatabase(
+      { definition: { ...config, models: [ProductDefinition, FeaturedDefinition] } },
+      async (db) => {
+        const model = db.model(ProductDefinition);
+        expect(model.repository().getTable()).toEqual(table);
+        expect(db.model(ProductDefinition)).toBe(model);
+        expect(db.model(FeaturedDefinition)).not.toBe(model);
+        expect(constructors).toBe(0);
+        expect(db.model(FeaturedDefinition).newRecord({ title: "feature" }).feature()).toBe(
+          "featured",
         );
-      }
-    }
-    bootModels([DefinitionParent, DefinitionChild]);
-    bootModels([DefinitionParent, DefinitionChild]);
-    DefinitionParent.query();
-    expect(boots).toBe(1);
-  });
-
-  test("failed boot remains a startup failure and can be retried", () => {
-    let attempts = 0;
-    let scopes = 0;
-    class RetriedProduct extends defineModel(table) {
-      static override boot() {
-        RetriedProduct.addGlobalScope("retry", (query) => {
-          scopes++;
-          return query;
-        });
-        if (++attempts === 1) throw new Error("boot failed");
-      }
-    }
-    expect(() => bootModels([RetriedProduct])).toThrow("boot failed");
-    bootModels([RetriedProduct]);
-    expect(attempts).toBe(2);
-    RetriedProduct.query();
-    expect(scopes).toBe(1);
-  });
-
-  test("legacy explicit bindings still work and missing definitions fail clearly", () => {
-    class LegacyProduct extends Model<Record, "sku"> {}
-    expect(() => LegacyProduct.repository<Record, "sku">()).toThrow(
-      "repository() is not implemented",
+        expect(constructors).toBe(1);
+      },
     );
-    const repository = new BaseRepository(table);
-    registerModelRepository(LegacyProduct, repository);
-    expect(LegacyProduct.repository<Record, "sku">()).toBe(repository);
+  });
+  test("preserves concrete models, non-id primary keys and explicit transaction rollback", async () => {
+    const app = createApplication({ providers: [], services: createDatabaseBindings(config) });
+    await app.start();
+    try {
+      await app.run(async (scope) => {
+        const db = scope.resolve(DATABASE_SESSION_TOKEN);
+        await schema(db);
+        const saved = await db.model(ProductDefinition).create({ sku: "first", title: "book" });
+        expect(saved).toBeInstanceOf(Product);
+        expect(saved.id).toBe("first");
+        expect(saved.label()).toBe("book");
+      });
+      await expect(
+        app.run((scope) =>
+          scope.resolve(DATABASE_SESSION_TOKEN).transaction(async (tx) => {
+            await tx.model(ProductDefinition).create({ sku: "rollback", title: "rollback" });
+            throw new Error("abort");
+          }),
+        ),
+      ).rejects.toThrow("abort");
+      await app.run(async (scope) => {
+        const model = scope.resolve(DATABASE_SESSION_TOKEN).model(ProductDefinition);
+        expect(await model.find("rollback")).toBeNull();
+        expect((await model.findOrFail("first")).label()).toBe("book");
+      });
+    } finally {
+      await app.stop();
+    }
+  });
+  test("the same definitions follow concurrent explicit application connections", async () => {
+    const apps = [
+      createApplication({ providers: [], services: createDatabaseBindings(config) }),
+      createApplication({ providers: [], services: createDatabaseBindings(config) }),
+    ];
+    await Promise.all(apps.map((app) => app.start()));
+    try {
+      const results = await Promise.all(
+        apps.map((app, index) =>
+          app.run(async (scope) => {
+            const db = scope.resolve(DATABASE_SESSION_TOKEN);
+            await schema(db);
+            await db
+              .model(ProductDefinition)
+              .create({ sku: "shared", title: index === 0 ? "first tenant" : "second tenant" });
+            if (index === 0) await Bun.sleep(5);
+            return (await db.model(ProductDefinition).findOrFail("shared")).get("title");
+          }),
+        ),
+      );
+      expect(results).toEqual(["first tenant", "second tenant"]);
+    } finally {
+      await Promise.all(apps.map((app) => app.stop()));
+    }
+  });
+  test("custom repository constructors are selected by exact immutable definitions", async () => {
+    class CustomRepository extends BaseRepository<Row, "sku"> {
+      #label = "custom";
+      label() {
+        return this.#label;
+      }
+    }
+    const custom = defineRepository({
+      name: "custom",
+      table,
+      dependencies: [],
+      create: (binding) => new CustomRepository(binding),
+    });
+    const customModel = defineModel({
+      name: "CustomProduct",
+      repository: custom,
+      dependencies: [],
+      attributes: {},
+      construct: (state, binding) => new Product(state, binding),
+    });
+    await withBoundDatabase(
+      {
+        definition: {
+          ...config,
+          repositories: [repository, custom],
+          models: [ProductDefinition, customModel],
+        },
+      },
+      async (db) => {
+        expect(db.repository(custom).label()).toBe("custom");
+        expect(db.model(customModel).repository()).toBe(db.repository(custom));
+        expect(db.model(ProductDefinition).repository()).not.toBe(db.repository(custom));
+      },
+    );
+  });
+  test("all names and morph aliases are prepared before relation construction", async () => {
+    const child = defineModel({
+      name: "DefinitionChild",
+      aliases: ["definition-child"],
+      repository,
+      dependencies: [],
+      attributes: {},
+      construct: (state, binding) => new Product(state, binding),
+    });
+    class Parent extends Product {
+      children() {
+        return this.hasMany("definition-child", "sku", "sku");
+      }
+    }
+    const parent = defineModel({
+      name: "DefinitionParent",
+      repository,
+      dependencies: [],
+      attributes: {},
+      construct: (state, binding) => new Parent(state, binding),
+    });
+    await withBoundDatabase({ definition: { ...config, models: [parent, child] } }, async (db) => {
+      expect(db.model(parent).newRecord({ sku: "parent", title: "parent" }).children().kind).toBe(
+        "hasMany",
+      );
+      expect(db.model(parent)).toBe(db.model(parent));
+    });
+  });
+  test("duplicate aliases fail before entity constructors and pool startup", () => {
+    let constructors = 0;
+    const make = (name: string) =>
+      defineModel({
+        name,
+        aliases: ["duplicate"],
+        repository,
+        dependencies: [],
+        attributes: {},
+        construct: (state, binding) => {
+          constructors++;
+          return new Product(state, binding);
+        },
+      });
+    expect(() => createDatabaseBindings({ ...config, models: [make("one"), make("two")] })).toThrow(
+      "Duplicate model alias",
+    );
+    expect(constructors).toBe(0);
+  });
+  test("unregistered definitions reject before constructing a model", async () => {
+    const missing: ModelDefinition<Row, "sku", Product> = defineModel({
+      name: "Missing",
+      repository,
+      dependencies: [],
+      attributes: {},
+      construct: (state, binding) => new Product(state, binding),
+    });
+    await withBoundDatabase({ definition: config }, async (db) => {
+      expect(() => db.model(missing)).toThrow();
+      expect(db.model(ProductDefinition).repository().getTable()).toEqual(table);
+    });
   });
 });
