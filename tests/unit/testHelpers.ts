@@ -19,7 +19,6 @@ import { createStorageDriver, StorageManager } from "@getstrata/core/storage/sto
 import { HTTP_PERSISTENCE_OPTIONS } from "../../src/bootstrap/httpPersistence";
 import type { DatabaseConnection } from "../../src/db/connection/createConnection";
 import type { CacheLike } from "../../src/types/services";
-import { fixtureDatabase } from "../helpers/fixtureDatabase";
 
 const defaultTestTenant = {
   id: 1,
@@ -181,20 +180,7 @@ function mockFetch(implementation: (...args: never[]) => unknown): typeof fetch 
   return implementation as unknown as typeof fetch;
 }
 
-/** Explicit legacy audit-fixture cleanup; it does not grant canonical ORM authority. */
-async function clearPendingAuditLogs(): Promise<void> {
-  const db = fixtureDatabase.connection();
-  await db.begin(async (transaction) => {
-    if ((process.env.DB_CONNECTION ?? "pgsql") === "pgsql")
-      await transaction.unsafe("SELECT set_config('app.bypass_rls', $1, true)", ["true"]);
-    await transaction.unsafe(
-      "UPDATE audit_log SET exported_at = CURRENT_TIMESTAMP WHERE exported_at IS NULL",
-    );
-  });
-}
-
 export {
-  clearPendingAuditLogs,
   createMockCache,
   createMockDatabaseConnection,
   createMockDependencies,

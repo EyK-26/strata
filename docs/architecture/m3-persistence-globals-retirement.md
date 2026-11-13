@@ -12,7 +12,7 @@ connection APIs. Applications select declared connections through their current
 | `bunSql.test.ts`: binder sets two globals | Binder assertion removed; URL validation and all explicit `createBunSqlPool` constructor tests remain. |
 | `database/namedConnections.test.ts`: global registry mutation and ambient named runner | Replaced by `selectedNamedConnections.test.ts`: same-named pools isolate two owners, missing names and expired scopes reject. |
 | Remaining SQLite/MySQL sections in that file | Preserved as `database/nativeConnections.test.ts`, including driver lifecycle/transaction assertions. |
-| Production `src/db/connection` singleton used by test preload, RLS inventory and audit cleanup | Removed. `tests/helpers/fixtureDatabase.ts` owns the deliberately shared per-worker test fixture without publishing/registering a default or callable proxy. |
+| Production `src/db/connection` singleton used by test preload and RLS inventory | Removed. `tests/helpers/fixtureDatabase.ts` owns the deliberately shared per-worker test fixture without publishing/registering a default or callable proxy. The unreferenced `clearPendingAuditLogs` test helper is retired. |
 | Fixture ping, reconnection and deliberate replacement tests | Retained against explicit private fixture owners; add no-acquire close, cleanup failure and gated overlapping-transition ownership assertions. |
 | Implicit/test-overridden live-role inspector | Removed. The guard takes explicit environment and inspector; URL denylist precedes inspection, missing/malformed/query-failed/unsafe roles fail closed for applicable targets. |
 
