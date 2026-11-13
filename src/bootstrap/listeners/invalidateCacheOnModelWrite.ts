@@ -1,3 +1,4 @@
+import type { CacheLike } from "@getstrata/core/cache/tokens";
 import { type ServiceDeclaration, service } from "@getstrata/core/contracts/services";
 import { createServiceToken, type ServiceToken } from "@getstrata/core/contracts/token";
 import type { BaseRepository } from "@getstrata/core/database/baseRepository";
@@ -11,7 +12,6 @@ import {
 import type { DurableListener } from "@getstrata/core/events/outbox";
 import { InvalidateCacheTagsJob } from "@getstrata/core/jobs/invalidateCacheTagsJob";
 import type { Queue } from "@getstrata/core/queue";
-import type { CacheLike } from "../../types/services";
 import { cacheTagsForModelWrite } from "../cache/modelCacheTags";
 import type { AppModule } from "../contracts";
 import type { ListenerDeclarations } from "../discoverListeners";
