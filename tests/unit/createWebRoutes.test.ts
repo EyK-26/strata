@@ -15,7 +15,7 @@ import { PolicyGate } from "@getstrata/core/auth/policy";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
-import { CORE_TOKEN_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import { CORE_ABILITY_CHECKER_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { SyncQueue } from "@getstrata/core/queue";
 import { createRoutes } from "../../src/bootstrap/createRoutes";
 import { guestGuardOptions } from "../helpers/devAuthHeaders";
@@ -34,7 +34,7 @@ function createTestDependencies(): AppDependencies {
   dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard(guestGuardOptions())));
   dependencies.container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
   dependencies.container.set(CORE_QUEUE_TOKEN, new SyncQueue());
-  dependencies.container.set(CORE_TOKEN_SERVICE_TOKEN, {
+  dependencies.container.set(CORE_ABILITY_CHECKER_TOKEN, {
     requireAbility: () => undefined,
     tokenCan: () => true,
   });

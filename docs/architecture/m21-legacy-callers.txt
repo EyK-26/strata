@@ -1,3 +1,6 @@
+2026-11-13 typed-token reconciliation (implementation, final qualification pending)
+LegacyServiceKey/string container overloads and CORE_TOKEN_SERVICE_TOKEN fallback are removed. CORE_CONFIG/QUEUE/EVENT_BUS/POLICY_GATE/AUTH/ABILITY_CHECKER/AUTH_USER_DIRECTORY and actual HTTP_PERSISTENCE_OPTIONS/CORE_VIEW_TOKEN/FAILED_JOB_SERVICE_TOKEN now use canonical opaque tokens; generated queue and probe consumers migrate to their canonical declarations. Existing typed methods continue on the same engine. ConfigStore string configuration keys remain a distinct adapter contract, not service keys. Items below record the historical M2.1 inventory and are not current pending string-key ownership work.
+
 M2.1 legacy composition caller/deletion ledger
 Base: f762ae6ddabf97c581a3ebc17f7ce08288a432e8. This is a migration inventory, not an assertion that the old framework is isolated. Existing legacy consumers stay on their old view; the new application command/provider resolver has typed tokens and no string overload or full-container exposure.
 

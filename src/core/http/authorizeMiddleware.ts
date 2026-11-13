@@ -6,7 +6,7 @@ import type { AuthReader } from "../auth/authReader";
 import type { Middleware } from "./middleware";
 
 function createAuthorizeMiddleware(
-  gate: PolicyGate,
+  gate: Pick<PolicyGate, "allows">,
   auth: Pick<AuthReader, "resolve">,
   resource: string,
   action: keyof Policy,

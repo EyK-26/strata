@@ -15,7 +15,8 @@ import type {
   IdentityPolicyMode,
 } from "./persistenceContracts";
 
-export const HTTP_PERSISTENCE_OPTIONS = "bootstrap.httpPersistence";
+export { HTTP_PERSISTENCE_OPTIONS } from "#strata-http-route";
+
 function snapshotAuth(auth: EstablishedRequest["auth"]): EstablishedRequest["auth"] {
   const user = auth.user;
   const name = user?.name;

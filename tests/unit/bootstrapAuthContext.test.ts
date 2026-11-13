@@ -5,11 +5,14 @@ import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
 import { type AppDependencies, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { type AuthUser, createAuthMiddleware, currentAuthUser } from "@getstrata/core";
+import { establishedAuthReader } from "@getstrata/core/auth/authReader";
 import { createMockDependencies } from "./testHelpers";
 
 function createDependencies(authUser: AuthUser | null): AppDependencies {
   const container = new ServiceContainer();
   container.set(CORE_AUTH_TOKEN, {
+    ...establishedAuthReader,
+    resolveWithSource: async () => ({ user: authUser, credentialSource: null }),
     resolve: async () => authUser,
   });
 
@@ -21,9 +24,7 @@ describe("bootstrap auth context", () => {
     const admin: AuthUser = { id: 1, role: "admin", abilities: ["*"] };
     const dependencies = createDependencies(admin);
     const kernel = createHttpKernel(dependencies);
-    const auth = dependencies.container.resolve<{ resolve: () => Promise<AuthUser | null> }>(
-      CORE_AUTH_TOKEN,
-    );
+    const auth = dependencies.container.resolve(CORE_AUTH_TOKEN);
 
     const handler = kernel.wrapWebGlobalAdmin(async () => {
       expect(currentAuthUser()?.role).toBe("admin");

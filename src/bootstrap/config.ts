@@ -19,7 +19,6 @@ export {
   CORE_QUEUE_TOKEN,
   CORE_TENANT_RESOLVER_TOKEN,
   CORE_THROTTLE_QUOTA_POLICY_TOKEN,
-  CORE_TOKEN_SERVICE_TOKEN,
 } from "@getstrata/core/contracts/serviceTokens";
 
 const AUTH_DEV_HEADERS_CONFIG_KEY = "auth.allowDevHeaders";

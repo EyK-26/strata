@@ -63,3 +63,80 @@ test("canonical module inventory retains the three existing profiles", () => {
   expect(baselines).toHaveLength(3);
   expect(baselines.map(({ profile }) => profile)).toEqual(historical.map(({ profile }) => profile));
 });
+
+test("emitted module provider typechecks and registers its genuine typed policy", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "strata-module-provider-"));
+  const repository = join(import.meta.dir, "../../..");
+  try {
+    const rendered = renderModuleScaffold({
+      moduleSlug: "invoice",
+      moduleName: "Invoice",
+      moduleIdentifier: "invoice",
+      withWeb: false,
+    });
+    for (const name of ["provider.ts", "policy.ts", "types.ts"]) {
+      const source = rendered.files.get(name);
+      if (!source) throw new Error(`Missing generated ${name}`);
+      await writeFile(join(directory, name), source);
+    }
+    const consumer = `import provider, { invoicePolicyToken } from "./provider";
+import InvoicePolicy from "./policy";
+import { ConfigStore, ServiceContainer } from "@getstrata/core/contracts/container";
+import { CORE_POLICY_GATE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import { PolicyGate } from "@getstrata/core/auth/policy";
+import type { ProviderContext } from "@getstrata/core/contracts/di";
+const container = new ServiceContainer();
+const gate = new PolicyGate();
+container.set(CORE_POLICY_GATE_TOKEN, gate);
+const context: ProviderContext = { container, config: new ConfigStore(), dependencies: { container }, invoke: async () => { throw new Error("No persistence in provider fixture."); }, onCleanup() {} };
+await provider.register?.(context);
+const policy: InvoicePolicy = container.resolve(invoicePolicyToken);
+if (!(policy instanceof InvoicePolicy)) throw new Error("Generated provider lost genuine policy construction.");
+await provider.boot?.(context);
+if (!(await gate.allows("invoice", "create", { id: 1, role: "member" }))) throw new Error("Generated provider did not register typed policy.");
+console.log("typed generated policy registered");
+`;
+    await writeFile(join(directory, "consumer.ts"), consumer);
+    const config = join(directory, "tsconfig.json");
+    await writeFile(
+      config,
+      JSON.stringify({
+        extends: join(repository, "tsconfig.json"),
+        compilerOptions: { typeRoots: [join(repository, "node_modules/@types")] },
+        include: [],
+        files: [join(directory, "consumer.ts")],
+      }),
+    );
+    const checked = Bun.spawn(
+      [join(repository, "node_modules/.bin/tsc"), "--noEmit", "-p", config],
+      { cwd: repository, stdout: "pipe", stderr: "pipe" },
+    );
+    const [typeCode, typeOut, typeErr] = await Promise.all([
+      checked.exited,
+      new Response(checked.stdout).text(),
+      new Response(checked.stderr).text(),
+    ]);
+    expect({ code: typeCode, output: typeOut + typeErr }).toEqual({ code: 0, output: "" });
+    const runtime = Bun.spawn(
+      [
+        process.execPath,
+        "--tsconfig-override",
+        join(repository, "tsconfig.json"),
+        join(directory, "consumer.ts"),
+      ],
+      { cwd: repository, stdout: "pipe", stderr: "pipe" },
+    );
+    const [runCode, runOut, runErr] = await Promise.all([
+      runtime.exited,
+      new Response(runtime.stdout).text(),
+      new Response(runtime.stderr).text(),
+    ]);
+    expect({ code: runCode, error: runErr, output: runOut.trim() }).toEqual({
+      code: 0,
+      error: "",
+      output: "typed generated policy registered",
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

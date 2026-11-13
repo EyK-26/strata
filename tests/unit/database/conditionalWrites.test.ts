@@ -7,7 +7,7 @@ import {
   defineRepository,
   type TransactionalRepositoryListener,
 } from "@getstrata/core/database/definitions";
-import { currentSqlDialect, runWithSqlDialect } from "@getstrata/core/database/dialect";
+import { currentSqlDialect, dialectFor, runWithSqlDialect } from "@getstrata/core/database/dialect";
 import { buildConditionalWriteQuery } from "@getstrata/core/database/query";
 import { defineTable } from "@getstrata/core/database/table";
 import { withRepositories } from "../../helpers/boundRepositoryHarness";
@@ -64,17 +64,17 @@ test("empty predicates and unsupported selection options are rejected before mut
         ).rejects.toThrow("do not support");
       expect(writes).toBe(0);
       expect(() =>
-        buildConditionalWriteQuery(currentSqlDialect(), table, "update", {}, { where: { id: 1 } }),
+        buildConditionalWriteQuery(dialectFor("pgsql"), table, "update", {}, { where: { id: 1 } }),
       ).toThrow("value");
       for (const changes of [JSON.parse('{"id":2}'), JSON.parse('{"stock;DROP":2}')])
         expect(() =>
-          buildConditionalWriteQuery(currentSqlDialect(), table, "update", changes, {
+          buildConditionalWriteQuery(dialectFor("pgsql"), table, "update", changes, {
             where: { id: 1 },
           }),
         ).toThrow("non-primary");
       expect(() =>
         buildConditionalWriteQuery(
-          currentSqlDialect(),
+          dialectFor("pgsql"),
           table,
           "update",
           { stock: 2 },

@@ -121,11 +121,12 @@ export default ${moduleName}Policy;
     ],
     [
       "provider.ts",
-      `import type { ServiceProvider } from "@getstrata/core/contracts/di";
+      `import { createServiceToken } from "@getstrata/core/contracts/token";
+import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import { CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
 import ${moduleName}Policy from "./policy";
 
-const ${moduleIdentifier}PolicyToken = "${moduleSlug}.policy";
+const ${moduleIdentifier}PolicyToken = createServiceToken<${moduleName}Policy>("${moduleSlug}.policy");
 
 const ${moduleIdentifier}Provider: ServiceProvider = {
   name: "${moduleSlug}.provider",
@@ -133,9 +134,7 @@ const ${moduleIdentifier}Provider: ServiceProvider = {
     container.singleton(${moduleIdentifier}PolicyToken, () => new ${moduleName}Policy());
   },
   boot({ container }) {
-    const gate = container.resolve<{ register: (resource: string, policy: unknown) => void }>(
-      CORE_POLICY_GATE_TOKEN,
-    );
+    const gate = container.resolve(CORE_POLICY_GATE_TOKEN);
     gate.register("${moduleSlug}", container.resolve(${moduleIdentifier}PolicyToken));
   },
 };

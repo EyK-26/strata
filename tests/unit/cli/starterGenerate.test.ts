@@ -1287,25 +1287,26 @@ describe("create-strata CLI", () => {
     await mkdir(probeDir, { recursive: true });
     await writeFile(
       join(probeDir, "index.ts"),
-      `import { CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
+      `import { createServiceToken } from "@getstrata/core/contracts/token";
+import { CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import type { ServiceProvider } from "@getstrata/core/contracts/di";
 
-export const PROBE_REGISTER_TOKEN = "probe.module.register.token";
-export const PROBE_BOOT_TOKEN = "probe.module.boot.token";
+export const PROBE_REGISTER_TOKEN = createServiceToken<string>("probe.module.register.token");
+export const PROBE_CLOSED_TOKEN = createServiceToken<boolean>("probe.closed");
+export const STARTER_BOOT_OBSERVED_TOKEN = createServiceToken<boolean>("fixture.starter-boot-observed");
+export const PROBE_BOOT_TOKEN = createServiceToken<string>("probe.module.boot.token");
 
 const probeProvider: ServiceProvider = {
   name: "probe.provider",
   async register({ container, onCleanup }) {
     await new Promise((resolve) => setTimeout(resolve, 20));
-    onCleanup(() => { container.set("probe.closed", true); });
+    onCleanup(() => { container.set(PROBE_CLOSED_TOKEN, true); });
     container.singleton(PROBE_REGISTER_TOKEN, () => "module-provider-register");
   },
   async boot({ container }) {
     await new Promise((resolve) => setTimeout(resolve, 5));
-    const gate = container.resolve<{ register: (resource: string, policy: unknown) => void }>(
-      CORE_POLICY_GATE_TOKEN,
-    );
+    const gate = container.resolve(CORE_POLICY_GATE_TOKEN);
     gate.register("probe", { view: () => true });
     container.singleton(PROBE_BOOT_TOKEN, () => "module-provider-boot");
   },
@@ -1324,14 +1325,15 @@ export default probeModule;
     const providerSource = await readFile(providerIndex, "utf8");
     await writeFile(
       providerIndex,
-      providerSource.replace(
-        "    createStarterAuthProvider(auth),",
-        `    {name:"fixture.starter-boot-order",boot({container}) {
-      if(container.resolve("probe.module.register.token")!=="module-provider-register") throw new Error("starter boot ran before module registration");
-      container.set("fixture.starter-boot-observed",true);
+      'import { PROBE_REGISTER_TOKEN, STARTER_BOOT_OBSERVED_TOKEN } from "../../modules/probe";\n' +
+        providerSource.replace(
+          "    createStarterAuthProvider(auth),",
+          `    {name:"fixture.starter-boot-order",boot({container}) {
+      if(container.resolve(PROBE_REGISTER_TOKEN)!=="module-provider-register") throw new Error("starter boot ran before module registration");
+      container.set(STARTER_BOOT_OBSERVED_TOKEN,true);
     }},
     createStarterAuthProvider(auth),`,
-      ),
+        ),
     );
 
     installGeneratedAppDependencies(app);
@@ -1350,16 +1352,19 @@ export default probeModule;
 
     try {
       const { bootstrapApp } = await import(`${join(app, "src/bootstrap/createApp.ts")}`);
-      const { PROBE_BOOT_TOKEN, PROBE_REGISTER_TOKEN } = await import(
-        `${join(probeDir, "index.ts")}`
-      );
+      const {
+        PROBE_BOOT_TOKEN,
+        PROBE_REGISTER_TOKEN,
+        PROBE_CLOSED_TOKEN,
+        STARTER_BOOT_OBSERVED_TOKEN,
+      } = await import(`${join(probeDir, "index.ts")}`);
 
       // Compare identities within the installed consumer, not against the source checkout.
       const { ConfigStore } = await import(
         createRequire(join(app, "package.json")).resolve("@getstrata/bootstrap/contracts")
       );
       const { context } = await bootstrapApp({ migrate: false });
-      expect(context.container.resolve("fixture.starter-boot-observed")).toBe(true);
+      expect(context.container.resolve(STARTER_BOOT_OBSERVED_TOKEN)).toBe(true);
       expect(context.container.resolve(PROBE_REGISTER_TOKEN)).toBe("module-provider-register");
       expect(context.container.resolve(PROBE_BOOT_TOKEN)).toBe("module-provider-boot");
       expect(context.config).toBeInstanceOf(ConfigStore);
@@ -1369,7 +1374,7 @@ export default probeModule;
         'Config key "generator.missing" is not defined.',
       );
       await context.dispose();
-      expect(context.container.resolve("probe.closed")).toBe(true);
+      expect(context.container.resolve(PROBE_CLOSED_TOKEN)).toBe(true);
     } finally {
       resetDiscoverModulesForTests();
       process.chdir(repoRoot);

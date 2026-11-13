@@ -4,7 +4,7 @@ import {
   hasVerifiedEmail,
   isEmailVerificationRequired,
 } from "@getstrata/core/auth/emailVerification";
-import type { Policy, PolicyGate } from "@getstrata/core/auth/policy";
+import type { Policy } from "@getstrata/core/auth/policy";
 import { resolveAbilityChecker } from "@getstrata/core/contracts/serviceTokens";
 import { createAuthorizeMiddleware } from "@getstrata/core/http/authorizeMiddleware";
 import { createBodySizeLimitMiddleware } from "@getstrata/core/http/bodySizeLimitMiddleware";
@@ -48,7 +48,7 @@ import {
   CSRF_TARGET_ORIGIN_CONFIG_KEY,
   REDIS_URL_CONFIG_KEY,
 } from "./config";
-import type { AppDependencies, ConfigStore } from "./contracts";
+import type { AppDependencies } from "./contracts";
 import { createHttpPersistence, HTTP_PERSISTENCE_OPTIONS } from "./httpPersistence";
 import { enterModuleRoutes } from "./moduleRouteMiddleware";
 import type {
@@ -81,9 +81,7 @@ class HttpKernel {
     this.publicReadsEnabled = http?.features?.publicReadsEnabled ?? isPublicReadsEnabled();
     this.etagEnabled = http?.features?.etagEnabled ?? true;
     const targetOrigin = dependencies.container.has(CORE_CONFIG_TOKEN)
-      ? dependencies.container
-          .resolve<ConfigStore>(CORE_CONFIG_TOKEN)
-          .get<string>(CSRF_TARGET_ORIGIN_CONFIG_KEY)
+      ? dependencies.container.resolve(CORE_CONFIG_TOKEN).get<string>(CSRF_TARGET_ORIGIN_CONFIG_KEY)
       : undefined;
     this.configuredCsrfMiddleware = createCsrfMiddleware({ targetOrigin, ...http?.csrf });
     this.responses = Object.freeze({
@@ -102,8 +100,7 @@ class HttpKernel {
   }
 
   routeModelBindingPorts(auth: Pick<AuthReader, "resolve">): RouteModelBindingPorts {
-    const gate =
-      this.dependencies.container.resolve<Pick<PolicyGate, "authorize">>(CORE_POLICY_GATE_TOKEN);
+    const gate = this.dependencies.container.resolve(CORE_POLICY_GATE_TOKEN);
     const authorize = gate.authorize;
     return Object.freeze({
       auth,
@@ -273,7 +270,7 @@ class HttpKernel {
         const quotaPolicy = this.dependencies.container.has(CORE_THROTTLE_QUOTA_POLICY_TOKEN)
           ? this.dependencies.container.resolve(CORE_THROTTLE_QUOTA_POLICY_TOKEN)
           : undefined;
-        const config = this.dependencies.container.resolve<ConfigStore>(CORE_CONFIG_TOKEN);
+        const config = this.dependencies.container.resolve(CORE_CONFIG_TOKEN);
         const redisUrl = config.get<string>(REDIS_URL_CONFIG_KEY)?.trim() ?? "";
 
         if (!redisUrl) {
@@ -539,7 +536,7 @@ class HttpKernel {
   ): ComposedRouteHandler<TRequest> {
     assertHttpHandler(handler);
     const auth = establishedAuthReader;
-    const gate = this.dependencies.container.resolve<PolicyGate>(CORE_POLICY_GATE_TOKEN);
+    const gate = this.dependencies.container.resolve(CORE_POLICY_GATE_TOKEN);
 
     return this.composed(
       withMiddleware(createAuthorizeMiddleware(gate, auth, resource, action))(handler),
@@ -615,7 +612,7 @@ class HttpKernel {
     const memoryKeyPrefix = scope === "login" ? "login-throttle:" : "register-throttle:";
     const redisUrl = this.dependencies.container.has(CORE_CONFIG_TOKEN)
       ? (this.dependencies.container
-          .resolve<ConfigStore>(CORE_CONFIG_TOKEN)
+          .resolve(CORE_CONFIG_TOKEN)
           .get<string>(REDIS_URL_CONFIG_KEY)
           ?.trim() ?? "")
       : "";

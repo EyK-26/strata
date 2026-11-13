@@ -499,7 +499,7 @@ Generated apps consume the environment policy above. Custom native server compos
 
 ## Typed service tokens and narrow controller dependencies
 
-Use `createServiceToken<T>()` from `@getstrata/core/contracts/container` for new application bindings. Tokens remain string keys at runtime, preserving existing container lifecycle and interoperating with legacy registrations. Their invariant type supplies inference and rejects a mismatched value/factory or an explicit resolution generic that disagrees with the token.
+Use `createServiceToken<T>()` from `@getstrata/core/contracts/container` for new application bindings. Tokens carry opaque symbol identities and use the existing container lifecycle. Their invariant type supplies inference and rejects a mismatched value/factory or an explicit resolution generic that disagrees with the token.
 
 ```typescript
 import { createServiceToken } from "@getstrata/core/contracts/container";
@@ -516,7 +516,7 @@ class CatalogController {
 }
 ```
 
-`container.set`, `instance`, `singleton`, `bind`, `get`, `resolve`, `make` and `resolveService(dependencies, token)` preserve the token's service type. Existing `container.resolve<T>("legacy.key")` callers remain supported. Keep token names unique and export one token declaration per service: creating the same name with a different type does not create a distinct runtime identity. This is a compile-time contract, not runtime validation of values registered through legacy strings, `any`, explicit assertions or JavaScript. Widening a token deliberately to `string` also leaves typed resolution. Prefer typed tokens at both registration and resolution boundaries.
+`container.set`, `instance`, `singleton`, `bind`, `get`, `resolve`, `make` and `resolveService(dependencies, token)` require an opaque typed token and preserve its service type. String service keys reject, including calls from JavaScript. Each `createServiceToken` call creates a distinct identity even when labels match; export one canonical token declaration for each shared service. TypeScript checks registered values, but `any`, assertions and JavaScript can bypass value typing. Token identity is validated at runtime; arbitrary service payloads are not runtime type-checked.
 
 Use constructor parameters for the services a controller actually needs; resolve them in module/provider composition. Stateful services can remain classes, while stateless business operations can remain functions. This API does not alter request scoping, model typing, middleware typing, queues or transactions, and upgrading packages does not rewrite existing controllers.
 

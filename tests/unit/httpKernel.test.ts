@@ -10,12 +10,13 @@ import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
 import { wrapWebLogin } from "@getstrata/bootstrap/web/routing";
+import { establishedAuthReader } from "@getstrata/core/auth/authReader";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { createPasswordConfirmCookie } from "@getstrata/core/auth/passwordConfirmCookie";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
-import { CORE_TOKEN_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import { CORE_ABILITY_CHECKER_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
 import { resetMemoryLoginThrottleForTests } from "@getstrata/core/http/loginThrottleMiddleware";
@@ -154,6 +155,7 @@ describe("HttpKernel", () => {
     const dependencies = createKernelDependencies();
     let calls = 0;
     dependencies.container.set(CORE_AUTH_TOKEN, {
+      ...establishedAuthReader,
       resolveWithSource: async () => {
         calls++;
         return { user: { id: 1, role: "admin" }, credentialSource: "session" };
@@ -650,7 +652,7 @@ describe("HttpKernel", () => {
 
   test("wrapAbility rejects guests before ability checks", async () => {
     const dependencies = createKernelDependencies();
-    dependencies.container.set(CORE_TOKEN_SERVICE_TOKEN, {
+    dependencies.container.set(CORE_ABILITY_CHECKER_TOKEN, {
       requireAbility: () => {
         throw new ForbiddenError("Token ability required.");
       },

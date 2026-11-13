@@ -1,3 +1,4 @@
+import { FAILED_JOB_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import type { Queue } from "./index";
 import {
   createFailedJobService,
@@ -9,8 +10,6 @@ import {
   type QueueServices,
 } from "./publicQueue";
 import { resolveQueueConfig } from "./queueConfig";
-
-const FAILED_JOB_SERVICE_TOKEN = "core.failedJobs";
 
 function createAppQueue(
   driver: "sync" | "async" | "redis",

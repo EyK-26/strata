@@ -157,10 +157,8 @@ function createMockDependencies(
       allowTenantDevHeaders: false,
       metadata: () => ({
         authenticate: async (request) => {
-          type FixtureAuth = Pick<AuthManager, "resolve"> &
-            Partial<Pick<AuthManager, "resolveWithSource">>;
-          const manager: FixtureAuth = container.has(CORE_AUTH_TOKEN)
-            ? container.resolve<FixtureAuth>(CORE_AUTH_TOKEN)
+          const manager = container.has(CORE_AUTH_TOKEN)
+            ? container.resolve(CORE_AUTH_TOKEN)
             : anonymous;
           return typeof manager.resolveWithSource === "function"
             ? manager.resolveWithSource(request)

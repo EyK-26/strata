@@ -46,8 +46,16 @@ export function serviceTokenContracts(dependencies: AppDependencies): void {
   // @ts-expect-error Typed tokens are invariant even when the service is a subtype.
   const widened: ServiceToken<string | number> = name;
   void widened;
-  // Existing string consumers remain supported during migration.
+  // @ts-expect-error String service registration is retired.
   container.set("legacy", "value");
-  const legacy: string = container.resolve<string>("legacy");
-  void legacy;
+  // @ts-expect-error String resolution is retired.
+  container.resolve<string>("legacy");
+  // @ts-expect-error String eager initialization is retired.
+  container.initialize("legacy", () => 1, new AbortController().signal);
+  // @ts-expect-error Alias targets must carry the same invariant service type.
+  container.alias(count, name);
+  // @ts-expect-error String membership queries are retired.
+  container.has("legacy");
+  // @ts-expect-error Dependency helper requires a typed token.
+  resolveService(dependencies, "legacy");
 }

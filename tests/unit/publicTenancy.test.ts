@@ -188,7 +188,7 @@ describe("trusted public tenancy", () => {
           publicTenancy: container.resolve(CORE_PUBLIC_TENANCY_TOKEN),
           metadata: () => ({
             authenticate: (request) =>
-              container.resolve<AuthManager>(CORE_AUTH_TOKEN).resolveWithSource(request),
+              container.resolve(CORE_AUTH_TOKEN).resolveWithSource(request),
             memberships: async () => [],
             userTenantId: async () => 1,
             tenant: container.resolve(CORE_TENANT_RESOLVER_TOKEN),

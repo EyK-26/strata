@@ -5,6 +5,7 @@ import * as BootstrapRoot from "@getstrata/bootstrap";
 import * as BootstrapConfig from "@getstrata/bootstrap/config";
 import { CORE_CACHE_TOKEN as bootstrapCacheToken } from "@getstrata/bootstrap/config";
 import { createServiceToken as bootstrapToken } from "@getstrata/bootstrap/contracts";
+import * as ProviderView from "@getstrata/bootstrap/providers/view";
 import { createViewProvider as granularViewProvider } from "@getstrata/bootstrap/providers/view";
 import * as Root from "@getstrata/core";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
@@ -17,9 +18,11 @@ import * as Services from "@getstrata/core/contracts/services";
 import * as ServiceTokens from "@getstrata/core/contracts/serviceTokens";
 import { CORE_CACHE_TOKEN as serviceToken } from "@getstrata/core/contracts/serviceTokens";
 import * as Tokens from "@getstrata/core/contracts/token";
+import * as AppQueue from "@getstrata/core/queue/createAppQueue";
 import * as Runtime from "@getstrata/core/runtime/application";
 import { type CommandScope, createApplication } from "@getstrata/core/runtime/application";
 import * as Views from "@getstrata/core/view";
+import * as ViewTokens from "@getstrata/core/view/tokens";
 
 assert.equal(Root.createServiceToken, Tokens.createServiceToken);
 assert.equal(Container.createServiceToken, Tokens.createServiceToken);
@@ -47,6 +50,9 @@ const publicModules: Record<string, Record<string, unknown>> = {
   view: Views,
   bootstrap: BootstrapRoot,
   bootstrapConfig: BootstrapConfig,
+  providerView: ProviderView,
+  appQueue: AppQueue,
+  viewTokens: ViewTokens,
 };
 const opaqueConstants = new Map<string, Array<{ path: string; value: unknown }>>();
 for (const [path, module] of Object.entries(publicModules)) {
@@ -63,6 +69,15 @@ for (const [path, module] of Object.entries(publicModules)) {
 }
 const expectedOpaque = [
   "CORE_CACHE_TOKEN",
+  "CORE_CONFIG_TOKEN",
+  "CORE_QUEUE_TOKEN",
+  "CORE_EVENT_BUS_TOKEN",
+  "CORE_POLICY_GATE_TOKEN",
+  "CORE_AUTH_TOKEN",
+  "CORE_ABILITY_CHECKER_TOKEN",
+  "CORE_AUTH_USER_DIRECTORY_TOKEN",
+  "CORE_VIEW_TOKEN",
+  "FAILED_JOB_SERVICE_TOKEN",
   "CORE_EXECUTION_CONTEXT_TOKEN",
   "CORE_HTTP_CLEANUP_TOKEN",
   "CORE_PUBLIC_TENANCY_TOKEN",

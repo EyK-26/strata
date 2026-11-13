@@ -12,10 +12,9 @@ import {
   resolveWebLayoutData,
   ViewRenderer,
 } from "@getstrata/core/view";
-import { CORE_VIEW_RENDERER_TOKEN } from "@getstrata/core/view/tokens";
+import { CORE_VIEW_RENDERER_TOKEN, CORE_VIEW_TOKEN } from "@getstrata/core/view/tokens";
 import type { ServiceProvider } from "../contracts";
 
-const CORE_VIEW_TOKEN = "core.view";
 const VIEW_DIRECTORY_CONFIG_KEY = "view.directory";
 
 interface ViewProviderOptions {

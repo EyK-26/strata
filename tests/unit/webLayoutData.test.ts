@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
-import { CORE_TOKEN_SERVICE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import { CORE_AUTH_USER_DIRECTORY_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import {
   configureWebLayoutData,
   resetWebLayoutDataConfigForTests,
@@ -27,7 +27,7 @@ describe("resolveWebLayoutData", () => {
 
   test("returns email for the authenticated session user", async () => {
     const container = {
-      has: (token: string) => token === CORE_TOKEN_SERVICE_TOKEN,
+      has: (token: unknown) => token === CORE_AUTH_USER_DIRECTORY_TOKEN,
       resolve: () => ({
         findByIdOrThrow: async (id: number) => ({
           id,
