@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { ServiceToken } from "@getstrata/core/contracts/token";
 import { CORE_SHARED_SUBPATH_SET, CORE_STANDALONE_SUBPATHS } from "./core-shared-subpaths";
 
 const root = join(import.meta.dir, "..");
@@ -89,7 +90,7 @@ for (const [name, value] of Object.entries(rootExports)) {
     `Public ${name} has a private or invalid token brand`,
   );
   assert.doesNotThrow(
-    () => canonicalServices.valueService(value as never, undefined),
+    () => canonicalServices.valueService(value as ServiceToken<unknown>, undefined),
     `Public ${name} must be accepted by canonical valueService`,
   );
 }

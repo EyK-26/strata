@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
+import type { ServiceToken } from "@getstrata/core/contracts/token";
 
 const CORE_DIST = join(process.cwd(), "packages/strata-core/dist");
 
@@ -141,10 +142,12 @@ test("published queue registry token uses canonical opaque token ownership", asy
   const services = await import("@getstrata/core/contracts/services");
   const value = new registry.JobRegistry();
   expect(tokens.isServiceToken(registry.QUEUE_JOB_REGISTRY_TOKEN)).toBe(true);
-  expect(() => services.valueService(registry.QUEUE_JOB_REGISTRY_TOKEN, value)).not.toThrow();
+  expect(() =>
+    services.valueService(registry.QUEUE_JOB_REGISTRY_TOKEN as ServiceToken<unknown>, value),
+  ).not.toThrow();
   const forged = { name: "core.queueJobRegistry" };
   expect(tokens.isServiceToken(forged)).toBe(false);
-  expect(() => services.valueService(forged as never, value)).toThrow(
+  expect(() => services.valueService(forged as unknown as ServiceToken<unknown>, value)).toThrow(
     "Expected an opaque service token",
   );
 });
