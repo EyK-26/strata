@@ -208,6 +208,18 @@ describe("makeFactoryCommand", () => {
       expect(await Bun.file(factoryPath).exists()).toBe(true);
       const factorySource = await Bun.file(factoryPath).text();
       expect(factorySource).toContain('from "@getstrata/core/database/factory"');
+      expect(factorySource).toContain("definition: () => WidgetRecord;");
+      expect(factorySource).toContain("persist?: FactoryPersist<WidgetRecord>;");
+      expect(factorySource).toContain(
+        "function createWidgetFactory(dependencies: WidgetFactoryDependencies)",
+      );
+      expect(factorySource).toContain("Factory.from(WidgetFactory, dependencies)");
+      expect(factorySource).not.toContain("extends Factory");
+      expect(factorySource).not.toContain("as WidgetRecord");
+      await expect(makeFactoryCommand("widget")).rejects.toThrow(
+        `Factory already exists: ${factoryPath}`,
+      );
+      expect(await Bun.file(factoryPath).text()).toBe(factorySource);
       expect(output.logs[0]).toBe(`Created factory: ${factoryPath}`);
     });
   });

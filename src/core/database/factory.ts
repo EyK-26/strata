@@ -1,5 +1,70 @@
 import { foreignKeyFromTable } from "./inflection.ts";
 
+const construction: unique symbol = Symbol("factory.construction");
+declare const definitionType: unique symbol;
+type FactoryPersist<R extends object> = (values: Partial<R>) => Promise<R>;
+interface FactoryBehavior<R extends object> {
+  definition(): R;
+  persist?: FactoryPersist<R>;
+}
+interface FactoryConstruction<R extends object, D, S> {
+  initialState(): S;
+  forkState(state: Readonly<S>): S;
+  construct(state: S, dependencies: D): FactoryBehavior<R>;
+}
+interface StatelessFactoryConstruction<R extends object, D> {
+  construct(dependencies: D): FactoryBehavior<R>;
+}
+interface ConstructedFactory<R extends object> {
+  readonly behavior: FactoryBehavior<R>;
+  fork(): ConstructedFactory<R>;
+}
+interface FactoryDefinition<R extends object, D> {
+  readonly [definitionType]: {
+    readonly record: (record: R) => R;
+    readonly dependencies: (deps: D) => D;
+  };
+  readonly [construction]: (dependencies: D) => ConstructedFactory<R>;
+}
+function defineFactory<R extends object, D, S>(
+  spec: FactoryConstruction<R, D, S>,
+): FactoryDefinition<R, D>;
+function defineFactory<R extends object, D = undefined>(
+  spec: StatelessFactoryConstruction<R, D>,
+): FactoryDefinition<R, D>;
+function defineFactory<R extends object, D, S>(
+  spec: FactoryConstruction<R, D, S> | StatelessFactoryConstruction<R, D>,
+): FactoryDefinition<R, D> {
+  let create: (dependencies: D) => ConstructedFactory<R>;
+  if ("initialState" in spec) {
+    const initialState = spec.initialState.bind(spec);
+    const forkState = spec.forkState.bind(spec);
+    const construct = spec.construct.bind(spec);
+    create = (dependencies) => {
+      const build = (state: S): ConstructedFactory<R> => ({
+        behavior: construct(state, dependencies),
+        fork: () => build(forkState(state)),
+      });
+      return build(initialState());
+    };
+  } else {
+    const construct = spec.construct.bind(spec);
+    create = (dependencies) => {
+      const build = (): ConstructedFactory<R> => ({
+        behavior: construct(dependencies),
+        fork: build,
+      });
+      return build();
+    };
+  }
+  return Object.freeze({ [construction]: create }) as FactoryDefinition<R, D>;
+}
+
+type FactoryParent = {
+  id?: unknown;
+  getRepository?: () => { getTable(): { name: string } };
+};
+
 type FactoryState<TRecord extends object> =
   | Partial<TRecord>
   | ((record: TRecord) => Partial<TRecord>);
@@ -51,23 +116,31 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
   private sequenceItems: Array<FactorySequence<TRecord>> = [];
   private parentAssociations: Array<ParentAssociation<TRecord>> = [];
   private children: RelatedFactory[] = [];
-  private afterMakingCallbacks: Array<(record: TRecord) => void> = [];
+  private afterMakingCallbacks: Array<(record: TRecord) => undefined> = [];
   private afterCreatingCallbacks: Array<(record: TRecord) => void | Promise<void>> = [];
-  protected model?: {
-    create(attributes: Record<string, unknown>): Promise<{ toObject(): object }>;
-  };
+  private constructor(private readonly instance: ConstructedFactory<TRecord>) {}
 
-  protected definition(): TRecord {
-    throw new Error("Factory definition must be implemented by subclass.");
+  static from<R extends object>(definition: FactoryDefinition<R, undefined>): Factory<R>;
+  static from<R extends object, D>(
+    definition: FactoryDefinition<R, D>,
+    dependencies: D,
+  ): Factory<R>;
+  static from<R extends object, D>(
+    definition: FactoryDefinition<R, D>,
+    dependencies?: D,
+  ): Factory<R> {
+    return new Factory(definition[construction](dependencies as D));
   }
 
-  protected clone(): this {
-    const next = Object.create(Object.getPrototypeOf(this)) as this;
-    Object.assign(next, this);
+  private fork(): Factory<TRecord, Counted> {
+    const next = new Factory<TRecord, Counted>(this.instance.fork());
+    next.quantity = this.quantity;
+    next.counted = this.counted;
+    next.sequenceIndex = this.sequenceIndex;
     next.stateTransforms = [...this.stateTransforms];
     next.sequenceItems = [...this.sequenceItems];
     next.parentAssociations = [...this.parentAssociations];
-    next.children = [...this.children];
+    next.children = this.children.map((child) => ({ ...child, factory: child.factory.fork() }));
     next.afterMakingCallbacks = [...this.afterMakingCallbacks];
     next.afterCreatingCallbacks = [...this.afterCreatingCallbacks];
     return next;
@@ -78,15 +151,18 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
       throw new Error("Factory.count() requires a positive integer.");
     }
 
-    const next = this.clone() as Factory<TRecord, true>;
+    const next = this.fork() as Factory<TRecord, true>;
     next.quantity = quantity;
     next.counted = true;
     return next;
   }
 
   state(state: FactoryState<TRecord>): Factory<TRecord, Counted> {
-    const next = this.clone();
-    next.stateTransforms = [...this.stateTransforms, state];
+    const next = this.fork();
+    next.stateTransforms = [
+      ...this.stateTransforms,
+      typeof state === "function" ? state : { ...state },
+    ];
     return next;
   }
 
@@ -95,40 +171,37 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
       throw new Error("Factory.sequence() requires at least one attribute set.");
     }
 
-    const next = this.clone();
-    next.sequenceItems = [...this.sequenceItems, ...items];
+    const next = this.fork();
+    next.sequenceItems = [
+      ...this.sequenceItems,
+      ...items.map((item) => (typeof item === "function" ? item : { ...item })),
+    ];
     return next;
   }
 
-  for(
-    parent: { id?: unknown; getRepository?: () => { getTable(): { name: string } } },
-    foreignKey?: keyof TRecord & string,
-  ): Factory<TRecord, Counted> {
+  for(parent: FactoryParent, foreignKey?: keyof TRecord & string): Factory<TRecord, Counted> {
     if (parent.id === undefined || parent.id === null) {
       throw new Error("Factory.for() requires a parent with an id.");
     }
 
     const key = inferFactoryForeignKey<TRecord>(parent, foreignKey);
-    const next = this.clone();
+    const next = this.fork();
     next.parentAssociations = [...this.parentAssociations, { foreignKey: key, value: parent.id }];
     return next;
   }
 
-  recycle(
-    parent: { id?: unknown; getRepository?: () => { getTable(): { name: string } } },
-    foreignKey?: keyof TRecord & string,
-  ): Factory<TRecord, Counted> {
+  recycle(parent: FactoryParent, foreignKey?: keyof TRecord & string): Factory<TRecord, Counted> {
     return this.for(parent, foreignKey);
   }
 
-  afterMaking(callback: (record: TRecord) => void): Factory<TRecord, Counted> {
-    const next = this.clone();
+  afterMaking(callback: (record: TRecord) => undefined): Factory<TRecord, Counted> {
+    const next = this.fork();
     next.afterMakingCallbacks = [...this.afterMakingCallbacks, callback];
     return next;
   }
 
   afterCreating(callback: (record: TRecord) => void | Promise<void>): Factory<TRecord, Counted> {
-    const next = this.clone();
+    const next = this.fork();
     next.afterCreatingCallbacks = [...this.afterCreatingCallbacks, callback];
     return next;
   }
@@ -137,10 +210,10 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
     factory: Factory<TRelated, RelatedCounted>,
     foreignKey?: keyof TRelated & string,
   ): Factory<TRecord, Counted> {
-    const next = this.clone();
+    const next = this.fork();
     next.children = [
       ...this.children,
-      { factory: factory as unknown as Factory<object>, foreignKey },
+      { factory: factory.fork() as unknown as Factory<object>, foreignKey },
     ];
     return next;
   }
@@ -168,8 +241,8 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
     return records as FactoryMakeResult<TRecord, Counted>;
   }
 
-  protected makeOne(overrides: Partial<TRecord> = {}): TRecord {
-    let record = { ...this.definition() };
+  private makeOne(overrides: Partial<TRecord> = {}): TRecord {
+    let record = { ...this.instance.behavior.definition() };
 
     for (const state of this.stateTransforms) {
       const patch = typeof state === "function" ? state(record) : state;
@@ -199,20 +272,29 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
     return made;
   }
 
-  protected async createOne(overrides: Partial<TRecord> = {}): Promise<TRecord> {
+  private async createOne(overrides: Partial<TRecord> = {}): Promise<TRecord> {
     return this.persistCreated(this.makeOne(overrides));
   }
 
-  protected async persistCreated(record: TRecord): Promise<TRecord> {
+  private async persistCreated(record: TRecord): Promise<TRecord> {
     const created = await this.persist(this.insertable(record));
 
-    await Promise.all(
-      this.children.map((child) =>
-        (child.factory as Factory<Record<string, unknown>>)
-          .for(created as { id?: unknown }, child.foreignKey)
-          .create(),
+    // Validate every association before starting a child write. Every started
+    // sibling is then joined, including synchronous invocation failures.
+    const children = this.children.map((child) =>
+      (child.factory as Factory<Record<string, unknown>>).for(
+        created as FactoryParent,
+        child.foreignKey,
       ),
     );
+    const outcomes = await Promise.allSettled(
+      children.map((child) => Promise.resolve().then(() => child.create())),
+    );
+    const errors = outcomes.flatMap((outcome) =>
+      outcome.status === "rejected" ? [outcome.reason] : [],
+    );
+    if (errors.length === 1) throw errors[0];
+    if (errors.length) throw new AggregateError(errors, "Factory children failed.");
 
     for (const callback of this.afterCreatingCallbacks) {
       await callback(created);
@@ -221,7 +303,7 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
     return created;
   }
 
-  protected insertable(record: TRecord): Partial<TRecord> {
+  private insertable(record: TRecord): Partial<TRecord> {
     const values = { ...record } as Record<string, unknown>;
 
     if (values.id === 0 || values.id === undefined || values.id === null) {
@@ -231,18 +313,20 @@ class Factory<TRecord extends object, Counted extends boolean = false> {
     return values as Partial<TRecord>;
   }
 
-  protected async persist(values: Partial<TRecord>): Promise<TRecord> {
-    if (this.model) {
-      const created = await this.model.create(values as Record<string, unknown>);
-      if (created && typeof created.toObject === "function") {
-        return created.toObject() as TRecord;
-      }
-      return created as TRecord;
-    }
-
-    throw new Error("Factory.persist() must be implemented to use create().");
+  private async persist(values: Partial<TRecord>): Promise<TRecord> {
+    if (!this.instance.behavior.persist)
+      throw new Error("Factory.persist() must be supplied to use create().");
+    return this.instance.behavior.persist(values);
   }
 }
 
-export type { FactoryMakeResult };
-export { Factory };
+export type {
+  FactoryBehavior,
+  FactoryConstruction,
+  FactoryDefinition,
+  FactoryMakeResult,
+  FactoryParent,
+  FactoryPersist,
+  StatelessFactoryConstruction,
+};
+export { defineFactory, Factory };

@@ -515,3 +515,92 @@ remain supported. Native transaction checkout and interruptible read-only observ
 remain optional capabilities; consumers must reject unsupported operations rather than
 silently simulate them. Internal adapters depend on the type-only connection contract,
 so they do not import the repository implementation to describe their transport.
+
+## Composing record factories
+
+Factories use explicit definitions and dependencies through
+`@getstrata/core/database/factory`. The same `Factory` and `defineFactory` exports
+are available from the package root and database barrel. Factory subclassing and
+protected overrides have been replaced by construction functions.
+
+```ts
+import { defineFactory, Factory, type FactoryPersist } from "@getstrata/core/database/factory";
+
+type Widget = { id: number; name: string };
+type Dependencies = { persist?: FactoryPersist<Widget> };
+const WidgetFactory = defineFactory<Widget, Dependencies>({
+  construct: dependencies => ({
+    definition: () => ({ id: 0, name: "Widget" }),
+    persist: dependencies.persist,
+  }),
+});
+const widgets = Factory.from(WidgetFactory, {});
+widgets.make();                         // one complete Widget, no database work
+widgets.count(1).make();                // Widget[], including count(1)
+widgets.state({ name: "Custom" }).make();
+```
+
+`create()` requires a supplied persistence callback. It removes a placeholder
+`id` of `0`, `null`, or `undefined` before calling that callback and returns its
+persisted record. Bind persistence inside the selected database invocation or
+transaction scope, for example `persist: async values => (await
+selectedModel.create(values)).toObject()`. The factory retains that exact
+capability. Await `create()` before leaving the scope; saving a factory does not
+extend its session lifetime or select another owner after the scope expires.
+See [application-owned SQL sessions](DATABASE-SESSIONS.md).
+
+`bun run cli make:factory widget` emits a `WidgetFactory` definition and
+`createWidgetFactory(dependencies)` helper. Its dependencies require
+`definition: () => WidgetRecord`, returning every required domain field, and
+optionally accept `persist: FactoryPersist<WidgetRecord>`. Supply your own
+complete definition for pure `make()` calls. `create()` without persistence
+rejects explicitly. The generator does not invent model fields, retain an
+application singleton, or discover a database session.
+
+For mutable generation state, use the stateful overload:
+
+```ts
+const SerialWidgetFactory = defineFactory<Widget, Dependencies, { serial: number }>({
+  initialState: () => ({ serial: 0 }),
+  forkState: state => ({ serial: state.serial }),
+  construct: (state, dependencies) => ({
+    definition: () => ({ id: 0, name: `Widget ${state.serial++}` }),
+    persist: dependencies.persist,
+  }),
+});
+```
+
+Every fluent branch constructs genuine behavior and forks the explicit state.
+A behavior class can initialize native private fields in its constructor;
+methods are called on that genuine receiver. Mutable state that should survive
+a branch belongs in the explicit state object. Other behavior-private counters
+and caches are reconstructed. `forkState` owns the isolation of nested user
+state; `Readonly` is shallow. Dependencies and captured closures may be shared
+intentionally. Construction and callbacks can have user effects that the
+framework cannot roll back.
+
+A branch copies its current sequence cursor, so using it does not advance the
+source factory. Merge order is definition, ordered state transforms, sequence,
+parent associations, call overrides, then `afterMaking`. Literal state and
+sequence patches are snapshotted shallowly when registered. `for` and `recycle`
+snapshot the parent id; Model parents can infer the foreign key from their
+repository table. Explicit keys retain the record-key type contract.
+
+`afterMaking` is synchronous and returns `undefined`; ordinary block callbacks
+work without an explicit return. Async callbacks and callbacks annotated to
+return `void` do not satisfy this contract. Wrap a known synchronous void helper
+in a block, or use `afterCreating` for asynchronous work. This type contract does
+not make arbitrary casts or untyped async callbacks safe.
+
+`has` snapshots the child's plan, explicit state, and cursor when registered.
+Each parent creates a fresh association branch from that snapshot. This changes
+the former behavior where subsequently using the external child could affect a
+parent's later child sequence. `make()` does not create children. `create()`
+prepares all child associations before starting child writes, launches siblings
+concurrently, and joins every started outcome before returning or rejecting.
+One failed child preserves its exact rejection reason; multiple failures become
+an `AggregateError` in registration order, retaining repeated and falsy reasons.
+Child failure skips `afterCreating`. Otherwise, `afterCreating` callbacks run
+and are awaited in registration order. Counted parent creation is sequential.
+Parent and child operations are atomic only when explicitly bound to the
+appropriate transaction; factories do not introduce an implicit transaction.

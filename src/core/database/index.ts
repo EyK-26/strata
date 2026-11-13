@@ -19,6 +19,16 @@ export {
   repositoryEffects,
 } from "@getstrata/core/database/definitions";
 export { mapDatabaseError, withDatabaseErrorHandling } from "@getstrata/core/database/errors";
+export type {
+  FactoryBehavior,
+  FactoryConstruction,
+  FactoryDefinition,
+  FactoryMakeResult,
+  FactoryParent,
+  FactoryPersist,
+  StatelessFactoryConstruction,
+} from "@getstrata/core/database/factory";
+export { defineFactory, Factory } from "@getstrata/core/database/factory";
 export {
   BaseRepository,
   BelongsToManyRelationQuery,
@@ -49,7 +59,6 @@ export {
   runWithSqlDialect,
   useSqlDialect,
 } from "./dialect.ts";
-export { Factory } from "./factory.ts";
 export { foreignKeyFromTable, pivotTableName, singularize } from "./inflection.ts";
 export type { CastType } from "./model.ts";
 export {
