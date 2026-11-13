@@ -160,7 +160,7 @@ globalThis.fetch=Object.assign(async(input,init)=>{
   return new Response('fixture');
 },{preconnect:original.preconnect});
 try{
-  const response=await safeFetch('https://owned-outbound.invalid/probe');
+  const response=await safeFetch('https://owned-outbound.invalid/probe',{}, {production:true});
   assert.equal(await response.text(),'fixture');
   assert.equal(dnsCalls,1);
   assert.equal(requests[0].headers.get('host'),'owned-outbound.invalid');
@@ -170,11 +170,11 @@ try{
   assert.deepEqual(requests.slice(2,4).map(row=>row.headers.get('user-agent')),['acceptance-outbound','acceptance-outbound'],'Provider consumers must use the explicit captured user agent.');
   assert.deepEqual(requests.slice(1).map(row=>row.headers.get('host')),['github.com','api.github.com','api.github.com']);
   address='2.2.2.2';
-  assert.equal(await (await safeFetch('https://owned-outbound.invalid/changed')).text(),'fixture');
+  assert.equal(await (await safeFetch('https://owned-outbound.invalid/changed',{}, {production:true})).text(),'fixture');
   assert.equal(dnsCalls,5);
   assert.equal(requests[4].url.hostname,address,'A later resolver answer must replace the prior pinned address.');
   address='127.0.0.1';
-  await assert.rejects(()=>safeFetch('https://owned-outbound.invalid/private'));
+  await assert.rejects(()=>safeFetch('https://owned-outbound.invalid/private',{}, {production:true}));
   await assert.rejects(()=>provider.exchangeCode('private-code'));
   assert.equal(dnsCalls,7);
   assert.equal(requests.length,5,'Private DNS answers must be refused before HTTP transport.');
@@ -335,9 +335,15 @@ import {createAuthorizeMiddleware} from '@getstrata/core/http/authorizeMiddlewar
 import {createRequireGlobalAdminMiddleware} from '@getstrata/core/http/requireGlobalAdminMiddleware';
 import {createRequireAbilityMiddleware} from '@getstrata/core/http/requireAbilityMiddleware';
 import {createRequireVerifiedMiddleware} from '@getstrata/core/http/requireVerifiedMiddleware';
+import {intendedUrlCookieOptionsFromEnvironment} from '@getstrata/core/auth/intendedUrlCookie';
+import {passwordConfirmOptionsFromEnvironment} from '@getstrata/core/auth/passwordConfirmCookie';
+import {isEmailVerificationRequired} from '@getstrata/core/auth/emailVerification';
+import {isProductionEnv} from '@getstrata/core/runtime/appEnv';
 import {createRequirePasswordConfirmMiddleware} from '@getstrata/core/http/requirePasswordConfirmMiddleware';
 import {createBodySizeLimitMiddleware} from '@getstrata/core/http/bodySizeLimitMiddleware';
 import {withErrorHandling} from '@getstrata/core/http/response';
+const policy=Object.freeze({...process.env,FEATURE_EMAIL_VERIFICATION:'true'});
+const intended=intendedUrlCookieOptionsFromEnvironment(policy),passwordConfirmation=passwordConfirmOptionsFromEnvironment(policy);
 const auth=new AuthManager({authenticate:()=>absentAuth});
 const member={id:4,role:'member'};
 const json=()=>new Request('https://app.example.test/private',{headers:{accept:'application/json'}});
@@ -349,29 +355,27 @@ async function denied(middleware,user,status,message,request=json()){
   assert.deepEqual(await response.json(),{error:message});
   assert.equal(response.headers.get('cache-control'),'no-store','Every canonical JSON admission producer must retain the safe error default.');
 }
-const ability=createRequireAbilityMiddleware({tokenCan:()=>false,requireAbility(){throw new ForbiddenError('Missing fixture ability.',{auditOnly:'fixture-private-detail'});}})('fixture');
-const previous=process.env.FEATURE_EMAIL_VERIFICATION;
-process.env.FEATURE_EMAIL_VERIFICATION='true';
-try{
+const ability=createRequireAbilityMiddleware({tokenCan:()=>false,requireAbility(){throw new ForbiddenError('Missing fixture ability.',{auditOnly:'fixture-private-detail'});}},true)('fixture');
+{
   await denied(createRequireAuthMiddleware(auth),null,401,'Unauthorized');
   await denied(createAuthorizeMiddleware(new PolicyGate(),auth,'fixture','view'),member,403,'Forbidden');
   await denied(createRequireGlobalAdminMiddleware(),member,403,'Platform admin access required.');
   await denied(ability,member,403,'Missing fixture ability.');
-  await denied(createRequireVerifiedMiddleware(),member,403,'Your email address is not verified.');
-  await denied(createRequirePasswordConfirmMiddleware(),null,401,'Authentication required.');
-  await denied(createRequirePasswordConfirmMiddleware(),member,423,'Password confirmation required.');
+  await denied(createRequireVerifiedMiddleware(auth,isEmailVerificationRequired(policy),intended),member,403,'Your email address is not verified.');
+  await denied(createRequirePasswordConfirmMiddleware(passwordConfirmation),null,401,'Authentication required.');
+  await denied(createRequirePasswordConfirmMiddleware(passwordConfirmation),member,423,'Password confirmation required.');
   await denied(createBodySizeLimitMiddleware(1),null,413,'Request body exceeds the 1 byte limit.',new Request('https://app.example.test/upload',{method:'POST',headers:{accept:'application/json','content-length':'2'},body:'xx'}));
   const success=await runWithAuthUser({id:4,role:'admin'},()=>createRequireGlobalAdminMiddleware()(json(),async()=>new Response('admitted')));
   assert.equal(success.status,200);
   assert.equal(await success.text(),'admitted');
   assert.equal(success.headers.get('cache-control'),null,'Successful admission does not inherit error cache policy.');
   const html=new Request('https://app.example.test/private',{headers:{accept:'text/html'}});
-  const deniedHtml=await runWithAuthUser(member,()=>withErrorHandling(request=>ability(request,async()=>{throw new Error('denied next ran');}))(html));
+  const deniedHtml=await runWithAuthUser(member,()=>withErrorHandling(request=>ability(request,async()=>{throw new Error('denied next ran');}),{enabled:true,production:isProductionEnv(policy)})(html));
   assert.equal(deniedHtml.status,403);
   assert.ok(deniedHtml.headers.get('content-type')?.includes('text/html'));
   assert.equal(deniedHtml.headers.get('cache-control'),'no-store');
   assert.equal(currentAuthUser(),null);
-}finally{if(previous===undefined)delete process.env.FEATURE_EMAIL_VERIFICATION;else process.env.FEATURE_EMAIL_VERIFICATION=previous;}
+}
 console.log('Packed admission errors preserve exact contracts, no-store, denial boundaries and successful/HTML behavior.');
 `,
   );
@@ -492,33 +496,23 @@ if(failures.length===1)throw failures[0];if(failures.length>1)throw new Aggregat
     const spec = JSON.parse(actual);
     // Resolve the candidate package installed into this fixture, not a monorepo alias.
     const require = createRequire(join(fixture.app, "package.json"));
-    const { renderTypeScriptSdk } = await import(
+    const { renderTypeScriptSdk, resolveOpenApiConfig } = await import(
       require.resolve("@getstrata/core/openapi/generator")
     );
-    const previousName = process.env.APP_NAME;
-    const previousClass = process.env.APP_SDK_CLASS;
-    try {
-      process.env.APP_NAME = env.APP_NAME;
-      delete process.env.APP_SDK_CLASS;
-      const sdkSnapshot = await readFile(join(repoRoot, "sdk/typescript/client.ts"), "utf8");
-      const defaultOrigin = 'private readonly baseUrl = "http://localhost:3000/api"';
-      if (mysql) assert.equal(sdkSnapshot.split(defaultOrigin).length, 2);
-      assert.equal(
-        renderTypeScriptSdk(spec, "/api"),
-        mysql
-          ? sdkSnapshot.replace(
-              defaultOrigin,
-              `private readonly baseUrl = ${JSON.stringify(`${env.APP_URL}/api`)}`,
-            )
-          : sdkSnapshot,
-        "Generated API-only SDK differs from the committed snapshot.",
-      );
-    } finally {
-      if (previousName === undefined) delete process.env.APP_NAME;
-      else process.env.APP_NAME = previousName;
-      if (previousClass === undefined) delete process.env.APP_SDK_CLASS;
-      else process.env.APP_SDK_CLASS = previousClass;
-    }
+    const sdkConfig = resolveOpenApiConfig({ ...env, APP_SDK_CLASS: undefined });
+    const sdkSnapshot = await readFile(join(repoRoot, "sdk/typescript/client.ts"), "utf8");
+    const defaultOrigin = 'private readonly baseUrl = "http://localhost:3000/api"';
+    if (mysql) assert.equal(sdkSnapshot.split(defaultOrigin).length, 2);
+    assert.equal(
+      renderTypeScriptSdk(spec, "/api", sdkConfig.sdkClassName),
+      mysql
+        ? sdkSnapshot.replace(
+            defaultOrigin,
+            `private readonly baseUrl = ${JSON.stringify(`${env.APP_URL}/api`)}`,
+          )
+        : sdkSnapshot,
+      "Generated API-only SDK differs from the committed snapshot.",
+    );
 
     for (const path of Object.keys(spec.paths)) {
       assert.ok(
