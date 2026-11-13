@@ -1,5 +1,5 @@
 import { RedisClient } from "bun";
-import { queueConfig, resolveRedisQueueTransport } from "./queueConfig";
+import type { QueueConfig } from "./queueConfig";
 import type { QueueServices } from "./queueServices";
 import { queueInvalidKey, queueProcessingKey } from "./redisQueue";
 import { defaultQueueKeys } from "./redisQueueKeys";
@@ -24,16 +24,19 @@ interface QueueMetricsSnapshot {
   failedCount: number;
 }
 
-async function readRedisQueueDepth(redisUrl: string): Promise<QueueDepthMetrics> {
+async function readRedisQueueDepth(
+  redisUrl: string,
+  transport: "lists" | "streams" = "lists",
+): Promise<QueueDepthMetrics> {
+  if (transport !== "lists" && transport !== "streams")
+    throw new TypeError("Invalid queue metrics transport.");
   const client = new RedisClient(redisUrl);
   let high: number;
   let defaultQueue: number;
   let low: number;
   try {
     const readDepth = async (key: string) =>
-      resolveRedisQueueTransport() === "streams"
-        ? readStreamQueueDepth(client, key)
-        : client.llen(key);
+      transport === "streams" ? readStreamQueueDepth(client, key) : client.llen(key);
     [high, defaultQueue, low] = await Promise.all([
       readDepth(defaultQueueKeys()[0]),
       readDepth(defaultQueueKeys()[1]),
@@ -51,10 +54,18 @@ async function readRedisQueueDepth(redisUrl: string): Promise<QueueDepthMetrics>
   };
 }
 
+interface QueueMetricsOptions {
+  readonly driver: QueueConfig["driver"];
+  readonly redisUrl?: string;
+  readonly transport?: "lists" | "streams";
+}
+
 async function collectQueueMetrics(
   failedJobs: Pick<QueueServices, "listRecent">,
+  options: QueueMetricsOptions = { driver: "sync" },
 ): Promise<QueueMetricsSnapshot> {
-  const driver = queueConfig.driver;
+  const { driver, redisUrl } = options;
+  const transport = options.transport ?? "lists";
   const failedCount = (await failedJobs.listRecent(1000)).length;
 
   if (driver !== "redis") {
@@ -69,8 +80,6 @@ async function collectQueueMetrics(
       failedCount,
     };
   }
-
-  const redisUrl = process.env.REDIS_URL;
 
   if (!redisUrl) {
     return {
@@ -87,12 +96,12 @@ async function collectQueueMetrics(
 
   return {
     driver,
-    pending: await readRedisQueueDepth(redisUrl),
+    pending: await readRedisQueueDepth(redisUrl, transport),
     failedCount,
   };
 }
 
-export type { QueueDepthMetrics, QueueMetricsSnapshot };
+export type { QueueDepthMetrics, QueueMetricsOptions, QueueMetricsSnapshot };
 export { collectQueueMetrics, readRedisQueueDepth };
 
 interface RedisQueueSnapshotOptions {
@@ -165,7 +174,7 @@ async function readRedisQueueSnapshot(
   options: RedisQueueSnapshotOptions = {},
 ): Promise<RedisQueueSnapshot> {
   if (!redisUrl.trim()) throw new TypeError("Queue metrics require a Redis URL.");
-  const transport = options.transport ?? resolveRedisQueueTransport();
+  const transport = options.transport ?? "lists";
   if (transport !== "lists" && transport !== "streams")
     throw new TypeError("Invalid queue metrics transport.");
   const timeoutMs = options.timeoutMs ?? 1000;
