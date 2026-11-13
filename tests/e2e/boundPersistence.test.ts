@@ -135,6 +135,7 @@ export function excludedPrivateAuthority() {
     const report = JSON.parse(line);
     for (const key of [
       "canonicalClasses",
+      "packedQueueHandoff",
       "privateArtifactsHidden",
       "privateStateBind",
       "definitionIsolation",

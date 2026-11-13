@@ -40,6 +40,7 @@ function createQueueWorkerTransport(options: {
   const runtime = snapshotQueueRuntimeConfig(options.runtime ?? resolveQueueRuntimeConfig());
   const retryPolicy = snapshotQueueRetryPolicy(options.retryPolicy ?? resolveQueueConfig());
   const { redisUrl, queueServices } = options;
+  const registrySource = options.registry;
   const createWorker =
     options.createWorker ??
     ((url, services, registry) =>
@@ -66,7 +67,7 @@ function createQueueWorkerTransport(options: {
               worker = createWorker(
                 redisUrl,
                 queueServices,
-                typeof options.registry === "function" ? options.registry() : options.registry,
+                typeof registrySource === "function" ? registrySource() : registrySource,
               );
               acquired = true;
               return { ok: true, value: worker };

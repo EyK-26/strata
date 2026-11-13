@@ -523,3 +523,29 @@ test("queue transport denies bounded polling without adapter capability and clos
     expect((await persistence.application.stop()).successful).toBe(true);
   }
 });
+
+test("queue transport captures its registry source before application setup", async () => {
+  const fixture = await createQueuePersistenceFixture();
+  const first = new JobRegistry();
+  const foreign = new JobRegistry();
+  let selected: JobRegistry | undefined;
+  const options = {
+    redisUrl: "redis://unused",
+    registry: first,
+    queueServices: fixture.services,
+    createWorker(_url: string, _services: unknown, registry: JobRegistry) {
+      selected = registry;
+      return { requestStop() {}, async run() {}, close() {} };
+    },
+  };
+  const transport = createQueueWorkerTransport(options);
+  options.registry = foreign;
+  const application = createApplication({ providers: [], transports: [transport.transport] });
+  try {
+    await application.start();
+    expect(selected).toBe(first);
+  } finally {
+    expect((await application.stop()).successful).toBe(true);
+    expect((await fixture.application.stop()).successful).toBe(true);
+  }
+});
