@@ -2,8 +2,8 @@ import { currentAuthUser } from "@getstrata/core/auth/authContext";
 import { resolveAuthUserDirectory } from "@getstrata/core/contracts/serviceTokens";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import type { ServiceContainerLike } from "../contracts/serviceContainer";
-import { resolveCsrfTokenForRequest } from "../http/csrfToken";
-import { pullFlash } from "../http/flashSession";
+import { type CsrfTokenOptions, resolveCsrfTokenForRequest } from "../http/csrfToken";
+import { type FlashSessionOptions, pullFlash } from "../http/flashSession";
 
 interface WebLayoutAuthUser {
   id: number;
@@ -23,6 +23,8 @@ interface WebLayoutData {
 type WebLayoutUserKey = "authUser" | "currentUser";
 
 interface WebLayoutDataOptions {
+  csrf?: CsrfTokenOptions;
+  flash?: FlashSessionOptions;
   userKey?: WebLayoutUserKey;
   loadUser?: (
     container: ServiceContainerLike,
@@ -93,6 +95,8 @@ function createWebLayoutDataResolver(
 ): (request?: Request) => Promise<Record<string, unknown>> {
   const scoped = {
     ...options,
+    csrf: options.csrf ? { ...options.csrf } : undefined,
+    flash: options.flash ? { ...options.flash } : undefined,
     extra: typeof options.extra === "function" ? options.extra : { ...options.extra },
   };
   return (request) => loadWebLayoutData(container, request, scoped);
@@ -103,8 +107,22 @@ async function loadWebLayoutData(
   request: Request | undefined,
   resolved: WebLayoutDataOptions,
 ): Promise<Record<string, unknown>> {
-  const csrfToken = request ? resolveCsrfTokenForRequest(request) : "";
-  const flash = request ? (currentRequestMeta().flash ?? pullFlash(request)) : null;
+  const meta = currentRequestMeta();
+  const established = meta.request === request;
+  const csrfToken = request
+    ? resolved.csrf
+      ? resolveCsrfTokenForRequest(request, resolved.csrf)
+      : established
+        ? (meta.csrfToken ?? "")
+        : ""
+    : "";
+  const flash = request
+    ? established && meta.flash !== undefined
+      ? meta.flash
+      : resolved.flash
+        ? pullFlash(request, resolved.flash)
+        : null
+    : null;
   const userKey = layoutUserKey(resolved);
   const loadUser = resolved.loadUser ?? defaultLoadLayoutUser;
   const user = await loadUser(container, request);

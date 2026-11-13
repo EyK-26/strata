@@ -72,3 +72,59 @@ describe("resolveWebLayoutData", () => {
     expect(data.cspNonce).toBe("");
   });
 });
+
+test("captured cookie policies preserve owner tokens and reject another owner's flash", async () => {
+  const { csrfTokenOptionsFromEnvironment, createCsrfTokenCookie } = await import(
+    "@getstrata/core/http/csrfToken"
+  );
+  const { flashSessionOptionsFromEnvironment, createFlashCookie } = await import(
+    "@getstrata/core/http/flashSession"
+  );
+  const { createWebLayoutDataResolver } = await import("@getstrata/core/view/webLayoutData");
+  const env = {
+    APP_ENV: "development",
+    APP_KEY_PREFIX: "first",
+    SESSION_SECRET: "first-owner-secret",
+  };
+  const csrf = csrfTokenOptionsFromEnvironment(env);
+  const flash = flashSessionOptionsFromEnvironment(env);
+  const first = createCsrfTokenCookie(csrf);
+  const request = new Request("https://app.test/form", {
+    headers: {
+      cookie: `${first.cookie.split(";")[0]}; ${createFlashCookie({ level: "info", message: "first-only" }, flash).split(";")[0]}`,
+    },
+  });
+  const container = {
+    has: () => false,
+    resolve: () => {
+      throw new Error("unused");
+    },
+  } as unknown as ServiceContainer;
+  const options = { csrf: { ...csrf }, flash: { ...flash } };
+  const resolveFirst = createWebLayoutDataResolver(container, options);
+  options.csrf.secret = "mutated";
+  options.flash.secret = "mutated";
+  const resolveSecond = createWebLayoutDataResolver(container, {
+    csrf: csrfTokenOptionsFromEnvironment({
+      ...env,
+      APP_KEY_PREFIX: "second",
+      SESSION_SECRET: "second-owner-secret",
+    }),
+    flash: flashSessionOptionsFromEnvironment({
+      ...env,
+      APP_KEY_PREFIX: "second",
+      SESSION_SECRET: "second-owner-secret",
+    }),
+  });
+  const [firstData, secondData, ownerless] = await Promise.all([
+    resolveFirst(request),
+    resolveSecond(request),
+    resolveWebLayoutData(container, request),
+  ]);
+  expect(firstData.csrfToken).toBe(first.token);
+  expect(firstData.flash).toEqual({ level: "info", message: "first-only" });
+  expect(secondData.csrfToken).not.toBe(first.token);
+  expect(secondData.flash).toBeNull();
+  expect(ownerless.csrfToken).toBe("");
+  expect(ownerless.flash).toBeNull();
+});

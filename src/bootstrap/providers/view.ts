@@ -1,4 +1,6 @@
 import { resolve } from "node:path";
+import { csrfTokenOptionsFromEnvironment } from "@getstrata/core/http/csrfToken";
+import { flashSessionOptionsFromEnvironment } from "@getstrata/core/http/flashSession";
 import { isViewsMode, parseFrontendMode } from "@getstrata/core/runtime/frontendMode";
 import type { WebErrorViewOptions, WebLayoutDataOptions } from "@getstrata/core/view";
 import {
@@ -43,6 +45,16 @@ function createViewProvider(options: ViewProviderOptions = {}): ServiceProvider 
   const defaults = { appName, currentOrganization: null, organizations: [] };
   const data = {
     ...options.data,
+    csrf: options.data?.csrf
+      ? { ...options.data.csrf }
+      : enabled
+        ? csrfTokenOptionsFromEnvironment(env)
+        : undefined,
+    flash: options.data?.flash
+      ? { ...options.data.flash }
+      : enabled
+        ? flashSessionOptionsFromEnvironment(env)
+        : undefined,
     extra:
       typeof extra === "function"
         ? async (user: Record<string, unknown> | null) => ({ ...defaults, ...(await extra(user)) })
