@@ -1,10 +1,10 @@
 import { createStorageDriver, resolveStorageConfig } from "@getstrata/core/storage/storage";
 import type { ServiceProvider } from "../contracts";
-import { legacyCacheProvider } from "../legacyCache";
 import authProvider from "./auth";
-import configProvider from "./config";
+import { createCacheProvider } from "./cacheProvider";
+import { createConfigProvider } from "./config";
 import policyProvider from "./policy";
-import queueProvider from "./queue";
+import { createQueueProvider } from "./queue";
 import { createStorageProvider } from "./storage";
 import { createTracingProvider } from "./tracing";
 import { viewProvider } from "./view";
@@ -12,15 +12,18 @@ import { viewProvider } from "./view";
 function createCoreProviders(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): ServiceProvider[] {
+  env = Object.freeze({ ...env });
+  const configProvider = createConfigProvider(env);
+  const cacheProvider = createCacheProvider(env);
   const storageProvider = createStorageProvider(createStorageDriver(resolveStorageConfig(env)));
   return [
     configProvider,
     createTracingProvider({ env }),
-    legacyCacheProvider,
+    cacheProvider,
     storageProvider,
     authProvider,
     policyProvider,
-    queueProvider,
+    createQueueProvider(env),
     viewProvider,
   ];
 }

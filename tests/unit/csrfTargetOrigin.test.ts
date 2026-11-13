@@ -7,7 +7,7 @@ import { AuthManager } from "@getstrata/core/auth/guard";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
 import { createCsrfTokenCookie } from "@getstrata/core/http/csrfToken";
-import configProvider from "../../src/bootstrap/providers/config";
+import { createConfigProvider } from "../../src/bootstrap/providers/config";
 import { authFixtureOutcome } from "../helpers/authOutcome";
 import { createMockDependencies } from "./testHelpers";
 
@@ -243,10 +243,10 @@ test("the root config provider binds only an explicitly supplied CSRF target", a
     },
     onCleanup: () => {},
   };
-  await configProvider.register?.(context);
+  await createConfigProvider(process.env).register?.(context);
   expect(config.get("http.csrf.targetOrigin")).toBeUndefined();
   process.env.CSRF_TARGET_ORIGIN = targetOrigin;
-  await configProvider.register?.(context);
+  await createConfigProvider(process.env).register?.(context);
   expect(config.get("http.csrf.targetOrigin")).toBe(targetOrigin);
 });
 

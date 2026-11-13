@@ -1,6 +1,6 @@
+import { createApplicationCachedJson } from "./cachedJson";
 import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
-import { createLegacyCachedJson } from "./legacyCache";
 import { enterModuleRoutes } from "./moduleRouteMiddleware";
 import type { BusinessRouteHandler } from "./persistenceContracts";
 import type { RouteSource } from "./routeCompiler";
@@ -19,7 +19,7 @@ function buildWebModuleRoutes(
   const { modules, seedRoutes = {} } = options;
 
   const kernel = createHttpKernel(dependencies);
-  const cachedJson = createLegacyCachedJson(dependencies);
+  const cachedJson = createApplicationCachedJson(dependencies);
 
   const sources: RouteSource[] = [
     { name: "seed routes", routes: seedRoutes, middleware: ["global", "web"] },

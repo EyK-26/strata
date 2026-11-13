@@ -1,8 +1,8 @@
 import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
 import { identityModes, scimMiddleware } from "#strata-http-route";
+import { createApplicationCachedJson } from "./cachedJson";
 import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
 import { createHttpKernel } from "./httpKernel";
-import { createLegacyCachedJson } from "./legacyCache";
 import { enterModuleRoutes } from "./moduleRouteMiddleware";
 import type { BusinessRouteHandler } from "./persistenceContracts";
 import type { RouteSource } from "./routeCompiler";
@@ -22,7 +22,7 @@ function buildModuleRoutes(
 
   const kernel = createHttpKernel(dependencies);
   const middleware = kernel.group("api");
-  const cachedJson = createLegacyCachedJson(dependencies);
+  const cachedJson = createApplicationCachedJson(dependencies);
   const sources: RouteSource[] = [];
 
   for (const module of modules) {
