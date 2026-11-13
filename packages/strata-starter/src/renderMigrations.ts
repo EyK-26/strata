@@ -62,6 +62,7 @@ function starterSchemaStatements(plan: StarterFeaturePlan): string[] {
     id ${d.id},
     job_name ${d.keyText} NOT NULL,
     job_id ${d.text},
+    handoff ${d.text},
     payload ${payloadType},
     exception ${d.text} NOT NULL,
     failed_at ${d.timestamp}
