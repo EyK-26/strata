@@ -503,20 +503,29 @@ test("the app adapter does not authenticate the proxy: direct matching-host tran
 
 test("a real browser sends Secure cookies and HTTPS Origin through the TLS-offload edge", async () => {
   const { chromium } = await import("playwright");
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ?? "/usr/bin/chromium",
-    args: ["--no-sandbox"],
-  });
+  let browser: import("playwright").Browser | undefined;
+  const errors: unknown[] = [];
   try {
+    browser = await chromium.launch({
+      headless: true,
+      ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+        ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+        : {}),
+      timeout: 30_000,
+      args: ["--no-sandbox"],
+    });
     for (const boundary of ["default", "adapter", "target", "kernel"] as const) {
-      const f = await fixture({
-        adapter: boundary === "adapter",
-        targetOrigin: boundary === "target",
-        kernel: boundary === "kernel",
-      });
-      const context = await browser.newContext({ ignoreHTTPSErrors: true });
+      let f: Awaited<ReturnType<typeof fixture>> | undefined;
+      let context: import("playwright").BrowserContext | undefined;
       try {
+        f = await fixture({
+          adapter: boundary === "adapter",
+          targetOrigin: boundary === "target",
+          kernel: boundary === "kernel",
+        });
+        context = await browser.newContext({ ignoreHTTPSErrors: true });
+        context.setDefaultTimeout(10_000);
+        context.setDefaultNavigationTimeout(10_000);
         const page = await context.newPage();
         expect((await page.goto(`${f.publicOrigin}/etf`))?.status()).toBe(200);
         const cookies = await context.cookies(f.publicOrigin);
@@ -533,15 +542,29 @@ test("a real browser sends Secure cookies and HTTPS Origin through the TLS-offlo
           forwardedProto: "https",
           tokenValidHandlerReached: boundary !== "default",
         });
+      } catch (error) {
+        errors.push(error);
       } finally {
-        await context.close();
-        await f.close();
+        const cleanup = await Promise.allSettled([
+          Promise.resolve().then(() => context?.close()),
+          Promise.resolve().then(() => f?.close()),
+        ]);
+        for (const result of cleanup) if (result.status === "rejected") errors.push(result.reason);
       }
+      if (errors.length) break;
     }
+  } catch (error) {
+    errors.push(error);
   } finally {
-    await browser.close();
+    try {
+      await browser?.close();
+    } catch (error) {
+      errors.push(error);
+    }
   }
-});
+  if (errors.length === 1) throw errors[0];
+  if (errors.length) throw new AggregateError(errors, "Browser CSRF probe and cleanup failed.");
+}, 120_000);
 
 test("kernel target policy preserves native route params, original URL, body and request identity", async () => {
   const f = await fixture({ kernel: true });
