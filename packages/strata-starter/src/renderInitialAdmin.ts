@@ -1,8 +1,8 @@
-import { authNeedsUsers, type StarterLayers, usesTenantTable } from "./types.ts";
+import type { StarterFeaturePlan } from "./featurePlan.ts";
 
-function renderInitialAdminMigration(layers: StarterLayers): string | null {
-  if (!authNeedsUsers(layers.auth)) return null;
-  const driver = layers.database === "postgres" ? "pgsql" : layers.database;
+function renderInitialAdminMigration(plan: StarterFeaturePlan): string | null {
+  if (!plan.decisions.users) return null;
+  const driver = plan.decisions.sqlDriver;
   return `import { Schema } from "@getstrata/core/database/schema";
 import { guardMigrationRollback } from "@getstrata/core/database/migrations";
 import type { Migration } from "@getstrata/core/database/migrations/types";
@@ -30,10 +30,11 @@ export default migration;
 `;
 }
 
-function renderInitialAdminCommand(layers: StarterLayers): string | null {
-  if (!authNeedsUsers(layers.auth)) return null;
-  const tenant = usesTenantTable(layers.tenancy);
-  const rls = layers.tenancy === "rls";
+function renderInitialAdminCommand(plan: StarterFeaturePlan): string | null {
+  const layers = plan.layers;
+  if (!plan.decisions.users) return null;
+  const tenant = plan.decisions.tenantTable;
+  const rls = plan.decisions.rls;
   const placeholder = layers.database === "postgres" ? "$1" : "?";
   const fields = ["name", "email", "password", "is_admin", ...(tenant ? ["tenant_id"] : [])];
   const placeholders = fields.map((_, index) =>

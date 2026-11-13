@@ -1,7 +1,7 @@
-import { authNeedsUsers, type StarterLayers } from "./types.ts";
+import type { StarterFeaturePlan } from "./featurePlan.ts";
 
-function renderScimModule(layers: StarterLayers): string | null {
-  if (!layers.extras.scim || !authNeedsUsers(layers.auth)) {
+function renderScimModule(plan: StarterFeaturePlan): string | null {
+  if (!plan.decisions.scim) {
     return null;
   }
 
@@ -296,7 +296,7 @@ const scimModule: AppModule = {
             if (!email || !name) {
               return scimError("userName and name are required.", 400);
             }
-            const user = await ports.database.model(User).where({ id, tenant_id: tenantId(ports) })${layers.database === "sqlite" ? "" : ".lockForUpdate()"}.first();
+            const user = await ports.database.model(User).where({ id, tenant_id: tenantId(ports) })${plan.decisions.rowLocks ? ".lockForUpdate()" : ""}.first();
             if (!user) {
               return scimError("User not found.", 404);
             }
@@ -311,7 +311,7 @@ const scimModule: AppModule = {
             if (id instanceof Response) {
               return id;
             }
-            const user = await ports.database.model(User).where({ id, tenant_id: tenantId(ports) })${layers.database === "sqlite" ? "" : ".lockForUpdate()"}.first();
+            const user = await ports.database.model(User).where({ id, tenant_id: tenantId(ports) })${plan.decisions.rowLocks ? ".lockForUpdate()" : ""}.first();
             if (!user) {
               return scimError("User not found.", 404);
             }
@@ -370,7 +370,7 @@ const scimModule: AppModule = {
             if (id instanceof Response) {
               return id;
             }
-            const user = await ports.database.model(User).where({ id, tenant_id: tenantId(ports) })${layers.database === "sqlite" ? "" : ".lockForUpdate()"}.first();
+            const user = await ports.database.model(User).where({ id, tenant_id: tenantId(ports) })${plan.decisions.rowLocks ? ".lockForUpdate()" : ""}.first();
             if (user) {
               await user.delete();
             }

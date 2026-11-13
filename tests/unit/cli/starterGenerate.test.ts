@@ -67,7 +67,6 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
 import {
   generateProject,
   resolveOverlayRoot,
@@ -117,7 +116,6 @@ function restoreRuntime(): void {
       process.env[key] = value;
     }
   }
-  resetDiscoverModulesForTests();
 }
 
 afterEach(async () => {
@@ -361,7 +359,7 @@ describe("create-strata generate", () => {
     expect(bootstrap).toContain(
       'import { repositoryDefinitions, modelDefinitions } from "../models/register.ts";',
     );
-    expect(preload).toContain("configureModulesDirectory");
+    expect(preload).not.toContain("configureModulesDirectory");
     expect(existsSync(join(app, "src/modules/billing/index.ts"))).toBe(false);
     expect(existsSync(join(app, "src/jobs/dispatchOutboundWebhookJob.ts"))).toBe(false);
 
@@ -380,8 +378,8 @@ describe("create-strata generate", () => {
     );
     expect(existsSync(join(app, "src/bootstrap/providers/policy.ts"))).toBe(true);
 
-    expect(providers).toContain('import { tracingProvider } from "@getstrata/bootstrap"');
-    expect(providers).toContain("  tracingProvider,");
+    expect(providers).toContain('import { createTracingProvider } from "@getstrata/bootstrap"');
+    expect(providers).toContain("  createTracingProvider({ env }),");
 
     const queueProvider = providers;
     expect(queueProvider).toContain("registerDefaultJobs");
@@ -390,15 +388,18 @@ describe("create-strata generate", () => {
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(createApp).not.toContain("createMetricsRoutes");
     expect(createApp).toContain("isProductionEnv(env)");
-    expect(createApp).toContain("discoverModules");
+    expect(createApp).toContain(
+      'ensureModulesLoaded({modulesDir:join(import.meta.dir,"../modules")})',
+    );
+    expect(createApp).not.toContain("discoverModules()");
     expect(createApp).toContain("...modules.flatMap(module=>module.providers??[])");
-    expect(createApp.indexOf("await ensureModulesLoaded()")).toBeLessThan(
+    expect(createApp.indexOf("await ensureModulesLoaded({modulesDir:")).toBeLessThan(
       createApp.indexOf("const handle=createApplicationContext("),
     );
     expect(createApp).toContain("providersFromScope:scope=>");
     expect(createApp).not.toContain("runProviderPhase");
     expect(queueProvider).toContain("async register({container})");
-    expect(queueProvider.indexOf("discoverJobs()")).toBeGreaterThan(
+    expect(queueProvider.indexOf("discoverJobs(registry)")).toBeGreaterThan(
       queueProvider.indexOf("async register({container})"),
     );
     expect(readme).not.toContain("GET /metrics");
@@ -1348,7 +1349,6 @@ export default probeModule;
     process.env.MAIL_DRIVER = "log";
     process.env.CACHE_DRIVER = "array";
     process.env.QUEUE_DRIVER = "sync";
-    resetDiscoverModulesForTests();
 
     try {
       const { bootstrapApp } = await import(`${join(app, "src/bootstrap/createApp.ts")}`);
@@ -1376,7 +1376,6 @@ export default probeModule;
       await context.dispose();
       expect(context.container.resolve(PROBE_CLOSED_TOKEN)).toBe(true);
     } finally {
-      resetDiscoverModulesForTests();
       process.chdir(repoRoot);
     }
   });
@@ -1401,7 +1400,6 @@ export default probeModule;
     process.env.CACHE_DRIVER = "array";
     process.env.QUEUE_DRIVER = "sync";
     process.env.METRICS_TOKEN = "generated-metrics-fixture";
-    resetDiscoverModulesForTests();
     const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
 
     let context: Awaited<ReturnType<typeof bootstrapApp>>["context"] | undefined;
@@ -1598,7 +1596,6 @@ export default probeModule;
         SCIM_TENANT_TOKENS: "1:fixture-first,2:fixture-second,999:fixture-missing",
         REDIS_URL: "",
       });
-      resetDiscoverModulesForTests();
       const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
 
       const { User } = await import(join(app, "src/models/User.ts"));
@@ -1747,7 +1744,6 @@ export default probeModule;
           SCIM_TENANT_TOKENS: "1:fixture-scim-one,2:fixture-scim-two",
           REDIS_URL: "",
         });
-        resetDiscoverModulesForTests();
         await prepareObserverFixture(app);
         const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
 
@@ -2076,7 +2072,6 @@ export default probeModule;
         CACHE_DRIVER: "array",
         QUEUE_DRIVER: "sync",
       });
-      resetDiscoverModulesForTests();
       await prepareObserverFixture(app);
       const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
 
@@ -2337,7 +2332,6 @@ export default probeModule;
       process.env.MAIL_DRIVER = "log";
       process.env.CACHE_DRIVER = "array";
       process.env.QUEUE_DRIVER = "sync";
-      resetDiscoverModulesForTests();
       const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
 
       const { User } = await import(join(app, "src/models/User.ts"));

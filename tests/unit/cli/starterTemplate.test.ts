@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { compileStarterFeatures } from "../../../packages/strata-starter/src/featurePlan.ts";
 
 describe("starter template CLI", () => {
   test("depends on @getstrata/cli and uses strata scripts", async () => {
@@ -42,7 +43,10 @@ test("generated CORS examples remain explicit opt-ins and preserve safe defaults
   const { layersFromFlags, parseCreateStrataArgs } = await import(
     "../../../packages/strata-starter/src/parseArgs.ts"
   );
-  const env = renderEnvExample("cors-app", layersFromFlags(parseCreateStrataArgs(["cors-app"])));
+  const env = renderEnvExample(
+    "cors-app",
+    compileStarterFeatures(layersFromFlags(parseCreateStrataArgs(["cors-app"]))),
+  );
   expect(env).toContain("# CORS_ALLOWED_ORIGINS=https://app.example.com");
   expect(env).toContain("# CORS_ADDITIONAL_ALLOWED_HEADERS=Idempotency-Key,X-Correlation-Id");
   expect(env.split("\n").some((line) => line.startsWith("CORS_ADDITIONAL_ALLOWED_HEADERS="))).toBe(
@@ -60,10 +64,10 @@ test("generated CSRF target example is opt-in and config providers wire its expl
     "../../../packages/strata-starter/src/parseArgs.ts"
   );
   const layers = layersFromFlags(parseCreateStrataArgs(["csrf-app"]));
-  const env = renderEnvExample("csrf-app", layers);
+  const env = renderEnvExample("csrf-app", compileStarterFeatures(layers));
   expect(env).toContain("# CSRF_TARGET_ORIGIN=https://app.example.com");
   expect(env.split("\n").some((line) => line.startsWith("CSRF_TARGET_ORIGIN="))).toBe(false);
-  expect(renderConfigProvider(layers)).toContain(
+  expect(renderConfigProvider(compileStarterFeatures(layers))).toContain(
     "config.set(CSRF_TARGET_ORIGIN_CONFIG_KEY, env.CSRF_TARGET_ORIGIN)",
   );
 });

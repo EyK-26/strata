@@ -19,6 +19,16 @@ import {
   resolveTemplateRoot,
 } from "../../../packages/strata-starter/src/generate.ts";
 import { defaultLayers, exampleAppLayers } from "../../../packages/strata-starter/src/presets.ts";
+import {
+  renderAuthModule,
+  renderAuthProvider,
+} from "../../../packages/strata-starter/src/renderAuth.ts";
+import {
+  renderEnvExample,
+  renderPackageJson,
+} from "../../../packages/strata-starter/src/renderEnv.ts";
+import { renderStarterSchemaMigration } from "../../../packages/strata-starter/src/renderMigrations.ts";
+import { renderModelsRegister } from "../../../packages/strata-starter/src/renderModels.ts";
 
 const owned: string[] = [];
 function fixture() {
@@ -141,6 +151,89 @@ describe("starter feature compilation", () => {
         });
       expect(manifest.emittedArtifacts).toEqual(actual(options.targetDir).sort());
       expect(manifest.decisions.users).toBe(profile !== "hiroapp-hobby");
+    },
+  );
+});
+
+describe("compiled decision consumption", () => {
+  test.each(["api", "server-htmx", "spa-react", "hybrid"] as const)(
+    "%s consumers use the same immutable capability snapshot",
+    (frontend) => {
+      const options = fixture();
+      options.layers = { ...exampleAppLayers("hiroapp-team"), frontend };
+      options.layers.extras.mfa = true;
+      const plan = compileStarterFeatures(options.layers);
+      // Mutating the caller's selections cannot change any renderer's decisions.
+      options.layers.auth = "headers";
+      options.layers.extras.mfa = false;
+      const models = renderModelsRegister(plan);
+      const migration = renderStarterSchemaMigration(plan);
+      const auth = renderAuthModule(plan);
+      if (!auth) throw new Error("Compiled account capability did not render auth routes.");
+      const provider = renderAuthProvider(plan);
+      const env = renderEnvExample("app", plan);
+      const manifest = JSON.parse(renderPackageJson("app", { plan }));
+      expect(models).toContain("UserRepository");
+      expect(migration).toContain("CREATE TABLE IF NOT EXISTS users");
+      expect(provider).toContain(JSON.stringify(plan.decisions.authMechanisms));
+      expect(auth.includes('"/api/v1/auth/register"')).toBe(plan.decisions.jsonAccounts);
+      expect(auth.includes('"/login"')).toBe(plan.decisions.cookie);
+      expect(env.includes("\nSESSION_SECRET=")).toBe(plan.decisions.sessionSecret);
+      expect(Boolean(manifest.scripts["frontend:build"])).toBe(plan.decisions.frontendBuild);
+      expect(plan.decisions.pendingMfa).toBe(true);
+      expect(plan.decisions.mfaViews).toBe(frontend === "api" || frontend === "spa-react");
+    },
+  );
+
+  test.each(["token", "jwt"] as const)(
+    "%s API account flows receive a dedicated signed URL secret",
+    (auth) => {
+      const layers = { ...defaultLayers(), frontend: "api" as const, auth };
+      layers.extras.emailVerification = true;
+      layers.extras.scim = true;
+      const plan = compileStarterFeatures(layers);
+      const env = renderEnvExample("app", plan);
+      expect(plan.requirements).toContainEqual({
+        feature: "auth:accounts",
+        capability: "config:signed-urls",
+      });
+      expect(plan.decisions.dedicatedSigningSecret).toBe(true);
+      expect(env).toContain("SIGNED_URL_SECRET=dev-signed-url-secret-change-me-please-32ch");
+      expect(env).not.toContain("\nSESSION_SECRET=");
+      expect(renderAuthProvider(plan)).toContain(
+        'requireConfiguredSecret(["SIGNED_URL_SECRET","SESSION_SECRET","OAUTH_STATE_SECRET"]',
+      );
+    },
+  );
+
+  test("header-only API omits account, session, bearer and frontend capabilities", () => {
+    const plan = compileStarterFeatures(defaultLayers());
+    expect(plan.decisions).toMatchObject({
+      users: false,
+      cookie: false,
+      token: false,
+      jwt: false,
+      signedUrls: false,
+      dedicatedSigningSecret: false,
+      frontendBuild: false,
+    });
+    expect(renderAuthModule(plan)).toBeNull();
+    expect(renderModelsRegister(plan)).not.toContain("UserRepository");
+    expect(renderStarterSchemaMigration(plan)).not.toContain("CREATE TABLE IF NOT EXISTS users");
+    expect(renderEnvExample("app", plan)).not.toContain("\nSIGNED_URL_SECRET=");
+    expect(
+      JSON.parse(renderPackageJson("app", { plan })).scripts["frontend:build"],
+    ).toBeUndefined();
+  });
+
+  test.each(["mfa", "oauthGithub", "oidc", "emailVerification", "scim"] as const)(
+    "rejects unsupported %s before creating even the output parent",
+    (extra) => {
+      const options = fixture();
+      options.targetDir = join(options.targetDir, "missing", "app");
+      options.layers.extras[extra] = true;
+      expect(() => generateProject(options)).toThrow("unsupported with headers");
+      expect(existsSync(join(options.targetDir, ".."))).toBe(false);
     },
   );
 });

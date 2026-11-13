@@ -1,10 +1,9 @@
-import { authUsesJwt, authUsesToken } from "../types.ts";
 import { renderMfaChallengeRoutes } from "./renderBrowserRoutes.ts";
 import type { AuthRenderingContext } from "./renderingContext.ts";
 import { portAuthRouteSource } from "./routePersistence.ts";
 
 export function renderApiAuthRoutes({
-  layers,
+  plan,
   cookie,
   github,
   oidc,
@@ -15,7 +14,7 @@ export function renderApiAuthRoutes({
   jsonAccounts,
 }: Pick<
   AuthRenderingContext,
-  | "layers"
+  | "plan"
   | "cookie"
   | "github"
   | "oidc"
@@ -25,15 +24,14 @@ export function renderApiAuthRoutes({
   | "jsonCookieAccounts"
   | "jsonAccounts"
 >) {
-  const browserMfa =
-    cookie && mfa && (layers.frontend === "api" || layers.frontend === "spa-react");
+  const browserMfa = plan.decisions.mfaViews;
   const mfaContinuation = browserMfa
     ? `
         ...kernel.wrapRouteMap({
 ${renderMfaChallengeRoutes()}
         }, kernel.group("api")),`
     : "";
-  const tokenLogin = authUsesToken(layers.auth)
+  const tokenLogin = plan.decisions.token
     ? `
         "/api/v1/auth/login": {
           POST: kernel.wrap("api", kernel.wrapLogin(async (request, _ports) => {
@@ -110,7 +108,7 @@ ${renderMfaChallengeRoutes()}
         },`
     : "";
 
-  const jwtLogin = authUsesJwt(layers.auth)
+  const jwtLogin = plan.decisions.jwt
     ? `
         "/api/auth/token": {
           POST: kernel.wrap("api", kernel.wrapLogin(async (request, _ports) => {
@@ -190,9 +188,8 @@ ${renderMfaChallengeRoutes()}
         },`
     : "";
 
-  const jsonVerify =
-    jsonAccounts && verify
-      ? `
+  const jsonVerify = plan.decisions.jsonVerification
+    ? `
         "/api/v1/auth/verify-email": {
           POST: kernel.wrap("api", kernel.wrapSigned(async (request, _ports) => {
             if (!(await completeSignedEmailVerification(_ports, request))) {
@@ -201,7 +198,7 @@ ${renderMfaChallengeRoutes()}
             return privateJsonResponse({ ok: true });
           })),
         },`
-      : "";
+    : "";
 
   const jsonAccountManagement = jsonCookieAccounts
     ? `
@@ -261,9 +258,8 @@ ${renderMfaChallengeRoutes()}
           }),
         },`;
 
-  const cookieJsonAuth =
-    cookie && !bearerApi
-      ? `
+  const cookieJsonAuth = plan.decisions.cookieJsonLogin
+    ? `
         "/api/v1/auth/login": {
           POST: kernel.wrap("api", kernel.wrapLogin(async (request, _ports) => {
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
@@ -305,7 +301,7 @@ ${renderMfaChallengeRoutes()}
             return payload;
           }),
         },`
-      : "";
+    : "";
 
   const samlRoutes = cookie
     ? `
@@ -448,9 +444,8 @@ ${renderMfaChallengeRoutes()}
         },`
     : "";
 
-  const apiRoutes =
-    bearerApi || cookie
-      ? `
+  const apiRoutes = plan.decisions.users
+    ? `
     routes({ kernel, dependencies }) {
       const authServices = dependencies.container.resolve(STARTER_AUTH_SERVICES);${
         browserMfa
@@ -462,6 +457,6 @@ ${renderMfaChallengeRoutes()}
       return {${mfaContinuation}${csrfRoute}${samlRoutes}${githubRoutes}${oidcRoutes}${cookieJsonAuth}${tokenLogin}${jsonRegister}${jwtLogin}${apiUser}${jsonPassword}${jsonVerify}${jsonAccountManagement}
       };
     },`
-      : "";
+    : "";
   return portAuthRouteSource(apiRoutes);
 }

@@ -1,4 +1,5 @@
-import { type StarterLayers, selectedDockerServices } from "./types.ts";
+import type { StarterFeaturePlan } from "./featurePlan.ts";
+import type { StarterLayers } from "./types.ts";
 
 const GENERATED_POSTGRES_APP_ROLE = "strata_app";
 const GENERATED_POSTGRES_APP_PASSWORD = "dev-strata-app-change-me";
@@ -9,8 +10,8 @@ function appDatabaseName(projectName: string): string {
   return projectName.replace(/[^A-Za-z0-9_]/g, "_");
 }
 
-function usesComposePostgres(layers: StarterLayers): boolean {
-  return selectedDockerServices(layers).includes("postgres");
+function usesComposePostgres(plan: StarterFeaturePlan): boolean {
+  return plan.services.docker.includes("postgres");
 }
 
 function defaultDatabaseUrl(layers: StarterLayers, projectName: string): string {

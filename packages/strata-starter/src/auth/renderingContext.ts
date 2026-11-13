@@ -1,24 +1,10 @@
-import {
-  authUsesJwt,
-  authUsesToken,
-  htmlAuthKit,
-  type StarterLayers,
-  usesTenantTable,
-} from "../types.ts";
+import type { StarterFeaturePlan } from "../featurePlan.ts";
 
-// Resolve existing selection policy once; fragments only render their owned artifact.
-export function createAuthRenderingContext(layers: StarterLayers) {
-  const cookie = htmlAuthKit(layers.auth);
-  const github = Boolean(layers.extras.oauthGithub && cookie);
-  const oidc = Boolean(layers.extras.oidc && cookie);
-  const mfa = Boolean(layers.extras.mfa && cookie);
-  const verify = Boolean(layers.extras.emailVerification);
-  const bearerApi = authUsesToken(layers.auth) || authUsesJwt(layers.auth);
-  const jsonCookieAccounts =
-    cookie &&
-    (layers.frontend === "api" || layers.frontend === "spa-react" || layers.frontend === "hybrid");
-  const jsonAccounts = bearerApi || jsonCookieAccounts;
-  const tenantInsert = usesTenantTable(layers.tenancy);
+// The compiler owns capability policy; this context adds only rendered SQL fragments.
+export function createAuthRenderingContext(plan: StarterFeaturePlan) {
+  const { cookie, github, oidc, mfa, bearerApi, jsonCookieAccounts, jsonAccounts } = plan.decisions;
+  const verify = plan.decisions.emailVerification;
+  const tenantInsert = plan.decisions.tenantTable;
   const tenantCreateField = tenantInsert
     ? `
                 tenant_id: establishedTenantId(ports),`
@@ -29,7 +15,7 @@ export function createAuthRenderingContext(layers: StarterLayers) {
     : "";
 
   return {
-    layers,
+    plan,
     cookie,
     github,
     oidc,

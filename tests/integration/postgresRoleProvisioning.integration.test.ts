@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { SQL } from "bun";
+import { compileStarterFeatures } from "../../packages/strata-starter/src/featurePlan.ts";
 import { defaultLayers } from "../../packages/strata-starter/src/presets.ts";
 import { renderPostgresAppRoleInitSql } from "../../packages/strata-starter/src/renderEnv.ts";
 import {
@@ -227,10 +228,13 @@ describe.skipIf(!adminUrl)("real Postgres cluster-wide role provisioning", () =>
   }, 15_000);
 
   test("starter SQL uses the core mechanism and wraps standalone execution transactionally", () => {
-    const script = renderPostgresAppRoleInitSql(databases[0], {
-      ...defaultLayers(),
-      database: "postgres",
-    });
+    const script = renderPostgresAppRoleInitSql(
+      databases[0],
+      compileStarterFeatures({
+        ...defaultLayers(),
+        database: "postgres",
+      }),
+    );
     expect(script).toBe(`BEGIN;\n${postgresAppRoleSql({ database: databases[0] })}COMMIT;\n`);
   });
 

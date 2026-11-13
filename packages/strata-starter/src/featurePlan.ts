@@ -12,7 +12,6 @@ import {
   type DockerServiceName,
   extraApplies,
   FRONTENDS,
-  htmlAuthKit,
   MAIL_DRIVERS,
   neededDockerServices,
   needsFrontendBuild,
@@ -26,8 +25,17 @@ import {
 type Immutable<T> = { readonly [K in keyof T]: Immutable<T[K]> };
 
 export interface FeatureRequirement {
-  readonly feature: keyof CorporateExtras | "tenancy:rls" | "reference:work-tracker";
-  readonly capability: "database:postgres" | "auth:cookie" | "auth:users" | "tenancy:enabled";
+  readonly feature:
+    | keyof CorporateExtras
+    | "tenancy:rls"
+    | "reference:work-tracker"
+    | "auth:accounts";
+  readonly capability:
+    | "database:postgres"
+    | "auth:cookie"
+    | "auth:users"
+    | "tenancy:enabled"
+    | "config:signed-urls";
 }
 
 /** Known starter capabilities, compiled once before generation acquires an output directory. */
@@ -38,6 +46,36 @@ export interface StarterFeaturePlan {
   readonly requirements: readonly FeatureRequirement[];
   readonly conflicts: readonly string[];
   readonly decisions: Readonly<{
+    rls: boolean;
+    sqlDriver: "pgsql" | "mysql" | "sqlite";
+    rowLocks: boolean;
+    schemaTenants: boolean;
+    mfa: boolean;
+    emailVerification: boolean;
+    scim: boolean;
+    github: boolean;
+    oidc: boolean;
+    bearerApi: boolean;
+    jsonCookieAccounts: boolean;
+    jsonAccounts: boolean;
+    mfaViews: boolean;
+    serverViews: boolean;
+    apiDocs: boolean;
+    mysqlDependency: boolean;
+    redisQueue: boolean;
+    redis: boolean;
+    composeUpCommand: string;
+    workTracker: boolean;
+    authMechanisms: readonly string[];
+    sessionSecret: boolean;
+    tenantUsers: boolean;
+    cookieVerification: boolean;
+    jsonVerification: boolean;
+    cookieJsonLogin: boolean;
+    htmlCookieAccounts: boolean;
+    ensureDatabase: boolean;
+    signedUrls: boolean;
+    dedicatedSigningSecret: boolean;
     users: boolean;
     cookie: boolean;
     token: boolean;
@@ -149,21 +187,64 @@ export function compileStarterFeatures(
       ),
     }),
   });
-  const decisions = Object.freeze({
-    users: authNeedsUsers(layers.auth),
-    cookie: authUsesCookie(layers.auth),
-    token: authUsesToken(layers.auth),
-    jwt: authUsesJwt(layers.auth),
-    htmlAuth: htmlAuthKit(layers.auth),
-    frontendBuild: needsFrontendBuild(layers.frontend),
-    tenantTable: usesTenantTable(layers.tenancy),
-    pendingMfa: layers.extras.mfa && htmlAuthKit(layers.auth),
-    browserTransport: authUsesCookie(layers.auth)
-      ? ("cookie" as const)
-      : (layers.auth as "token" | "jwt" | "headers"),
-  });
+  const users = authNeedsUsers(layers.auth);
+  const cookie = authUsesCookie(layers.auth);
+  const token = authUsesToken(layers.auth);
+  const jwt = authUsesJwt(layers.auth);
+  const tenantTable = usesTenantTable(layers.tenancy);
+  const serverViews = layers.frontend === "server-htmx" || layers.frontend === "hybrid";
+  const bearerApi = token || jwt;
+  const jsonCookieAccounts = cookie && layers.frontend !== "server-htmx";
+  if (users) requirements.push({ feature: "auth:accounts", capability: "config:signed-urls" });
   const required = neededDockerServices(layers);
   const docker = selectedDockerServices(layers);
+  const decisions = Object.freeze({
+    workTracker: reference === "work-tracker",
+    authMechanisms: Object.freeze([
+      ...(token ? ["api", "basic"] : []),
+      ...(jwt ? ["jwt", ...(token ? [] : ["basic"])] : []),
+      ...(cookie ? ["session"] : []),
+    ]),
+    sessionSecret: cookie || serverViews,
+    tenantUsers: tenantTable && users,
+    cookieVerification: cookie && layers.extras.emailVerification,
+    jsonVerification: (bearerApi || jsonCookieAccounts) && layers.extras.emailVerification,
+    cookieJsonLogin: cookie && !bearerApi,
+    htmlCookieAccounts: cookie && serverViews,
+    ensureDatabase: layers.database !== "sqlite",
+    signedUrls: users,
+    dedicatedSigningSecret: users && !cookie && !serverViews,
+    rls: layers.tenancy === "rls",
+    sqlDriver: layers.database === "postgres" ? ("pgsql" as const) : layers.database,
+    rowLocks: layers.database !== "sqlite",
+    schemaTenants: tenantTable || layers.extras.scim,
+    mfa: layers.extras.mfa && users,
+    emailVerification: layers.extras.emailVerification && users,
+    scim: layers.extras.scim && users,
+    github: layers.extras.oauthGithub && cookie,
+    oidc: layers.extras.oidc && cookie,
+    bearerApi,
+    jsonCookieAccounts,
+    jsonAccounts: bearerApi || jsonCookieAccounts,
+    mfaViews: layers.extras.mfa && cookie && !serverViews,
+    serverViews,
+    apiDocs: layers.frontend === "api",
+    mysqlDependency: layers.database === "mysql",
+    redisQueue: layers.queue === "redis",
+    redis: layers.cache === "redis" || layers.queue === "redis",
+    composeUpCommand: docker.includes("adminer")
+      ? "docker compose --profile debug up -d --wait --wait-timeout 180"
+      : "docker compose up -d --wait --wait-timeout 180",
+    users,
+    cookie,
+    token,
+    jwt,
+    htmlAuth: cookie,
+    frontendBuild: needsFrontendBuild(layers.frontend),
+    tenantTable,
+    pendingMfa: layers.extras.mfa && cookie,
+    browserTransport: cookie ? ("cookie" as const) : (layers.auth as "token" | "jwt" | "headers"),
+  });
   const artifacts = [
     "package.json",
     "src/bootstrap/createApp.ts",
@@ -204,7 +285,7 @@ export function compileStarterFeatures(
       "src/jobs/dispatchOutboundWebhookJob.ts",
       "src/listeners/noteCreatedWebhookListener.ts",
     );
-  if (reference === "work-tracker")
+  if (decisions.workTracker)
     artifacts.push(
       "docs/WORK_TRACKER.md",
       "src/domain/workTracker.ts",

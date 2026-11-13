@@ -6,19 +6,14 @@ import {
   GENERATED_POSTGRES_APP_PASSWORD,
   GENERATED_POSTGRES_APP_ROLE,
 } from "./databaseDefaults.ts";
-import {
-  authUsesCookie,
-  authUsesJwt,
-  authUsesToken,
-  needsRedis,
-  type StarterLayers,
-} from "./types.ts";
+import type { StarterFeaturePlan } from "./featurePlan.ts";
 
 function envFlag(value: boolean): string {
   return value ? "true" : "false";
 }
 
-function postgresAppRoleEnvNotes(layers: StarterLayers): string[] {
+function postgresAppRoleEnvNotes(plan: StarterFeaturePlan): string[] {
+  const layers = plan.layers;
   if (layers.database !== "postgres") {
     return [];
   }
@@ -28,13 +23,17 @@ function postgresAppRoleEnvNotes(layers: StarterLayers): string[] {
     "# Production provisioning also requires STRATA_APP_PASSWORD matching the restricted role credential.",
     "# STRATA_APP_PASSWORD=",
     "# db/ensure-postgres-app-role.sql is repeatable on an existing volume, not only docker-entrypoint-initdb.d.",
-    layers.tenancy === "rls"
+    plan.decisions.rls
       ? "# Production TENANCY_DRIVER=rls inspects pg_roles (rolsuper / rolbypassrls), not only the URL username."
       : "# This app is not TENANCY_DRIVER=rls; still do not point runtime traffic at the postgres superuser.",
   ];
 }
 
-function renderPostgresAppRoleInitSql(projectName: string, layers: StarterLayers): string | null {
+function renderPostgresAppRoleInitSql(
+  projectName: string,
+  plan: StarterFeaturePlan,
+): string | null {
+  const layers = plan.layers;
   if (layers.database !== "postgres") {
     return null;
   }
@@ -47,7 +46,8 @@ ${postgresAppRoleSql({
 `;
 }
 
-function renderEnvExample(projectName: string, layers: StarterLayers): string {
+function renderEnvExample(projectName: string, plan: StarterFeaturePlan): string {
+  const layers = plan.layers;
   const lines = [
     `APP_NAME=${projectName}`,
     `APP_KEY_PREFIX=${projectName}`,
@@ -61,7 +61,7 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
     "# Opt-in for HTTPS termination with a preserved public Host; does not trust forwarding headers.",
     "# CSRF_TARGET_ORIGIN=https://app.example.com",
     `DATABASE_URL=${defaultDatabaseUrl(layers, projectName)}`,
-    ...postgresAppRoleEnvNotes(layers),
+    ...postgresAppRoleEnvNotes(plan),
     ...(layers.database === "postgres"
       ? [`MIGRATION_DATABASE_URL=${defaultMigrationDatabaseUrl(layers, projectName)}`]
       : []),
@@ -77,20 +77,20 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
           "# Optional. Point runtime at a different database than DATABASE_URL.",
           "# APP_DATABASE_URL=",
         ]),
-    `DB_CONNECTION=${layers.database === "postgres" ? "pgsql" : layers.database}`,
+    `DB_CONNECTION=${plan.decisions.sqlDriver}`,
     `FRONTEND_MODE=${layers.frontend}`,
     `SPA_PREFIX=${layers.spaPrefix}`,
     `TENANCY_DRIVER=${layers.tenancy}`,
     `CACHE_DRIVER=${layers.cache}`,
     `QUEUE_DRIVER=${layers.queue}`,
-    ...(layers.queue === "redis"
+    ...(plan.decisions.redisQueue
       ? [
           "# New apps use Streams. Do not point this at Redis that still holds list jobs.",
           "QUEUE_REDIS_TRANSPORT=streams",
         ]
       : []),
     `MAIL_DRIVER=${layers.mail}`,
-    `AUTH_DEV_HEADERS=${envFlag(layers.auth === "headers")}`,
+    `AUTH_DEV_HEADERS=${envFlag(!plan.decisions.users)}`,
   ];
 
   lines.push(
@@ -173,7 +173,7 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
   lines.push("# WEBHOOK_ALLOW_PRIVATE=true");
   lines.push("# WEBHOOK_SIGNATURE_HEADER=");
 
-  if (needsRedis(layers)) {
+  if (plan.decisions.redis) {
     lines.push("REDIS_PASSWORD=dev-redis-change-me");
     lines.push("REDIS_URL=redis://:dev-redis-change-me@127.0.0.1:6379");
   } else {
@@ -181,24 +181,24 @@ function renderEnvExample(projectName: string, layers: StarterLayers): string {
     lines.push("# REDIS_URL=redis://127.0.0.1:6379");
   }
 
-  if (
-    authUsesCookie(layers.auth) ||
-    layers.frontend === "server-htmx" ||
-    layers.frontend === "hybrid"
-  ) {
+  if (plan.decisions.sessionSecret) {
     lines.push("SESSION_SECRET=dev-session-secret-change-me-please-32ch");
   } else {
     lines.push("# SESSION_SECRET=");
   }
 
-  if (authUsesJwt(layers.auth)) {
+  if (plan.decisions.dedicatedSigningSecret) {
+    lines.push("SIGNED_URL_SECRET=dev-signed-url-secret-change-me-please-32ch");
+  }
+
+  if (plan.decisions.jwt) {
     lines.push("JWT_SECRET=dev-jwt-secret-change-me-please-32chars");
     lines.push("JWT_TTL_SECONDS=3600");
   } else {
     lines.push("# JWT_SECRET=");
   }
 
-  if (authUsesToken(layers.auth)) {
+  if (plan.decisions.token) {
     lines.push("FEATURE_API_TOKENS=true");
     lines.push("TOKEN_HASH_PEPPER=dev-token-pepper-change-me");
     lines.push("API_TOKEN_DEFAULT_EXPIRY_DAYS=30");

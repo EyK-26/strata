@@ -2,7 +2,6 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
 import { hashPassword } from "@getstrata/core/auth/password";
 import type {
   ExecutionPersistence,
@@ -60,7 +59,6 @@ afterEach(() => {
   process.chdir(repoRoot);
   for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];
   Object.assign(process.env, original);
-  resetDiscoverModulesForTests();
 });
 
 test("generated SCIM mutation rejection and observer rollback preserve restricted Postgres tenant isolation", async () => {
@@ -119,7 +117,6 @@ test("generated SCIM mutation rejection and observer rollback preserve restricte
       SCIM_BEARER_TOKEN: "",
       SCIM_TENANT_TOKENS: "1:fixture-one,2:fixture-two",
     });
-    resetDiscoverModulesForTests();
     const { bootstrapApp } = await import(join(app, "src/bootstrap/createApp.ts"));
     const { User, fixtureObserverService } = await import(join(app, "src/models/User.ts"));
     let rejectUpdate = false;

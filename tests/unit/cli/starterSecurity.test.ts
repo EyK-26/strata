@@ -2,7 +2,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
 import type { ExecutionPersistence } from "@getstrata/core/contracts/persistence";
 import { generateTotp, generateTotpSecret } from "@getstrata/core/security/totp";
 import {
@@ -46,7 +45,6 @@ function restoreRuntime(): void {
       process.env[key] = value;
     }
   }
-  resetDiscoverModulesForTests();
 }
 
 afterEach(async () => {

@@ -2,7 +2,6 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
 import { hashPassword } from "@getstrata/core/auth/password";
 import type {
   ExecutionPersistence,
@@ -44,7 +43,6 @@ afterEach(() => {
   process.chdir(repoRoot);
   for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];
   Object.assign(process.env, original);
-  resetDiscoverModulesForTests();
 });
 
 async function withApp(
@@ -113,7 +111,6 @@ async function withApp(
       delete process.env.APP_DATABASE_URL;
       delete process.env.MIGRATION_DATABASE_URL;
     }
-    resetDiscoverModulesForTests();
     await verify(app, admin);
   } finally {
     process.chdir(repoRoot);

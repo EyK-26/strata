@@ -1,7 +1,7 @@
 import type { AuthRenderingContext } from "./renderingContext.ts";
 
 export function renderAuthHelpers({
-  layers,
+  plan,
   cookie,
   mfa,
   verify,
@@ -9,7 +9,7 @@ export function renderAuthHelpers({
   samlTenantCreateField,
 }: Pick<
   AuthRenderingContext,
-  "layers" | "cookie" | "mfa" | "verify" | "tenantCreateField" | "samlTenantCreateField"
+  "plan" | "cookie" | "mfa" | "verify" | "tenantCreateField" | "samlTenantCreateField"
 >) {
   const helpers = `
 function withAuthDatabase(ports: BusinessRequestPorts, database: SelectedSession): BusinessRequestPorts {
@@ -29,7 +29,7 @@ async function deferAuthEffect(ports: BusinessRequestPorts, work: () => void | P
   else await work();
 }
 ${
-  layers.tenancy === "none"
+  !plan.decisions.tenantTable
     ? ""
     : `function establishedTenantId(ports: BusinessRequestPorts): number {
   const id = ports.established.tenant?.id;
@@ -179,7 +179,7 @@ async function completeSignedPasswordReset(ports: BusinessRequestPorts, request:
     const userId = await consumeSignedAuthToken(ports, request, AUTH_ONE_TIME_PURPOSES.passwordReset);
     if (!userId) return false;
     await runAuthWrite(ports, userId, async (ports) => {
-      const user = await ports.database.model(User).where({ id: userId })${layers.database === "sqlite" ? "" : ".lockForUpdate()"}.first();
+      const user = await ports.database.model(User).where({ id: userId })${plan.decisions.rowLocks ? ".lockForUpdate()" : ""}.first();
       if (!user) throw new Error("Reset account no longer exists.");
       await user.update({ password: await hashPassword(password) });
       await revokeStoredUserSessions(ports.database, userId, { incrementAuthVersion: true });

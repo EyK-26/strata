@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadAppCommands, resolveApp, runCli } from "@getstrata/cli";
+import { compileStarterFeatures } from "../../../packages/strata-starter/src/featurePlan.ts";
 import {
   generateProject,
   resolveOverlayRoot,
@@ -251,7 +252,7 @@ console.log("missing-redis-before-application");
     try {
       for (const app of [fixtures.rls, fixtures.hobby, fixtures.team]) {
         const { layers } = JSON.parse(await readFile(join(app, "strata.layers.json"), "utf8"));
-        const expectedRegister = renderCliRegisterTs(layers);
+        const expectedRegister = renderCliRegisterTs(compileStarterFeatures(layers));
         const actualRegister = await readFile(join(app, "src/cli/register.ts"), "utf8");
         const actualQueueWork = await readFile(join(app, "src/cli/queueWork.ts"), "utf8");
         expect(actualRegister).toBe(expectedRegister);

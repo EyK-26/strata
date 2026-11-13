@@ -3,7 +3,7 @@ import { renderBrowserAuthRoutes } from "./auth/renderBrowserRoutes.ts";
 import { renderAuthImports } from "./auth/renderImports.ts";
 import { createAuthRenderingContext } from "./auth/renderingContext.ts";
 import { renderAuthHelpers, renderMfaEnrollment } from "./auth/renderWorkflows.ts";
-import { authNeedsUsers, type StarterLayers } from "./types.ts";
+import type { StarterFeaturePlan } from "./featurePlan.ts";
 
 function renderPendingMfaTs(): string {
   return `import { createPendingMfaCookie, clearPendingMfaCookie, readPendingMfaCookie } from "@getstrata/core/auth/pendingMfaCookie";
@@ -19,7 +19,7 @@ export function createPendingMfaHelpers(options: Readonly<{secret:string;product
 `;
 }
 
-function renderSiteModule(_layers: StarterLayers): string {
+function renderSiteModule(_plan: StarterFeaturePlan): string {
   return `import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { CORE_VIEW_RENDERER_TOKEN } from "@getstrata/core/view";
 
@@ -40,9 +40,9 @@ export default siteModule;
 `;
 }
 
-function renderAuthModule(layers: StarterLayers): string | null {
-  if (!authNeedsUsers(layers.auth)) return null;
-  const context = createAuthRenderingContext(layers);
+function renderAuthModule(plan: StarterFeaturePlan): string | null {
+  if (!plan.decisions.users) return null;
+  const context = createAuthRenderingContext(plan);
   const imports = renderAuthImports(context);
   const helpers = renderAuthHelpers(context);
   const apiRoutes = renderApiAuthRoutes(context);

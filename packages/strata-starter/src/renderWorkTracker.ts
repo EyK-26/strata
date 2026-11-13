@@ -1,4 +1,4 @@
-import type { StarterLayers } from "./types.ts";
+import type { StarterFeaturePlan } from "./featurePlan.ts";
 
 export function renderWorkTrackerModels(): string {
   return `import { BaseRepository } from "@getstrata/core/database/baseRepository";
@@ -136,7 +136,7 @@ export const workTrackerListener:DurableListener={name:"work.notification",event
 `;
 }
 
-export function renderWorkTrackerMigration(layers: StarterLayers): string {
+export function renderWorkTrackerMigration(plan: StarterFeaturePlan): string {
   const statements = [
     "CREATE TABLE work_organizations (id VARCHAR(64) PRIMARY KEY, tenant_id INTEGER NOT NULL, name VARCHAR(200) NOT NULL, UNIQUE (tenant_id,id))",
     "CREATE TABLE work_members (tenant_id INTEGER NOT NULL, organization_id VARCHAR(64) NOT NULL, user_id INTEGER NOT NULL, role VARCHAR(16) NOT NULL CHECK (role IN ('owner','member','viewer')), PRIMARY KEY (tenant_id,organization_id,user_id), FOREIGN KEY (tenant_id,organization_id) REFERENCES work_organizations(tenant_id,id))",
@@ -153,7 +153,7 @@ export function renderWorkTrackerMigration(layers: StarterLayers): string {
     "work_members",
     "work_organizations",
   ];
-  if (layers.tenancy === "rls") {
+  if (plan.decisions.rls) {
     for (const table of tables) {
       statements.push(
         `ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`,

@@ -3,7 +3,6 @@ import { createHash, createSign, generateKeyPairSync } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resetDiscoverModulesForTests } from "@getstrata/bootstrap/discoverModules";
 import { signJwt } from "@getstrata/core/auth/jwt";
 import { oidcAccessTokenHash } from "@getstrata/core/auth/oauth/oidcIdToken";
 import { hashPassword } from "@getstrata/core/auth/password";
@@ -74,7 +73,6 @@ afterEach(() => {
   process.chdir(repoRoot);
   for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];
   Object.assign(process.env, original);
-  resetDiscoverModulesForTests();
 });
 
 async function withApp(
@@ -151,7 +149,6 @@ async function withApp(
       delete process.env.APP_DATABASE_URL;
       delete process.env.MIGRATION_DATABASE_URL;
     }
-    resetDiscoverModulesForTests();
     await verify(app, admin);
   } finally {
     process.chdir(repoRoot);

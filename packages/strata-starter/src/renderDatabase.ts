@@ -1,16 +1,9 @@
 import { defaultDatabaseUrl } from "./databaseDefaults.ts";
-import type { DatabaseLayer, StarterLayers } from "./types.ts";
+import type { StarterFeaturePlan } from "./featurePlan.ts";
 
-function needsEnsure(layers: StarterLayers): boolean {
-  return layers.database !== "sqlite";
-}
-
-function driverName(database: DatabaseLayer): "pgsql" | "mysql" | "sqlite" {
-  return database === "postgres" ? "pgsql" : database;
-}
-
-function renderDatabaseTs(layers: StarterLayers): string {
-  const driver = driverName(layers.database);
+function renderDatabaseTs(plan: StarterFeaturePlan): string {
+  const layers = plan.layers;
+  const driver = plan.decisions.sqlDriver;
   const filename =
     layers.database === "sqlite"
       ? `
@@ -46,7 +39,8 @@ export async function pingDatabase(selected: DatabaseSession | TransactionSessio
 `;
 }
 
-function renderEnsureDatabaseTs(layers: StarterLayers, projectName: string): string | null {
+function renderEnsureDatabaseTs(plan: StarterFeaturePlan, projectName: string): string | null {
+  const layers = plan.layers;
   if (layers.database === "sqlite") {
     return null;
   }
@@ -147,8 +141,8 @@ export async function ensureAppDatabase(options: { provision?: boolean } = {}): 
 `;
 }
 
-function renderSidecarsTs(_layers: StarterLayers): string | null {
+function renderSidecarsTs(_plan: StarterFeaturePlan): string | null {
   return null;
 }
 
-export { needsEnsure, renderDatabaseTs, renderEnsureDatabaseTs, renderSidecarsTs };
+export { renderDatabaseTs, renderEnsureDatabaseTs, renderSidecarsTs };

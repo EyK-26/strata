@@ -3,14 +3,8 @@ import {
   GENERATED_MYSQL_ROOT_PASSWORD,
   GENERATED_POSTGRES_SUPERUSER_PASSWORD,
 } from "./databaseDefaults.ts";
-import {
-  DOCKER_SERVICE_LABELS,
-  type DockerServiceName,
-  dockerComposeUpCommand,
-  neededDockerServices,
-  type StarterLayers,
-  selectedDockerServices,
-} from "./types.ts";
+import type { StarterFeaturePlan } from "./featurePlan.ts";
+import { DOCKER_SERVICE_LABELS, type DockerServiceName } from "./types.ts";
 
 function localEnvVars(services: DockerServiceName[]): string[] {
   const vars: string[] = [];
@@ -26,13 +20,14 @@ function localEnvVars(services: DockerServiceName[]): string[] {
   return [...new Set(vars)];
 }
 
-function renderSupportingToolsReadme(projectName: string, layers: StarterLayers): string {
-  const needed = neededDockerServices(layers);
+function renderSupportingToolsReadme(projectName: string, plan: StarterFeaturePlan): string {
+  const layers = plan.layers;
+  const needed = plan.services.required;
   if (needed.length === 0) {
     return "";
   }
 
-  const dockerOn = selectedDockerServices(layers);
+  const dockerOn = plan.services.docker;
   const dockerSet = new Set(dockerOn);
   const localOn = needed.filter((name) => !dockerSet.has(name));
   const lines = ["## Supporting tools", ""];
@@ -43,7 +38,7 @@ function renderSupportingToolsReadme(projectName: string, layers: StarterLayers)
       `Docker Compose includes ${names}.`,
       "",
       "```bash",
-      dockerComposeUpCommand(layers),
+      plan.decisions.composeUpCommand,
       "```",
       "",
       "Wait for this command to succeed before migrating. It waits up to 180 seconds for selected services to be healthy; inspect `docker compose ps` and `docker compose logs` if it fails. Increasing `--wait-timeout` can accommodate a slow first initialization. These checks do not run application migrations.",

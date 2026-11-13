@@ -1,22 +1,17 @@
 import { generatedRlsBootstrapSql } from "../../../src/core/tenant/enableTenantRls.ts";
-import { needsEnsure } from "./renderDatabase.ts";
-import {
-  authNeedsUsers,
-  authUsesCookie,
-  authUsesToken,
-  type DatabaseLayer,
-  type StarterLayers,
-  usesTenantTable,
-} from "./types.ts";
+import type { StarterFeaturePlan } from "./featurePlan.ts";
+import type { DatabaseLayer } from "./types.ts";
 
-function ensureImport(layers: StarterLayers): string {
-  return needsEnsure(layers)
+function ensureImport(plan: StarterFeaturePlan): string {
+  return plan.decisions.ensureDatabase
     ? `import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";\n`
     : "";
 }
 
-function ensureCall(layers: StarterLayers, provision = true): string {
-  return needsEnsure(layers) ? `  await ensureAppDatabase({ provision: ${provision} });\n` : "";
+function ensureCall(plan: StarterFeaturePlan, provision = true): string {
+  return plan.decisions.ensureDatabase
+    ? `  await ensureAppDatabase({ provision: ${provision} });\n`
+    : "";
 }
 
 function dialectFragments(database: DatabaseLayer) {
@@ -55,11 +50,12 @@ function dialectFragments(database: DatabaseLayer) {
   };
 }
 
-function starterSchemaStatements(layers: StarterLayers): string[] {
+function starterSchemaStatements(plan: StarterFeaturePlan): string[] {
+  const layers = plan.layers;
   const d = dialectFragments(layers.database);
   const statements: string[] = [];
-  const tenancyOn = usesTenantTable(layers.tenancy);
-  const mfaOn = layers.extras.mfa && authNeedsUsers(layers.auth);
+  const tenancyOn = plan.decisions.tenantTable;
+  const mfaOn = plan.decisions.mfa;
   const payloadType = layers.database === "postgres" ? "JSONB NOT NULL" : `${d.text} NOT NULL`;
 
   statements.push(`CREATE TABLE IF NOT EXISTS failed_job (
@@ -71,7 +67,7 @@ function starterSchemaStatements(layers: StarterLayers): string[] {
     failed_at ${d.timestamp}
   )`);
 
-  if (tenancyOn || layers.extras.scim) {
+  if (plan.decisions.schemaTenants) {
     statements.push(`CREATE TABLE IF NOT EXISTS tenant (
     id ${d.id},
     slug ${d.keyText} NOT NULL UNIQUE
@@ -85,9 +81,10 @@ function starterSchemaStatements(layers: StarterLayers): string[] {
     created_at ${d.timestamp}
   )`);
 
-  if (authNeedsUsers(layers.auth)) {
-    const tenantColumn =
-      tenancyOn || layers.extras.scim ? "\n    tenant_id INTEGER NOT NULL DEFAULT 1," : "";
+  if (plan.decisions.users) {
+    const tenantColumn = plan.decisions.schemaTenants
+      ? "\n    tenant_id INTEGER NOT NULL DEFAULT 1,"
+      : "";
     const mfaColumns = mfaOn
       ? `\n    mfa_secret ${d.text},\n    mfa_enabled ${d.bool},\n    mfa_recovery_codes ${d.text},`
       : "";
@@ -111,7 +108,7 @@ function starterSchemaStatements(layers: StarterLayers): string[] {
   )`);
   }
 
-  if (authUsesCookie(layers.auth)) {
+  if (plan.decisions.cookie) {
     statements.push(`CREATE TABLE IF NOT EXISTS sessions (
     id ${d.keyText} PRIMARY KEY,
     user_id INTEGER NOT NULL,
@@ -132,7 +129,7 @@ function starterSchemaStatements(layers: StarterLayers): string[] {
   )`);
   }
 
-  if (authUsesToken(layers.auth)) {
+  if (plan.decisions.token) {
     statements.push(`CREATE TABLE IF NOT EXISTS api_tokens (
     id ${d.id},
     user_id INTEGER NOT NULL,
@@ -145,17 +142,17 @@ function starterSchemaStatements(layers: StarterLayers): string[] {
   )`);
   }
 
-  const rlsOn = layers.tenancy === "rls" && layers.database === "postgres";
+  const rlsOn = plan.decisions.rls;
   if (rlsOn) {
-    const rlsTables = authNeedsUsers(layers.auth) ? ["notes", "users"] : ["notes"];
+    const rlsTables = plan.decisions.users ? ["notes", "users"] : ["notes"];
     const userOwnedTables: string[] = [];
-    if (authNeedsUsers(layers.auth)) {
+    if (plan.decisions.users) {
       userOwnedTables.push("auth_one_time_tokens");
     }
-    if (authUsesCookie(layers.auth)) {
+    if (plan.decisions.cookie) {
       userOwnedTables.push("sessions");
     }
-    if (authUsesToken(layers.auth)) {
+    if (plan.decisions.token) {
       userOwnedTables.push("api_tokens");
     }
     statements.push(generatedRlsBootstrapSql(rlsTables, userOwnedTables).trim());
@@ -164,13 +161,14 @@ function starterSchemaStatements(layers: StarterLayers): string[] {
   return statements;
 }
 
-function renderStarterSchemaMigration(layers: StarterLayers): string {
-  const statements = starterSchemaStatements(layers);
+function renderStarterSchemaMigration(plan: StarterFeaturePlan): string {
+  const layers = plan.layers;
+  const statements = starterSchemaStatements(plan);
   const cascade = layers.database === "sqlite" ? "" : " CASCADE";
   const upCalls = statements
     .map((sql) => `    await db.unsafe(${JSON.stringify(sql)});`)
     .join("\n");
-  const downCalls = dropTables(layers)
+  const downCalls = dropTables(plan)
     .map((table) => `    await db.unsafe("DROP TABLE IF EXISTS ${table}${cascade}");`)
     .join("\n");
 
@@ -190,8 +188,9 @@ export default migration;
 `;
 }
 
-function renderMigrationRuntimeTs(layers: StarterLayers): string {
-  const driver = layers.database === "postgres" ? "pgsql" : layers.database;
+function renderMigrationRuntimeTs(plan: StarterFeaturePlan): string {
+  const layers = plan.layers;
+  const driver = plan.decisions.sqlDriver;
   const imports =
     layers.database === "postgres"
       ? `import { grantPostgresAppRolePrivileges, openPostgresAdminConnection, postgresDatabaseNameFromUrl } from "@getstrata/core/tenant/enableTenantRls";`
@@ -247,22 +246,21 @@ export async function withMigrationDatabase<T>(
 `;
 }
 
-function renderMigrateTs(layers: StarterLayers): string {
-  const tenancyOn = usesTenantTable(layers.tenancy);
-  const usersOn = authNeedsUsers(layers.auth);
-  const verifyOn = layers.extras.emailVerification && usersOn;
-  const rlsOn = layers.tenancy === "rls" && layers.database === "postgres";
+function renderMigrateTs(plan: StarterFeaturePlan): string {
+  const tenancyOn = plan.decisions.tenantTable;
+  const usersOn = plan.decisions.users;
+  const verifyOn = plan.decisions.emailVerification;
+  const rlsOn = plan.decisions.rls;
   const imports = usersOn
     ? `import { hashPassword } from "@getstrata/core/auth/password";
 import { User, UserRepository } from "../models/User.ts";
 `
     : "";
-  const tenant =
-    tenancyOn || layers.extras.scim
-      ? `
+  const tenant = plan.decisions.schemaTenants
+    ? `
     const [tenant] = await selected.execute<{count:string|number}>({text:"SELECT COUNT(*) AS count FROM tenant",params:[]});
     if (Number(tenant?.count ?? 0) === 0) await selected.execute({text:\`INSERT INTO tenant (slug) VALUES (\${selected.dialect.placeholder(1)})\`,params:["default"]});`
-      : "";
+    : "";
   const users = usersOn
     ? `
     const users = selected.model(User);
@@ -275,7 +273,7 @@ import { User, UserRepository } from "../models/User.ts";
   const run = rlsOn
     ? `policy.run(database, {kind:"bypass"}, writeSeed)`
     : `database.transaction(writeSeed)`;
-  return `${imports}${ensureImport(layers)}import { createApplication } from "@getstrata/core/runtime/application";
+  return `${imports}${ensureImport(plan)}import { createApplication } from "@getstrata/core/runtime/application";
 import { createDatabaseBindings } from "@getstrata/core/database/bindings";
 import type { DatabaseSession, TransactionSession } from "@getstrata/core/database/session";
 import { createPersistenceInvocation } from "@getstrata/bootstrap/persistenceInvocation";
@@ -288,7 +286,7 @@ import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime
 /** An explicit development-only command owns its own canonical Application. */
 export async function seed() {
   if (isProductionEnv()) throw new Error("Demo seeding is disabled in production and staging.");
-${ensureCall(layers)}  const connection = databaseOptions();
+${ensureCall(plan)}  const connection = databaseOptions();
   const application = createApplication({providers:[],services:createDatabaseBindings({default:"main",connections:{main:connection},repositories:[NoteRepository${usersOn ? ",UserRepository" : ""}],models:[Note${usersOn ? ",User" : ""}]})});
   await application.start();
   try {
@@ -306,7 +304,7 @@ ${ensureCall(layers)}  const connection = databaseOptions();
 }
 
 export async function migrate() {
-${ensureCall(layers)}  await withMigrationDatabase(async (db) => {
+${ensureCall(plan)}  await withMigrationDatabase(async (db) => {
     await migrateDatabase(db, await loadStarterMigrations());
   });
 }
@@ -318,34 +316,34 @@ if (import.meta.main) {
 `;
 }
 
-function dropTables(layers: StarterLayers): string[] {
+function dropTables(plan: StarterFeaturePlan): string[] {
   const ordered: string[] = ["failed_job"];
-  if (authUsesToken(layers.auth)) {
+  if (plan.decisions.token) {
     ordered.push("api_tokens");
   }
-  if (authUsesCookie(layers.auth)) {
+  if (plan.decisions.cookie) {
     ordered.push("sessions");
     ordered.push("auth_saml_assertions");
   }
-  if (authNeedsUsers(layers.auth)) {
+  if (plan.decisions.users) {
     ordered.push("auth_one_time_tokens");
     ordered.push("users");
   }
   ordered.push("notes");
-  if (usesTenantTable(layers.tenancy) || layers.extras.scim) {
+  if (plan.decisions.schemaTenants) {
     ordered.push("tenant");
   }
   return ordered;
 }
 
-function renderFreshTs(layers: StarterLayers): string {
-  return `${ensureImport(layers)}import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
+function renderFreshTs(plan: StarterFeaturePlan): string {
+  return `${ensureImport(plan)}import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { freshDatabase } from "@getstrata/core/database/migrations";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function fresh() {
   if (isProductionEnv()) throw new Error("migrate:fresh is only available in development/test environments.");
-${ensureCall(layers)}  await withMigrationDatabase(async (db) => {
+${ensureCall(plan)}  await withMigrationDatabase(async (db) => {
     await freshDatabase(db, await loadStarterMigrations(), { destructive: true });
   });
 }
@@ -370,12 +368,13 @@ if (import.meta.main) {
 `;
 }
 
-function renderStatusTs(layers: StarterLayers): string {
-  return `${ensureImport(layers)}import { getMigrationStatus } from "@getstrata/core/database/migrations";
+function renderStatusTs(plan: StarterFeaturePlan): string {
+  const layers = plan.layers;
+  return `${ensureImport(plan)}import { getMigrationStatus } from "@getstrata/core/database/migrations";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function status() {
-${ensureCall(layers, false)}  const rows = await withMigrationDatabase(async (db) => {
+${ensureCall(plan, false)}  const rows = await withMigrationDatabase(async (db) => {
     return getMigrationStatus(db, await loadStarterMigrations());
   }${layers.database === "postgres" ? ", { grantRuntimePrivileges: false }" : ""});
   console.log("Migrations:");
@@ -392,12 +391,12 @@ if (import.meta.main) {
 `;
 }
 
-function renderRollbackTs(layers: StarterLayers): string {
-  return `${ensureImport(layers)}import { rollbackDatabase } from "@getstrata/core/database/migrations";
+function renderRollbackTs(plan: StarterFeaturePlan): string {
+  return `${ensureImport(plan)}import { rollbackDatabase } from "@getstrata/core/database/migrations";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 export async function rollback() {
-${ensureCall(layers, false)}  const rolledBack = await withMigrationDatabase(async (db) => {
+${ensureCall(plan, false)}  const rolledBack = await withMigrationDatabase(async (db) => {
     return rollbackDatabase(db, await loadStarterMigrations(), {
       onMigration: (name) => {
         console.log(\`rolled back \${name}\`);
@@ -417,17 +416,17 @@ if (import.meta.main) {
 `;
 }
 
-function renderAccountStateMigration(layers: StarterLayers): string {
-  const driver = layers.database === "postgres" ? "pgsql" : layers.database;
+function renderAccountStateMigration(plan: StarterFeaturePlan): string {
+  const driver = plan.decisions.sqlDriver;
   return `import { createAccountStateMigration } from "@getstrata/core/auth/accountStateMigration";
 
-export default createAccountStateMigration("0006_account_state", "${driver}", { sessions: ${authUsesCookie(layers.auth)} });
+export default createAccountStateMigration("0006_account_state", "${driver}", { sessions: ${plan.decisions.cookie} });
 `;
 }
 
-function renderOutboxMigration(layers: StarterLayers): string {
-  const driver = layers.database === "postgres" ? "pgsql" : layers.database;
-  const rls = layers.tenancy === "rls" && layers.database === "postgres";
+function renderOutboxMigration(plan: StarterFeaturePlan): string {
+  const driver = plan.decisions.sqlDriver;
+  const rls = plan.decisions.rls;
   return `import { createOutboxMigration } from "@getstrata/core/events/outbox";
 
 export default createOutboxMigration("0005_outbox", "${driver}", { rls: ${rls} });
