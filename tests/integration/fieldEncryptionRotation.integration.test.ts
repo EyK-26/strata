@@ -17,7 +17,7 @@ import {
 import { revealMfaSecret } from "@getstrata/core/crypto/mfaSecret";
 import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import { defineRepository } from "@getstrata/core/database/definitions";
-import { resetSqlDialect, useSqlDialect } from "@getstrata/core/database/dialect";
+import { runWithSqlDialect } from "@getstrata/core/database/dialect";
 import { Schema } from "@getstrata/core/database/schema";
 import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
 import { defineTable } from "@getstrata/core/database/table";
@@ -554,145 +554,145 @@ test("restricted-role Postgres RLS batches serialize, bind tenant checkpoints an
 });
 
 test("MySQL published entrypoints resume and serialize maintenance batches across three processes", async () => {
-  const admin = process.env.MYSQL_OBSERVABILITY_ADMIN_URL;
-  if (!admin) throw new Error("MySQL qualification fixture required");
-  const { createConnection } = await import("mysql2/promise");
-  const { createMysqlConnection } = await import("@getstrata/core/database/mysqlConnection");
-  const { resolve } = await import("node:path");
-  const root = await createConnection(admin);
-  const consumerDirectory = await mkdtemp(join(tmpdir(), "rotation-published-consumer-"));
-  const consumerTsconfig = join(consumerDirectory, "tsconfig.json");
-  await writeFile(consumerTsconfig, JSON.stringify({ compilerOptions: {} }));
-  const database = `rotate_${crypto.randomUUID().replaceAll("-", "")}`;
-  const url = new URL(admin);
-  url.pathname = `/${database}`;
-  const db = createMysqlConnection(url.toString());
-  try {
-    await root.query(`CREATE DATABASE ${database}`);
-    useSqlDialect("mysql");
-    await createFieldEncryptionRotationMigration("rotation", "mysql").up(db);
-    await Schema.run(db, "mysql", (schema) => {
-      schema.create(table.name, (t) => {
-        t.id();
-        t.text("email").nullable();
-        t.string("lookup", 64).nullable().unique();
-        t.text("mfa").nullable();
-        t.text("deleted_at").nullable();
+  return runWithSqlDialect("mysql", async () => {
+    const admin = process.env.MYSQL_OBSERVABILITY_ADMIN_URL;
+    if (!admin) throw new Error("MySQL qualification fixture required");
+    const { createConnection } = await import("mysql2/promise");
+    const { createMysqlConnection } = await import("@getstrata/core/database/mysqlConnection");
+    const { resolve } = await import("node:path");
+    const root = await createConnection(admin);
+    const consumerDirectory = await mkdtemp(join(tmpdir(), "rotation-published-consumer-"));
+    const consumerTsconfig = join(consumerDirectory, "tsconfig.json");
+    await writeFile(consumerTsconfig, JSON.stringify({ compilerOptions: {} }));
+    const database = `rotate_${crypto.randomUUID().replaceAll("-", "")}`;
+    const url = new URL(admin);
+    url.pathname = `/${database}`;
+    const db = createMysqlConnection(url.toString());
+    try {
+      await root.query(`CREATE DATABASE ${database}`);
+      await createFieldEncryptionRotationMigration("rotation", "mysql").up(db);
+      await Schema.run(db, "mysql", (schema) => {
+        schema.create(table.name, (t) => {
+          t.id();
+          t.text("email").nullable();
+          t.string("lookup", 64).nullable().unique();
+          t.text("mfa").nullable();
+          t.text("deleted_at").nullable();
+        });
       });
-    });
-    await withBoundDatabase(
-      {
-        definition: {
-          default: "test",
-          connections: { test: { driver: "mysql", url: url.toString() } },
-          repositories: [rotationRepository, fieldEncryptionRotationRepository],
+      await withBoundDatabase(
+        {
+          definition: {
+            default: "test",
+            connections: { test: { driver: "mysql", url: url.toString() } },
+            repositories: [rotationRepository, fieldEncryptionRotationRepository],
+          },
         },
-      },
-      async (selected) => {
-        const repo = selected.repository(rotationRepository);
-        for (let id = 1; id <= 4; id++) {
-          const email = `user${id}@example.test`;
-          await repo.create({
-            id,
-            email: encryptField(email, old),
-            lookup: source.lookup(email),
-            mfa: null,
-            deleted_at: null,
+        async (selected) => {
+          const repo = selected.repository(rotationRepository);
+          for (let id = 1; id <= 4; id++) {
+            const email = `user${id}@example.test`;
+            await repo.create({
+              id,
+              email: encryptField(email, old),
+              lookup: source.lookup(email),
+              mfa: null,
+              deleted_at: null,
+            });
+          }
+          const options: FieldEncryptionRotationOptions<Row, "id"> = {
+            session: selected,
+            tenantId: null,
+            repository: rotationRepository,
+            runId: "mysql",
+            scopeId: "global",
+            maintenanceMode: true,
+            source,
+            target,
+            fields: [{ column: "email", purpose: "email", lookupColumn: "lookup" }],
+            batchSize: 1,
+          };
+          expect((await runFieldEncryptionRotationBatch(options)).changed).toBe(1);
+          const program = `import{BaseRepository,defineTable,defineRepository,runFieldEncryptionRotationBatch}from ${JSON.stringify(resolve("packages/strata-core/dist/index.js"))};import{createApplication}from ${JSON.stringify(resolve("packages/strata-core/dist/entries/runtime/application.js"))};import{createDatabaseBindings}from ${JSON.stringify(resolve("packages/strata-core/dist/entries/database/bindings.js"))};import{DATABASE_SESSION_TOKEN}from ${JSON.stringify(resolve("packages/strata-core/dist/entries/database/tokens.js"))};import{runFieldEncryptionRotationBatch as shared,fieldEncryptionRotationRepository}from ${JSON.stringify(resolve("packages/strata-core/dist/entries/crypto/fieldEncryptionRotation.js"))};import{createFieldEncryptionKeyring}from ${JSON.stringify(resolve("packages/strata-core/dist/entries/crypto/fieldEncryption.js"))};if(shared!==runFieldEncryptionRotationBatch)throw Error('Entry identity mismatch');const repository=defineRepository({name:'rotation.accounts',table:defineTable({name:'rotation_accounts',primaryKey:'id',columns:['id','email','lookup','mfa','deleted_at'],softDeletes:true}),dependencies:[],create:binding=>new BaseRepository(binding)});const app=createApplication({providers:[],services:createDatabaseBindings({default:'main',connections:{main:{driver:'mysql',url:process.env.ROTATION_MYSQL_URL}},repositories:[repository,fieldEncryptionRotationRepository]})});await app.start();const source=createFieldEncryptionKeyring({activeKeyId:'old',encryptionKeys:{old:Buffer.alloc(32,11)},legacyV1Key:Buffer.alloc(32,11),lookupKey:Buffer.alloc(32,11)});const target=createFieldEncryptionKeyring({activeKeyId:'next',encryptionKeys:{next:Buffer.alloc(32,22)},lookupKey:Buffer.alloc(32,33)});try{console.log(JSON.stringify(await app.run(scope=>shared({session:scope.resolve(DATABASE_SESSION_TOKEN),tenantId:null,repository,runId:'mysql',scopeId:'global',maintenanceMode:true,source,target,fields:[{column:'email',purpose:'email',lookupColumn:'lookup'}],batchSize:1}))));}finally{const result=await app.stop();if(!result.successful)throw Error('Application did not stop cleanly');}`;
+          const actors = await Promise.all(
+            Array.from({ length: 3 }, async () => {
+              const actor = Bun.spawn(
+                [
+                  process.execPath,
+                  "--no-env-file",
+                  "--config=/dev/null",
+                  `--tsconfig-override=${consumerTsconfig}`,
+                  "-e",
+                  program,
+                ],
+                {
+                  cwd: consumerDirectory,
+                  env: { PATH: process.env.PATH, ROTATION_MYSQL_URL: url.toString() },
+                  stdout: "pipe",
+                  stderr: "pipe",
+                },
+              );
+              const [body, errors, exit] = await Promise.all([
+                new Response(actor.stdout).text(),
+                new Response(actor.stderr).text(),
+                actor.exited,
+              ]);
+              return { body, errors, exit };
+            }),
+          );
+          const results = actors.map(({ body, errors, exit }) => {
+            expect(exit, errors).toBe(0);
+            return JSON.parse(body);
           });
-        }
-        const options: FieldEncryptionRotationOptions<Row, "id"> = {
-          session: selected,
-          tenantId: null,
-          repository: rotationRepository,
-          runId: "mysql",
-          scopeId: "global",
-          maintenanceMode: true,
-          source,
-          target,
-          fields: [{ column: "email", purpose: "email", lookupColumn: "lookup" }],
-          batchSize: 1,
-        };
-        expect((await runFieldEncryptionRotationBatch(options)).changed).toBe(1);
-        const program = `import{BaseRepository,defineTable,defineRepository,runFieldEncryptionRotationBatch}from ${JSON.stringify(resolve("packages/strata-core/dist/index.js"))};import{createApplication}from ${JSON.stringify(resolve("packages/strata-core/dist/entries/runtime/application.js"))};import{createDatabaseBindings}from ${JSON.stringify(resolve("packages/strata-core/dist/entries/database/bindings.js"))};import{DATABASE_SESSION_TOKEN}from ${JSON.stringify(resolve("packages/strata-core/dist/entries/database/tokens.js"))};import{runFieldEncryptionRotationBatch as shared,fieldEncryptionRotationRepository}from ${JSON.stringify(resolve("packages/strata-core/dist/entries/crypto/fieldEncryptionRotation.js"))};import{createFieldEncryptionKeyring}from ${JSON.stringify(resolve("packages/strata-core/dist/entries/crypto/fieldEncryption.js"))};if(shared!==runFieldEncryptionRotationBatch)throw Error('Entry identity mismatch');const repository=defineRepository({name:'rotation.accounts',table:defineTable({name:'rotation_accounts',primaryKey:'id',columns:['id','email','lookup','mfa','deleted_at'],softDeletes:true}),dependencies:[],create:binding=>new BaseRepository(binding)});const app=createApplication({providers:[],services:createDatabaseBindings({default:'main',connections:{main:{driver:'mysql',url:process.env.ROTATION_MYSQL_URL}},repositories:[repository,fieldEncryptionRotationRepository]})});await app.start();const source=createFieldEncryptionKeyring({activeKeyId:'old',encryptionKeys:{old:Buffer.alloc(32,11)},legacyV1Key:Buffer.alloc(32,11),lookupKey:Buffer.alloc(32,11)});const target=createFieldEncryptionKeyring({activeKeyId:'next',encryptionKeys:{next:Buffer.alloc(32,22)},lookupKey:Buffer.alloc(32,33)});try{console.log(JSON.stringify(await app.run(scope=>shared({session:scope.resolve(DATABASE_SESSION_TOKEN),tenantId:null,repository,runId:'mysql',scopeId:'global',maintenanceMode:true,source,target,fields:[{column:'email',purpose:'email',lookupColumn:'lookup'}],batchSize:1}))));}finally{const result=await app.stop();if(!result.successful)throw Error('Application did not stop cleanly');}`;
-        const actors = await Promise.all(
-          Array.from({ length: 3 }, async () => {
-            const actor = Bun.spawn(
-              [
-                process.execPath,
-                "--no-env-file",
-                "--config=/dev/null",
-                `--tsconfig-override=${consumerTsconfig}`,
-                "-e",
-                program,
-              ],
-              {
-                cwd: consumerDirectory,
-                env: { PATH: process.env.PATH, ROTATION_MYSQL_URL: url.toString() },
-                stdout: "pipe",
-                stderr: "pipe",
-              },
-            );
-            const [body, errors, exit] = await Promise.all([
-              new Response(actor.stdout).text(),
-              new Response(actor.stderr).text(),
-              actor.exited,
-            ]);
-            return { body, errors, exit };
-          }),
-        );
-        const results = actors.map(({ body, errors, exit }) => {
-          expect(exit, errors).toBe(0);
-          return JSON.parse(body);
-        });
-        expect(results.reduce((sum, row) => sum + row.changed, 0)).toBe(3);
-        expect(results.filter((row) => row.completed).length).toBe(1);
-        const audit = await runFieldEncryptionRotationBatch({
-          ...options,
-          runId: "mysql_audit",
-          mode: "audit",
-          batchSize: 5,
-        });
-        expect(audit).toEqual({ processed: 4, changed: 0, completed: true });
-      },
-    );
-  } finally {
-    resetSqlDialect();
-    await db.close();
-    await root.query(`DROP DATABASE IF EXISTS ${database}`);
-    await root.end();
-    await rm(consumerDirectory, { recursive: true, force: true });
-  }
+          expect(results.reduce((sum, row) => sum + row.changed, 0)).toBe(3);
+          expect(results.filter((row) => row.completed).length).toBe(1);
+          const audit = await runFieldEncryptionRotationBatch({
+            ...options,
+            runId: "mysql_audit",
+            mode: "audit",
+            batchSize: 5,
+          });
+          expect(audit).toEqual({ processed: 4, changed: 0, completed: true });
+        },
+      );
+    } finally {
+      await db.close();
+      await root.query(`DROP DATABASE IF EXISTS ${database}`);
+      await root.end();
+      await rm(consumerDirectory, { recursive: true, force: true });
+    }
+  });
 });
 
 test("explicit development fresh reset drops populated checkpoints while rollback remains protected", async () => {
-  const { freshDatabase, migrateDatabase, rollbackDatabase } = await import(
-    "@getstrata/core/database/migrations/runner"
-  );
-  const directory = await mkdtemp(join(tmpdir(), "rotation-fresh-"));
-  const db = createSqliteConnection(join(directory, "app.sqlite"));
-  const migration = createFieldEncryptionRotationMigration("rotation", "sqlite");
-  try {
-    useSqlDialect("sqlite");
-    await migrateDatabase(db, [migration]);
-    await db.unsafe(
-      "INSERT INTO strata_encryption_rotation (run_id,definition_hash,probe,lookup_probe,claim_token,completed) VALUES (?,?,?,?,?,?)",
-      ["fixture", "hash", "probe", "lookup", "claim", false],
+  return runWithSqlDialect("sqlite", async () => {
+    const { freshDatabase, migrateDatabase, rollbackDatabase } = await import(
+      "@getstrata/core/database/migrations/runner"
     );
-    await expect(rollbackDatabase(db, [migration])).rejects.toThrow("administrative archival");
-    await expect(freshDatabase(db, [migration])).rejects.toThrow("administrative archival");
-    expect(
-      (await db.unsafe<{ n: number }>("SELECT COUNT(*) AS n FROM strata_encryption_rotation"))[0]
-        ?.n,
-    ).toBe(1);
-    await freshDatabase(db, [migration], { destructive: true });
-    expect(
-      (await db.unsafe<{ n: number }>("SELECT COUNT(*) AS n FROM strata_encryption_rotation"))[0]
-        ?.n,
-    ).toBe(0);
-    await freshDatabase(db, [migration], { destructive: true });
-  } finally {
-    await db.close();
-    resetSqlDialect();
-    await rm(directory, { recursive: true, force: true });
-  }
+    const directory = await mkdtemp(join(tmpdir(), "rotation-fresh-"));
+    const db = createSqliteConnection(join(directory, "app.sqlite"));
+    const migration = createFieldEncryptionRotationMigration("rotation", "sqlite");
+    try {
+      await migrateDatabase(db, [migration]);
+      await db.unsafe(
+        "INSERT INTO strata_encryption_rotation (run_id,definition_hash,probe,lookup_probe,claim_token,completed) VALUES (?,?,?,?,?,?)",
+        ["fixture", "hash", "probe", "lookup", "claim", false],
+      );
+      await expect(rollbackDatabase(db, [migration])).rejects.toThrow("administrative archival");
+      await expect(freshDatabase(db, [migration])).rejects.toThrow("administrative archival");
+      expect(
+        (await db.unsafe<{ n: number }>("SELECT COUNT(*) AS n FROM strata_encryption_rotation"))[0]
+          ?.n,
+      ).toBe(1);
+      await freshDatabase(db, [migration], { destructive: true });
+      expect(
+        (await db.unsafe<{ n: number }>("SELECT COUNT(*) AS n FROM strata_encryption_rotation"))[0]
+          ?.n,
+      ).toBe(0);
+      await freshDatabase(db, [migration], { destructive: true });
+    } finally {
+      await db.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });

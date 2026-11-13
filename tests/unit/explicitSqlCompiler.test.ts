@@ -1,10 +1,6 @@
 import { test } from "bun:test";
 import assert from "node:assert/strict";
-import {
-  resetSqlDialect,
-  runWithSqlDialect,
-  useSqlDialect,
-} from "@getstrata/core/database/dialect";
+import { runWithSqlDialect } from "@getstrata/core/database/dialect";
 import {
   buildInsertQuery,
   buildLimitedRelationQuery,
@@ -60,8 +56,7 @@ test("C1 explicit SQL compiler dialect overrides hostile ambient selection acros
     insert:
       'INSERT INTO "widgets" ("label", "owner_id") VALUES (?, ?) RETURNING "widgets"."id", "widgets"."label", "widgets"."owner_id"',
   };
-  try {
-    useSqlDialect("mysql");
+  runWithSqlDialect("mysql", () => {
     for (const expected of [postgres, mysql, sqlite, postgres]) {
       runWithSqlDialect(expected.ambient, () => {
         const dialect = dialectFor(expected.driver);
@@ -77,9 +72,7 @@ test("C1 explicit SQL compiler dialect overrides hostile ambient selection acros
         );
       });
     }
-  } finally {
-    resetSqlDialect();
-  }
+  });
 });
 
 test("C2 explicit SQL compiler threads limited callback, through and pivot dialects with nested parameters", () => {
@@ -104,8 +97,7 @@ test("C2 explicit SQL compiler threads limited callback, through and pivot diale
     offset: 1,
   };
   let sourceCalls = 0;
-  try {
-    useSqlDialect("sqlite");
+  runWithSqlDialect("sqlite", () => {
     const limited = buildLimitedRelationQuery(
       pg,
       widgets,
@@ -113,10 +105,10 @@ test("C2 explicit SQL compiler threads limited callback, through and pivot diale
       { table: "widgets", column: "owner_id" },
       (columns, rank, params) => {
         sourceCalls++;
-        // Leave legacy selection changed until AFTER outer aliases/bounds are formatted.
-        useSqlDialect("mysql");
-        const where = buildQueryWhereClause(pg, widgets, options, options.whereNodes, params);
-        return `SELECT ${columns}, ${rank} FROM ${quoteIdentifier(pg, "widgets")}${where.clause}`;
+        return runWithSqlDialect("mysql", () => {
+          const where = buildQueryWhereClause(pg, widgets, options, options.whereNodes, params);
+          return `SELECT ${columns}, ${rank} FROM ${quoteIdentifier(pg, "widgets")}${where.clause}`;
+        });
       },
     );
     assert.equal(sourceCalls, 1);
@@ -126,9 +118,8 @@ test("C2 explicit SQL compiler threads limited callback, through and pivot diale
         text: 'SELECT * FROM (SELECT $1::text AS "kind", "widgets"."id", ROW_NUMBER() OVER (PARTITION BY "widgets"."owner_id" ORDER BY "widgets"."id" ASC) AS "__strata_eager_row_number" FROM "widgets" WHERE "widgets"."owner_id" IN ($2, $3) AND ("widgets"."label" ILIKE $4 OR "widgets"."id" > $5)) AS "__strata_eager" WHERE "__strata_eager_row_number" > 1 AND "__strata_eager_row_number" <= 3 ORDER BY "__strata_eager_row_number"',
         params: ["entry", 7, 8, "%needle%", 10],
       },
-      "C2 outer formatting and nested WHERE must retain the supplied PostgreSQL descriptor after callback changes ambient selection",
+      "C2 outer formatting and nested WHERE must retain the supplied PostgreSQL descriptor through a callback with a conflicting owned dialect",
     );
-    useSqlDialect("pgsql");
     assert.deepEqual(
       buildHasManyThroughQuery(
         dialectFor("mysql"),
@@ -162,7 +153,6 @@ test("C2 explicit SQL compiler threads limited callback, through and pivot diale
       },
       "C2 limited through callback must forward MySQL dialect and accumulate parent/filter values in order",
     );
-    useSqlDialect("mysql");
     assert.deepEqual(
       buildPivotLookupQuery(
         pg,
@@ -171,7 +161,5 @@ test("C2 explicit SQL compiler threads limited callback, through and pivot diale
       ),
       { text: "SELECT * FROM group_widget WHERE group_id IN ($1, $2)", params: [31, 32] },
     );
-  } finally {
-    resetSqlDialect();
-  }
+  });
 });

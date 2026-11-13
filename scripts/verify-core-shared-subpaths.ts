@@ -47,7 +47,7 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
     "renderOutboxMetrics",
   ],
   "database/bunSql": ["createBunSqlPool"],
-  "database/dialect": ["currentSqlDialect", "sqlTimestamp", "useSqlDialect"],
+  "database/dialect": ["currentSqlDialect", "sqlTimestamp", "runWithSqlDialect"],
   "database/mysqlConnection": [
     "createMysqlConnection",
     "createMysqlConnectionFromPool",

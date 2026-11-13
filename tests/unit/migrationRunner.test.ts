@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resetSqlDialect, useSqlDialect } from "@getstrata/core/database/dialect";
+import { runWithSqlDialect } from "@getstrata/core/database/dialect";
 import {
   ensureMigrationsTable,
   freshDatabase,
@@ -98,453 +98,495 @@ const migrations: Migration[] = [
 
 describe("migration runner", () => {
   test("migrateDatabase applies pending migrations in order", async () => {
-    const { db, applied, tables } = createMemoryDb();
-    const names: string[] = [];
+    return runWithSqlDialect("pgsql", async () => {
+      const { db, applied, tables } = createMemoryDb();
+      const names: string[] = [];
 
-    const count = await migrateDatabase(db, migrations, {
-      onMigration: (name) => names.push(name),
+      const count = await migrateDatabase(db, migrations, {
+        onMigration: (name) => names.push(name),
+      });
+      expect(count).toBe(2);
+      expect(applied).toHaveLength(2);
+      expect(tables.has("widgets")).toBe(true);
+      expect(names).toEqual(["0001_create_widgets", "0002_add_widget_color"]);
     });
-    expect(count).toBe(2);
-    expect(applied).toHaveLength(2);
-    expect(tables.has("widgets")).toBe(true);
-    expect(names).toEqual(["0001_create_widgets", "0002_add_widget_color"]);
   });
 
   test("migrateDatabase returns zero when nothing is pending", async () => {
-    const { db } = createMemoryDb();
-    await migrateDatabase(db, migrations);
-    expect(await migrateDatabase(db, migrations)).toBe(0);
+    return runWithSqlDialect("pgsql", async () => {
+      const { db } = createMemoryDb();
+      await migrateDatabase(db, migrations);
+      expect(await migrateDatabase(db, migrations)).toBe(0);
+    });
   });
 
   test("rollbackDatabase returns zero when nothing has been applied", async () => {
-    const { db } = createMemoryDb();
-    expect(await rollbackDatabase(db, migrations)).toBe(0);
+    return runWithSqlDialect("pgsql", async () => {
+      const { db } = createMemoryDb();
+      expect(await rollbackDatabase(db, migrations)).toBe(0);
+    });
   });
 
   test("ensureMigrationsTable creates the tracking table", async () => {
-    const { db } = createMemoryDb();
-    await ensureMigrationsTable(db);
-    expect(await getAppliedMigrations(db)).toEqual([]);
+    return runWithSqlDialect("pgsql", async () => {
+      const { db } = createMemoryDb();
+      await ensureMigrationsTable(db);
+      expect(await getAppliedMigrations(db)).toEqual([]);
+    });
   });
 
   test("getMigrationStatus reports pending and applied migrations", async () => {
-    const { db } = createMemoryDb();
-    expect(await getMigrationStatus(db, migrations)).toEqual([
-      { name: "0001_create_widgets", status: "pending", batch: null },
-      { name: "0002_add_widget_color", status: "pending", batch: null },
-    ]);
+    return runWithSqlDialect("pgsql", async () => {
+      const { db } = createMemoryDb();
+      expect(await getMigrationStatus(db, migrations)).toEqual([
+        { name: "0001_create_widgets", status: "pending", batch: null },
+        { name: "0002_add_widget_color", status: "pending", batch: null },
+      ]);
 
-    await migrateDatabase(db, migrations);
-    expect(await getMigrationStatus(db, migrations)).toEqual([
-      { name: "0001_create_widgets", status: "up", batch: 1 },
-      { name: "0002_add_widget_color", status: "up", batch: 1 },
-    ]);
+      await migrateDatabase(db, migrations);
+      expect(await getMigrationStatus(db, migrations)).toEqual([
+        { name: "0001_create_widgets", status: "up", batch: 1 },
+        { name: "0002_add_widget_color", status: "up", batch: 1 },
+      ]);
+    });
   });
 
   test("rollbackDatabase rolls back the latest batch", async () => {
-    const { db, applied, tables } = createMemoryDb();
-    await migrateDatabase(db, migrations);
+    return runWithSqlDialect("pgsql", async () => {
+      const { db, applied, tables } = createMemoryDb();
+      await migrateDatabase(db, migrations);
 
-    const rolledBack = await rollbackDatabase(db, migrations);
-    expect(rolledBack).toBe(2);
-    expect(applied).toHaveLength(0);
-    expect(tables.has("widgets")).toBe(false);
+      const rolledBack = await rollbackDatabase(db, migrations);
+      expect(rolledBack).toBe(2);
+      expect(applied).toHaveLength(0);
+      expect(tables.has("widgets")).toBe(false);
+    });
   });
 
   test("freshDatabase resets and re-applies migrations", async () => {
-    const { db, applied } = createMemoryDb();
-    await migrateDatabase(db, migrations);
-    await freshDatabase(db, migrations);
-    expect(applied).toHaveLength(2);
+    return runWithSqlDialect("pgsql", async () => {
+      const { db, applied } = createMemoryDb();
+      await migrateDatabase(db, migrations);
+      await freshDatabase(db, migrations);
+      expect(applied).toHaveLength(2);
+    });
   });
 
   test("migrateDatabase throws when migration record cannot be inserted", async () => {
-    const applied: { name: string; batch: number }[] = [];
-    const db: MigrationDatabase = {
-      async unsafe<T>(query: string, _params: readonly unknown[] = []): Promise<T[]> {
-        if (query.includes("CREATE TABLE IF NOT EXISTS framework_migrations")) {
+    return runWithSqlDialect("pgsql", async () => {
+      const applied: { name: string; batch: number }[] = [];
+      const db: MigrationDatabase = {
+        async unsafe<T>(query: string, _params: readonly unknown[] = []): Promise<T[]> {
+          if (query.includes("CREATE TABLE IF NOT EXISTS framework_migrations")) {
+            return [];
+          }
+
+          if (query.includes("SELECT name, batch")) {
+            return applied.map(({ name, batch }) => ({ name, batch })) as unknown as T[];
+          }
+
+          if (query.startsWith("INSERT INTO framework_migrations")) {
+            return [] as unknown as T[];
+          }
+
+          if (query.includes("CREATE TABLE IF NOT EXISTS widgets")) {
+            return [];
+          }
+
           return [];
-        }
+        },
+      };
 
-        if (query.includes("SELECT name, batch")) {
-          return applied.map(({ name, batch }) => ({ name, batch })) as unknown as T[];
-        }
-
-        if (query.startsWith("INSERT INTO framework_migrations")) {
-          return [] as unknown as T[];
-        }
-
-        if (query.includes("CREATE TABLE IF NOT EXISTS widgets")) {
-          return [];
-        }
-
-        return [];
-      },
-    };
-
-    await expect(migrateDatabase(db, migrations)).rejects.toThrow(
-      "Migration 0001_create_widgets was applied but not recorded.",
-    );
+      await expect(migrateDatabase(db, migrations)).rejects.toThrow(
+        "Migration 0001_create_widgets was applied but not recorded.",
+      );
+    });
   });
 
   test("loadMigrationsFromDirectory imports migration modules", async () => {
-    const loaded = await loadMigrationsFromDirectory(
-      join(import.meta.dir, "../../src/db/migrations"),
-    );
-    expect(loaded.length).toBeGreaterThan(20);
-    expect(loaded[0]?.name).toMatch(/^0001_/);
+    return runWithSqlDialect("pgsql", async () => {
+      const loaded = await loadMigrationsFromDirectory(
+        join(import.meta.dir, "../../src/db/migrations"),
+      );
+      expect(loaded.length).toBeGreaterThan(20);
+      expect(loaded[0]?.name).toMatch(/^0001_/);
+    });
   });
 
   test("records migrations with mysql placeholders", async () => {
-    useSqlDialect("mysql");
-    try {
-      const { db, applied } = createMemoryDb();
-      const queries: string[] = [];
-      const originalUnsafe = db.unsafe.bind(db);
-      db.unsafe = async <T = unknown>(query: string, params: readonly unknown[] = []) => {
-        queries.push(query);
-        return originalUnsafe<T>(query, params);
-      };
+    return runWithSqlDialect("mysql", async () => {
+      try {
+        const { db, applied } = createMemoryDb();
+        const queries: string[] = [];
+        const originalUnsafe = db.unsafe.bind(db);
+        db.unsafe = async <T = unknown>(query: string, params: readonly unknown[] = []) => {
+          queries.push(query);
+          return originalUnsafe<T>(query, params);
+        };
 
-      expect(await migrateDatabase(db, migrations.slice(0, 1))).toBe(1);
-      expect(applied).toHaveLength(1);
-      expect(queries.some((query) => query.includes("VARCHAR(255) PRIMARY KEY"))).toBe(true);
-      expect(queries.some((query) => query.includes("DATETIME"))).toBe(true);
-      expect(queries.some((query) => query.includes("VALUES (?, ?)"))).toBe(true);
-    } finally {
-      resetSqlDialect();
-    }
+        expect(await migrateDatabase(db, migrations.slice(0, 1))).toBe(1);
+        expect(applied).toHaveLength(1);
+        expect(queries.some((query) => query.includes("VARCHAR(255) PRIMARY KEY"))).toBe(true);
+        expect(queries.some((query) => query.includes("DATETIME"))).toBe(true);
+        expect(queries.some((query) => query.includes("VALUES (?, ?)"))).toBe(true);
+      } finally {
+      }
+    });
   });
 });
 
 describe("explicit fresh migration context", () => {
   test("legacy resets and rollbacks retain guards; explicit resets receive fresh context", async () => {
-    const { db } = createMemoryDb();
-    const migration: Migration = {
-      name: "protected",
-      async up() {},
-      async down(_db, context) {
-        await guardMigrationRollback(context, {
-          hasHistory: async () => true,
-          message: "Protected history",
-        });
-      },
-    };
-    await migrateDatabase(db, [migration]);
-    await expect(freshDatabase(db, [migration])).rejects.toThrow("Protected history");
-    await expect(rollbackDatabase(db, [migration])).rejects.toThrow("Protected history");
-    await freshDatabase(db, [migration], { destructive: true });
-    expect(await getMigrationStatus(db, [migration])).toEqual([
-      { name: "protected", status: "up", batch: 1 },
-    ]);
+    return runWithSqlDialect("pgsql", async () => {
+      const { db } = createMemoryDb();
+      const migration: Migration = {
+        name: "protected",
+        async up() {},
+        async down(_db, context) {
+          await guardMigrationRollback(context, {
+            hasHistory: async () => true,
+            message: "Protected history",
+          });
+        },
+      };
+      await migrateDatabase(db, [migration]);
+      await expect(freshDatabase(db, [migration])).rejects.toThrow("Protected history");
+      await expect(rollbackDatabase(db, [migration])).rejects.toThrow("Protected history");
+      await freshDatabase(db, [migration], { destructive: true });
+      expect(await getMigrationStatus(db, [migration])).toEqual([
+        { name: "protected", status: "up", batch: 1 },
+      ]);
+    });
   });
   test("production and staging fail before database access", async () => {
-    const previous = process.env.APP_ENV;
-    const previousNode = process.env.NODE_ENV;
-    try {
-      for (const [app, node] of [
-        ["production", "development"],
-        ["staging", "test"],
-        ["unknown-environment", "development"],
-        [" StAgInG ", "development"],
-        ["local", "production"],
-        ["test", " PRODUCTION "],
-      ]) {
-        process.env.APP_ENV = app;
-        process.env.NODE_ENV = node;
-        const db: MigrationDatabase = {
-          unsafe() {
-            throw new Error("Database must not be touched");
-          },
-        };
-        await expect(freshDatabase(db, [], { destructive: true })).rejects.toThrow(
-          "development/test",
-        );
+    return runWithSqlDialect("pgsql", async () => {
+      const previous = process.env.APP_ENV;
+      const previousNode = process.env.NODE_ENV;
+      try {
+        for (const [app, node] of [
+          ["production", "development"],
+          ["staging", "test"],
+          ["unknown-environment", "development"],
+          [" StAgInG ", "development"],
+          ["local", "production"],
+          ["test", " PRODUCTION "],
+        ]) {
+          process.env.APP_ENV = app;
+          process.env.NODE_ENV = node;
+          const db: MigrationDatabase = {
+            unsafe() {
+              throw new Error("Database must not be touched");
+            },
+          };
+          await expect(freshDatabase(db, [], { destructive: true })).rejects.toThrow(
+            "development/test",
+          );
+        }
+      } finally {
+        if (previous === undefined) delete process.env.APP_ENV;
+        else process.env.APP_ENV = previous;
+        if (previousNode === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = previousNode;
       }
-    } finally {
-      if (previous === undefined) delete process.env.APP_ENV;
-      else process.env.APP_ENV = previous;
-      if (previousNode === undefined) delete process.env.NODE_ENV;
-      else process.env.NODE_ENV = previousNode;
-    }
+    });
   });
   test("production and staging permit normal migrate/rollback without bypassing history guards", async () => {
-    const previous = process.env.APP_ENV;
-    const previousNode = process.env.NODE_ENV;
-    try {
-      for (const environment of ["production", "staging"]) {
-        process.env.APP_ENV = environment;
-        process.env.NODE_ENV = "production";
-        const { db, applied } = createMemoryDb();
-        let historyChecks = 0;
-        const protectedMigration: Migration = {
-          name: "protected",
-          async up() {},
-          async down(_db, context) {
-            expect(context).toBeUndefined();
-            await guardMigrationRollback(context, {
-              hasHistory() {
-                historyChecks += 1;
-                return true;
-              },
-              message: "Retain history",
-            });
-          },
-        };
-        const ordinary: Migration = {
-          name: "ordinary",
-          async up() {},
-          async down(_db, context) {
-            expect(context).toBeUndefined();
-          },
-        };
-        expect(await migrateDatabase(db, [protectedMigration])).toBe(1);
-        expect(await migrateDatabase(db, [ordinary])).toBe(1);
-        expect(await rollbackDatabase(db, [ordinary])).toBe(1);
-        await expect(rollbackDatabase(db, [protectedMigration])).rejects.toThrow("Retain history");
-        await expect(freshDatabase(db, [protectedMigration])).rejects.toThrow("Retain history");
-        expect(historyChecks).toBe(2);
-        expect(applied.map((row) => row.name)).toEqual(["protected"]);
+    return runWithSqlDialect("pgsql", async () => {
+      const previous = process.env.APP_ENV;
+      const previousNode = process.env.NODE_ENV;
+      try {
+        for (const environment of ["production", "staging"]) {
+          process.env.APP_ENV = environment;
+          process.env.NODE_ENV = "production";
+          const { db, applied } = createMemoryDb();
+          let historyChecks = 0;
+          const protectedMigration: Migration = {
+            name: "protected",
+            async up() {},
+            async down(_db, context) {
+              expect(context).toBeUndefined();
+              await guardMigrationRollback(context, {
+                hasHistory() {
+                  historyChecks += 1;
+                  return true;
+                },
+                message: "Retain history",
+              });
+            },
+          };
+          const ordinary: Migration = {
+            name: "ordinary",
+            async up() {},
+            async down(_db, context) {
+              expect(context).toBeUndefined();
+            },
+          };
+          expect(await migrateDatabase(db, [protectedMigration])).toBe(1);
+          expect(await migrateDatabase(db, [ordinary])).toBe(1);
+          expect(await rollbackDatabase(db, [ordinary])).toBe(1);
+          await expect(rollbackDatabase(db, [protectedMigration])).rejects.toThrow(
+            "Retain history",
+          );
+          await expect(freshDatabase(db, [protectedMigration])).rejects.toThrow("Retain history");
+          expect(historyChecks).toBe(2);
+          expect(applied.map((row) => row.name)).toEqual(["protected"]);
+        }
+      } finally {
+        if (previous === undefined) delete process.env.APP_ENV;
+        else process.env.APP_ENV = previous;
+        if (previousNode === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = previousNode;
       }
-    } finally {
-      if (previous === undefined) delete process.env.APP_ENV;
-      else process.env.APP_ENV = previous;
-      if (previousNode === undefined) delete process.env.NODE_ENV;
-      else process.env.NODE_ENV = previousNode;
-    }
+    });
   });
 });
 
 describe("fresh reset progress", () => {
   test("a later down failure retains only unapplied rollback steps; migrate restores completed downs", async () => {
-    for (const destructive of [false, true]) {
+    return runWithSqlDialect("pgsql", async () => {
+      for (const destructive of [false, true]) {
+        const { db, applied } = createMemoryDb();
+        let blocked = true;
+        const definitions: Migration[] = [
+          {
+            name: "base",
+            async up() {},
+            async down() {
+              if (blocked) throw new Error("Injected refusal");
+            },
+          },
+          { name: "later", async up() {}, async down() {} },
+        ];
+        await migrateDatabase(db, definitions);
+        await expect(freshDatabase(db, definitions, { destructive })).rejects.toThrow(
+          "Injected refusal",
+        );
+        expect(applied.map((row) => row.name)).toEqual(["base"]);
+        expect(await migrateDatabase(db, definitions)).toBe(1);
+        expect(applied.map((row) => row.name)).toEqual(["base", "later"]);
+        blocked = false;
+        await freshDatabase(db, definitions, { destructive });
+        expect(applied.map((row) => row.name)).toEqual(["base", "later"]);
+      }
+    });
+  });
+  test("completed down records use dialect placeholders", async () => {
+    return runWithSqlDialect("mysql", async () => {
+      try {
+        const { db } = createMemoryDb();
+        const original = db.unsafe.bind(db);
+        const removals: { sql: string; params: readonly unknown[] }[] = [];
+        db.unsafe = async <T = unknown>(sql: string, params: readonly unknown[] = []) => {
+          if (sql.startsWith("DELETE FROM framework_migrations WHERE name"))
+            removals.push({ sql, params });
+          return original<T>(sql, params);
+        };
+        await migrateDatabase(db, migrations);
+        await freshDatabase(db, migrations, { destructive: true });
+        expect(removals.map((row) => row.sql)).toEqual([
+          "DELETE FROM framework_migrations WHERE name = ?",
+          "DELETE FROM framework_migrations WHERE name = ?",
+        ]);
+        expect(removals.map((row) => row.params[0])).toEqual([
+          migrations[1]?.name,
+          migrations[0]?.name,
+        ]);
+      } finally {
+      }
+    });
+  });
+  test("history removal failure stops before earlier downs and never clears all history", async () => {
+    return runWithSqlDialect("pgsql", async () => {
       const { db, applied } = createMemoryDb();
-      let blocked = true;
       const definitions: Migration[] = [
         {
           name: "base",
           async up() {},
           async down() {
-            if (blocked) throw new Error("Injected refusal");
+            throw new Error("Must not reach earlier down");
           },
         },
         { name: "later", async up() {}, async down() {} },
       ];
       await migrateDatabase(db, definitions);
-      await expect(freshDatabase(db, definitions, { destructive })).rejects.toThrow(
-        "Injected refusal",
-      );
-      expect(applied.map((row) => row.name)).toEqual(["base"]);
-      expect(await migrateDatabase(db, definitions)).toBe(1);
-      expect(applied.map((row) => row.name)).toEqual(["base", "later"]);
-      blocked = false;
-      await freshDatabase(db, definitions, { destructive });
-      expect(applied.map((row) => row.name)).toEqual(["base", "later"]);
-    }
-  });
-  test("completed down records use dialect placeholders", async () => {
-    useSqlDialect("mysql");
-    try {
-      const { db } = createMemoryDb();
       const original = db.unsafe.bind(db);
-      const removals: { sql: string; params: readonly unknown[] }[] = [];
       db.unsafe = async <T = unknown>(sql: string, params: readonly unknown[] = []) => {
         if (sql.startsWith("DELETE FROM framework_migrations WHERE name"))
-          removals.push({ sql, params });
+          throw new Error("History write unavailable");
         return original<T>(sql, params);
       };
-      await migrateDatabase(db, migrations);
-      await freshDatabase(db, migrations, { destructive: true });
-      expect(removals.map((row) => row.sql)).toEqual([
-        "DELETE FROM framework_migrations WHERE name = ?",
-        "DELETE FROM framework_migrations WHERE name = ?",
-      ]);
-      expect(removals.map((row) => row.params[0])).toEqual([
-        migrations[1]?.name,
-        migrations[0]?.name,
-      ]);
-    } finally {
-      resetSqlDialect();
-    }
-  });
-  test("history removal failure stops before earlier downs and never clears all history", async () => {
-    const { db, applied } = createMemoryDb();
-    const definitions: Migration[] = [
-      {
-        name: "base",
-        async up() {},
-        async down() {
-          throw new Error("Must not reach earlier down");
-        },
-      },
-      { name: "later", async up() {}, async down() {} },
-    ];
-    await migrateDatabase(db, definitions);
-    const original = db.unsafe.bind(db);
-    db.unsafe = async <T = unknown>(sql: string, params: readonly unknown[] = []) => {
-      if (sql.startsWith("DELETE FROM framework_migrations WHERE name"))
-        throw new Error("History write unavailable");
-      return original<T>(sql, params);
-    };
-    await expect(freshDatabase(db, definitions, { destructive: true })).rejects.toThrow(
-      "History write unavailable",
-    );
-    expect(applied.map((row) => row.name)).toEqual(["base", "later"]);
+      await expect(freshDatabase(db, definitions, { destructive: true })).rejects.toThrow(
+        "History write unavailable",
+      );
+      expect(applied.map((row) => row.name)).toEqual(["base", "later"]);
+    });
   });
   test("reapplication failure retains completed ups and retry resumes pending migrations", async () => {
-    const { db, applied } = createMemoryDb();
-    let refuseUp = false;
-    const definitions: Migration[] = [
-      { name: "base", async up() {}, async down() {} },
-      {
-        name: "later",
-        async up() {
-          if (refuseUp) throw new Error("Injected up refusal");
+    return runWithSqlDialect("pgsql", async () => {
+      const { db, applied } = createMemoryDb();
+      let refuseUp = false;
+      const definitions: Migration[] = [
+        { name: "base", async up() {}, async down() {} },
+        {
+          name: "later",
+          async up() {
+            if (refuseUp) throw new Error("Injected up refusal");
+          },
+          async down() {},
         },
-        async down() {},
-      },
-    ];
-    await migrateDatabase(db, definitions);
-    refuseUp = true;
-    await expect(freshDatabase(db, definitions, { destructive: true })).rejects.toThrow(
-      "Injected up refusal",
-    );
-    expect(applied.map((row) => row.name)).toEqual(["base"]);
-    refuseUp = false;
-    expect(await migrateDatabase(db, definitions)).toBe(1);
-    expect(applied.map((row) => row.name)).toEqual(["base", "later"]);
+      ];
+      await migrateDatabase(db, definitions);
+      refuseUp = true;
+      await expect(freshDatabase(db, definitions, { destructive: true })).rejects.toThrow(
+        "Injected up refusal",
+      );
+      expect(applied.map((row) => row.name)).toEqual(["base"]);
+      refuseUp = false;
+      expect(await migrateDatabase(db, definitions)).toBe(1);
+      expect(applied.map((row) => row.name)).toEqual(["base", "later"]);
+    });
   });
 });
 
 describe("migration preflight", () => {
   test("malformed and duplicate definitions fail before any database or callback effects", async () => {
-    const valid = migrations[0];
-    const invalid = [
-      null,
-      {},
-      { name: "" },
-      { name: "   ", up() {}, down() {} },
-      { name: 1, up() {}, down() {} },
-      { name: "bad", up: true, down() {} },
-      { name: "bad", up() {} },
-      { name: "bad", up() {}, down: 1 },
-      [],
-    ];
-    const denied: MigrationDatabase = {
-      unsafe() {
-        throw new Error("Database touched");
-      },
-    };
-    const callback = () => {
-      throw new Error("Callback touched");
-    };
-    for (const entries of [...invalid.map((item) => [valid, item]), [valid, valid]]) {
-      const definitions: Migration[] = entries as Migration[];
-      for (const operation of [
-        () => migrateDatabase(denied, definitions, { advisoryLock: true, onMigration: callback }),
-        () => runPendingMigrations(denied, definitions, { onMigration: callback }),
-        () => rollbackDatabase(denied, definitions, { onMigration: callback }),
-        () =>
-          freshDatabase(denied, definitions, {
-            destructive: true,
-            advisoryLock: true,
-            onMigration: callback,
-          }),
-        () => getMigrationStatus(denied, definitions),
-      ])
-        await expect(operation()).rejects.toThrow(/Invalid|Duplicate/);
-    }
-    await expect(migrateDatabase(denied, JSON.parse("{}"))).rejects.toThrow("must be an array");
+    return runWithSqlDialect("pgsql", async () => {
+      const valid = migrations[0];
+      const invalid = [
+        null,
+        {},
+        { name: "" },
+        { name: "   ", up() {}, down() {} },
+        { name: 1, up() {}, down() {} },
+        { name: "bad", up: true, down() {} },
+        { name: "bad", up() {} },
+        { name: "bad", up() {}, down: 1 },
+        [],
+      ];
+      const denied: MigrationDatabase = {
+        unsafe() {
+          throw new Error("Database touched");
+        },
+      };
+      const callback = () => {
+        throw new Error("Callback touched");
+      };
+      for (const entries of [...invalid.map((item) => [valid, item]), [valid, valid]]) {
+        const definitions: Migration[] = entries as Migration[];
+        for (const operation of [
+          () => migrateDatabase(denied, definitions, { advisoryLock: true, onMigration: callback }),
+          () => runPendingMigrations(denied, definitions, { onMigration: callback }),
+          () => rollbackDatabase(denied, definitions, { onMigration: callback }),
+          () =>
+            freshDatabase(denied, definitions, {
+              destructive: true,
+              advisoryLock: true,
+              onMigration: callback,
+            }),
+          () => getMigrationStatus(denied, definitions),
+        ])
+          await expect(operation()).rejects.toThrow(/Invalid|Duplicate/);
+      }
+      await expect(migrateDatabase(denied, JSON.parse("{}"))).rejects.toThrow("must be an array");
+    });
   });
 
   test("missing applied definitions reject both reset modes and latest-batch rollback before downs", async () => {
-    const { db, applied } = createMemoryDb();
-    await migrateDatabase(db, migrations);
-    const original = applied.map((row) => ({ ...row }));
-    for (const definitions of [[], migrations.slice(0, 1)]) {
-      for (const destructive of [false, true]) {
-        await expect(freshDatabase(db, definitions, { destructive })).rejects.toThrow(
+    return runWithSqlDialect("pgsql", async () => {
+      const { db, applied } = createMemoryDb();
+      await migrateDatabase(db, migrations);
+      const original = applied.map((row) => ({ ...row }));
+      for (const definitions of [[], migrations.slice(0, 1)]) {
+        for (const destructive of [false, true]) {
+          await expect(freshDatabase(db, definitions, { destructive })).rejects.toThrow(
+            "missing applied migration definitions",
+          );
+          expect(applied).toEqual(original);
+        }
+        await expect(rollbackDatabase(db, definitions)).rejects.toThrow(
           "missing applied migration definitions",
         );
         expect(applied).toEqual(original);
       }
-      await expect(rollbackDatabase(db, definitions)).rejects.toThrow(
-        "missing applied migration definitions",
-      );
-      expect(applied).toEqual(original);
-    }
+    });
   });
 
   test("forward migration and latest rollback allow older applied definitions outside the supplied set", async () => {
-    const { db, applied } = createMemoryDb();
-    await migrateDatabase(db, migrations.slice(0, 1));
-    expect(await migrateDatabase(db, migrations.slice(1))).toBe(1);
-    expect(await rollbackDatabase(db, migrations.slice(1))).toBe(1);
-    expect(applied.map((row) => row.name)).toEqual(["0001_create_widgets"]);
-    expect(await migrateDatabase(db, [])).toBe(0);
+    return runWithSqlDialect("pgsql", async () => {
+      const { db, applied } = createMemoryDb();
+      await migrateDatabase(db, migrations.slice(0, 1));
+      expect(await migrateDatabase(db, migrations.slice(1))).toBe(1);
+      expect(await rollbackDatabase(db, migrations.slice(1))).toBe(1);
+      expect(applied.map((row) => row.name)).toEqual(["0001_create_widgets"]);
+      expect(await migrateDatabase(db, [])).toBe(0);
+    });
   });
 
   test("reset removes only completed-down records rather than blanket-clearing history", async () => {
-    const { db, applied } = createMemoryDb();
-    const definition: Migration = {
-      name: "known",
-      async up() {},
-      async down() {
-        // Simulate a record appearing after preflight; this is not writer exclusion.
-        applied.push({ name: "unrelated", batch: 2 });
-      },
-    };
-    await migrateDatabase(db, [definition]);
-    await freshDatabase(db, [definition], { destructive: true });
-    expect(applied.map((row) => row.name)).toEqual(["unrelated", "known"]);
+    return runWithSqlDialect("pgsql", async () => {
+      const { db, applied } = createMemoryDb();
+      const definition: Migration = {
+        name: "known",
+        async up() {},
+        async down() {
+          // Simulate a record appearing after preflight; this is not writer exclusion.
+          applied.push({ name: "unrelated", batch: 2 });
+        },
+      };
+      await migrateDatabase(db, [definition]);
+      await freshDatabase(db, [definition], { destructive: true });
+      expect(applied.map((row) => row.name)).toEqual(["unrelated", "known"]);
+    });
   });
 
   test("directory loading rejects malformed exports and reports duplicate source files", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "migration-preflight-"));
-    try {
-      const valid = 'export default {name:"fixture", async up(){}, async down(){}};';
-      for (const name of [
-        "types.ts",
-        "index.ts",
-        "runner.ts",
-        "advisoryLock.ts",
-        "types.js",
-        "index.js",
-        "runner.js",
-        "advisoryLock.js",
-        "migration.d.ts",
-        "migrationDatabase.ts",
-        "migrationDatabase.js",
-      ]) {
-        await Bun.write(
-          join(dir, name),
-          "// Reserved infrastructure and declarations are not migrations.",
-        );
+    return runWithSqlDialect("pgsql", async () => {
+      const dir = await mkdtemp(join(tmpdir(), "migration-preflight-"));
+      try {
+        const valid = 'export default {name:"fixture", async up(){}, async down(){}};';
+        for (const name of [
+          "types.ts",
+          "index.ts",
+          "runner.ts",
+          "advisoryLock.ts",
+          "types.js",
+          "index.js",
+          "runner.js",
+          "advisoryLock.js",
+          "migration.d.ts",
+          "migrationDatabase.ts",
+          "migrationDatabase.js",
+        ]) {
+          await Bun.write(
+            join(dir, name),
+            "// Reserved infrastructure and declarations are not migrations.",
+          );
+        }
+        await Bun.write(join(dir, "0001_valid.ts"), valid);
+        for (const [index, source] of [
+          'export const name="missing default";',
+          "export default null;",
+          'export default {name:"bad",async up(){}};',
+        ].entries()) {
+          const file = join(dir, `0002_bad_${index}.ts`);
+          await Bun.write(file, source);
+          await expect(loadMigrationsFromDirectory(dir)).rejects.toThrow(file);
+          await rm(file);
+        }
+        const duplicate = join(dir, "0002_duplicate.js");
+        await Bun.write(duplicate, valid);
+        await expect(loadMigrationsFromDirectory(dir)).rejects.toThrow("Duplicate migration name");
+        await expect(loadMigrationsFromDirectory(dir)).rejects.toThrow("0001_valid.ts");
+        await expect(loadMigrationsFromDirectory(dir)).rejects.toThrow("0002_duplicate.js");
+        await rm(duplicate);
+        expect((await loadMigrationsFromDirectory(dir)).map((item) => item.name)).toEqual([
+          "fixture",
+        ]);
+        await rm(join(dir, "0001_valid.ts"));
+        expect(await loadMigrationsFromDirectory(dir)).toEqual([]);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
       }
-      await Bun.write(join(dir, "0001_valid.ts"), valid);
-      for (const [index, source] of [
-        'export const name="missing default";',
-        "export default null;",
-        'export default {name:"bad",async up(){}};',
-      ].entries()) {
-        const file = join(dir, `0002_bad_${index}.ts`);
-        await Bun.write(file, source);
-        await expect(loadMigrationsFromDirectory(dir)).rejects.toThrow(file);
-        await rm(file);
-      }
-      const duplicate = join(dir, "0002_duplicate.js");
-      await Bun.write(duplicate, valid);
-      await expect(loadMigrationsFromDirectory(dir)).rejects.toThrow("Duplicate migration name");
-      await expect(loadMigrationsFromDirectory(dir)).rejects.toThrow("0001_valid.ts");
-      await expect(loadMigrationsFromDirectory(dir)).rejects.toThrow("0002_duplicate.js");
-      await rm(duplicate);
-      expect((await loadMigrationsFromDirectory(dir)).map((item) => item.name)).toEqual([
-        "fixture",
-      ]);
-      await rm(join(dir, "0001_valid.ts"));
-      expect(await loadMigrationsFromDirectory(dir)).toEqual([]);
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+    });
   });
 });

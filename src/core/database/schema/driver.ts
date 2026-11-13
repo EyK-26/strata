@@ -45,19 +45,19 @@ function resolveDriverFromUrl(url: string): DatabaseDriver | null {
   return null;
 }
 
-function resolveDatabaseDriver(options: ResolveDatabaseDriverOptions = {}): DatabaseDriver {
-  const connection = options.connection ?? process.env.DB_CONNECTION;
+function resolveDatabaseDriver(options: ResolveDatabaseDriverOptions): DatabaseDriver {
+  const connection = options.connection;
   if (connection) {
     return normalizeConnectionName(connection);
   }
 
-  const url = options.url ?? process.env.DATABASE_URL ?? "";
+  const url = options.url ?? "";
   const fromUrl = resolveDriverFromUrl(url);
   if (fromUrl) {
     return fromUrl;
   }
 
-  return "pgsql";
+  throw new Error("An explicit database connection or supported database URL is required.");
 }
 
 export type { DatabaseDriver, ResolveDatabaseDriverOptions };

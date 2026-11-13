@@ -1,10 +1,11 @@
+import { currentSqlDialect } from "@getstrata/core/database/dialect";
 import type { Migration } from "@getstrata/core/database/migrations/types";
-import { resolveDatabaseDriver, Schema } from "@getstrata/core/database/schema";
+import { Schema } from "@getstrata/core/database/schema";
 
 const migration: Migration = {
   name: "9999_combination",
   async up(db) {
-    await Schema.run(db, resolveDatabaseDriver(), (schema) => {
+    await Schema.run(db, currentSqlDialect().driver, (schema) => {
       schema.create("combination_orders", (table) => {
         table.id();
         table.string("reference");
@@ -25,7 +26,7 @@ const migration: Migration = {
     });
   },
   async down(db) {
-    await Schema.run(db, resolveDatabaseDriver(), (schema) => {
+    await Schema.run(db, currentSqlDialect().driver, (schema) => {
       schema.drop("combination_pivot");
       schema.drop("combination_lines");
       schema.drop("combination_orders");

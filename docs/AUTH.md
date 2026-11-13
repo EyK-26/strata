@@ -180,7 +180,7 @@ Generated user-backed apps include `0006_account_state.ts`, model/directory fiel
 import { createAccountStateMigration } from "@getstrata/core/auth/accountStateMigration";
 import { resolveDatabaseDriver } from "@getstrata/core/database/schema";
 
-export default createAccountStateMigration("0006_account_state", resolveDatabaseDriver(), {
+export default createAccountStateMigration("0006_account_state", resolveDatabaseDriver({ connection: "pgsql" }), {
   sessions: true, // only when this app has the standard database-cookie sessions table
 });
 ```

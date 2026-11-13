@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { resetSqlDialect, useSqlDialect } from "@getstrata/core/database/dialect";
+import { runWithSqlDialect } from "@getstrata/core/database/dialect";
 import {
   freshDatabase,
   migrateDatabase,
@@ -15,40 +15,39 @@ import { SQL } from "bun";
 type Driver = "sqlite" | "pgsql" | "mysql";
 
 async function fixture(driver: Driver, run: (db: MigrationDatabase) => Promise<void>) {
-  useSqlDialect(driver);
-  if (driver === "sqlite") {
-    const db = createSqliteConnection(":memory:");
-    try {
-      await run(db);
-    } finally {
-      db.close();
-      resetSqlDialect();
+  return runWithSqlDialect(driver, async () => {
+    if (driver === "sqlite") {
+      const db = createSqliteConnection(":memory:");
+      try {
+        await run(db);
+      } finally {
+        db.close();
+      }
+      return;
     }
-    return;
-  }
-  const source =
-    driver === "pgsql"
-      ? process.env.MIGRATION_DATABASE_URL
-      : process.env.MYSQL_OBSERVABILITY_ADMIN_URL;
-  if (!source) throw new Error("Missing disposable database admin URL");
-  const name = `fresh_${crypto.randomUUID().replaceAll("-", "")}`;
-  const control = driver === "pgsql" ? new SQL(source) : createMysqlConnection(source);
-  let database: typeof control | undefined;
-  let created = false;
-  try {
-    await control.unsafe(`CREATE DATABASE ${name}`);
-    created = true;
-    const url = new URL(source);
-    url.pathname = `/${name}`;
-    database = driver === "pgsql" ? new SQL(url.href) : createMysqlConnection(url.href);
-    await run(database);
-  } finally {
-    await database?.close();
-    if (created)
-      await control.unsafe(`DROP DATABASE ${name}${driver === "pgsql" ? " WITH (FORCE)" : ""}`);
-    await control.close();
-    resetSqlDialect();
-  }
+    const source =
+      driver === "pgsql"
+        ? process.env.MIGRATION_DATABASE_URL
+        : process.env.MYSQL_OBSERVABILITY_ADMIN_URL;
+    if (!source) throw new Error("Missing disposable database admin URL");
+    const name = `fresh_${crypto.randomUUID().replaceAll("-", "")}`;
+    const control = driver === "pgsql" ? new SQL(source) : createMysqlConnection(source);
+    let database: typeof control | undefined;
+    let created = false;
+    try {
+      await control.unsafe(`CREATE DATABASE ${name}`);
+      created = true;
+      const url = new URL(source);
+      url.pathname = `/${name}`;
+      database = driver === "pgsql" ? new SQL(url.href) : createMysqlConnection(url.href);
+      await run(database);
+    } finally {
+      await database?.close();
+      if (created)
+        await control.unsafe(`DROP DATABASE ${name}${driver === "pgsql" ? " WITH (FORCE)" : ""}`);
+      await control.close();
+    }
+  });
 }
 
 for (const driver of ["sqlite", "pgsql", "mysql"] as const) {

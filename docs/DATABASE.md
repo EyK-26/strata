@@ -44,19 +44,18 @@ See [PostgreSQL provisioning and migration identities](POSTGRES-PROVISIONING.md)
 
 ## Query builder
 
-`@getstrata/core/database/query` compiles SQL through `currentSqlDialect()`. Tests can wrap a block:
+`@getstrata/core/database/query` compiles SQL using an explicit `SqlDialect` descriptor, obtained with `dialectFor(driver)`. Repositories select their descriptor from their owned connection.
+
+Migration mutations, `sqlTimestamp()`, and schema builders without a driver use an explicit async context:
 
 ```typescript
 import { runWithSqlDialect } from "@getstrata/core/database/dialect";
+import { migrateDatabase } from "@getstrata/core/database/migrations/runner";
 
-runWithSqlDialect("mysql", () => {
-  // INSERT uses ? and backticks, no RETURNING
-});
+await runWithSqlDialect("mysql", () => migrateDatabase(connection, migrations));
 ```
 
-`useSqlDialect("mysql")` changes the process until `resetSqlDialect()`. Prefer `runWithSqlDialect` so the previous dialect always comes back, including across `await`.
-
-The dialect is stored in AsyncLocalStorage (`@getstrata/sqlDialect`) with a process fallback for `useSqlDialect`. Apps must import `@getstrata/core/database/dialect`, not a copied helper, or overrides will not match the query builder.
+`runWithSqlDialect` isolates concurrent callers, retains the selected dialect across `await`, and restores the enclosing context after success or failure. Calls requiring a dialect throw outside this context; there is no process override or environment fallback. `Schema.builder("mysql")` and `Schema.run(connection, "mysql", callback)` also accept an explicit driver without an async context. `resolveDatabaseDriver({ connection, url })` parses supplied options only and throws if neither supplies a supported driver.
 
 ### Filter operators
 

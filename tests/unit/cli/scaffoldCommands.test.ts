@@ -168,7 +168,7 @@ describe("makeMigrationCommand", () => {
       const source = await Bun.file(join(migrationsRoot, files[0] ?? "")).text();
       expect(source).toContain('from "@getstrata/core/database/migrations/types"');
       expect(source).toContain('from "@getstrata/core/database/schema"');
-      expect(source).toContain("Schema.run(db, resolveDatabaseDriver()");
+      expect(source).toContain("Schema.run(db, currentSqlDialect().driver");
       expect(source).not.toContain("SELECT 1");
       expect(output.logs[0]).toMatch(/^Created migration: /);
     });

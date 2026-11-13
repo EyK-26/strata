@@ -1,3 +1,4 @@
+import { currentSqlDialect } from "../dialect.ts";
 import type { MigrationDatabase } from "../migrations/types.ts";
 import { Blueprint } from "./blueprint.ts";
 import type { DatabaseDriver } from "./driver.ts";
@@ -47,7 +48,7 @@ class SchemaBuilder {
 
 class Schema {
   static builder(driver?: DatabaseDriver): SchemaBuilder {
-    return new SchemaBuilder(driver ?? resolveDatabaseDriver());
+    return new SchemaBuilder(driver ?? currentSqlDialect().driver);
   }
 
   static async run(

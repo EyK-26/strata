@@ -233,10 +233,8 @@ export type { SqlDialect } from "../core/database/dialect.ts";
 export {
   currentSqlDialect,
   dialectFor,
-  resetSqlDialect,
   runWithSqlDialect,
   sqlTimestamp,
-  useSqlDialect,
 } from "../core/database/dialect.ts";
 export { foreignKeyFromTable, pivotTableName, singularize } from "../core/database/inflection.ts";
 export { withMigrationLock } from "../core/database/migrations/advisoryLock.ts";

@@ -55,9 +55,7 @@ export type { SqlDialect } from "./dialect.ts";
 export {
   currentSqlDialect,
   dialectFor,
-  resetSqlDialect,
   runWithSqlDialect,
-  useSqlDialect,
 } from "./dialect.ts";
 export { foreignKeyFromTable, pivotTableName, singularize } from "./inflection.ts";
 export type { CastType } from "./model.ts";

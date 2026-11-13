@@ -1,15 +1,6 @@
 import { Database } from "bun:sqlite";
-import { afterEach, describe, expect, test } from "bun:test";
-import {
-  dialectFor,
-  resetSqlDialect,
-  sqlTimestamp,
-  useSqlDialect,
-} from "@getstrata/core/database/dialect";
-
-afterEach(() => {
-  resetSqlDialect();
-});
+import { describe, expect, test } from "bun:test";
+import { dialectFor, runWithSqlDialect, sqlTimestamp } from "@getstrata/core/database/dialect";
 
 const SAMPLE = new Date("2026-09-20T18:41:51.597Z");
 
@@ -30,25 +21,32 @@ describe("dialect timestampValue", () => {
 });
 
 describe("sqlTimestamp", () => {
+  test("requires an explicit context", () => {
+    expect(() => sqlTimestamp(SAMPLE)).toThrow("SQL dialect context is required");
+  });
   test("follows the active dialect", () => {
-    useSqlDialect("mysql");
-    expect(sqlTimestamp(SAMPLE)).toBe("2026-09-20 18:41:51");
+    runWithSqlDialect("mysql", () => {
+      expect(sqlTimestamp(SAMPLE)).toBe("2026-09-20 18:41:51");
+    });
 
-    useSqlDialect("pgsql");
-    expect(sqlTimestamp(SAMPLE)).toBe("2026-09-20T18:41:51.597Z");
+    runWithSqlDialect("pgsql", () => {
+      expect(sqlTimestamp(SAMPLE)).toBe("2026-09-20T18:41:51.597Z");
+    });
 
-    useSqlDialect("sqlite");
-    expect(sqlTimestamp(SAMPLE)).toBe("2026-09-20T18:41:51.597Z");
+    runWithSqlDialect("sqlite", () => {
+      expect(sqlTimestamp(SAMPLE)).toBe("2026-09-20T18:41:51.597Z");
+    });
   });
 
   test("defaults to the current time", () => {
-    useSqlDialect("mysql");
-    const before = Date.now();
-    const rendered = sqlTimestamp();
-    expect(rendered).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
-    expect(new Date(`${rendered.replace(" ", "T")}Z`).getTime()).toBeGreaterThanOrEqual(
-      before - 1000,
-    );
+    runWithSqlDialect("mysql", () => {
+      const before = Date.now();
+      const rendered = sqlTimestamp();
+      expect(rendered).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+      expect(new Date(`${rendered.replace(" ", "T")}Z`).getTime()).toBeGreaterThanOrEqual(
+        before - 1000,
+      );
+    });
   });
 });
 
