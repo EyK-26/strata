@@ -138,3 +138,19 @@ test("queue retry defaults belong to the assembled queue despite environment and
     await queue.close();
   }
 });
+
+test("built-in producer names resolve only through an explicitly registered owner", async () => {
+  const { registerDefaultJobs } = await import("@getstrata/bootstrap/queue/defaultJobs");
+  const { InvalidateCacheTagsJob } = await import("@getstrata/core/jobs/invalidateCacheTagsJob");
+  const { ExportAuditLogsJob } = await import("@getstrata/core/jobs/exportAuditLogsJob");
+  const owned = new JobRegistry(),
+    empty = new JobRegistry();
+  registerDefaultJobs(owned);
+  for (const [job, name] of [
+    [new InvalidateCacheTagsJob(), "cache.invalidate-tags"],
+    [new ExportAuditLogsJob(), "audit.export"],
+  ] as const) {
+    expect(owned.resolveName(job)).toBe(name);
+    expect(empty.resolveName(job)).toBeUndefined();
+  }
+});

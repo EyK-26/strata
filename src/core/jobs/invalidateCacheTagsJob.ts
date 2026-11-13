@@ -6,6 +6,7 @@ interface InvalidateCacheTagsPayload {
 }
 
 class InvalidateCacheTagsJob extends Job<InvalidateCacheTagsPayload> {
+  static override readonly jobName = "cache.invalidate-tags";
   constructor(private readonly cache?: CacheLike) {
     super();
   }

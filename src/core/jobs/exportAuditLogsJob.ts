@@ -6,6 +6,7 @@ interface ExportAuditLogsPayload {
 }
 
 class ExportAuditLogsJob extends Job<ExportAuditLogsPayload> {
+  static override readonly jobName = "audit.export";
   override readonly maxAttempts = 2;
   override readonly backoffMs = 5_000;
 

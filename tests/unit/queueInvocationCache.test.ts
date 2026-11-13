@@ -34,8 +34,6 @@ test("two applications execute the same asynchronous cache job definition agains
     await cacheB.tags("shared").remember("entry", async () => "B");
     const jobA = new InvalidateCacheTagsJob(),
       jobB = new InvalidateCacheTagsJob();
-    registryA.track("cache.invalidate-tags", jobA);
-    registryB.track("cache.invalidate-tags", jobB);
     await queueA.dispatch(jobA, { tags: ["shared"] });
     await queueA.close();
     expect(await cacheA.get("entry")).toBeUndefined();

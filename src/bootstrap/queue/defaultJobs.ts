@@ -3,10 +3,10 @@ import { InvalidateCacheTagsJob } from "@getstrata/core/jobs/invalidateCacheTags
 import type { JobRegistry } from "@getstrata/core/queue/jobRegistry";
 
 function registerDefaultJobs(registry: JobRegistry): void {
-  registry.register("cache.invalidate-tags", () => {
+  registry.register(InvalidateCacheTagsJob.jobName, () => {
     return new InvalidateCacheTagsJob();
   });
-  registry.register("audit.export", () => new ExportAuditLogsJob());
+  registry.register(ExportAuditLogsJob.jobName, () => new ExportAuditLogsJob());
 }
 
 export { registerDefaultJobs };
