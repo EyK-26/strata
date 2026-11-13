@@ -151,6 +151,14 @@ const contexts = await Promise.all(
       http: {
         tenancy: "column",
         signatureSecret: `installed-${label}-signing-secret`,
+        csrf: {
+          token: {
+            secret: `installed-${label}-csrf-secret-32-characters`,
+            cookieName: `installed_${label}_csrf`,
+            production: true,
+          },
+          allowDevelopmentHeaders: false,
+        },
         production: true,
         allowTenantDevHeaders: false,
         metadata: () => ({
@@ -225,6 +233,12 @@ try {
       return Response.json({ label: repository.label(), memo: entity.memo() });
     })(new Request("http://installed.test/notes", { headers: { accept: "application/json" } }));
     assert.equal(response.status, 200);
+    assert.ok(
+      response.headers
+        .get("set-cookie")
+        ?.startsWith(`installed_${index === 0 ? "one" : "two"}_csrf=`),
+    );
+    assert.ok(response.headers.get("set-cookie")?.includes("; Secure"));
     assert.deepEqual(await response.json(), {
       label: index === 0 ? "one" : "two",
       memo: "private-constructor-state",
