@@ -13,6 +13,7 @@ import type { Queue } from "@getstrata/core/queue";
 import { FAILED_JOB_SERVICE_TOKEN, type QueueServices } from "@getstrata/core/queue/createAppQueue";
 import { failedJobRepository } from "@getstrata/core/queue/failedJobRepository";
 import { QUEUE_JOB_REGISTRY_TOKEN } from "@getstrata/core/queue/jobRegistry";
+import { resolveQueueConfig, resolveQueueRuntimeConfig } from "@getstrata/core/queue/queueConfig";
 import { createQueueWorkerTransport } from "@getstrata/core/queue/queueWorkerTransport";
 
 /** Process entrypoint snapshot; pool ownership belongs to this one application. */
@@ -20,11 +21,14 @@ async function bootQueueApplication(
   withWorker = false,
   bootOptions: { readonly modules?: readonly AppModule[] } = {},
 ): Promise<QueueCommandApplication & { context: InitializedAppContext }> {
+  const environment = Object.freeze({ ...process.env });
+  const runtime = resolveQueueRuntimeConfig(environment);
+  const retryPolicy = resolveQueueConfig(environment);
   assertProductionSecrets();
-  const url = process.env.DATABASE_URL;
+  const url = environment.DATABASE_URL;
   if (!url) throw new Error("Queue commands require DATABASE_URL.");
   const configuredDriver =
-    process.env.DB_CONNECTION ??
+    environment.DB_CONNECTION ??
     (url.startsWith("sqlite:") ? "sqlite" : url.startsWith("mysql:") ? "mysql" : "pgsql");
   const driver =
     configuredDriver === "postgresql"
@@ -46,7 +50,7 @@ async function bootQueueApplication(
             driver: "sqlite" as const,
             filename: url.slice("sqlite:".length).replace(/^\/\//, ""),
           };
-  const redisUrl = process.env.REDIS_URL;
+  const redisUrl = environment.REDIS_URL;
   if (withWorker && !redisUrl) throw new Error("queue:work requires REDIS_URL to be set.");
   let queueContainer: ServiceContainerLike;
   const selectedServices = () => queueContainer.resolve(FAILED_JOB_SERVICE_TOKEN);
@@ -58,6 +62,8 @@ async function bootQueueApplication(
     ? createQueueWorkerTransport({
         redisUrl: redisUrl as string,
         queueServices: workerServices,
+        runtime,
+        retryPolicy,
         registry: () => queueContainer.resolve(QUEUE_JOB_REGISTRY_TOKEN),
       })
     : undefined;

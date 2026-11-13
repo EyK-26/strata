@@ -10,7 +10,7 @@ import {
   createTrackedJob,
   type QueueServices,
 } from "./publicQueue";
-import type { QueueRetryPolicy } from "./queueConfig";
+import type { QueueRetryPolicy, QueueRuntimeConfig } from "./queueConfig";
 import { resolveQueueConfig } from "./queueConfig";
 
 function createAppQueue(
@@ -19,15 +19,19 @@ function createAppQueue(
   failedJobs: QueueServices,
   registry: JobRegistry,
   retryPolicy?: QueueRetryPolicy,
+  runtime?: QueueRuntimeConfig,
 ): Queue {
   return createProductionQueue(driver, {
     redisUrl,
     failedJobs,
     registry,
     retryPolicy,
+    runtime,
   });
 }
 
+export type { QueueHandoff, QueueIdentity } from "@getstrata/core/queue/queueHandoff";
+export { createIdentityQueue, createQueueHandoff } from "@getstrata/core/queue/queueHandoff";
 export type { QueueInvocation, QueueInvocationConfig, QueueServices } from "./queueServices";
 export {
   createAppQueue,

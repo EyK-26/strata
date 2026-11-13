@@ -157,7 +157,7 @@ try {
         assert.equal(database.repository(notes), database.repository(notes));
         assert.ok(database.repository(failedJobRepository) instanceof BaseRepository);
         await database.execute({
-          text: "CREATE TABLE failed_job (id INTEGER PRIMARY KEY,job_name TEXT,job_id TEXT,payload TEXT,exception TEXT,failed_at TEXT)",
+          text: "CREATE TABLE failed_job (id INTEGER PRIMARY KEY,job_name TEXT,job_id TEXT,handoff TEXT,payload TEXT,exception TEXT,failed_at TEXT)",
           params: [],
         });
         assert.deepEqual(

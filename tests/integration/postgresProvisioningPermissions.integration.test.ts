@@ -151,7 +151,7 @@ test("runtime HTTP, RLS and queue effects need no schema CREATE after owner migr
           name: "runtime_tables",
           async up(db) {
             await db.unsafe(
-              "CREATE TABLE scoped_entries(id SERIAL PRIMARY KEY,tenant_id INTEGER NOT NULL,value TEXT NOT NULL); INSERT INTO scoped_entries(tenant_id,value) VALUES(2,'private-two'); CREATE TABLE failed_job(id SERIAL PRIMARY KEY,job_name TEXT NOT NULL,job_id TEXT,payload JSONB NOT NULL,exception TEXT NOT NULL,failed_at TIMESTAMPTZ NOT NULL)",
+              "CREATE TABLE scoped_entries(id SERIAL PRIMARY KEY,tenant_id INTEGER NOT NULL,value TEXT NOT NULL); INSERT INTO scoped_entries(tenant_id,value) VALUES(2,'private-two'); CREATE TABLE failed_job(id SERIAL PRIMARY KEY,job_name TEXT NOT NULL,job_id TEXT,handoff TEXT,payload JSONB NOT NULL,exception TEXT NOT NULL,failed_at TIMESTAMPTZ NOT NULL)",
             );
             await db.unsafe(generatedRlsBootstrapSql(["scoped_entries"]));
           },

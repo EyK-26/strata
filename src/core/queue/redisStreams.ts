@@ -1,15 +1,17 @@
+import { QueueHandoffError } from "@getstrata/core/queue/queueHandoff";
 import { RedisClient } from "bun";
-import type { Job, Queue } from "./index";
+import type { Job, Queue, QueueDispatchOptions } from "./index";
 import type { JobRegistry } from "./jobRegistry";
 import { parseQueueJobEnvelope, type QueueJobEnvelope, runQueueJob } from "./jobRunner";
 import {
+  DEFAULT_QUEUE_VISIBILITY_MS,
   type QueueRetryPolicy,
   readQueueVisibilityMs,
   resolveQueueConfig,
   snapshotQueueRetryPolicy,
 } from "./queueConfig";
 import type { QueueServices } from "./queueServices";
-import { defaultQueueKeys, queueKeyForPriority } from "./redisQueueKeys";
+import { defaultQueueKeys, QUEUE_KEYS, queueKeyForPriority } from "./redisQueueKeys";
 import {
   ASSERT_DRAINED,
   CANCEL_STREAM,
@@ -138,6 +140,7 @@ async function scheduleStreamRetry(
   reservation: StreamReservation,
   envelope: QueueJobEnvelope,
   delayMs: number,
+  visibilityMs = DEFAULT_QUEUE_VISIBILITY_MS,
 ): Promise<void> {
   // Keep server timestamp arithmetic exact, including its epoch component.
   if (!Number.isSafeInteger(delayMs) || delayMs < 0 || delayMs > Number.MAX_SAFE_INTEGER / 2)
@@ -151,7 +154,7 @@ async function scheduleStreamRetry(
     STREAM_GROUP,
     reservation.id,
     reservation.owner,
-    String(readQueueVisibilityMs()),
+    String(visibilityMs),
     String(delayMs),
     JSON.stringify(envelope),
     envelope.deadlineAtMs === undefined ? "" : String(envelope.deadlineAtMs),
@@ -173,6 +176,7 @@ async function pollStreamPriorities(
   queueKeys: readonly string[],
   owner: string,
   cursors: readonly string[],
+  visibilityMs = DEFAULT_QUEUE_VISIBILITY_MS,
 ): Promise<{
   cursors: string[];
   hit: { index: number; reservation: StreamReservation } | null;
@@ -185,7 +189,7 @@ async function pollStreamPriorities(
     ...keys,
     STREAM_GROUP,
     owner,
-    String(readQueueVisibilityMs()),
+    String(visibilityMs),
     ...cursors,
   ]);
   if (!Array.isArray(raw)) throw new Error("Invalid Redis stream poll response");
@@ -266,6 +270,7 @@ async function updateStreamReservation(
   reservation: StreamReservation,
   action: "renew" | "ack" | "quarantine",
   controlKey?: string,
+  visibilityMs = DEFAULT_QUEUE_VISIBILITY_MS,
 ): Promise<boolean> {
   return (
     Number(
@@ -278,7 +283,7 @@ async function updateStreamReservation(
         STREAM_GROUP,
         reservation.id,
         reservation.owner,
-        String(readQueueVisibilityMs()),
+        String(visibilityMs),
         action,
         reservation.payload,
         controlKey ? "1" : "0",
@@ -292,6 +297,7 @@ async function reserveStreamJob(
   key: string,
   owner: string,
   cursor = "0-0",
+  visibilityMs = DEFAULT_QUEUE_VISIBILITY_MS,
 ): Promise<{ reservation: StreamReservation | null; cursor: string }> {
   // COUNT 1 bounds Redis's pending scan; retain its cursor across polling cycles.
   const claimed = await client.send("EVAL", [
@@ -300,7 +306,7 @@ async function reserveStreamJob(
     streamQueueKey(key),
     STREAM_GROUP,
     owner,
-    String(readQueueVisibilityMs()),
+    String(visibilityMs),
     cursor,
   ]);
   if (!Array.isArray(claimed) || typeof claimed[0] !== "string" || !Array.isArray(claimed[1]))
@@ -322,19 +328,24 @@ async function reserveStreamJob(
 }
 
 class RedisStreamsQueue implements Queue {
-  private readonly queueKeys = Object.freeze(defaultQueueKeys());
   private readonly client: RedisClient;
   constructor(
     redisUrl: string,
     private readonly registry: JobRegistry,
+    private readonly queueKeys: readonly [string, string, string] = defaultQueueKeys(),
   ) {
+    this.queueKeys = Object.freeze([...queueKeys]) as readonly [string, string, string];
     this.client = new RedisClient(redisUrl);
   }
   close(): void {
     this.client.close();
   }
-  async dispatch<TPayload extends object>(job: Job<TPayload>, payload: TPayload): Promise<void> {
-    await this.enqueue(job, payload);
+  async dispatch<TPayload extends object>(
+    job: Job<TPayload>,
+    payload: TPayload,
+    options?: QueueDispatchOptions,
+  ): Promise<void> {
+    await this.admit(job, payload, {}, undefined, options?.handoff);
   }
   async enqueue<TPayload extends object>(
     job: Job<TPayload>,
@@ -347,6 +358,7 @@ class RedisStreamsQueue implements Queue {
     job: Job<TPayload>,
     payload: TPayload,
     jobId: string,
+    options?: QueueDispatchOptions,
   ): Promise<void> {
     const prefix = this.queueKeys.find((key) => jobId.startsWith(`${streamQueueKey(key)}/`));
     if (
@@ -356,13 +368,14 @@ class RedisStreamsQueue implements Queue {
       )
     )
       throw new Error("Replay identity does not belong to this Streams namespace");
-    await this.admit(job, payload, {}, jobId);
+    await this.admit(job, payload, {}, jobId, options?.handoff);
   }
   private async admit<TPayload extends object>(
     job: Job<TPayload>,
     payload: TPayload,
     options: StreamsEnqueueOptions,
     replayId?: string,
+    handoff?: string,
   ): Promise<string> {
     if (options.cancellable !== undefined && typeof options.cancellable !== "boolean")
       throw new Error("cancellable must be a boolean");
@@ -386,6 +399,7 @@ class RedisStreamsQueue implements Queue {
       name,
       payload,
       attempts: 0,
+      ...(handoff === undefined ? {} : { handoff }),
       jobId,
       deadlineAtMs,
       ...(options.cancellable ? { cancellable: true } : {}),
@@ -425,9 +439,11 @@ class RedisStreamsWorker {
     private readonly timeoutSeconds = 5,
     private readonly queueKeys: readonly string[] = defaultQueueKeys(),
     retryPolicy: QueueRetryPolicy = resolveQueueConfig(),
+    private readonly visibilityMs = readQueueVisibilityMs(),
   ) {
+    this.queueKeys = Object.freeze([...queueKeys]);
     this.retryPolicy = snapshotQueueRetryPolicy(retryPolicy);
-    readQueueVisibilityMs();
+    readQueueVisibilityMs({ QUEUE_VISIBILITY_MS: String(this.visibilityMs) });
     this.client = new RedisClient(redisUrl);
   }
   requestStop(): void {
@@ -466,6 +482,7 @@ class RedisStreamsWorker {
         this.queueKeys,
         this.owner,
         this.queueKeys.map((key) => this.cursors.get(key) ?? "0-0"),
+        this.visibilityMs,
       );
       this.queueKeys.forEach((key, index) => {
         const cursor = polled.cursors[index];
@@ -491,7 +508,14 @@ class RedisStreamsWorker {
         payload: { raw: reservation.payload },
         exception: "Malformed or unknown queue envelope",
       });
-      await updateStreamReservation(this.client, key, reservation, "quarantine");
+      await updateStreamReservation(
+        this.client,
+        key,
+        reservation,
+        "quarantine",
+        undefined,
+        this.visibilityMs,
+      );
       return;
     }
     envelope.jobId ??= `${streamQueueKey(key)}/${reservation.id}`;
@@ -500,7 +524,14 @@ class RedisStreamsWorker {
       try {
         controlKey = streamControlKey(key, envelope.jobId);
       } catch {
-        await updateStreamReservation(this.client, key, reservation, "quarantine");
+        await updateStreamReservation(
+          this.client,
+          key,
+          reservation,
+          "quarantine",
+          undefined,
+          this.visibilityMs,
+        );
         return;
       }
     }
@@ -509,10 +540,18 @@ class RedisStreamsWorker {
       await this.failedJobs.recordFailure({
         jobName: envelope.name,
         jobId: envelope.jobId,
+        ...(envelope.handoff === undefined ? {} : { handoff: envelope.handoff }),
         payload: envelope.payload,
         exception: cancellationError.message,
       });
-      await updateStreamReservation(this.client, key, reservation, "ack", controlKey);
+      await updateStreamReservation(
+        this.client,
+        key,
+        reservation,
+        "ack",
+        controlKey,
+        this.visibilityMs,
+      );
       return;
     }
     const remainingMs =
@@ -524,15 +563,24 @@ class RedisStreamsWorker {
       await this.failedJobs.recordFailure({
         jobName: envelope.name,
         jobId: envelope.jobId,
+        ...(envelope.handoff === undefined ? {} : { handoff: envelope.handoff }),
         payload: envelope.payload,
         exception: deadlineError.message,
       });
-      await updateStreamReservation(this.client, key, reservation, "ack", controlKey);
+      await updateStreamReservation(
+        this.client,
+        key,
+        reservation,
+        "ack",
+        controlKey,
+        this.visibilityMs,
+      );
       return;
     }
     const controller = new AbortController();
     this.active = controller;
     let acknowledge = false;
+    let invalidHandoff = false;
     let released = false;
     let ownershipLost = false;
     let renewal: Promise<void> | undefined;
@@ -562,7 +610,14 @@ class RedisStreamsWorker {
         renewal = (async () => {
           try {
             if (
-              !(await updateStreamReservation(this.client, key, reservation, "renew", controlKey))
+              !(await updateStreamReservation(
+                this.client,
+                key,
+                reservation,
+                "renew",
+                controlKey,
+                this.visibilityMs,
+              ))
             )
               loseOwnership(new Error("Queue lease lost"));
             else if (controlKey && (await readStreamCancellation(this.client, controlKey))) {
@@ -577,7 +632,7 @@ class RedisStreamsWorker {
           renewal = undefined;
         });
       },
-      Math.max(1, Math.floor(readQueueVisibilityMs() / 3)),
+      Math.max(1, Math.floor(this.visibilityMs / 3)),
     );
     try {
       await runQueueJob(envelope, this.failedJobs, this.registry, {
@@ -589,7 +644,14 @@ class RedisStreamsWorker {
         },
         deferRetry: async (next, delayMs) => {
           controller.signal.throwIfAborted();
-          await scheduleStreamRetry(this.client, key, reservation, next, delayMs);
+          await scheduleStreamRetry(
+            this.client,
+            key,
+            reservation,
+            next,
+            delayMs,
+            this.visibilityMs,
+          );
           released = true;
         },
         onFailureRecorded: () => {
@@ -599,12 +661,24 @@ class RedisStreamsWorker {
       });
       acknowledge = true;
     } catch (error) {
-      console.error("[StreamsWorker] Job failed:", error);
+      if (error instanceof QueueHandoffError) invalidHandoff = true;
+      else console.error("[StreamsWorker] Job failed:", error);
     } finally {
       stopDeadlineWatch?.();
       clearInterval(heartbeat);
       await renewal;
       this.active = undefined;
+    }
+    if (invalidHandoff && !ownershipLost && !released) {
+      await updateStreamReservation(
+        this.client,
+        key,
+        reservation,
+        "quarantine",
+        controlKey,
+        this.visibilityMs,
+      );
+      return;
     }
     if (
       !ownershipLost &&
@@ -616,6 +690,7 @@ class RedisStreamsWorker {
         await this.failedJobs.recordFailure({
           jobName: envelope.name,
           jobId: envelope.jobId,
+          ...(envelope.handoff === undefined ? {} : { handoff: envelope.handoff }),
           payload: envelope.payload,
           exception: cancellationError.message,
         });
@@ -632,13 +707,21 @@ class RedisStreamsWorker {
         await this.failedJobs.recordFailure({
           jobName: envelope.name,
           jobId: envelope.jobId,
+          ...(envelope.handoff === undefined ? {} : { handoff: envelope.handoff }),
           payload: envelope.payload,
           exception: deadlineError.message,
         });
       acknowledge = true;
     }
     if (acknowledge && !ownershipLost && !released)
-      await updateStreamReservation(this.client, key, reservation, "ack", controlKey);
+      await updateStreamReservation(
+        this.client,
+        key,
+        reservation,
+        "ack",
+        controlKey,
+        this.visibilityMs,
+      );
   }
   async run(): Promise<void> {
     this.running = true;
@@ -686,7 +769,7 @@ async function migrateLegacyQueueToStreams(
   if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > 1000)
     throw new Error("Queue conversion batchSize must be between 1 and 1000.");
   let converted = 0;
-  for (const key of options.queueKeys ?? defaultQueueKeys())
+  for (const key of [...(options.queueKeys ?? QUEUE_KEYS)])
     converted += Number(
       await client.send("EVAL", [
         CONVERT_LIST,

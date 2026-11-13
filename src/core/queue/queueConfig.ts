@@ -1,7 +1,14 @@
+const DEFAULT_QUEUE_VISIBILITY_MS = 60000;
+
 interface QueueConfig {
   readonly driver: "sync" | "async" | "redis";
   readonly maxAttempts: number;
   readonly backoffMs: number;
+}
+interface QueueRuntimeConfig {
+  readonly transport: "lists" | "streams";
+  readonly visibilityMs: number;
+  readonly queueKeys: readonly [string, string, string];
 }
 type QueueRetryPolicy = Readonly<Pick<QueueConfig, "maxAttempts" | "backoffMs">>;
 type QueueEnvironment = Readonly<Record<string, string | undefined>>;
@@ -42,10 +49,41 @@ function readQueueVisibilityMs(env: QueueEnvironment = process.env): number {
   return value;
 }
 
-export type { QueueConfig, QueueRetryPolicy };
+function snapshotQueueRuntimeConfig(config: QueueRuntimeConfig): QueueRuntimeConfig {
+  if (
+    (config.transport !== "lists" && config.transport !== "streams") ||
+    typeof config.visibilityMs !== "number"
+  )
+    throw new TypeError("Queue runtime requires explicit transport and numeric visibility.");
+  if (
+    !Array.isArray(config.queueKeys) ||
+    config.queueKeys.length !== 3 ||
+    config.queueKeys.some((key) => typeof key !== "string" || !key.length) ||
+    new Set(config.queueKeys).size !== 3
+  )
+    throw new TypeError("Queue runtime requires three distinct nonempty priority keys.");
+  return Object.freeze({
+    queueKeys: Object.freeze([...config.queueKeys]) as readonly [string, string, string],
+    transport: resolveRedisQueueTransport({ QUEUE_REDIS_TRANSPORT: config.transport }),
+    visibilityMs: readQueueVisibilityMs({ QUEUE_VISIBILITY_MS: String(config.visibilityMs) }),
+  });
+}
+function resolveQueueRuntimeConfig(env: QueueEnvironment = process.env): QueueRuntimeConfig {
+  const prefix = env.APP_KEY_PREFIX?.trim() || "strata";
+  return snapshotQueueRuntimeConfig({
+    transport: resolveRedisQueueTransport(env),
+    visibilityMs: readQueueVisibilityMs(env),
+    queueKeys: [`${prefix}:queue:high`, `${prefix}:queue:default`, `${prefix}:queue:low`],
+  });
+}
+
+export type { QueueConfig, QueueRetryPolicy, QueueRuntimeConfig };
 export {
+  DEFAULT_QUEUE_VISIBILITY_MS,
   readQueueVisibilityMs,
   resolveQueueConfig,
+  resolveQueueRuntimeConfig,
   resolveRedisQueueTransport,
   snapshotQueueRetryPolicy,
+  snapshotQueueRuntimeConfig,
 };

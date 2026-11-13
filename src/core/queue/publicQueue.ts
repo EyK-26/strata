@@ -5,9 +5,11 @@ import type { JobRegistry } from "./jobRegistry.ts";
 import { runQueueJob } from "./jobRunner.ts";
 import {
   type QueueRetryPolicy,
+  type QueueRuntimeConfig,
   resolveQueueConfig,
-  resolveRedisQueueTransport,
+  resolveQueueRuntimeConfig,
   snapshotQueueRetryPolicy,
+  snapshotQueueRuntimeConfig,
 } from "./queueConfig";
 import {
   createFailedJobService,
@@ -34,6 +36,7 @@ function createProductionQueue(
     failedJobs: QueueServices;
     registry: JobRegistry;
     retryPolicy?: QueueRetryPolicy;
+    runtime?: QueueRuntimeConfig;
   },
 ): Queue {
   const failedJobs = options.failedJobs;
@@ -43,9 +46,10 @@ function createProductionQueue(
       throw new Error('QUEUE_DRIVER="redis" requires REDIS_URL to be set.');
     }
 
-    return resolveRedisQueueTransport() === "streams"
-      ? new RedisStreamsQueue(options.redisUrl, options.registry)
-      : new RedisQueue(options.redisUrl, options.registry);
+    const runtime = snapshotQueueRuntimeConfig(options.runtime ?? resolveQueueRuntimeConfig());
+    return runtime.transport === "streams"
+      ? new RedisStreamsQueue(options.redisUrl, options.registry, runtime.queueKeys)
+      : new RedisQueue(options.redisUrl, options.registry, runtime.queueKeys);
   }
 
   return new ResilientQueue(
@@ -60,12 +64,33 @@ function createQueueWorker(
   redisUrl: string,
   failedJobs: Pick<QueueServices, "recordFailure" | "runAttempt">,
   registry: JobRegistry,
+  options: { readonly runtime?: QueueRuntimeConfig; readonly retryPolicy?: QueueRetryPolicy } = {},
 ): QueueWorker | RedisStreamsWorker {
-  return resolveRedisQueueTransport() === "streams"
-    ? new RedisStreamsWorker(redisUrl, failedJobs, registry)
-    : new QueueWorker(redisUrl, failedJobs, registry);
+  const runtime = snapshotQueueRuntimeConfig(options.runtime ?? resolveQueueRuntimeConfig());
+  const retry = snapshotQueueRetryPolicy(options.retryPolicy ?? resolveQueueConfig());
+  return runtime.transport === "streams"
+    ? new RedisStreamsWorker(
+        redisUrl,
+        failedJobs,
+        registry,
+        5,
+        runtime.queueKeys,
+        retry,
+        runtime.visibilityMs,
+      )
+    : new QueueWorker(
+        redisUrl,
+        failedJobs,
+        registry,
+        5,
+        runtime.queueKeys,
+        retry,
+        runtime.visibilityMs,
+      );
 }
 
+export type { QueueHandoff, QueueIdentity } from "@getstrata/core/queue/queueHandoff";
+export { createIdentityQueue, createQueueHandoff } from "@getstrata/core/queue/queueHandoff";
 export type { QueueInvocation, QueueInvocationConfig, QueueServices } from "./queueServices";
 export {
   createFailedJobService,

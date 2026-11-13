@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   ensureStreamGroup,
+  migrateLegacyQueueToStreams,
   pollStreamPriorities,
   readStreamCancellation,
   readStreamEntry,
@@ -228,4 +229,26 @@ test("unknown hit flags and truncated claimed entries cannot be delivered", asyn
     await expect(
       pollStreamPriorities(replies([response]) as never, ["only"], "owner", ["0-0"]),
     ).rejects.toThrow("stream poll response");
+});
+
+test("maintenance conversion captures keys and batch size before asynchronous Redis work", async () => {
+  const keys = ["owner-high", "owner-default", "owner-low"];
+  const options = { maintenance: true as const, batchSize: 3, queueKeys: keys };
+  const observed: string[][] = [];
+  const client = {
+    async send(_command: string, args: string[]) {
+      observed.push(args);
+      if (observed.length === 1) {
+        keys[1] = "foreign-default";
+        options.batchSize = 999;
+      }
+      return 1;
+    },
+  };
+  expect(await migrateLegacyQueueToStreams(client as never, options)).toBe(3);
+  expect(observed.map((args) => [args[2], args.at(-1)])).toEqual([
+    ["owner-high", "3"],
+    ["owner-default", "3"],
+    ["owner-low", "3"],
+  ]);
 });

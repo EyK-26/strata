@@ -118,7 +118,7 @@ async function liveWorkspace(
 async function schema(app: LiveApplication) {
   await app.invoke({ kind: "command" }, async ({ database }) => {
     await database.execute({
-      text: "CREATE TABLE failed_job(id INTEGER PRIMARY KEY,job_name TEXT NOT NULL,job_id TEXT,payload TEXT NOT NULL,exception TEXT NOT NULL,failed_at DATETIME NOT NULL)",
+      text: "CREATE TABLE failed_job(id INTEGER PRIMARY KEY,job_name TEXT NOT NULL,job_id TEXT,handoff TEXT,payload TEXT NOT NULL,exception TEXT NOT NULL,failed_at DATETIME NOT NULL)",
       params: [],
     });
     await database.execute({ text: "CREATE TABLE queue_effects(id INTEGER NOT NULL)", params: [] });

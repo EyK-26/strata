@@ -1,6 +1,14 @@
 import type { TransportDefinition } from "../contracts/application";
 import type { JobRegistry } from "./jobRegistry";
 import { createQueueWorker } from "./publicQueue";
+import {
+  type QueueRetryPolicy,
+  type QueueRuntimeConfig,
+  resolveQueueConfig,
+  resolveQueueRuntimeConfig,
+  snapshotQueueRetryPolicy,
+  snapshotQueueRuntimeConfig,
+} from "./queueConfig";
 import type { QueueServices } from "./queueServices";
 
 interface QueueWorkerAdapter {
@@ -21,13 +29,21 @@ function createQueueWorkerTransport(options: {
   readonly registry: JobRegistry | (() => JobRegistry);
   readonly queueServices: Pick<QueueServices, "recordFailure" | "runAttempt">;
   readonly name?: string;
+  readonly runtime?: QueueRuntimeConfig;
+  readonly retryPolicy?: QueueRetryPolicy;
   readonly createWorker?: (
     redisUrl: string,
     services: Pick<QueueServices, "recordFailure" | "runAttempt">,
     registry: JobRegistry,
   ) => QueueWorkerAdapter;
 }): QueueWorkerTransport {
-  const { redisUrl, queueServices, createWorker = createQueueWorker } = options;
+  const runtime = snapshotQueueRuntimeConfig(options.runtime ?? resolveQueueRuntimeConfig());
+  const retryPolicy = snapshotQueueRetryPolicy(options.retryPolicy ?? resolveQueueConfig());
+  const { redisUrl, queueServices } = options;
+  const createWorker =
+    options.createWorker ??
+    ((url, services, registry) =>
+      createQueueWorker(url, services, registry, { runtime, retryPolicy }));
   const name = options.name ?? "queue.worker";
   let worker: QueueWorkerAdapter | undefined;
   let running: Promise<void> | undefined;

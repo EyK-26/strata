@@ -53,11 +53,12 @@ async function queueRetryCommand(id: string | undefined, boot: QueueFailedBoot):
       const job = registry.create(failedJob.job_name);
       if (!job) throw new Error(`Unknown job "${failedJob.job_name}".`);
       registry.track(failedJob.job_name, job);
+      const options = failedJob.handoff == null ? undefined : { handoff: failedJob.handoff };
       if (failedJob.job_id !== null && failedJob.job_id !== undefined) {
         if (!queue.replay)
           throw new Error("Configured queue cannot preserve the failed-job identity");
-        await queue.replay(job, failedJob.payload, failedJob.job_id);
-      } else await queue.dispatch(job, failedJob.payload);
+        await queue.replay(job, failedJob.payload, failedJob.job_id, options);
+      } else await queue.dispatch(job, failedJob.payload, options);
     });
     console.log(`Enqueued failed job #${jobId}.`);
   });

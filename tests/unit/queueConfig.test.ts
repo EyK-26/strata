@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import {
   readQueueVisibilityMs,
   resolveQueueConfig,
+  resolveQueueRuntimeConfig,
   resolveRedisQueueTransport,
   snapshotQueueRetryPolicy,
+  snapshotQueueRuntimeConfig,
 } from "../../src/core/queue/queueConfig";
 
 describe("queue configuration snapshots", () => {
@@ -31,6 +33,45 @@ describe("queue configuration snapshots", () => {
     input.backoffMs = 99;
     expect(snapshot).toEqual({ maxAttempts: 2, backoffMs: 10 });
     expect(Object.isFrozen(snapshot)).toBe(true);
+  });
+  test("runtime captures namespace, visibility and transport independently of later environment/config drift", () => {
+    const environment = {
+      APP_KEY_PREFIX: "owner-a",
+      QUEUE_REDIS_TRANSPORT: "streams",
+      QUEUE_VISIBILITY_MS: "300",
+    };
+    const captured = resolveQueueRuntimeConfig(environment);
+    environment.APP_KEY_PREFIX = "owner-b";
+    environment.QUEUE_REDIS_TRANSPORT = "lists";
+    environment.QUEUE_VISIBILITY_MS = "bad";
+    expect(captured).toEqual({
+      transport: "streams",
+      visibilityMs: 300,
+      queueKeys: ["owner-a:queue:high", "owner-a:queue:default", "owner-a:queue:low"],
+    });
+    expect(Object.isFrozen(captured.queueKeys)).toBe(true);
+    expect(() =>
+      snapshotQueueRuntimeConfig({
+        transport: "invalid",
+        visibilityMs: 300,
+        queueKeys: ["high", "default", "low"],
+      } as never),
+    ).toThrow("explicit transport");
+    const keys = ["high", "default", "low"] as [string, string, string];
+    const snapshot = snapshotQueueRuntimeConfig({
+      transport: "lists",
+      visibilityMs: 300,
+      queueKeys: keys,
+    });
+    keys[0] = "changed";
+    expect(snapshot.queueKeys[0]).toBe("high");
+    expect(() =>
+      snapshotQueueRuntimeConfig({
+        transport: "lists",
+        visibilityMs: 300,
+        queueKeys: ["same", "same", "low"],
+      }),
+    ).toThrow();
   });
   test("transport and visibility adapters validate explicit sources", () => {
     expect(resolveRedisQueueTransport({})).toBe("lists");
