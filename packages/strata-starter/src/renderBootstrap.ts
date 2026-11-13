@@ -75,6 +75,7 @@ import type { ServiceProvider } from "@getstrata/core/contracts/di";
 import { loadConfig } from "../config.ts";
 
 export function createConfigProvider(appConfig:ReturnType<typeof loadConfig>,env:Readonly<Record<string,string|undefined>>):ServiceProvider {
+  env=Object.freeze({...env});
   return {
   name: "starter.config",
   register({ container, config }) {
@@ -93,6 +94,7 @@ export function createConfigProvider(appConfig:ReturnType<typeof loadConfig>,env
     config.set(APP_PORT_CONFIG_KEY, appConfig.port);
     config.set(REDIS_URL_CONFIG_KEY, env.REDIS_URL ?? "");
     config.set("app.url", appConfig.appUrl);
+    config.set("app.debug", env.APP_DEBUG === "true");
     config.set("cache.driver", env.CACHE_DRIVER ?? "${layers.cache}");
     config.set("cache.ttlMs", 3_600_000);
     config.set("cache.maxEntries", 100);

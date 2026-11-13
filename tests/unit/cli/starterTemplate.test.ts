@@ -71,3 +71,54 @@ test("generated CSRF target example is opt-in and config providers wire its expl
     "config.set(CSRF_TARGET_ORIGIN_CONFIG_KEY, env.CSRF_TARGET_ORIGIN)",
   );
 });
+
+test("generated config providers capture each owner's debug setting before registration", async () => {
+  const { renderConfigProvider } = await import(
+    "../../../packages/strata-starter/src/renderBootstrap.ts"
+  );
+  const { layersFromFlags, parseCreateStrataArgs } = await import(
+    "../../../packages/strata-starter/src/parseArgs.ts"
+  );
+  const layers = layersFromFlags(parseCreateStrataArgs(["debug-owner"]));
+  const rendered = renderConfigProvider(compileStarterFeatures(layers));
+  const executable = new Bun.Transpiler({ loader: "ts" })
+    .transformSync(rendered.replace(/^import[\s\S]*?;\n/gm, ""))
+    .replace("export function", "function");
+  const create = new Function(
+    "CORE_CONFIG_TOKEN",
+    "CORE_PUBLIC_TENANCY_TOKEN",
+    "CSRF_TARGET_ORIGIN_CONFIG_KEY",
+    "DATABASE_URL_CONFIG_KEY",
+    "APP_PORT_CONFIG_KEY",
+    "REDIS_URL_CONFIG_KEY",
+    "isProductionEnv",
+    "normalizeTenantHostname",
+    `${executable}; return createConfigProvider;`,
+  )(
+    "config",
+    "tenant",
+    "csrf",
+    "db",
+    "port",
+    "redis",
+    () => false,
+    (value: string) => value,
+  );
+  const firstEnv = { APP_DEBUG: "true" };
+  const secondEnv = { APP_DEBUG: "false" };
+  const appConfig = { appUrl: "https://owner.test", databaseUrl: "sqlite::memory:", port: 3000 };
+  const first = create(appConfig, firstEnv);
+  const second = create(appConfig, secondEnv);
+  firstEnv.APP_DEBUG = "false";
+  secondEnv.APP_DEBUG = "true";
+  const register = (provider: typeof first) => {
+    const values = new Map<string, unknown>();
+    provider.register({
+      container: { set: () => {} },
+      config: { set: (key: string, value: unknown) => values.set(key, value) },
+    });
+    return values;
+  };
+  expect(register(first).get("app.debug")).toBe(true);
+  expect(register(second).get("app.debug")).toBe(false);
+});
