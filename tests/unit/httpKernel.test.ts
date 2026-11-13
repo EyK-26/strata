@@ -16,12 +16,17 @@ import { createPasswordConfirmCookie } from "@getstrata/core/auth/passwordConfir
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import { SimpleCache } from "@getstrata/core/cache/simpleCache";
 import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
-import { CORE_ABILITY_CHECKER_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import {
+  CORE_ABILITY_CHECKER_TOKEN,
+  CORE_TRACING_RUNTIME_TOKEN,
+} from "@getstrata/core/contracts/serviceTokens";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { resolveCsrfTokenForRequest } from "@getstrata/core/http/csrfToken";
 import { resetMemoryLoginThrottleForTests } from "@getstrata/core/http/loginThrottleMiddleware";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { temporarySignedUrl } from "@getstrata/core/http/signedUrl";
+import { createTracingRuntime } from "@getstrata/core/tracing/tracingMiddleware";
+import { InMemorySpanExporter } from "@opentelemetry/sdk-trace-base";
 import {
   enableDevAuthHeaders,
   guestGuardOptions,
@@ -53,6 +58,52 @@ describe("HttpKernel", () => {
   afterEach(() => {
     restoreDevAuthHeaders(previousHeaders);
   });
+  test("response tracing uses only the runtime installed in this application container", async () => {
+    const exporterA = new InMemorySpanExporter();
+    const exporterB = new InMemorySpanExporter();
+    const runtimeA = createTracingRuntime({
+      exporter: exporterA,
+      serviceName: "kernel-a",
+      env: { OTEL_SDK_DISABLED: "false" },
+    });
+    const runtimeB = createTracingRuntime({
+      exporter: exporterB,
+      serviceName: "kernel-b",
+      env: { OTEL_SDK_DISABLED: "false" },
+    });
+    try {
+      const dependenciesA = createKernelDependencies();
+      const dependenciesB = createKernelDependencies();
+      dependenciesA.container.set(CORE_TRACING_RUNTIME_TOKEN, runtimeA);
+      dependenciesB.container.set(CORE_TRACING_RUNTIME_TOKEN, runtimeB);
+      const handlerA = createHttpKernel(dependenciesA).wrapPublicDocument(
+        async () => new Response("a"),
+      );
+      const handlerB = createHttpKernel(dependenciesB).wrapPublicDocument(
+        async () => new Response("b"),
+      );
+      const [responseA, responseB] = await Promise.all([
+        handlerA(new Request("http://a")),
+        handlerB(new Request("http://b")),
+      ]);
+      expect(responseA.headers.get("x-trace-id")).toHaveLength(32);
+      expect(responseB.headers.get("x-trace-id")).toHaveLength(32);
+      await runtimeA.forceFlush();
+      expect(exporterA.getFinishedSpans()).toHaveLength(1);
+      expect(exporterB.getFinishedSpans()).toHaveLength(0);
+      await runtimeA.shutdown();
+      await handlerB(new Request("http://b/next"));
+      await runtimeB.forceFlush();
+      expect(exporterB.getFinishedSpans()).toHaveLength(2);
+      const untraced = createHttpKernel(createKernelDependencies()).wrapPublicDocument(
+        async () => new Response(),
+      );
+      expect((await untraced(new Request("http://untraced"))).headers.get("x-trace-id")).toBeNull();
+    } finally {
+      await Promise.allSettled([runtimeA.shutdown(), runtimeB.shutdown()]);
+    }
+  });
+
   test("API quota DI works in local mode without weakening login/register protection", async () => {
     const config = new ConfigStore();
     config.set(REDIS_URL_CONFIG_KEY, "");
