@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { ForbiddenError } from "@getstrata/core/errors/http";
 import { timingSafeCompareString } from "@getstrata/core/security/timingSafeCompare";
-import { requireConfiguredSecret } from "../runtime/appKeyPrefix";
+
 import type { Middleware } from "./middleware";
 
 interface TemporarySignedUrlOptions {
@@ -9,17 +9,9 @@ interface TemporarySignedUrlOptions {
   query?: Record<string, string | number>;
 }
 
-function resolveSignedUrlSecret(): string {
-  return requireConfiguredSecret(
-    ["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"],
-    "signed-url-secret",
-  );
+function missingSignedUrlSecret(): never {
+  throw new TypeError("Explicit signed URL secret is required.");
 }
-
-function resolveSignedUrlOrigin(): string {
-  return (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
-}
-
 function normalizeSignedPath(path: string): string {
   const trimmed = path.trim();
 
@@ -43,7 +35,7 @@ function sortedQueryString(params: URLSearchParams): string {
 }
 
 function signCanonicalPayload(path: string, query: string, secret?: string): string {
-  return createHmac("sha256", secret ?? resolveSignedUrlSecret())
+  return createHmac("sha256", secret ?? missingSignedUrlSecret())
     .update(`${path}\n${query}`)
     .digest("hex");
 }
@@ -105,7 +97,7 @@ function absoluteTemporarySignedUrl(
   path: string,
   expiresInSeconds: number,
   query: Record<string, string | number> = {},
-  origin = resolveSignedUrlOrigin(),
+  origin: string,
   secret?: string,
 ): string {
   return `${origin.replace(/\/$/, "")}${temporarySignedUrl(path, expiresInSeconds, query, secret)}`;
@@ -117,7 +109,7 @@ function readSignedRequestUrl(input: Request | URL | string): URL {
   }
 
   if (typeof input === "string") {
-    return new URL(input, resolveSignedUrlOrigin());
+    return new URL(input, "http://signed-url.invalid");
   }
 
   return new URL(input.url);
@@ -154,8 +146,8 @@ function assertValidSignature(input: Request | URL | string, secret?: string): v
   }
 }
 
-function createValidateSignatureMiddleware(options?: { readonly secret: string }): Middleware {
-  const secret = options?.secret ?? resolveSignedUrlSecret();
+function createValidateSignatureMiddleware(options: { readonly secret: string }): Middleware {
+  const secret = options?.secret ?? missingSignedUrlSecret();
   return async (request, next) => {
     assertValidSignature(request, secret);
     return await next();

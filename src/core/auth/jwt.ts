@@ -13,16 +13,25 @@ interface JwtPayload {
 }
 
 interface SignJwtOptions {
-  secret?: string;
+  secret: string;
   ttlSeconds?: number;
 }
 
-function resolveJwtSecret(secret?: string): string {
+export function jwtOptionsFromEnvironment(
+  env: Readonly<Record<string, string | undefined>>,
+): SignJwtOptions {
+  const parsed = Number.parseInt(env.JWT_TTL_SECONDS ?? "", 10);
+  return Object.freeze({
+    secret: requireConfiguredSecret(["JWT_SECRET", "SESSION_SECRET"], "jwt-secret", env),
+    ttlSeconds: Number.isInteger(parsed) && parsed > 0 ? parsed : 3600,
+  });
+}
+function resolveJwtSecret(secret: string): string {
   if (secret?.trim()) {
     return secret.trim();
   }
 
-  return requireConfiguredSecret(["JWT_SECRET", "SESSION_SECRET"], "jwt-secret");
+  throw new TypeError("Explicit JWT secret is required.");
 }
 
 function jwtTtlSeconds(override?: number): number {
@@ -30,8 +39,7 @@ function jwtTtlSeconds(override?: number): number {
     return override;
   }
 
-  const parsed = Number.parseInt(process.env.JWT_TTL_SECONDS ?? "", 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 3600;
+  return 3600;
 }
 
 function encodeJson(value: unknown): string {
@@ -61,7 +69,7 @@ function signaturesMatch(left: string, right: string): boolean {
   return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-function signJwt(payload: JwtPayload, options: SignJwtOptions = {}): string {
+function signJwt(payload: JwtPayload, options: SignJwtOptions): string {
   const issuedAt = Date.now() / 1000;
   const body: JwtPayload = {
     ...payload,
@@ -75,7 +83,7 @@ function signJwt(payload: JwtPayload, options: SignJwtOptions = {}): string {
   return `${unsigned}.${signature}`;
 }
 
-function verifyJwt(token: string, secret?: string): JwtPayload | null {
+function verifyJwt(token: string, secret: string): JwtPayload | null {
   const parts = token.split(".");
 
   if (parts.length !== 3) {
