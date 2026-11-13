@@ -45,10 +45,10 @@ function shouldKeepOpenApiPath(
 
 async function registerAppOpenApiRoutes(
   bootstrap: AppBootstrap,
+  spaPrefix = "/app",
 ): Promise<readonly RegisteredRoute[]> {
   const { routes } = await bootstrap();
   const registered = getRouteInventory(compileRouteMap(routes));
-  const spaPrefix = readSpaPrefix();
   return Object.freeze(
     registered.filter((route) => shouldKeepOpenApiPath(route.path, registered, spaPrefix)),
   );
@@ -57,11 +57,12 @@ async function registerAppOpenApiRoutes(
 function createOpenApiCommand(
   bootstrap: AppBootstrap,
   operation: (routes: readonly RegisteredRoute[]) => Promise<number | undefined>,
-  close?: AppCleanup,
+  close: AppCleanup | undefined,
+  spaPrefix: string,
 ) {
   return async (): Promise<void> => {
     const exitCode = await withCommandCleanup(async () => {
-      const routes = await registerAppOpenApiRoutes(bootstrap);
+      const routes = await registerAppOpenApiRoutes(bootstrap, spaPrefix);
       return operation(routes);
     }, close);
     if (exitCode === 1) process.exit(1);
@@ -72,6 +73,7 @@ function createOpenApiGenerateCommand(
   bootstrap: AppBootstrap,
   close?: AppCleanup,
   config: OpenApiConfig = resolveOpenApiConfig(process.env),
+  spaPrefix = readSpaPrefix(),
 ) {
   config = Object.freeze({ ...config });
   return createOpenApiCommand(
@@ -86,6 +88,7 @@ function createOpenApiGenerateCommand(
       return undefined;
     },
     close,
+    spaPrefix,
   );
 }
 
@@ -93,6 +96,7 @@ function createOpenApiValidateCommand(
   bootstrap: AppBootstrap,
   close?: AppCleanup,
   config: OpenApiConfig = resolveOpenApiConfig(process.env),
+  spaPrefix = readSpaPrefix(),
 ) {
   config = Object.freeze({ ...config });
   return createOpenApiCommand(
@@ -113,6 +117,7 @@ function createOpenApiValidateCommand(
       return undefined;
     },
     close,
+    spaPrefix,
   );
 }
 
@@ -120,6 +125,7 @@ function createOpenApiCheckCommand(
   bootstrap: AppBootstrap,
   close?: AppCleanup,
   config: OpenApiConfig = resolveOpenApiConfig(process.env),
+  spaPrefix = readSpaPrefix(),
 ) {
   config = Object.freeze({ ...config });
   return createOpenApiCommand(
@@ -153,6 +159,7 @@ function createOpenApiCheckCommand(
       return undefined;
     },
     close,
+    spaPrefix,
   );
 }
 

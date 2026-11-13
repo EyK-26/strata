@@ -140,17 +140,23 @@ describe("registerAppOpenApiRoutes", () => {
     process.env.SPA_PREFIX = "/portal";
     try {
       const [first, second] = await Promise.all([
-        registerAppOpenApiRoutes(async () => ({
-          routes: {
-            "/api/v1/products": () => new Response(),
-            "/portal": () => new Response(),
-            "/portal/dashboard": () => new Response(),
-            "/app/legacy": () => new Response(),
-          },
-        })),
-        registerAppOpenApiRoutes(async () => ({
-          routes: { "/other": { POST: () => new Response() } },
-        })),
+        registerAppOpenApiRoutes(
+          async () => ({
+            routes: {
+              "/api/v1/products": () => new Response(),
+              "/portal": () => new Response(),
+              "/portal/dashboard": () => new Response(),
+              "/app/legacy": () => new Response(),
+            },
+          }),
+          "/portal",
+        ),
+        registerAppOpenApiRoutes(
+          async () => ({
+            routes: { "/other": { POST: () => new Response() } },
+          }),
+          "/portal",
+        ),
       ]);
       expect(Object.keys(generateOpenApiSpec(first).paths).sort()).toEqual([
         "/api/v1/products",
@@ -197,4 +203,19 @@ test("OpenAPI closes after bootstrap or output failure and propagates cleanup fa
       )(),
     ).rejects.toBe(failure);
   });
+});
+
+test("OpenAPI SPA filtering keeps the selected owner across asynchronous bootstrap", async () => {
+  const previous = process.env.SPA_PREFIX;
+  try {
+    process.env.SPA_PREFIX = "/other";
+    const routes = await registerAppOpenApiRoutes(async () => {
+      await Promise.resolve();
+      process.env.SPA_PREFIX = "/api";
+      return { routes: { "/portal": () => new Response(), "/api": () => new Response() } };
+    }, "/portal");
+    expect(routes.map((route) => route.path)).toEqual(["/api"]);
+  } finally {
+    restoreEnvVar("SPA_PREFIX", previous);
+  }
 });
