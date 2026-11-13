@@ -13,7 +13,14 @@ function mergeCookies(response: Response, previous = ""): string {
     const pair = header.split(";")[0] ?? "";
     const [name, ...rest] = pair.split("=");
     if (name) {
-      jar.set(name, rest.join("="));
+      const maxAge = /(?:^|;)\s*max-age\s*=\s*(-?\d+)/i.exec(header)?.[1];
+      const expiry = /(?:^|;)\s*expires\s*=\s*([^;]+)/i.exec(header)?.[1];
+      if (
+        (maxAge !== undefined && Number(maxAge) <= 0) ||
+        (expiry !== undefined && Date.parse(expiry) <= Date.now())
+      )
+        jar.delete(name);
+      else jar.set(name, rest.join("="));
     }
   }
   return [...jar.entries()].map(([name, value]) => `${name}=${value}`).join("; ");

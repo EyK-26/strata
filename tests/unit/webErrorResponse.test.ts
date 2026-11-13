@@ -253,3 +253,40 @@ test("a failed POST may return to the same safe GET form/list path", async () =>
   });
   expect(html).toContain('href="/widgets">Go back');
 });
+
+test("supplied invalid credentials remain HTTP 401 while anonymous protected requests redirect", async () => {
+  const prior = process.env.FRONTEND_MODE;
+  process.env.FRONTEND_MODE = "server-htmx";
+  const { InvalidCredentialsError } = await import("@getstrata/core/errors/http");
+  const { withErrorHandling } = await import("@getstrata/core/http/response");
+  const server = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    fetch: withErrorHandling((request: Request) => {
+      if (request.headers.has("authorization")) throw new InvalidCredentialsError();
+      throw new UnauthorizedError();
+    }),
+  });
+  try {
+    const origin = `http://127.0.0.1:${server.port}`;
+    const invalid = await fetch(`${origin}/login`, {
+      headers: { accept: "text/html", authorization: "Bearer invalid" },
+      redirect: "manual",
+    });
+    expect(invalid.status).toBe(401);
+    expect(invalid.headers.get("location")).toBeNull();
+    const followed = await fetch(`${origin}/login`, {
+      headers: { accept: "text/html", authorization: "Bearer invalid" },
+    });
+    expect(followed.status).toBe(401);
+    const anonymous = await fetch(`${origin}/private`, {
+      headers: { accept: "text/html" },
+      redirect: "manual",
+    });
+    expect(anonymous.status).toBe(302);
+    expect(anonymous.headers.get("location")).toContain("/login?redirect=");
+  } finally {
+    await server.stop(true);
+    restoreEnvVar("FRONTEND_MODE", prior);
+  }
+});

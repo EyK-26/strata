@@ -97,6 +97,7 @@ export {
   ForbiddenError,
   HttpError,
   InternalServerError,
+  InvalidCredentialsError,
   isHttpErrorLike,
   NotFoundError,
   PayloadTooLargeError,

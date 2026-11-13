@@ -2505,6 +2505,10 @@ export default probeModule;
           ).toBe(true);
           for (const bearer of [undefined, token, jwt])
             expect(await credentialStatus(bearer)).toBe(401);
+          // Both transports retain the now-revoked session proof, so authentication rejects replay first.
+          expect((await submit("Another!Password123")).status).toBe(401);
+          // A fresh anonymous browser with the CSRF cookie still reaches consumed-link validation.
+          cookie = csrf.cookie;
           expect((await submit("Another!Password123")).status).toBe(html ? 200 : 403);
           expect(
             await verifyPassword(

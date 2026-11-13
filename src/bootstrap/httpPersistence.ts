@@ -3,7 +3,7 @@ import { type AuthOutcome, validatedAuthOutcome } from "@getstrata/core/auth/gua
 import { runWithMembershipSnapshot } from "@getstrata/core/auth/membershipContext";
 import type { ApplicationConfig } from "@getstrata/core/contracts/application";
 import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
-import { InternalServerError, UnauthorizedError } from "@getstrata/core/errors/http";
+import { InternalServerError, InvalidCredentialsError } from "@getstrata/core/errors/http";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { createPublicTenantSelector } from "@getstrata/core/tenant/publicTenantHost";
 import { runWithTenant, type TenantContext } from "@getstrata/core/tenant/tenantContext";
@@ -23,7 +23,7 @@ function snapshotAuth(input: AuthOutcome): EstablishedRequest["auth"] {
   const auth = validatedAuthOutcome(input);
   if (auth.status === "error")
     throw Object.assign(new InternalServerError(), { cause: auth.error });
-  if (auth.status === "invalid") throw new UnauthorizedError();
+  if (auth.status === "invalid") throw new InvalidCredentialsError();
   if (auth.status !== "absent" && auth.status !== "authenticated")
     throw new TypeError("Invalid authentication outcome.");
   const user = auth.user;

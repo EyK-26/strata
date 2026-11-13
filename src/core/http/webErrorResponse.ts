@@ -1,4 +1,9 @@
-import { type HttpError, toHttpError, ValidationError } from "@getstrata/core/errors/http";
+import {
+  type HttpError,
+  InvalidCredentialsError,
+  toHttpError,
+  ValidationError,
+} from "@getstrata/core/errors/http";
 import { appLogger } from "@getstrata/core/logging/logger";
 import { isProductionEnv } from "../runtime/appEnv";
 import { isViewsEnabled } from "../runtime/frontendMode";
@@ -79,7 +84,7 @@ async function webErrorResponse(error: unknown, request?: Request): Promise<Resp
   const mappedError = toHttpError(error) ?? mapDatabaseHttpError(error);
   logServerError(error, mappedError);
 
-  if (mappedError.status === 401) {
+  if (mappedError.status === 401 && !(mappedError instanceof InvalidCredentialsError)) {
     return Response.redirect(loginRedirectLocation(request), 302);
   }
 
