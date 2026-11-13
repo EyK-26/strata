@@ -17,7 +17,7 @@ function mergeCookies(response: Response, previous = ""): string {
       const expiry = /(?:^|;)\s*expires\s*=\s*([^;]+)/i.exec(header)?.[1];
       if (
         (maxAge !== undefined && Number(maxAge) <= 0) ||
-        (expiry !== undefined && Date.parse(expiry) <= Date.now())
+        (maxAge === undefined && expiry !== undefined && Date.parse(expiry) <= Date.now())
       )
         jar.delete(name);
       else jar.set(name, rest.join("="));

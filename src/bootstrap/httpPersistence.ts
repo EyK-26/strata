@@ -24,8 +24,6 @@ function snapshotAuth(input: AuthOutcome): EstablishedRequest["auth"] {
   if (auth.status === "error")
     throw Object.assign(new InternalServerError(), { cause: auth.error });
   if (auth.status === "invalid") throw new InvalidCredentialsError();
-  if (auth.status !== "absent" && auth.status !== "authenticated")
-    throw new TypeError("Invalid authentication outcome.");
   const user = auth.user;
   const name = user?.name;
   const email = user?.email;

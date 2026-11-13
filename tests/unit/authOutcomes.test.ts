@@ -294,3 +294,18 @@ test("session account lookup must return the exact identity carried by the proof
   expect(await guard.authenticate(request())).toEqual(invalidAuth("session"));
   expect(validityChecks).toBe(0);
 });
+
+test("JWT guard rejects an explicitly empty bearer without consulting account storage", async () => {
+  let lookups = 0;
+  const guard = new JwtGuard({
+    secret: "explicit-jwt-empty-bearer-fixture-secret",
+    directory: {
+      findByIdOrThrow: async (id) => {
+        lookups++;
+        return { id };
+      },
+    },
+  });
+  expect(await guard.authenticate(request("Bearer"))).toEqual(invalidAuth("bearer"));
+  expect(lookups).toBe(0);
+});

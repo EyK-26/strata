@@ -209,7 +209,6 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/core/view/webErrorView.ts",
   "src/core/view/webLayoutData.ts",
   "src/db/connection/createConnection.ts",
-  "src/db/connection/index.ts",
   "src/db/migrations/0001_create_organization.ts",
   "src/db/migrations/0002_create_project.ts",
   "src/db/migrations/0003_create_task.ts",
@@ -263,6 +262,6 @@ export const COVERAGE_EXEMPT_FILES = [
   "src/testing/webViewSmoke.ts",
 ] as const;
 
-export const COVERAGE_EXEMPT_LIMIT = 269;
+export const COVERAGE_EXEMPT_LIMIT = 261;
 
 export const COVERAGE_EXEMPT_SET: ReadonlySet<string> = new Set(COVERAGE_EXEMPT_FILES);
