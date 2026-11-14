@@ -304,3 +304,5 @@ export {
   rollbackDatabase,
   runPendingMigrations,
 };
+
+export { defineMigration, type MigrationDeclaration } from "./declaration";

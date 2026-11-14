@@ -20,7 +20,7 @@ export function renderAuthImports({
   );
   imports.push(`import type { SelectedSession } from "@getstrata/core/contracts/persistence";`);
   imports.push(
-    `import { STARTER_AUTH_SERVICES, type StarterAuthServices } from "../../bootstrap/providers/auth.ts";`,
+    `import { STARTER_AUTH_SERVICES, type StarterAuthServices } from "../../bootstrap/auth.ts";`,
   );
   imports.push(`import type { AppModule } from "@getstrata/bootstrap/contracts";`);
   if (cookie) {

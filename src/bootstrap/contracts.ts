@@ -47,6 +47,7 @@ interface AppModule {
   cacheTags?: readonly string[];
   cacheDeleteExtraTags?: readonly string[];
   providers?: ServiceProvider[];
+  policies?: Readonly<Record<string, import("@getstrata/core/auth/policy").Policy>>;
   routes?(context: ModuleRouteContext): AppRouteMap;
   webRoutes?(context: ModuleRouteContext): AppRouteMap;
 }

@@ -1,3 +1,4 @@
+export {defineApp,serveApplication,type AppDefinition,type BootstrappedApp,type BootstrapOptions,type ApplicationAuthServices,type ApplicationAuthOptions,APPLICATION_BILLING,APPLICATION_WEBHOOKS,APPLICATION_QUEUE} from "./application";
 /**
  * @getstrata/bootstrap: application shell for Strata apps.
  */
