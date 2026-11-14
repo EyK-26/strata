@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 3.0.7
+
+Carry forward the 3.0.6 application-authoring and correctness changes after its release stopped before publication. Correct SAML release acceptance to require browser-bound state while preserving assertion validation, successful login and MFA. See docs/releases/3.0.7.md for upgrade notes.
+
 ## 3.0.6
 
 - Package built-in application commands and load application adapters lazily, so custom CLI apps do not require bootstrap dependencies unless configured.

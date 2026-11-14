@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 3.0.7
+
+Carry forward the 3.0.6 application-authoring and correctness changes after its release stopped before publication. Correct SAML release acceptance to require browser-bound state while preserving assertion validation, successful login and MFA. See docs/releases/3.0.7.md for upgrade notes.
+
 ## 3.0.6
 
 - Generate small application declarations backed by packaged bootstrap/auth/database workflows instead of copied framework infrastructure. Keep model/repository registration and domain account mapping explicit.
