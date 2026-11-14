@@ -364,3 +364,50 @@ describe("makeListenerCommand", () => {
     await expect(makeListenerCommand()).rejects.toThrow("make:listener requires a listener name.");
   });
 });
+
+test("make:model emits an executable declaration with an explicit repository and session", async () => {
+  await withTempWorkspace(async (workspace) => {
+    const { makeModelCommand } = await import(
+      "../../../packages/strata-cli/src/scaffold/makeModel"
+    );
+    await makeModelCommand("Contact", "--key-type=string");
+    const path = join(workspace, "src/models/Contact.ts");
+    const source = await Bun.file(path).text();
+    expect(source).toContain("createModel({");
+    expect(source).not.toContain("construct:");
+    // Point this temporary consumer at the real source, independent of installed workspace links.
+    await writeFile(
+      path,
+      source
+        .replace("@getstrata/core/database/model", join(repoRoot, "src/core/database/model.ts"))
+        .replace("@getstrata/core/database/table", join(repoRoot, "src/core/database/table.ts")),
+    );
+    type GeneratedDefinition = ReturnType<
+      typeof import("../../../src/core/database/model").createModel<{ id: string }, "id">
+    >;
+    const { ContactDefinition, ContactRepository } = (await import(path)) as {
+      ContactDefinition: GeneratedDefinition;
+      ContactRepository: GeneratedDefinition["repository"];
+    };
+    expect(ContactDefinition.repository).toBe(ContactRepository);
+    expect(ContactDefinition.attributes.fillable).toEqual(["id"]);
+    expect(ContactDefinition.attributes.timestamps).toBe(false);
+    const { withBoundDatabase } = await import("../../helpers/boundRepositoryHarness");
+    await withBoundDatabase(
+      {
+        definition: {
+          default: "main",
+          connections: { main: { driver: "sqlite", filename: ":memory:" } },
+          repositories: [ContactRepository],
+          models: [ContactDefinition],
+        },
+      },
+      async (db) => {
+        await db.execute({ text: "CREATE TABLE contacts (id TEXT PRIMARY KEY)", params: [] });
+        const contact = await db.model(ContactDefinition).create({ id: "generated" });
+        expect(contact.id).toBe("generated");
+        expect((await db.model(ContactDefinition).findOrFail("generated")).id).toBe("generated");
+      },
+    );
+  });
+});

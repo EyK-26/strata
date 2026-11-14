@@ -240,6 +240,26 @@ retain the documented deferred-event boundary.
 
 ### Declarative model binding
 
+For ordinary models, `createModel` supplies the standard repository and entity constructors at declaration time:
+
+```typescript
+import { createModel } from "@getstrata/core/database/model";
+import { defineTable } from "@getstrata/core/database/table";
+
+const products = defineTable<{ sku: string; title: string }, "sku">({
+  name: "products", primaryKey: "sku", columns: ["sku", "title"],
+});
+const productModel = createModel({
+  name: "Product", table: products,
+  attributes: { fillable: ["sku", "title"] },
+});
+const productRepository = productModel.repository;
+```
+
+The helper defaults timestamps to `false`; enable them explicitly when the table declares the timestamp columns. Writable attributes remain an explicit allowlist. Register the definition in `createDatabaseBindings({ models: [productModel], ... })`, then select `database.model(productModel)` from an owned session or transaction. Register `productModel.repository` in `repositories` when selecting it directly. Definitions acquire no connections.
+
+For custom entity methods, repository hooks, service dependencies, scopes or observers, retain the advanced declarations:
+
 ```typescript
 import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import { defineModel, defineRepository } from "@getstrata/core/database/definitions";

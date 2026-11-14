@@ -8,9 +8,7 @@ function renderNoteModel(plan: StarterFeaturePlan): string {
     : "";
   const tenantColumn = tenancyOn ? ', "tenant_id"' : "";
   const fillable = tenancyOn ? '["body", "tenant_id"]' : '["body"]';
-  return `import { BaseRepository } from "@getstrata/core/database/baseRepository";
-import { defineModel, defineRepository } from "@getstrata/core/database/definitions";
-import { Model } from "@getstrata/core/database/model";
+  return `import { createModel, type Model } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 
 interface NoteRecord {
@@ -26,22 +24,17 @@ const notesTable = defineTable<NoteRecord, "id">({
   defaultOrderBy: { column: "id", direction: "ASC" },
 });
 
-class NoteEntity extends Model<NoteRecord, "id"> {}
-type Note = NoteEntity;
+type Note = Model<NoteRecord, "id">;
 
-const NoteRepository = defineRepository<NoteRecord, "id", BaseRepository<NoteRecord, "id">, readonly []>({
-  name: "NoteRepository", table: notesTable, dependencies: [],
-  create: binding => new BaseRepository(binding),
-});
-const Note = defineModel<NoteRecord, "id", NoteEntity, BaseRepository<NoteRecord, "id">, readonly []>({
-  name: "Note", repository: NoteRepository, dependencies: [],
+const Note = createModel({
+  name: "Note", table: notesTable,
   // created_at uses the table default; no client timestamp is sent.
   attributes: { fillable: ${fillable}, timestamps: false },
-  construct: (state, binding) => new NoteEntity(state, binding),
 });
+const NoteRepository = Note.repository;
 
 export type { NoteRecord };
-export { Note, NoteEntity, NoteRepository };
+export { Note, NoteRepository };
 `;
 }
 
@@ -82,9 +75,7 @@ function renderUserModel(plan: StarterFeaturePlan): string {
   const fillableLiteral = `[${fillable.map((column) => `"${column}"`).join(", ")}]`;
   const hiddenLiteral = `[${hidden.map((column) => `"${column}"`).join(", ")}]`;
   const columnsLiteral = columns.map((column) => `"${column}"`).join(", ");
-  return `import { BaseRepository } from "@getstrata/core/database/baseRepository";
-import { defineModel, defineRepository } from "@getstrata/core/database/definitions";
-import { Model } from "@getstrata/core/database/model";
+  return `import { createModel, type Model } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 
 interface UserRecord {
@@ -107,29 +98,22 @@ const usersTable = defineTable<UserRecord, "id">({
   defaultOrderBy: { column: "id", direction: "ASC" },
 });
 
-class UserEntity extends Model<UserRecord, "id"> {}
-type User = UserEntity;
+type User = Model<UserRecord, "id">;
 
-const UserRepository = defineRepository<UserRecord, "id", BaseRepository<UserRecord, "id">, readonly []>({
-  name: "UserRepository", table: usersTable, dependencies: [],
-  create: binding => new BaseRepository(binding),
-});
-const User = defineModel<UserRecord, "id", UserEntity, BaseRepository<UserRecord, "id">, readonly []>({
-  name: "User", repository: UserRepository, dependencies: [],
+const User = createModel({
+  name: "User", table: usersTable,
   // created_at uses the table default; no client timestamp is sent.
   attributes: { fillable: ${fillableLiteral}, hidden: ${hiddenLiteral}, timestamps: false },
-  construct: (state, binding) => new UserEntity(state, binding),
 });
+const UserRepository = User.repository;
 
 export type { UserRecord };
-export { User, UserEntity, UserRepository };
+export { User, UserRepository };
 `;
 }
 
 function renderApiTokenModel(): string {
-  return `import { BaseRepository } from "@getstrata/core/database/baseRepository";
-import { defineModel, defineRepository } from "@getstrata/core/database/definitions";
-import { Model } from "@getstrata/core/database/model";
+  return `import { createModel, type Model } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 
 interface ApiTokenRecord {
@@ -150,29 +134,22 @@ const apiTokensTable = defineTable<ApiTokenRecord, "id">({
   defaultOrderBy: { column: "id", direction: "ASC" },
 });
 
-class ApiTokenEntity extends Model<ApiTokenRecord, "id"> {}
-type ApiToken = ApiTokenEntity;
+type ApiToken = Model<ApiTokenRecord, "id">;
 
-const ApiTokenRepository = defineRepository<ApiTokenRecord, "id", BaseRepository<ApiTokenRecord, "id">, readonly []>({
-  name: "ApiTokenRepository", table: apiTokensTable, dependencies: [],
-  create: binding => new BaseRepository(binding),
-});
-const ApiToken = defineModel<ApiTokenRecord, "id", ApiTokenEntity, BaseRepository<ApiTokenRecord, "id">, readonly []>({
-  name: "ApiToken", repository: ApiTokenRepository, dependencies: [],
+const ApiToken = createModel({
+  name: "ApiToken", table: apiTokensTable,
   // created_at uses the table default; no client timestamp is sent.
   attributes: { fillable: ["user_id", "name", "token_hash", "abilities", "expires_at", "last_used_at"], timestamps: false },
-  construct: (state, binding) => new ApiTokenEntity(state, binding),
 });
+const ApiTokenRepository = ApiToken.repository;
 
 export type { ApiTokenRecord };
-export { ApiToken, ApiTokenEntity, ApiTokenRepository };
+export { ApiToken, ApiTokenRepository };
 `;
 }
 
 function renderAuthOneTimeTokenModel(): string {
-  return `import { BaseRepository } from "@getstrata/core/database/baseRepository";
-import { defineModel, defineRepository } from "@getstrata/core/database/definitions";
-import { Model } from "@getstrata/core/database/model";
+  return `import { createModel, type Model } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 
 interface AuthOneTimeTokenRecord {
@@ -191,21 +168,16 @@ const authOneTimeTokensTable = defineTable<AuthOneTimeTokenRecord, "id">({
   defaultOrderBy: { column: "id", direction: "ASC" },
 });
 
-class AuthOneTimeTokenEntity extends Model<AuthOneTimeTokenRecord, "id"> {}
-type AuthOneTimeToken = AuthOneTimeTokenEntity;
+type AuthOneTimeToken = Model<AuthOneTimeTokenRecord, "id">;
 
-const AuthOneTimeTokenRepository = defineRepository<AuthOneTimeTokenRecord, "id", BaseRepository<AuthOneTimeTokenRecord, "id">, readonly []>({
-  name: "AuthOneTimeTokenRepository", table: authOneTimeTokensTable, dependencies: [],
-  create: binding => new BaseRepository(binding),
-});
-const AuthOneTimeToken = defineModel<AuthOneTimeTokenRecord, "id", AuthOneTimeTokenEntity, BaseRepository<AuthOneTimeTokenRecord, "id">, readonly []>({
-  name: "AuthOneTimeToken", repository: AuthOneTimeTokenRepository, dependencies: [],
+const AuthOneTimeToken = createModel({
+  name: "AuthOneTimeToken", table: authOneTimeTokensTable,
   attributes: { fillable: ["purpose", "user_id", "token_hash", "expires_at", "consumed_at"], timestamps: false },
-  construct: (state, binding) => new AuthOneTimeTokenEntity(state, binding),
 });
+const AuthOneTimeTokenRepository = AuthOneTimeToken.repository;
 
 export type { AuthOneTimeTokenRecord };
-export { AuthOneTimeToken, AuthOneTimeTokenEntity, AuthOneTimeTokenRepository };
+export { AuthOneTimeToken, AuthOneTimeTokenRepository };
 `;
 }
 

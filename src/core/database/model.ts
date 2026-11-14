@@ -1,17 +1,18 @@
 import { isDeepStrictEqual } from "node:util";
 import type {
   AnyModelDefinition,
+  ModelAttributeOptions,
   ModelBinding,
   ModelDefinition,
   ModelObserver,
   ModelState,
   RepositoryDefinition,
 } from "@getstrata/core/database/definitions";
+import { defineModel, defineRepository } from "@getstrata/core/database/definitions";
 import { isUniqueConstraintError, RecordNotFoundError } from "@getstrata/core/database/errors";
 import { getBindingPorts } from "#strata-orm-internal";
 import type { KeysetOptions } from "../pagination/index.ts";
-import type BaseRepository from "./baseRepository.ts";
-import { getRepositoryBinding } from "./baseRepository.ts";
+import BaseRepository, { getRepositoryBinding } from "./baseRepository.ts";
 import { foreignKeyFromTable, pivotTableName } from "./inflection.ts";
 import {
   applyCasts,
@@ -69,6 +70,7 @@ import {
   morphTo,
 } from "./relationships.ts";
 import type { RepositoryQuery } from "./repositoryQuery.ts";
+import type { TableDefinition } from "./table";
 import type {
   ModelWhere,
   ModelWriteValues,
@@ -1501,6 +1503,47 @@ function createBoundModel<R extends object, K extends keyof R & string, M extend
   return new BoundModelFacade(binding);
 }
 
+/** Declare an ordinary model without selecting a database session or constructing entities. */
+function createModel<R extends object, K extends keyof R & string>(options: {
+  name: string;
+  table: TableDefinition<R, K>;
+  attributes: ModelAttributeOptions<R>;
+}): ModelDefinition<R, K, Model<R, K>> & {
+  readonly repository: RepositoryDefinition<R, K, BaseRepository<R, K>>;
+} {
+  const prototype = Object.getPrototypeOf(options);
+  if (prototype !== Object.prototype && prototype !== null)
+    throw new TypeError("Metadata must be a plain record.");
+  for (const key of Reflect.ownKeys(options)) {
+    const descriptor = Object.getOwnPropertyDescriptor(options, key);
+    if (
+      typeof key !== "string" ||
+      !["name", "table", "attributes"].includes(key) ||
+      !descriptor ||
+      !("value" in descriptor)
+    )
+      throw new TypeError("Invalid model declaration field.");
+  }
+  const repository = defineRepository({
+    name: `${options.name}.repository`,
+    table: options.table,
+    dependencies: [],
+    create: (binding) => new BaseRepository(binding),
+  });
+  return defineModel({
+    name: options.name,
+    repository,
+    dependencies: [],
+    attributes: Object.create(Object.getPrototypeOf(options.attributes), {
+      timestamps: { value: false, enumerable: true, configurable: true },
+      ...Object.getOwnPropertyDescriptors(options.attributes),
+    }) as ModelAttributeOptions<R>,
+    construct: (state, binding) => new Model(state, binding),
+  }) as ModelDefinition<R, K, Model<R, K>> & {
+    readonly repository: RepositoryDefinition<R, K, BaseRepository<R, K>>;
+  };
+}
+
 export { defineModel } from "@getstrata/core/database/definitions";
 export {
   BelongsToManyRelationQuery,
@@ -1517,6 +1560,7 @@ export {
   applyCasts,
   BoundModelFacade,
   createBoundModel,
+  createModel,
   dehydrateValue,
   filterMassAssignable,
   getModelBinding,

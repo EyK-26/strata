@@ -44,29 +44,23 @@ async function makeModelCommand(...args: string[]): Promise<void> {
   if (keyType !== "number" && keyType !== "string")
     throw new Error("--key-type must be number or string; UUID model keys use string.");
   const fillable = keyType === "string" ? JSON.stringify(key) : "";
-  const content = `import { Model } from "@getstrata/core/database/model";
-import { BaseRepository } from "@getstrata/core/database/baseRepository";
-import { defineModel, defineRepository } from "@getstrata/core/database/definitions";
+  const content = `import { createModel, type Model } from "@getstrata/core/database/model";
 import { defineTable } from "@getstrata/core/database/table";
 
 interface ${className}Record { ${key}: ${keyType}; }
 const table = defineTable<${className}Record, "${key}">({
   name: "${table}", primaryKey: "${key}", columns: ["${key}"],
 });
-const repository = defineRepository({
-  name: "${className}.repository", table, dependencies: [] as const,
-  create: binding => new BaseRepository(binding),
-});
-class ${className} extends Model<${className}Record, "${key}"> {}
-const ${className}Definition = defineModel({
-  name: "${className}", repository, dependencies: [] as const,
+type ${className} = Model<${className}Record, "${key}">;
+const ${className}Definition = createModel({
+  name: "${className}", table,
   attributes: { fillable: [${fillable}], timestamps: false },
-  construct: (state, binding) => new ${className}(state, binding),
 });
+const ${className}Repository = ${className}Definition.repository;
 // Register this definition in createDatabaseBindings({ models: [...] }).
 // Use selectedSession.model(${className}Definition) inside an application invocation.
-export type { ${className}Record };
-export { ${className}, ${className}Definition, repository as ${className}Repository };
+export type { ${className}Record, ${className} };
+export { ${className}Definition, ${className}Repository };
 `;
   const path = await writeScaffoldFile(
     ["src", "models", ...classParts.slice(0, -1), `${classParts.at(-1)}.ts`],
