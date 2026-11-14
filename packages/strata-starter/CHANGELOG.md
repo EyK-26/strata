@@ -1,5 +1,10 @@
 # create-strata changelog
 
+## Unreleased
+
+- Fix template discovery in both published generator CLIs after the removal of copied `src` templates. Detect the retained `tsconfig.json` template so installed packages find `dist/templates` correctly.
+- Require both generator tarballs to install and generate API and hybrid applications outside the repository during CI and release validation.
+
 ## 3.0.7
 
 Carry forward the 3.0.6 application-authoring and correctness changes after its release stopped before publication. Correct SAML release acceptance to require browser-bound state while preserving assertion validation, successful login and MFA. See docs/releases/3.0.7.md for upgrade notes.
