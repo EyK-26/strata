@@ -122,3 +122,26 @@ Observation is advisory and can become stale immediately. Use the official atomi
 SAML bearer admission also binds the `Recipient` in a signature-verified `SubjectConfirmationData` to the configured `SAML_ACS_URL`, with a valid `NotOnOrAfter` (the same five-second clock skew as node-saml), the bearer method and no bearer `NotBefore`. A valid confirmation for another recipient cannot validate an expired matching one. This reads node-saml's verified assertion rather than parsing unsigned response XML. See the [OASIS bearer profile requirements](https://docs.oasis-open.org/security/saml/v2.0/errata05/csprd01/saml-v2.0-errata05-csprd01.html). Signature, issuer, audience and other library timing checks remain mandatory. SQL replay insert/retention cleanup use the dialect timestamp contract and a framework transaction/savepoint, so a denied replay does not poison an enclosing Postgres request transaction. The default SQL store and one-hour retention remain; no application replay cache is required.
 
 SAML response envelope admission independently requires a root `Response` in the SAML protocol namespace and `Destination` exactly equal to `SAML_ACS_URL`; DOCTYPE and malformed envelopes are refused. After node-saml verification the framework uses its returned XML with the declared maintained `@xmldom/xmldom` parser for this metadata check. The assertion's verified bearer Recipient remains independently required. This follows the [HTTP POST binding destination requirement](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf). Parser admission does not authenticate unsigned metadata or replace any library signature check.
+
+
+## Application notification channels
+
+Import `NotificationChannel`, `NotificationChannels`, `Notification`, and `createNotificationDispatcher` from `@getstrata/core/notifications`. The dispatcher accepts an application-owned channel map as its third argument; the first two arguments retain the mail sender and optional database store convenience API. A handler implements `send(notifiable, notification): Promise<void>`. Custom notification subclasses return their channel names from `via()` and expose their own payload methods or fields; handlers can narrow the notification with `instanceof` to access those fields.
+
+```ts
+const sms: NotificationChannel = {
+  async send(recipient, notification) {
+    if (!(notification instanceof OrderShippedNotification)) {
+      throw new TypeError("Expected an order shipment notification");
+    }
+    const number = recipient.routeNotificationFor("sms");
+    if (number === null) return;
+    await smsProvider.send(String(number), notification.text);
+  },
+};
+const notifications = createNotificationDispatcher(mailSender, databaseStore, { sms });
+```
+
+Registrations are snapshotted per dispatcher, with no global registry. Explicit registrations can replace built-in channel handlers. The dispatcher validates all requested channel names before delivery; an unknown name or an unconfigured database channel rejects instead of silently discarding delivery. Handlers execute in `via()` order, and a delivery failure rejects the send and stops later channels. Earlier successful deliveries are not rolled back. Built-in mail still skips a null route or null `toMail()` result, and database delivery skips a null `toDatabase()` result. Non-markdown mail preserves `html` alongside its text body.
+
+Consumers can depend on `MailSender` from `@getstrata/core/mail/mailer`, which exposes only `send(MailMessage): Promise<void>`. `Mailer`, `MailDriver`, the notification dispatcher, `sendMarkdownMail`, and `CORE_MAIL_TOKEN` share that capability, so application-owned senders need no concrete `Mailer` dependency.

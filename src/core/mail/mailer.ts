@@ -17,9 +17,12 @@ interface MailMessage {
   signal?: AbortSignal;
 }
 
-interface MailDriver {
+interface MailSender {
   send(message: MailMessage): Promise<void>;
 }
+
+/** A mail transport implements the same minimal sending capability. */
+interface MailDriver extends MailSender {}
 
 interface SmtpConfig {
   host: string;
@@ -358,7 +361,7 @@ class SmtpMailDriver implements MailDriver {
   }
 }
 
-class Mailer {
+class Mailer implements MailSender {
   constructor(private readonly driver: MailDriver) {}
 
   send(message: MailMessage): Promise<void> {
@@ -381,7 +384,7 @@ function createMailDriver(
   return new LogMailDriver();
 }
 
-export type { MailDriver, MailMessage, SmtpConfig, SmtpTransport };
+export type { MailDriver, MailMessage, MailSender, SmtpConfig, SmtpTransport };
 export {
   assertSafeSmtpAddress,
   assertSafeSmtpField,

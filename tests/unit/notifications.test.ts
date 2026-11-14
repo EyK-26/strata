@@ -5,6 +5,7 @@ import {
   type DatabaseNotificationStore,
   type Notifiable,
   Notification,
+  type NotificationChannel,
 } from "@getstrata/core/notifications";
 
 class TestUser implements Notifiable {
@@ -126,11 +127,11 @@ describe("NotificationDispatcher", () => {
     ]);
   });
 
-  test("skips database channel when store is not configured", async () => {
+  test("rejects database channel when store is not configured", async () => {
     const dispatcher = createNotificationDispatcher(new Mailer(new LogMailDriver()));
     await expect(
       dispatcher.send(new TestUser(1, "user@example.test"), new WelcomeNotification()),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow('Notification channel "database" requires a database store.');
   });
 
   test("sends plain text mail when markdown is omitted", async () => {
@@ -196,4 +197,158 @@ test("channels with no message or payload have no delivery side effects", async 
   );
   await dispatcher.send(new TestUser(1, "one@example.test"), new EmptyNotification());
   expect(calls).toEqual([]);
+});
+
+test("preserves explicit HTML in mail notifications with a minimal sender", async () => {
+  const messages: unknown[] = [];
+  class HtmlNotification extends MailOnlyNotification {
+    override toMail() {
+      return { subject: "HTML", body: "Hello", html: "<p>Hello</p>" };
+    }
+  }
+  const dispatcher = createNotificationDispatcher({
+    async send(message) {
+      messages.push(message);
+    },
+  });
+  await dispatcher.send(new TestUser(1, "one@example.test"), new HtmlNotification());
+  expect(messages).toEqual([
+    { to: "one@example.test", subject: "HTML", body: "Hello", html: "<p>Hello</p>" },
+  ]);
+});
+
+class SmsNotification extends Notification {
+  override via() {
+    return ["sms", "webhook"];
+  }
+  readonly text = "Your order shipped";
+}
+
+test("delivers custom channels in order with typed handler context", async () => {
+  const calls: string[] = [];
+  const sms: NotificationChannel = {
+    async send(recipient, notification) {
+      if (!(notification instanceof SmsNotification))
+        throw new TypeError("Expected SMS notification");
+      calls.push(`sms:${recipient.routeNotificationFor("sms")}:${notification.text}`);
+    },
+  };
+  const dispatcher = createNotificationDispatcher({ async send() {} }, undefined, {
+    sms,
+    webhook: {
+      async send(recipient) {
+        calls.push(`webhook:${recipient.getNotificationKey()}`);
+      },
+    },
+  });
+  await dispatcher.send(new TestUser(7, "seven@example.test"), new SmsNotification());
+  expect(calls).toEqual(["sms:7:Your order shipped", "webhook:7"]);
+});
+
+test("channel maps and method registrations are snapshotted per application", async () => {
+  const calls: string[] = [];
+  const channels = {
+    sms: {
+      async send() {
+        calls.push("first");
+      },
+    },
+    webhook: { async send() {} },
+  };
+  const first = createNotificationDispatcher({ async send() {} }, undefined, channels);
+  channels.sms.send = async () => {
+    calls.push("second");
+  };
+  const second = createNotificationDispatcher({ async send() {} }, undefined, channels);
+  await first.send(new TestUser(1, "one@example.test"), new SmsNotification());
+  await second.send(new TestUser(1, "one@example.test"), new SmsNotification());
+  expect(calls).toEqual(["first", "second"]);
+  const unconfigured = createNotificationDispatcher({ async send() {} });
+  await expect(
+    unconfigured.send(new TestUser(1, "one@example.test"), new SmsNotification()),
+  ).rejects.toThrow('Unsupported notification channel: "sms".');
+});
+
+test("unsupported and misconfigured channels fail before any delivery", async () => {
+  let sends = 0;
+  class UnknownNotification extends MailOnlyNotification {
+    override via(): ["mail"] {
+      return ["mail"];
+    }
+  }
+  // Runtime input may contain untrusted channel names, including prototype properties.
+  for (const name of ["missing", "toString", "__proto__", "database"]) {
+    const notification = new UnknownNotification();
+    notification.via = () => ["mail", name] as unknown as ["mail"];
+    const dispatcher = createNotificationDispatcher({
+      async send() {
+        sends++;
+      },
+    });
+    await expect(
+      dispatcher.send(new TestUser(1, "one@example.test"), notification),
+    ).rejects.toThrow();
+  }
+  expect(sends).toBe(0);
+  expect(() =>
+    createNotificationDispatcher({ async send() {} }, undefined, {
+      sms: {} as NotificationChannel,
+    }),
+  ).toThrow('Invalid notification channel registration: "sms".');
+});
+
+test("channel delivery failures propagate and stop later channels", async () => {
+  const failure = new Error("SMS unavailable");
+  let laterCalls = 0;
+  const dispatcher = createNotificationDispatcher({ async send() {} }, undefined, {
+    sms: {
+      async send() {
+        throw failure;
+      },
+    },
+    webhook: {
+      async send() {
+        laterCalls++;
+      },
+    },
+  });
+  await expect(
+    dispatcher.send(new TestUser(1, "one@example.test"), new SmsNotification()),
+  ).rejects.toBe(failure);
+  expect(laterCalls).toBe(0);
+});
+
+test("validates built-in capabilities during construction", () => {
+  expect(() => createNotificationDispatcher({} as never)).toThrow(
+    'Notification channel "mail" requires a mail sender.',
+  );
+  expect(() => createNotificationDispatcher({ async send() {} }, {} as never)).toThrow(
+    'Notification channel "database" requires a database store.',
+  );
+});
+
+test("allows explicit replacement of built-in channels", async () => {
+  const calls: string[] = [];
+  const dispatcher = createNotificationDispatcher(
+    {
+      async send() {
+        throw new Error("unexpected default mail");
+      },
+    },
+    undefined,
+    {
+      mail: {
+        async send() {
+          calls.push("mail override");
+        },
+      },
+      database: {
+        async send() {
+          calls.push("database override");
+        },
+      },
+    },
+  );
+  await dispatcher.send(new TestUser(1, "one@example.test"), new WelcomeNotification());
+  expect(calls).toEqual(["mail override", "database override"]);
 });

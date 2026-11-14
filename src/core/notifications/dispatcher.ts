@@ -1,24 +1,56 @@
-import type { Mailer } from "../mail/mailer.ts";
+import type { MailSender } from "../mail/mailer.ts";
 import { buildMarkdownMailMessage } from "../mail/markdownMailable.ts";
 import type { Notification } from "./notification.ts";
-import type { DatabaseNotificationStore, Notifiable } from "./types.ts";
+import type { DatabaseNotificationStore, Notifiable, NotificationChannels } from "./types.ts";
 
 class NotificationDispatcher {
+  private readonly channels: NotificationChannels;
+
   constructor(
-    private readonly mailer: Mailer,
+    private readonly mailer: MailSender,
     private readonly databaseStore: DatabaseNotificationStore | null = null,
-  ) {}
+    channels: NotificationChannels = {},
+  ) {
+    if (!mailer || typeof mailer.send !== "function") {
+      throw new TypeError('Notification channel "mail" requires a mail sender.');
+    }
+    if (databaseStore && typeof databaseStore.create !== "function") {
+      throw new TypeError('Notification channel "database" requires a database store.');
+    }
+    // Snapshot registrations so one application's configuration cannot mutate another's.
+    const registrations = Object.create(null) as Record<string, NotificationChannels[string]>;
+    registrations.mail = { send: (recipient, message) => this.sendMail(recipient, message) };
+    if (databaseStore) {
+      registrations.database = {
+        send: (recipient, message) => this.sendDatabase(recipient, message),
+      };
+    }
+    for (const [name, channel] of Object.entries(channels)) {
+      if (!name || !channel || typeof channel.send !== "function") {
+        throw new TypeError(`Invalid notification channel registration: "${name}".`);
+      }
+      // Capture the method and receiver, rather than a mutable registration property.
+      const send = channel.send.bind(channel);
+      registrations[name] = Object.freeze({ send });
+    }
+    this.channels = Object.freeze(registrations);
+  }
 
   async send(notifiable: Notifiable, notification: Notification): Promise<void> {
-    for (const channel of notification.via(notifiable)) {
-      if (channel === "mail") {
-        await this.sendMail(notifiable, notification);
-        continue;
+    const channels = [...notification.via(notifiable)];
+    // Validate all requested channels before any delivery side effects.
+    const handlers = channels.map((name) => {
+      const channel = Object.hasOwn(this.channels, name) ? this.channels[name] : undefined;
+      if (!channel) {
+        if (name === "database") {
+          throw new Error('Notification channel "database" requires a database store.');
+        }
+        throw new Error(`Unsupported notification channel: "${name}".`);
       }
-
-      if (channel === "database") {
-        await this.sendDatabase(notifiable, notification);
-      }
+      return channel;
+    });
+    for (const channel of handlers) {
+      await channel.send(notifiable, notification);
     }
   }
 
@@ -50,12 +82,13 @@ class NotificationDispatcher {
       to: String(routed),
       subject: message.subject,
       body: message.body ?? "",
+      ...(message.html !== undefined ? { html: message.html } : {}),
     });
   }
 
   private async sendDatabase(notifiable: Notifiable, notification: Notification): Promise<void> {
     if (!this.databaseStore) {
-      return;
+      throw new Error('Notification channel "database" requires a database store.');
     }
 
     const payload = notification.toDatabase(notifiable);
@@ -72,10 +105,11 @@ class NotificationDispatcher {
 }
 
 function createNotificationDispatcher(
-  mailer: Mailer,
+  mailer: MailSender,
   databaseStore?: DatabaseNotificationStore,
+  channels: NotificationChannels = {},
 ): NotificationDispatcher {
-  return new NotificationDispatcher(mailer, databaseStore ?? null);
+  return new NotificationDispatcher(mailer, databaseStore ?? null, channels);
 }
 
 export { createNotificationDispatcher, NotificationDispatcher };
