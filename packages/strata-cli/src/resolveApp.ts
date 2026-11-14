@@ -45,6 +45,8 @@ async function resolveApp(cwd = process.cwd()): Promise<StrataAppConfig> {
 
   return {
     root,
+    application: resolvePath(root, file.application, []),
+    schedule: resolvePath(root, file.schedule, []),
     preload: resolvePath(root, file.preload, [
       "src/bootstrap/preload.ts",
       "src/bootstrap/preloadModules.ts",
@@ -52,6 +54,8 @@ async function resolveApp(cwd = process.cwd()): Promise<StrataAppConfig> {
     server: resolvePath(root, file.server, ["src/bootstrap/server.ts"]),
     modulesDirectory: resolvePath(root, file.modulesDirectory, ["src/modules"]),
     commandsModule: resolvePath(root, file.commands, ["src/cli/register.ts"]),
+    migrateStatus: resolvePath(root, file.migrateStatus, ["src/db/status.ts"]),
+    rollback: resolvePath(root, file.rollback, ["src/db/rollback.ts"]),
     migrate: resolvePath(root, file.migrate, ["src/db/migrate.ts"]),
     fresh: resolvePath(root, file.fresh, ["src/db/fresh.ts"]),
   };

@@ -1,15 +1,19 @@
 import { access } from "node:fs/promises";
-import { join } from "node:path";
-import { moduleDirectory, toCamelCase, toKebabCase, toPascalCase } from "./utils";
+import { join, relative, sep } from "node:path";
+import { scaffoldArguments, writeScaffoldFile } from "./scaffoldFile";
+import { moduleDirectory, toKebabCase, toPascalCase } from "./utils";
 
-async function makePolicyCommand(moduleName?: string): Promise<void> {
+async function makePolicyCommand(...args: string[]): Promise<void> {
+  const parsed = scaffoldArguments("make:policy", args);
+  if (!parsed) return;
+  const [moduleName] = parsed;
   if (!moduleName) {
     throw new Error("make:policy requires a module name.");
   }
 
   const moduleSlug = toKebabCase(moduleName);
   const resourceName = toPascalCase(moduleName);
-  const directory = moduleDirectory(moduleSlug);
+  const directory = await moduleDirectory(moduleSlug);
   const policyPath = join(directory, "policy.ts");
 
   try {
@@ -29,7 +33,6 @@ async function makePolicyCommand(moduleName?: string): Promise<void> {
 
   const recordType = `${resourceName}Record`;
   const policyClass = `${resourceName}Policy`;
-  const policyVariable = `${toCamelCase(moduleName)}Policy`;
 
   const content = `import { Policy } from "@getstrata/core/auth/policy";
 import type { ${recordType} } from "./types";
@@ -55,11 +58,11 @@ class ${policyClass} extends Policy {
 export default ${policyClass};
 `;
 
-  await Bun.write(policyPath, content);
+  await writeScaffoldFile(relative(process.cwd(), policyPath).split(sep), content, "Policy");
 
   console.log(`Created policy in: ${policyPath}`);
   console.log(
-    `Register it in src/modules/${moduleSlug}/provider.ts boot() via gate.register("${moduleSlug}", container.resolve(${policyVariable})).`,
+    `Register it in your module index: policies: { "${moduleSlug}": new ${policyClass}() }.`,
   );
 }
 

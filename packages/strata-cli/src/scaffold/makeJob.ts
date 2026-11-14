@@ -1,8 +1,12 @@
-import { access, mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { access } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
+import { scaffoldArguments, writeScaffoldFile } from "./scaffoldFile";
 import { toKebabCase, toPascalCase } from "./utils";
 
-async function makeJobCommand(name?: string): Promise<void> {
+async function makeJobCommand(...args: string[]): Promise<void> {
+  const parsed = scaffoldArguments("make:job", args);
+  if (!parsed) return;
+  const [name] = parsed;
   if (!name) {
     throw new Error("make:job requires a job name.");
   }
@@ -12,8 +16,6 @@ async function makeJobCommand(name?: string): Promise<void> {
   const payloadType = `${toPascalCase(name)}Payload`;
   const directory = join(process.cwd(), "src", "jobs");
   const jobPath = join(directory, `${jobSlug}Job.ts`);
-
-  await mkdir(directory, { recursive: true });
 
   try {
     await access(jobPath);
@@ -41,7 +43,7 @@ export default ${jobClass};
 export type { ${payloadType} };
 `;
 
-  await Bun.write(jobPath, content);
+  await writeScaffoldFile(relative(process.cwd(), jobPath).split(sep), content, "Job");
 
   console.log(`Created job in: ${jobPath}`);
   console.log(

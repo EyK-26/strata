@@ -1,16 +1,18 @@
-import { join } from "node:path";
-import { ensureDirectory, moduleDirectory, toKebabCase, toPascalCase } from "./utils";
+import { join, relative, sep } from "node:path";
+import { scaffoldArguments, writeScaffoldFile } from "./scaffoldFile";
+import { moduleDirectory, toKebabCase, toPascalCase } from "./utils";
 
-async function makeRequestCommand(moduleName?: string): Promise<void> {
+async function makeRequestCommand(...args: string[]): Promise<void> {
+  const parsed = scaffoldArguments("make:request", args);
+  if (!parsed) return;
+  const [moduleName] = parsed;
   if (!moduleName) {
     throw new Error("make:request requires a module name.");
   }
 
   const moduleSlug = toKebabCase(moduleName);
   const moduleNamePascal = toPascalCase(moduleName);
-  const filePath = join(moduleDirectory(moduleSlug), "requests.ts");
-
-  await ensureDirectory(moduleDirectory(moduleSlug));
+  const filePath = join(await moduleDirectory(moduleSlug), "requests.ts");
 
   const exists = await Bun.file(filePath).exists();
   if (exists) {
@@ -63,7 +65,7 @@ export { parseCreate${moduleNamePascal}Body, parse${moduleNamePascal}IdParams };
 export type { Create${moduleNamePascal}BodyDto, ${moduleNamePascal}IdParams };
 `;
 
-  await Bun.write(filePath, content);
+  await writeScaffoldFile(relative(process.cwd(), filePath).split(sep), content, "Request");
   console.log(`Created request helpers: ${filePath}`);
 }
 

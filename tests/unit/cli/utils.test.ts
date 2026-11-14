@@ -25,7 +25,7 @@ describe("scaffold utils paths", () => {
     process.chdir(workspace);
 
     try {
-      expect(moduleDirectory("Billing Widget")).toBe(
+      expect(await moduleDirectory("Billing Widget")).toBe(
         join(process.cwd(), "src", "modules", "billing-widget"),
       );
       expect(migrationDirectory()).toBe(join(process.cwd(), "src", "db", "migrations"));

@@ -1,11 +1,15 @@
 import { join } from "node:path";
 import type { ServiceDeclaration } from "@getstrata/core/contracts/services";
+import { resourceService, service } from "@getstrata/core/contracts/services";
+import { createServiceToken } from "@getstrata/core/contracts/token";
 import type { RepositoryEffectsDeclaration } from "@getstrata/core/database/definitions";
+import { repositoryEffects } from "@getstrata/core/database/definitions";
 import {
   type InfrastructureDiscoveryOptions,
   importInfrastructure,
   infrastructureFiles,
 } from "./infrastructureDiscovery";
+import { APPLICATION_EVENT_BUS_TOKEN } from "./providers/events";
 
 /** Inert graph declarations, collected before application construction and pool effects. */
 export interface ListenerDeclarations {
@@ -64,4 +68,47 @@ export async function discoverListeners(
       add(exports.default, file);
     }
   return Object.freeze(result);
+}
+
+/** Declare an after-commit listener; its lifetime belongs to the application graph. */
+export function defineModelListener<
+  R extends object,
+  K extends keyof R & string,
+  T extends import("@getstrata/core/database/baseRepository").BaseRepository<R, K>,
+>(
+  repository: import("@getstrata/core/database/definitions").RepositoryDefinition<R, K, T>,
+  action: import("@getstrata/core/database/definitions").RepositoryAction,
+  handler: import("@getstrata/core/database/definitions").AfterCommitRepositoryListener<R>,
+): ListenerDeclarations {
+  const token = createServiceToken<typeof handler>(`${repository.name}.${action}.listener`);
+  return Object.freeze({
+    services: Object.freeze([
+      service(token, { lifetime: "application", dependencies: [] as const, create: () => handler }),
+    ]),
+    repositoryEffects: Object.freeze([
+      repositoryEffects(repository, [{ action, afterCommit: token }]),
+    ]),
+  });
+}
+
+/** Subscribe when the application opens and unsubscribe when it stops. */
+export function defineEventListener(
+  event: string,
+  handler: Parameters<import("@getstrata/core/events").EventBus["listen"]>[1],
+): ListenerDeclarations {
+  const token = createServiceToken<() => void>(`${event}.listener`);
+  return Object.freeze({
+    repositoryEffects: Object.freeze([]),
+    services: Object.freeze([
+      resourceService(token, {
+        lifetime: "application",
+        dependencies: [APPLICATION_EVENT_BUS_TOKEN] as const,
+        create: (bus) => ({
+          name: event,
+          open: () => ({ ok: true, value: bus.listen(event, handler) }),
+          close: (unsubscribe) => unsubscribe(),
+        }),
+      }),
+    ]),
+  });
 }

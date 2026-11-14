@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import { resolveApp } from "../resolveApp";
 
 function toKebabCase(value: string): string {
   return value
@@ -43,8 +44,12 @@ async function ensureDirectory(path: string): Promise<void> {
   await mkdir(path, { recursive: true });
 }
 
-function moduleDirectory(name: string): string {
-  return join(process.cwd(), "src", "modules", toKebabCase(name));
+async function moduleDirectory(name: string): Promise<string> {
+  const app = await resolveApp();
+  return join(
+    app.modulesDirectory ?? join(app.root, "src", "modules"),
+    ...name.split("/").map(toKebabCase),
+  );
 }
 
 function migrationDirectory(): string {

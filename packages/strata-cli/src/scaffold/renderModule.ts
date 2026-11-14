@@ -42,58 +42,15 @@ export { ${moduleIdentifier}Table };
 `,
     ],
     [
-      "repository.ts",
-      `import { BaseRepository } from "@getstrata/core/database/baseRepository";
-import { defineRepository } from "@getstrata/core/database/definitions";
+      "model.ts",
+      `import { createModel } from "@getstrata/core/database/model";
 import { ${moduleIdentifier}Table } from "./table";
-import type { ${moduleName}Record } from "./types";
-
-class ${moduleName}Repository extends BaseRepository<${moduleName}Record, "id"> {}
-const ${moduleIdentifier}Repository = defineRepository({
-  name: "${moduleSlug}.repository", table: ${moduleIdentifier}Table, dependencies: [] as const,
-  create: binding => new ${moduleName}Repository(binding),
+const ${moduleName}Definition = createModel({
+  name: "${moduleName}", table: ${moduleIdentifier}Table,
+  attributes: { fillable: ["name"], timestamps: false },
 });
-export { ${moduleIdentifier}Repository };
-export default ${moduleName}Repository;
-`,
-    ],
-    [
-      "service.ts",
-      `import { NotFoundError } from "@getstrata/core/errors/http";
-import ${moduleName}Repository from "./repository";
-import type { ${moduleName}Record } from "./types";
-import type { PaginatedResult } from "@getstrata/core/pagination";
-
-class ${moduleName}Service {
-  constructor(private readonly repository: ${moduleName}Repository) {}
-
-  paginate(options: {
-    page: number;
-    perPage: number;
-  }): Promise<PaginatedResult<${moduleName}Record>> {
-    return this.repository.paginate(options);
-  }
-
-  findByIdOrThrow(id: number): Promise<${moduleName}Record> {
-    return this.repository.findByIdOrThrow(id, () => new NotFoundError("${moduleName} not found."));
-  }
-
-  create(input: { name: string }): Promise<${moduleName}Record> {
-    return this.repository.create(input);
-  }
-
-  update(id: number, input: { name?: string }): Promise<${moduleName}Record> {
-    return this.repository.updateByIdOrThrow(id, input, () => new NotFoundError("${moduleName} not found."));
-  }
-
-  async delete(id: number): Promise<void> {
-    if (!(await this.repository.deleteById(id))) {
-      throw new NotFoundError("${moduleName} not found.");
-    }
-  }
-}
-
-export default ${moduleName}Service;
+const ${moduleIdentifier}Repository = ${moduleName}Definition.repository;
+export { ${moduleName}Definition, ${moduleIdentifier}Repository };
 `,
     ],
     [
@@ -117,32 +74,6 @@ class ${moduleName}Policy extends Policy {
 }
 
 export default ${moduleName}Policy;
-`,
-    ],
-    [
-      "provider.ts",
-      `import { createServiceToken } from "@getstrata/core/contracts/token";
-import type { ServiceProvider } from "@getstrata/core/contracts/di";
-import { CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
-import ${moduleName}Policy from "./policy";
-
-const ${moduleIdentifier}PolicyToken = createServiceToken<${moduleName}Policy>("${moduleSlug}.policy");
-
-const ${moduleIdentifier}Provider: ServiceProvider = {
-  name: "${moduleSlug}.provider",
-  register({ container }) {
-    container.singleton(${moduleIdentifier}PolicyToken, () => new ${moduleName}Policy());
-  },
-  boot({ container }) {
-    const gate = container.resolve(CORE_POLICY_GATE_TOKEN);
-    gate.register("${moduleSlug}", container.resolve(${moduleIdentifier}PolicyToken));
-  },
-};
-
-export default ${moduleIdentifier}Provider;
-export {
-  ${moduleIdentifier}PolicyToken,
-};
 `,
     ],
     [
@@ -272,8 +203,8 @@ import { buildRequestCacheKey } from "@getstrata/core/http/validation";
 import {type RouteModelBindingPorts, securedBindRouteModel } from "@getstrata/core/http/securedRouteModelBinding";
 import type { RouteRequest } from "@getstrata/core/http/route";
 import { createdResponse, jsonResponse, noContentResponse } from "@getstrata/core/http/response";
-import ${moduleName}Service from "./service";
-import { ${moduleIdentifier}Repository } from "./repository";
+import { NotFoundError } from "@getstrata/core/errors/http";
+import { ${moduleIdentifier}Repository } from "./model";
 import {
   parseCreate${moduleName}Body,
   parse${moduleName}ListQuery,
@@ -299,8 +230,12 @@ class ${moduleName}Controller {
   readonly update:(request:RouteRequest<${moduleName}IdParams>)=>Promise<Response>;
   readonly destroy:(request:RouteRequest<${moduleName}IdParams>)=>Promise<Response>;
 
-  private get service(): ${moduleName}Service {
-    return new ${moduleName}Service(this.database.repository(${moduleIdentifier}Repository));
+  private get records() {
+    return this.database.repository(${moduleIdentifier}Repository);
+  }
+
+  private find(id: number) {
+    return this.records.findByIdOrThrow(id, () => new NotFoundError("${moduleName} not found."));
   }
 
   readonly index = (async (request?: Request) => {
@@ -310,7 +245,7 @@ class ${moduleName}Controller {
     return await this.cachedJson(
       cacheKey,
       async () => {
-        const result = await this.service.paginate(query);
+        const result = await this.records.paginate(query);
         return to${moduleName}PaginatedResourceCollection(result.data, result.meta);
       },
       [${moduleIdentifier.toUpperCase()}_CACHE_TAG],
@@ -321,7 +256,7 @@ class ${moduleName}Controller {
   readonly show = (
     bindRouteModel(
       "id",
-      (id) => this.service.findByIdOrThrow(id),
+      (id) => this.find(id),
       async (_request: RouteRequest<${moduleName}IdParams>, record) => {
         return jsonResponse(to${moduleName}Resource(record));
       },
@@ -330,17 +265,17 @@ class ${moduleName}Controller {
 
   readonly store = (async (request: Request) => {
     const body = await parseCreate${moduleName}Body(request);
-    const record = await this.service.create(body);
+    const record = await this.records.create(body);
     return createdResponse(to${moduleName}Resource(record));
   });
 
   private bindUpdate(binding:RouteModelBindingPorts) {return securedBindRouteModel(
       "id",
-      (id) => this.service.findByIdOrThrow(id),
+      (id) => this.find(id),
       { resource: "${moduleSlug}", action: "update" },
       async (req: RouteRequest<${moduleName}IdParams>, record) => {
         const body = await parseUpdate${moduleName}Body(req);
-        const updated = await this.service.update(record.id, body);
+        const updated = await this.records.updateByIdOrThrow(record.id, body, () => new NotFoundError("${moduleName} not found."));
         return jsonResponse(to${moduleName}Resource(updated));
       },
       binding,
@@ -349,10 +284,10 @@ class ${moduleName}Controller {
 
   private bindDestroy(binding:RouteModelBindingPorts) {return securedBindRouteModel(
       "id",
-      (id) => this.service.findByIdOrThrow(id),
+      (id) => this.find(id),
       { resource: "${moduleSlug}", action: "delete" },
       async (_request: RouteRequest<${moduleName}IdParams>, record) => {
-        await this.service.delete(record.id);
+        await this.records.deleteById(record.id);
         return noContentResponse();
       },
       binding,
@@ -410,8 +345,7 @@ export { create${moduleName}Routes };
       "index.ts",
       `import { type AppModule } from "@getstrata/bootstrap/contracts";
 import ${moduleName}Controller from "./controller";
-import ${moduleIdentifier}Provider, {
-} from "./provider";
+import ${moduleName}Policy from "./policy";
 import { create${moduleName}Routes } from "./routes";${
         withWeb
           ? `
@@ -425,7 +359,7 @@ const ${moduleVariable}: AppModule = {
   order: 100,
   tableName: ${moduleIdentifier}Table.name,
   cacheTags: ["${pluralSlug}"],
-  providers: [${moduleIdentifier}Provider],
+  policies: { "${moduleSlug}": new ${moduleName}Policy() },
   routes({ dependencies, cachedJson, kernel }) {
     return create${moduleName}Routes(dependencies, cachedJson, kernel);
   },${
@@ -439,9 +373,6 @@ const ${moduleVariable}: AppModule = {
 };
 
 export default ${moduleVariable};
-export {
-  ${moduleIdentifier}Provider,
-};
 export { ${moduleName}Controller };
 export { parse${moduleName}IdParams, parse${moduleName}ListQuery } from "./requests";
 export {
@@ -455,8 +386,7 @@ export { create${moduleName}Routes } from "./routes";${
 export { create${moduleName}WebRoutes } from "./webRoutes";`
           : ""
       }
-export { default as ${moduleName}Repository, ${moduleIdentifier}Repository } from "./repository";
-export { default as ${moduleName}Service } from "./service";
+export { ${moduleName}Definition, ${moduleIdentifier}Repository } from "./model";
 export { ${moduleIdentifier}Table } from "./table";
 export type { ${moduleName}Record } from "./types";
 `,
@@ -483,15 +413,19 @@ export type { ${moduleName}Record } from "./types";
 import type { AppDependencies } from "@getstrata/core/contracts/di";
 import { resolveService } from "@getstrata/core/contracts/di";
 import { CORE_VIEW_RENDERER_TOKEN, type NamespacedViewRenderer } from "@getstrata/core/view";
-import { ${moduleIdentifier}Repository } from "./repository";
+import { ${moduleIdentifier}Repository } from "./model";
 import { parse${moduleName}ListQuery } from "./requests";
-import ${moduleName}Service from "./service";
+import { NotFoundError } from "@getstrata/core/errors/http";
 
 class ${moduleName}WebController {
   constructor(private readonly dependencies: AppDependencies, private readonly database: BusinessRequestPorts["database"]) {}
 
-  private get service(): ${moduleName}Service {
-    return new ${moduleName}Service(this.database.repository(${moduleIdentifier}Repository));
+  private get records() {
+    return this.database.repository(${moduleIdentifier}Repository);
+  }
+
+  private find(id: number) {
+    return this.records.findByIdOrThrow(id, () => new NotFoundError("${moduleName} not found."));
   }
 
   private get views(): NamespacedViewRenderer {
@@ -500,7 +434,7 @@ class ${moduleName}WebController {
 
   readonly index = (async (request?: Request) => {
     const query = parse${moduleName}ListQuery(request);
-    const result = await this.service.paginate(query);
+    const result = await this.records.paginate(query);
 
     return this.views.renderHtmx("index.eta", {
         layout: { title: "${moduleName}s" },

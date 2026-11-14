@@ -1,8 +1,12 @@
 import { access } from "node:fs/promises";
-import { join } from "node:path";
-import { ensureDirectory, migrationDirectory, timestampForFilename, toKebabCase } from "./utils";
+import { join, relative, sep } from "node:path";
+import { scaffoldArguments, writeScaffoldFile } from "./scaffoldFile";
+import { migrationDirectory, timestampForFilename, toKebabCase } from "./utils";
 
-async function makeMigrationCommand(name?: string): Promise<void> {
+async function makeMigrationCommand(...args: string[]): Promise<void> {
+  const parsed = scaffoldArguments("make:migration", args);
+  if (!parsed) return;
+  const [name] = parsed;
   if (!name) {
     throw new Error("make:migration requires a name.");
   }
@@ -16,8 +20,6 @@ async function makeMigrationCommand(name?: string): Promise<void> {
   const directory = migrationDirectory();
   const filePath = join(directory, `${fileBaseName}.ts`);
 
-  await ensureDirectory(directory);
-
   try {
     await access(filePath);
     throw new Error(`Migration already exists: ${filePath}`);
@@ -30,31 +32,25 @@ async function makeMigrationCommand(name?: string): Promise<void> {
     }
   }
 
-  const content = `import type { Migration } from "@getstrata/core/database/migrations/types";
-import { currentSqlDialect } from "@getstrata/core/database/dialect";
-import { Schema } from "@getstrata/core/database/schema";
+  const content = `import { defineMigration } from "@getstrata/core/database/migrations";
 
-const migration: Migration = {
+export default defineMigration({
   name: "${fileBaseName}",
-  async up(db) {
-    await Schema.run(db, currentSqlDialect().driver, (schema) => {
-      // Define schema.create(...) or schema.table(...) here.
-      // Keep data transformations and unsupported engine features in db.unsafe(...).
-      void schema;
-    });
+  up(schema, db) {
+    // Define schema.create(...) or schema.table(...) here.
+    // Use db.unsafe(...) for explicit data transformations.
+    void schema;
+    void db;
   },
-  async down(db) {
-    await Schema.run(db, currentSqlDialect().driver, (schema) => {
-      // Reverse the schema changes; guard against losing business history.
-      void schema;
-    });
+  down(schema, db) {
+    // Reverse the schema changes; preserve business history.
+    void schema;
+    void db;
   },
-};
-
-export default migration;
+});
 `;
 
-  await Bun.write(filePath, content);
+  await writeScaffoldFile(relative(process.cwd(), filePath).split(sep), content, "Migration");
   console.log(`Created migration: ${filePath}`);
 }
 
