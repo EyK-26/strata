@@ -283,9 +283,9 @@ describe("passwordConfirmCookie", () => {
     process.env.PASSWORD_CONFIRM_COOKIE_NAME = "   ";
     process.env.PASSWORD_CONFIRM_TIMEOUT = "nope";
     expect(passwordConfirmCookieName(process.env)).toBe("strata_password_confirmed");
-    expect(passwordConfirmTtlSeconds(process.env)).toBe(DEFAULT_PASSWORD_CONFIRM_TTL_SECONDS);
+    expect(() => passwordConfirmTtlSeconds(process.env)).toThrow();
 
     process.env.PASSWORD_CONFIRM_TIMEOUT = "0";
-    expect(passwordConfirmTtlSeconds(process.env)).toBe(DEFAULT_PASSWORD_CONFIRM_TTL_SECONDS);
+    expect(() => passwordConfirmTtlSeconds(process.env)).toThrow();
   });
 });

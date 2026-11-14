@@ -880,8 +880,8 @@ describe("create-strata generate", () => {
     expect(auth).toContain("JSON.stringify([])");
     expect(auth).toContain("parseJsonBody(request, parseRegisterCredentials)");
     expect(auth).toContain("validateObject");
-    expect(auth).toContain("emailRule()");
-    expect(auth).toContain("minLength(8)");
+    expect(auth).toContain("parseLoginCredentials");
+    expect(auth).toContain("parseRegisterCredentials");
     expect(auth).toContain("kernel.wrapWebPasswordConfirm(");
     expect(auth).toMatch(/"\/reset-password":[\s\S]*?wrapWeb\(kernel\.wrapSigned\(/);
     expect(auth).toMatch(/"\/api\/v1\/auth\/reset-password":[\s\S]*?wrapSigned\(/);

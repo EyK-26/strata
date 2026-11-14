@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { resolveEnv } from "../config/envSchema";
 import { readRequestCookie } from "../http/cookies";
 import { isProductionEnv } from "../runtime/appEnv";
 import { appCookieName, requireConfiguredSecret } from "../runtime/appKeyPrefix";
@@ -57,8 +58,10 @@ function sessionCookieName(env: Readonly<Record<string, string | undefined>>): s
 }
 
 function parsePositiveSeconds(raw: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(raw ?? "", 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+  return resolveEnv(
+    { SESSION_TTL_SECONDS: { integer: true, minimum: 1, default: String(fallback) } },
+    { SESSION_TTL_SECONDS: raw },
+  ).SESSION_TTL_SECONDS;
 }
 
 function sessionTtlSeconds(env: Readonly<Record<string, string | undefined>>): number {

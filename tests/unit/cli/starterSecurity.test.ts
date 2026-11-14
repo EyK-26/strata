@@ -145,7 +145,7 @@ describe("starter security flows", () => {
       "authServices.config.registrationEnabled",
     );
     expect(await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8")).toContain(
-      '(env.FEATURE_REGISTRATION ?? "true") !== "false"',
+      "createAuthRuntimeConfig(options,",
     );
     expect(await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8")).toContain(
       "auth_one_time_tokens",

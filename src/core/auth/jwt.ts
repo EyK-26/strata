@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { resolveEnv } from "../config/envSchema";
 import { requireConfiguredSecret } from "../runtime/appKeyPrefix";
 
 interface JwtPayload {
@@ -20,10 +21,10 @@ interface SignJwtOptions {
 export function jwtOptionsFromEnvironment(
   env: Readonly<Record<string, string | undefined>>,
 ): SignJwtOptions {
-  const parsed = Number.parseInt(env.JWT_TTL_SECONDS ?? "", 10);
+  const ttl = resolveEnv({ JWT_TTL_SECONDS: { integer: true, minimum: 60, default: "3600" } }, env);
   return Object.freeze({
     secret: requireConfiguredSecret(["JWT_SECRET", "SESSION_SECRET"], "jwt-secret", env),
-    ttlSeconds: Number.isInteger(parsed) && parsed > 0 ? parsed : 3600,
+    ttlSeconds: ttl.JWT_TTL_SECONDS,
   });
 }
 function resolveJwtSecret(secret: string): string {
@@ -35,11 +36,10 @@ function resolveJwtSecret(secret: string): string {
 }
 
 function jwtTtlSeconds(override?: number): number {
-  if (typeof override === "number" && Number.isInteger(override) && override > 0) {
-    return override;
-  }
-
-  return 3600;
+  if (override === undefined) return 3600;
+  if (!Number.isSafeInteger(override) || override <= 0)
+    throw new TypeError("JWT ttlSeconds must be a positive safe integer.");
+  return override;
 }
 
 function encodeJson(value: unknown): string {

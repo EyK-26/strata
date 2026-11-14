@@ -1,17 +1,16 @@
 import type { AuthRenderingContext } from "./renderingContext.ts";
-import { portAuthRouteSource } from "./routePersistence.ts";
 
 export function renderMfaChallengeRoutes(): string {
   return `        "/login/mfa": {
-          GET: kernel.wrapWebGuest(async (request, _ports) => {
+          GET: kernel.wrapWebGuest(kernel.wrapIdentity(async (request, _ports) => {
             const pending = authServices.pendingMfa.read(request);
             const record = pending ? await authServices.directory(_ports).findByIdOrThrow(pending.userId).catch(() => null) : null;
             if (!record?.is_active || record.auth_version !== pending?.authVersion) return redirectTo("/login");
             return views.render("mfa-challenge.eta", { layout: { title: "MFA" }, errors: {}, code: "" }, { request });
-          }),
+          })),
           POST: wrapWebLogin(
             kernel,
-            async (request, _ports) => {
+            kernel.wrapIdentity(async (request, _ports) => {
             const pending = authServices.pendingMfa.read(request);
             if (!pending) {
               return redirectTo("/login");
@@ -33,7 +32,7 @@ export function renderMfaChallengeRoutes(): string {
             signed.headers.append("set-cookie", authServices.pendingMfa.clearCookie());
             return signed;
             });
-          },
+          }),
             async (request) =>
               views.render("mfa-challenge.eta", { layout: { title: "MFA" }, errors: { code: "Too many login attempts. Try again shortly." }, code: "" }, { request, status: 429 }),
           ),
@@ -81,7 +80,7 @@ export function renderBrowserAuthRoutes({
           ),
           POST: wrapWebLogin(
             kernel,
-            async (request, _ports) => {
+            kernel.wrapIdentity(async (request, _ports) => {
               const { fields } = await parseFormBody(request);
               const { email, password, mfa_code } = parseLoginCredentials(fields);
               return runWithLoginUser(_ports, email, async (candidate, _ports) => {
@@ -90,7 +89,7 @@ export function renderBrowserAuthRoutes({
               const user = mfaResult.user;
               return authServices.session(_ports).signInRedirect(sessionUser(user), "/");
               });
-            },
+            }),
             async (request) =>
               views.render("login.eta", { layout: { title: "Sign in" }, errors: { email: "Too many login attempts. Try again shortly." }, email: "", password: "" }, { request, status: 429 }),
           ),
@@ -104,7 +103,7 @@ export function renderBrowserAuthRoutes({
           }),
           POST: wrapWebRegister(
             kernel,
-            async (request, _ports) => {
+            kernel.wrapIdentity(async (request, _ports) => {
               if (!authServices.config.registrationEnabled) {
                 return new Response("Not found", { status: 404 });
               }
@@ -119,7 +118,7 @@ export function renderBrowserAuthRoutes({
               ${verify ? "const verificationMail = " : ""}await createRegistration(_ports, authServices, { name, email, password: hashed }${verify ? ', "/email/verify"' : ""});
               ${verify ? "// SMTP follows the outermost commit, including request RLS.\n              if (verificationMail) await deferAuthEffect(_ports, () => authServices.mail.send(verificationMail));" : ""}
               ${verifyRegisterBranch}
-            },
+            }),
             async (request) =>
               views.render("register.eta", { layout: { title: "Create account" }, errors: { form: "Too many registration attempts. Try again shortly." }, name: "", email: "", password: "" }, { request, status: 429 }),
           ),
@@ -128,7 +127,7 @@ export function renderBrowserAuthRoutes({
           GET: kernel.wrapWebGuest(async (request) =>
             views.render("forgot-password.eta", { layout: { title: "Forgot password" }, errors: {}, email: "" }, { request }),
           ),
-          POST: kernel.wrapWeb(async (request, _ports) => {
+          POST: kernel.wrapWeb(kernel.wrapIdentity(async (request, _ports) => {
             const { fields } = await parseFormBody(request);
             const email = parseForgotPasswordEmail(fields);
             const user = await authServices.directory(_ports).findByEmail?.(email);
@@ -139,14 +138,14 @@ export function renderBrowserAuthRoutes({
               level: "success",
               message: "If that account exists, a reset link is on its way.",
             }, authServices.flash);
-          }),
+          })),
         },
         "/reset-password": {
           GET: kernel.wrapWeb(kernel.wrapSigned(async (request, _ports) => {
             const email = new URL(request.url).searchParams.get("email") ?? "";
             return views.render("reset-password.eta", { layout: { title: "Reset password" }, errors: {}, password: "", email, action: \`\${new URL(request.url).pathname}\${new URL(request.url).search}\` }, { request });
           })),
-          POST: kernel.wrapWeb(kernel.wrapSigned(async (request, _ports) => {
+          POST: kernel.wrapWeb(kernel.wrapSigned(kernel.wrapIdentity(async (request, _ports) => {
             const { fields } = await parseFormBody(request);
             const email = new URL(request.url).searchParams.get("email") ?? fields.email ?? "";
             const password = fields.password ?? "";
@@ -154,15 +153,15 @@ export function renderBrowserAuthRoutes({
               return views.render("reset-password.eta", { layout: { title: "Reset password" }, errors: { password: "Invalid or expired reset link." }, password: "", email, action: \`\${new URL(request.url).pathname}\${new URL(request.url).search}\` }, { request });
             }
             return flashResponse(redirectTo("/login"), { level: "success", message: "Password updated. Sign in." }, authServices.flash);
-          })),
+          }))),
         },
         "/logout": {
-          POST: kernel.wrapWebAuthenticatedAllowUnverified(async (request, _ports) => { return authServices.session(_ports).signOutRedirect(request, "/"); }),
+          POST: kernel.wrapWebAuthenticatedAllowUnverified(kernel.wrapIdentity(async (request, _ports) => { return authServices.session(_ports).signOutRedirect(request, "/"); })),
         },${
           verify
             ? `
         "/email/verify": {
-          GET: kernel.wrapWeb(async (request, _ports) => {
+          GET: kernel.wrapWeb(kernel.wrapIdentity(async (request, _ports) => {
             const url = new URL(request.url);
             if (url.searchParams.get("signature")) {
               assertValidSignature(request, authServices.config.signatureSecret);
@@ -178,17 +177,17 @@ export function renderBrowserAuthRoutes({
               );
             }
             return views.render("verify-email.eta", { layout: { title: "Verify email" } }, { request });
-          }),
+          })),
         },
         "/email/verification-notification": {
-          POST: kernel.wrapWebAuthenticatedAllowUnverified(async (request, _ports) => {
+          POST: kernel.wrapWebAuthenticatedAllowUnverified(kernel.wrapIdentity(async (request, _ports) => {
             const user = await _ports.auth.user(request);
             if (user) {
               const record = await authServices.directory(_ports).findByIdOrThrow(Number(user.id));
               await issueSignedAuthMail(_ports, authServices, record.email ?? "", "Verify your email", "/email/verify", AUTH_ONE_TIME_PURPOSES.emailVerify, Number(record.id), { id: String(record.id) });
             }
             return flashResponse(redirectTo("/email/verify"), { level: "info", message: "Verification link sent." }, authServices.flash);
-          }),
+          })),
         },`
             : ""
         }${
@@ -198,7 +197,7 @@ ${renderMfaChallengeRoutes()}        "/confirm-password": {
           GET: kernel.wrapWebAuthenticated(async (request) =>
             views.render("confirm-password.eta", { layout: { title: "Confirm password" }, errors: {}, password: "" }, { request }),
           ),
-          POST: kernel.wrapWebAuthenticated(async (request, _ports) => {
+          POST: kernel.wrapWebAuthenticated(kernel.wrapIdentity(async (request, _ports) => {
             const user = await _ports.auth.user(request);
             if (!user) {
               return redirectTo("/login");
@@ -215,10 +214,10 @@ ${renderMfaChallengeRoutes()}        "/confirm-password": {
             confirmed.headers.append("set-cookie", createPasswordConfirmCookie(Number(user.id), record.auth_version, authServices.config.passwordConfirmation));
             return confirmed;
             });
-          }),
+          })),
         },
         "/account/mfa": {
-          GET: kernel.wrapWebAuthenticated(async (request, _ports) => {
+          GET: kernel.wrapWebAuthenticated(kernel.wrapIdentity(async (request, _ports) => {
             const secret = generateTotpSecret();
             const user = await _ports.auth.user(request);
             const record = user ? await authServices.directory(_ports).findByIdOrThrow(Number(user.id)) : null;
@@ -228,8 +227,8 @@ ${renderMfaChallengeRoutes()}        "/confirm-password": {
               issuer: authServices.config.appName,
             });
             return views.render("mfa-setup.eta", { layout: { title: "MFA" }, errors: {}, code: "", secret, otpauth }, { request });
-          }),
-          POST: kernel.wrapWebPasswordConfirm(async (request, _ports) => {
+          })),
+          POST: kernel.wrapWebPasswordConfirm(kernel.wrapIdentity(async (request, _ports) => {
             const user = await _ports.auth.user(request);
             if (!user) {
               return redirectTo("/login");
@@ -255,12 +254,12 @@ ${renderMfaChallengeRoutes()}        "/confirm-password": {
                 otpauth: buildOtpauthUrl({ secret, account: "user", issuer: authServices.config.appName }),
                 recoveryCodes,
               }, { request });
-          }),
+          })),
         },`
             : ""
         }
       };
     },`
     : "";
-  return portAuthRouteSource(cookieRoutes);
+  return cookieRoutes;
 }
