@@ -2,35 +2,22 @@ import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { type AuthReader, establishedAuthReader } from "@getstrata/core/auth/authReader";
 import { hasVerifiedEmail } from "@getstrata/core/auth/emailVerification";
 import type { Policy } from "@getstrata/core/auth/policy";
-import {
-  CORE_TRACING_RUNTIME_TOKEN,
-  resolveAbilityChecker,
-} from "@getstrata/core/contracts/serviceTokens";
+import { resolveAbilityChecker } from "@getstrata/core/contracts/serviceTokens";
 import { createAuthorizeMiddleware } from "@getstrata/core/http/authorizeMiddleware";
-import { createBodySizeLimitMiddleware } from "@getstrata/core/http/bodySizeLimitMiddleware";
-import { createCorsMiddleware, resolveCorsConfig } from "@getstrata/core/http/corsMiddleware";
-import { createCsrfMiddleware } from "@getstrata/core/http/csrfMiddleware";
 import { createFlashMiddleware } from "@getstrata/core/http/flashMiddleware";
 import { createLoginThrottleMiddleware } from "@getstrata/core/http/loginThrottleMiddleware";
 import { createMemoryThrottleMiddleware } from "@getstrata/core/http/memoryThrottleMiddleware";
-import { createMetricsMiddleware } from "@getstrata/core/http/metricsMiddleware";
 import type { Middleware, RouteHandler } from "@getstrata/core/http/middleware";
-import { requestIdMiddleware } from "@getstrata/core/http/middleware";
 import { createRequireAbilityMiddleware } from "@getstrata/core/http/requireAbilityMiddleware";
 import { createRequireAuthMiddleware } from "@getstrata/core/http/requireAuthMiddleware";
 import { createRequireGlobalAdminMiddleware } from "@getstrata/core/http/requireGlobalAdminMiddleware";
 import { createRequirePasswordConfirmMiddleware } from "@getstrata/core/http/requirePasswordConfirmMiddleware";
 import { createRequireVerifiedMiddleware } from "@getstrata/core/http/requireVerifiedMiddleware";
 import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebAuthMiddleware";
-import { createJsonErrorMiddleware, createWebErrorMiddleware } from "@getstrata/core/http/response";
 import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
 import type { RouteModelBindingPorts } from "@getstrata/core/http/securedRouteModelBinding";
-import { createSecurityHeadersMiddleware } from "@getstrata/core/http/securityHeadersMiddleware";
 import { createValidateSignatureMiddleware } from "@getstrata/core/http/signedUrl";
 import { createThrottleMiddleware } from "@getstrata/core/http/throttleMiddleware";
-import { createRequestLoggingMiddleware } from "@getstrata/core/logging/requestLoggingMiddleware";
-import { createTracingMiddleware } from "@getstrata/core/tracing/tracingMiddleware";
-import { CORE_WEB_ERROR_VIEW_TOKEN } from "@getstrata/core/view/tokens";
 import type { ComposedRouteHandler } from "#strata-http-route";
 import {
   assertHttpHandler,
@@ -44,11 +31,14 @@ import {
   CORE_HTTP_CLEANUP_TOKEN,
   CORE_POLICY_GATE_TOKEN,
   CORE_THROTTLE_QUOTA_POLICY_TOKEN,
-  CSRF_TARGET_ORIGIN_CONFIG_KEY,
   REDIS_URL_CONFIG_KEY,
 } from "./config";
 import type { AppDependencies } from "./contracts";
 import { createHttpPersistence, HTTP_PERSISTENCE_OPTIONS } from "./httpPersistence";
+import {
+  createHttpResponseMiddleware,
+  resolveHttpResponseSettings,
+} from "./httpResponseComposition";
 import { enterModuleRoutes } from "./moduleRouteMiddleware";
 import type {
   BusinessRouteHandler,
@@ -77,46 +67,16 @@ class HttpKernel {
       ? dependencies.container.resolve<HttpPersistenceOptions>(HTTP_PERSISTENCE_OPTIONS)
       : undefined;
     this.httpOptions = http;
-    const config = dependencies.container.has(CORE_CONFIG_TOKEN)
-      ? dependencies.container.resolve(CORE_CONFIG_TOKEN)
-      : undefined;
-    const features =
-      http?.features ?? config?.get<HttpPersistenceOptions["features"]>("http.features");
-    this.emailVerificationRequired = features?.emailVerificationRequired ?? false;
-    this.viewsEnabled = features?.viewsEnabled ?? false;
-    this.publicReadsEnabled = features?.publicReadsEnabled ?? false;
-    this.etagEnabled = features?.etagEnabled ?? true;
-    const policy =
-      http?.responsePolicy ??
-      config?.get<HttpPersistenceOptions["responsePolicy"]>("http.responsePolicy");
-    if (policy?.cors) resolveCorsConfig(policy.cors);
-    this.responsePolicy = Object.freeze({
-      cors: policy?.cors
-        ? {
-            allowedOrigins: [...(policy.cors.allowedOrigins ?? [])],
-            additionalAllowedHeaders: [...(policy.cors.additionalAllowedHeaders ?? [])],
-          }
-        : undefined,
-      securityHeaders: policy?.securityHeaders ?? {
-        production: http?.production ?? true,
-        frontendMode: this.viewsEnabled ? ("server-htmx" as const) : ("api" as const),
-      },
-      maxBodyBytes: policy?.maxBodyBytes ?? 1_048_576,
-      rateLimitPerMinute: policy?.rateLimitPerMinute ?? 120,
-      namespace: policy?.namespace ?? "strata",
-      trustForwardedFor: policy?.trustForwardedFor ?? false,
-      loginRateLimit: Object.freeze({ ...(policy?.loginRateLimit ?? resolveLoginRateLimit()) }),
-      registerRateLimit: Object.freeze({
-        ...(policy?.registerRateLimit ?? resolveRegisterRateLimit()),
-      }),
-    });
-    const targetOrigin = dependencies.container.has(CORE_CONFIG_TOKEN)
-      ? dependencies.container.resolve(CORE_CONFIG_TOKEN).get<string>(CSRF_TARGET_ORIGIN_CONFIG_KEY)
-      : undefined;
-    this.configuredCsrfMiddleware = createCsrfMiddleware({ targetOrigin, ...http?.csrf });
+    const settings = resolveHttpResponseSettings(dependencies, http);
+    this.emailVerificationRequired = settings.emailVerificationRequired;
+    this.viewsEnabled = settings.viewsEnabled;
+    this.publicReadsEnabled = settings.publicReadsEnabled;
+    this.etagEnabled = settings.etagEnabled;
+    this.responsePolicy = settings.responsePolicy;
+    this.configuredCsrfMiddleware = settings.configuredCsrfMiddleware;
     this.responses = Object.freeze({
-      json: Object.freeze(this.responseMiddleware("json")),
-      web: Object.freeze(this.responseMiddleware("web")),
+      json: Object.freeze(createHttpResponseMiddleware(dependencies, settings, "json")),
+      web: Object.freeze(createHttpResponseMiddleware(dependencies, settings, "web")),
     });
     this.persistence = dependencies.container.has(HTTP_PERSISTENCE_OPTIONS)
       ? createHttpPersistence(
@@ -269,34 +229,6 @@ class HttpKernel {
     if (identityModes(handler) !== undefined)
       throw new TypeError("SCIM and identity operation declarations cannot be combined.");
     return this.composed(handler, "json", undefined, Object.freeze([...before]));
-  }
-
-  private responseMiddleware(errorFormat: "json" | "web"): Middleware[] {
-    return [
-      createCorsMiddleware(this.responsePolicy.cors),
-      createSecurityHeadersMiddleware(this.responsePolicy.securityHeaders),
-      createBodySizeLimitMiddleware(this.responsePolicy.maxBodyBytes),
-      ...(this.dependencies.container.has(CORE_TRACING_RUNTIME_TOKEN)
-        ? [createTracingMiddleware(this.dependencies.container.resolve(CORE_TRACING_RUNTIME_TOKEN))]
-        : []),
-      createMetricsMiddleware(),
-      createRequestLoggingMiddleware(this.responsePolicy.trustForwardedFor),
-      requestIdMiddleware,
-      // Commit and deferred listeners finish inside this boundary, before telemetry records the result.
-      errorFormat === "json"
-        ? createJsonErrorMiddleware()
-        : createWebErrorMiddleware({
-            enabled: this.viewsEnabled,
-            production: this.dependencies.container.has(HTTP_PERSISTENCE_OPTIONS)
-              ? (this.dependencies.container.resolve<HttpPersistenceOptions>(
-                  HTTP_PERSISTENCE_OPTIONS,
-                ).production ?? true)
-              : true,
-            render: this.dependencies.container.has(CORE_WEB_ERROR_VIEW_TOKEN)
-              ? this.dependencies.container.resolve(CORE_WEB_ERROR_VIEW_TOKEN)
-              : undefined,
-          }),
-    ];
   }
 
   /** Public application documents still own response policy and observation. */

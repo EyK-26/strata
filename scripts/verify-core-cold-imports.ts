@@ -70,6 +70,28 @@ const [root,base,model,definitions,errors,jobs]=await Promise.all([
  import('@getstrata/core/database/model'),import('@getstrata/core/database/definitions'),
  import('@getstrata/core/errors/http'),import('@getstrata/core/queue/failedJobRepository'),
 ]);
+const testing = await import('@getstrata/core/testing');
+for (const name of ['setNodeSamlLoaderForTests','resetMysqlLoaderForTests','resetMemoryThrottleForTests','resetMemoryLoginThrottleForTests','resetDnsLookupForTests','setDnsLookupForTests']) {
+ assert.equal(name in root, false, name+' belongs only to the testing surface');
+ assert.equal(typeof testing[name], 'function', name+' must be available to tests');
+}
+for (const [subpath,names] of [
+ ['database/mysqlConnection',['resetMysqlLoaderForTests']],
+ ['http/loginThrottleMiddleware',['resetMemoryLoginThrottleForTests']],
+ ['http/memoryThrottleMiddleware',['resetMemoryThrottleForTests']],
+ ['security/safeUrl',['resetDnsLookupForTests','setDnsLookupForTests']],
+ ['auth/saml/samlServiceProvider',['setNodeSamlLoaderForTests']],
+]) {
+ const advanced=await import('@getstrata/core/'+subpath);
+ for(const name of names)assert.strictEqual(testing[name],advanced[name],name+' must share canonical test state');
+}
+const throttle=root.createMemoryThrottleMiddleware({maxAttempts:1,decaySeconds:60});
+const throttleRequest=new Request('https://example.test/');
+await throttle(throttleRequest,async()=>new Response('ok'));
+assert.equal((await throttle(throttleRequest,async()=>new Response('ok'))).status,429);
+testing.resetMemoryThrottleForTests();
+assert.equal((await throttle(throttleRequest,async()=>new Response('ok'))).status,200);
+throttle.dispose();
 const authOutcome = await import('@getstrata/core/auth/authOutcome');
 const persistence = await import('@getstrata/core/database/errors');
 assert.strictEqual(root.AuthenticationRequiredError, authOutcome.AuthenticationRequiredError);

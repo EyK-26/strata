@@ -77,10 +77,20 @@ export const CORE_SHARED_DEFAULT_EXPORTS: Readonly<Record<string, string>> = {
   "database/baseRepository": "BaseRepository",
 };
 
+/** Advanced legacy subpaths retain named test hooks; the root excludes them. */
+export const CORE_SHARED_TEST_HOOKS: Readonly<Record<string, readonly string[]>> = {
+  "database/mysqlConnection": ["resetMysqlLoaderForTests"],
+  "http/loginThrottleMiddleware": ["resetMemoryLoginThrottleForTests"],
+  "security/safeUrl": ["resetDnsLookupForTests", "setDnsLookupForTests"],
+};
+
 export function renderCoreSharedShim(subpath: string): string {
   const importPath = `${"../".repeat(subpath.split("/").length)}index.js`;
   const name = CORE_SHARED_DEFAULT_EXPORTS[subpath];
-  return `export * from "${importPath}";\n${name ? `export { ${name} as default } from "${importPath}";\n` : ""}`;
+  const hooks = CORE_SHARED_TEST_HOOKS[subpath];
+  const testing = `${"../".repeat(subpath.split("/").length - 1)}testing.js`;
+  const testExports = hooks ? `export { ${hooks.join(", ")} } from "${testing}";\n` : "";
+  return `export * from "${importPath}";\n${name ? `export { ${name} as default } from "${importPath}";\n` : ""}${testExports}`;
 }
 
 export const CORE_SHARED_SUBPATH_SET = new Set<string>(CORE_SHARED_SUBPATHS);

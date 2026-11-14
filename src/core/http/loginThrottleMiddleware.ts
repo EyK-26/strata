@@ -1,3 +1,4 @@
+import { resetMemoryLoginThrottleForTests, testState } from "#strata-test-state";
 import {
   BoundedThrottleStore,
   type MemoryThrottleStorageOptions,
@@ -23,8 +24,6 @@ interface LoginThrottleOptions extends MemoryThrottleStorageOptions, ThrottleIde
   commandTimeoutMs?: number;
   redisClient?: RedisThrottleClient;
 }
-
-let resetGeneration = 0;
 
 function resolveLoginIdentity(request: Request, trustForwardedFor = false): string {
   return readClientIp(request, { TRUST_FORWARDED_FOR: String(trustForwardedFor) }) ?? "unknown";
@@ -59,11 +58,11 @@ function createMemoryLoginThrottleMiddleware(
   const store = new BoundedThrottleStore(options.decaySeconds * 1000, options);
   if (!Number.isSafeInteger(options.maxAttempts) || options.maxAttempts < 0)
     throw new Error("Invalid memory throttle limit.");
-  let generation = resetGeneration;
+  let generation = testState.loginThrottleGeneration;
   const middleware: Middleware = async (request, next) => {
-    if (generation !== resetGeneration) {
+    if (generation !== testState.loginThrottleGeneration) {
       store.clear();
-      generation = resetGeneration;
+      generation = testState.loginThrottleGeneration;
     }
     const email = await resolveLoginEmail(request);
     const key = redisThrottleKey(
@@ -132,10 +131,6 @@ function createLoginThrottleMiddleware(options: LoginThrottleOptions): Disposabl
   }
 
   return createMemoryLoginThrottleMiddleware(options);
-}
-
-function resetMemoryLoginThrottleForTests(): void {
-  resetGeneration++;
 }
 
 export type { LoginThrottleOptions };

@@ -193,6 +193,12 @@ const barrelPath = join(ROOT, "packages/strata-core/dist/index.js");
 try {
   const barrel = await import(barrelPath);
   for (const removed of [
+    "setNodeSamlLoaderForTests",
+    "resetMysqlLoaderForTests",
+    "resetMemoryThrottleForTests",
+    "resetMemoryLoginThrottleForTests",
+    "resetDnsLookupForTests",
+    "setDnsLookupForTests",
     "configureMembershipLookup",
     "resetMembershipLookupForTests",
     "resolveMembershipLookup",

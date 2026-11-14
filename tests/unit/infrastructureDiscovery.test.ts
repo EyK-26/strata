@@ -2,9 +2,10 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { discoverJobs, resetDiscoverJobsForTests } from "@getstrata/bootstrap/discoverJobs";
+import { discoverJobs } from "@getstrata/bootstrap/discoverJobs";
 import { discoverListeners } from "@getstrata/bootstrap/discoverListeners";
 import { createModuleDiscovery, ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
+import { resetDiscoverJobsForTests } from "@getstrata/bootstrap/testing";
 import { Job } from "@getstrata/core/queue";
 import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
 

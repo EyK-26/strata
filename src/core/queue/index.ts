@@ -30,18 +30,22 @@ interface QueueDispatchOptions {
   readonly handoff?: string;
 }
 
-interface Queue {
+/** Dispatch capability for application consumers, without replay or shutdown ownership. */
+interface QueueDispatcher {
+  dispatch<TPayload extends object>(
+    job: Job<TPayload>,
+    payload: TPayload,
+    options?: QueueDispatchOptions,
+  ): Promise<void>;
+}
+
+interface Queue extends QueueDispatcher {
   close?(): void | Promise<void>;
   /** Preserve a stored logical identity on deliberate replay; reset execution controls. */
   replay?<TPayload extends object>(
     job: Job<TPayload>,
     payload: TPayload,
     jobId: string,
-    options?: QueueDispatchOptions,
-  ): Promise<void>;
-  dispatch<TPayload extends object>(
-    job: Job<TPayload>,
-    payload: TPayload,
     options?: QueueDispatchOptions,
   ): Promise<void>;
 }
@@ -109,5 +113,5 @@ function createQueue(driver: "sync" | "async"): Queue {
   return driver === "async" ? new AsyncQueue() : new SyncQueue();
 }
 
-export type { JobContext, Queue, QueueDispatchOptions, QueuePriority };
+export type { JobContext, Queue, QueueDispatcher, QueueDispatchOptions, QueuePriority };
 export { AsyncQueue, createQueue, Job, SyncQueue };

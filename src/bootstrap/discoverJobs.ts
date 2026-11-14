@@ -12,19 +12,9 @@ type JobManifestEntry = DiscoveredJobClass | { name: string; create: () => Job }
 interface DiscoverJobsOptions extends InfrastructureDiscoveryOptions {
   manifest?: readonly JobManifestEntry[];
 }
-interface DiscoverJobsState {
-  registered: Map<string, { identity: unknown; location: string }>;
-  loads: Map<string | readonly JobManifestEntry[], Promise<string[]>>;
-}
-const states = new WeakMap<JobRegistry, DiscoverJobsState>();
-function state(registry: JobRegistry): DiscoverJobsState {
-  let value = states.get(registry);
-  if (!value) {
-    value = { loads: new Map(), registered: new Map() };
-    states.set(registry, value);
-  }
-  return value;
-}
+
+import { jobDiscoveryState as state } from "#strata-job-discovery";
+
 function validateClass(value: unknown, location: string): asserts value is DiscoveredJobClass {
   if (
     typeof value !== "function" ||
@@ -130,10 +120,6 @@ function discoverJobs(registry: JobRegistry, options: DiscoverJobsOptions = {}):
   cache.set(key, pending);
   return pending;
 }
-function resetDiscoverJobsForTests(registry: JobRegistry): void {
-  state(registry).loads = new Map();
-  state(registry).registered = new Map();
-}
 
 export type { DiscoveredJobClass, DiscoverJobsOptions, JobManifestEntry };
-export { discoverJobs, resetDiscoverJobsForTests };
+export { discoverJobs };

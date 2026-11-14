@@ -1,11 +1,11 @@
 import { createServiceToken } from "@getstrata/core/contracts/token";
 import type { AbilityChecker } from "../auth/abilityChecker";
 import type { AuthReader } from "../auth/authReader";
-import type { PolicyGate } from "../auth/policy";
-import type { EventBus } from "../events/eventBusClass";
+import type { PolicyAuthorizer, PolicyRegistry } from "../auth/policy";
+import type { EventDispatcher } from "../events/eventBusClass";
 import type { ThrottleQuotaPolicy } from "../http/throttleMiddleware";
 import type { MailSender } from "../mail/mailer";
-import type { Queue } from "../queue/index";
+import type { QueueDispatcher } from "../queue/index";
 import type { QueueServices } from "../queue/queueServices";
 import type { Storage } from "../storage/storage";
 import type { PublicTenancyOptions, TenantResolver } from "../tenant/tenantMiddleware";
@@ -33,10 +33,10 @@ const CORE_JSON_RESPONSE_POLICY_TOKEN =
 
 const CORE_CONFIG_TOKEN = createServiceToken<ConfigStoreLike>("core.config");
 const FAILED_JOB_SERVICE_TOKEN = createServiceToken<QueueServices>("core.failedJobs");
-const CORE_QUEUE_TOKEN = createServiceToken<Queue>("core.queue");
-const CORE_EVENT_BUS_TOKEN = createServiceToken<EventBus>("core.eventBus");
-const CORE_POLICY_GATE_TOKEN =
-  createServiceToken<Pick<PolicyGate, "allows" | "authorize" | "register">>("core.policyGate");
+const CORE_QUEUE_TOKEN = createServiceToken<QueueDispatcher>("core.queue");
+const CORE_EVENT_BUS_TOKEN = createServiceToken<EventDispatcher>("core.eventBus");
+const CORE_POLICY_GATE_TOKEN = createServiceToken<PolicyAuthorizer>("core.policyGate");
+const CORE_POLICY_REGISTRY_TOKEN = createServiceToken<PolicyRegistry>("core.policyRegistry");
 const CORE_AUTH_TOKEN = createServiceToken<AuthReader>("core.auth");
 const CORE_ABILITY_CHECKER_TOKEN = createServiceToken<AbilityChecker>("core.abilityChecker");
 const CORE_AUTH_USER_DIRECTORY_TOKEN =
@@ -82,6 +82,7 @@ export {
   CORE_JSON_RESPONSE_POLICY_TOKEN,
   CORE_MAIL_TOKEN,
   CORE_POLICY_GATE_TOKEN,
+  CORE_POLICY_REGISTRY_TOKEN,
   CORE_PUBLIC_TENANCY_TOKEN,
   CORE_QUEUE_TOKEN,
   CORE_STORAGE_TOKEN,

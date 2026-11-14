@@ -1,4 +1,13 @@
 import {
+  createMysqlPool,
+  executeMysql,
+  loadMysql,
+  type MysqlExecutable,
+  type MysqlPool,
+  type MysqlPoolConnection,
+  resetMysqlLoaderForTests,
+} from "#strata-mysql-native";
+import {
   type ActiveDatabaseHandle,
   getActiveDatabaseConnection,
   runWithDatabaseConnection,
@@ -9,15 +18,6 @@ import {
   type ReadOnlyObservationOptions,
 } from "./isolatedReadOnlyObservation.ts";
 import { legacyNativeTransaction } from "./legacyNativeTransaction";
-import {
-  createMysqlPool,
-  executeMysql,
-  loadMysql,
-  type MysqlExecutable,
-  type MysqlPool,
-  type MysqlPoolConnection,
-  resetMysqlLoaderForTests,
-} from "./mysqlNative";
 import { createMysqlPin } from "./rawMysql";
 
 type MysqlConnection = ActiveDatabaseHandle & {
