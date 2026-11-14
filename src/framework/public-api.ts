@@ -1,3 +1,6 @@
+export type { ApplicationProviderOptions } from "../core/contracts/provider";
+export { defineProvider } from "../core/contracts/provider";
+export type { CacheReader, CacheWriter } from "../types/services";
 /**
  * Stable framework surface for application modules and future package extraction.
  * Import from `@getstrata/core` (workspace) or `src/framework/public-api`.
@@ -130,6 +133,7 @@ export {
   BaseRepository,
   BelongsToManyRelationQuery,
   BelongsToRelationQuery,
+  createModel,
   HasManyRelationQuery,
   HasManyThroughRelationQuery,
   HasOneRelationQuery,
@@ -613,7 +617,13 @@ export {
   type ShutdownResult,
 } from "../core/lifecycle/gracefulShutdown.ts";
 export { createRequestLoggingMiddleware } from "../core/logging/requestLoggingMiddleware.ts";
-export type { MailDriver, MailMessage, SmtpConfig, SmtpTransport } from "../core/mail/mailer.ts";
+export type {
+  MailDriver,
+  MailMessage,
+  MailSender,
+  SmtpConfig,
+  SmtpTransport,
+} from "../core/mail/mailer.ts";
 export {
   buildSmtpPayload,
   createMailDriver,
@@ -644,7 +654,9 @@ export type {
   DatabaseNotificationStore,
   MailNotificationMessage,
   Notifiable,
+  NotificationChannel,
   NotificationChannelName,
+  NotificationChannels,
 } from "../core/notifications/index.ts";
 export {
   createNotificationDispatcher,
@@ -732,10 +744,17 @@ export {
 export type { SecurityEventDetails } from "../core/security/securityEvents.ts";
 export { logSecurityEvent } from "../core/security/securityEvents.ts";
 export { signedWebhookHeaders, signWebhookBody } from "../core/security/webhookSignature.ts";
-export type { S3StorageConfig, StorageConfig, StorageDriver } from "../core/storage/storage.ts";
+export type {
+  S3StorageConfig,
+  Storage,
+  StorageConfig,
+  StorageDriver,
+  StreamingStorage,
+} from "../core/storage/storage.ts";
 export {
   createStorageDriver,
   LocalStorageDriver,
+  requireStreamingStorage,
   resolveStorageConfig,
   StorageManager,
   snapshotStorageConfig,

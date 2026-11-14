@@ -89,8 +89,12 @@ interface ProviderScope {
 
 interface ProviderDefinition {
   readonly name: string;
+  /** Declarative bindings compiled into the application graph before any setup runs. */
+  readonly services?: readonly ServiceDeclaration[];
   readonly requires?: readonly string[];
   readonly setup: (scope: ProviderScope) => void | Promise<void>;
+  /** Runs after every provider setup, before transports start. */
+  readonly boot?: (scope: ProviderScope) => void | Promise<void>;
 }
 
 /** Uses the same owner as providers and starts after all providers have finished setup. */

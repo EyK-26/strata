@@ -159,12 +159,20 @@ function normalize(input: ApplicationDefinition): Definition {
       if (item.requires !== undefined && !Array.isArray(item.requires)) {
         throw new TypeError("Provider dependencies must be an array.");
       }
+      if (item.services !== undefined && !Array.isArray(item.services)) {
+        throw new TypeError("Provider services must be an array.");
+      }
+      if (item.boot !== undefined && typeof item.boot !== "function") {
+        throw new TypeError("Provider boot must be a function.");
+      }
       const requires = [...(item.requires ?? [])];
       for (const dependency of requires) declarationName(dependency);
       names.add(item.name);
       return Object.freeze({
         name: item.name,
         setup: item.setup,
+        ...(item.boot ? { boot: item.boot } : {}),
+        services: Object.freeze([...(item.services ?? [])]),
         requires: Object.freeze(requires),
       });
     });
@@ -204,7 +212,14 @@ function normalize(input: ApplicationDefinition): Definition {
     transports: orderedTransports,
     shutdownTimeoutMs: timeout(input.shutdownTimeoutMs),
     startupCleanupTimeoutMs: timeout(input.startupCleanupTimeoutMs),
-    services: compileServiceGraph(input.services, input.overrides),
+    services: compileServiceGraph(
+      [
+        ...(input.services ?? []),
+        ...providers.flatMap((item) => item.services ?? []),
+        ...transports.flatMap((item) => item.services ?? []),
+      ],
+      input.overrides,
+    ),
   };
 }
 
@@ -624,7 +639,17 @@ class OwnedApplication implements Application {
           validate?: (value: T) => void,
         ) => this.journal.acquire(group, spec, signal, validate),
       });
-      for (const provider of [...this.definition.providers, ...this.definition.transports]) {
+      const hooks = [
+        ...this.definition.providers.map((provider) => ({ provider, hook: provider.setup })),
+        ...this.definition.providers.flatMap((provider) =>
+          provider.boot ? [{ provider, hook: provider.boot }] : [],
+        ),
+        ...this.definition.transports.flatMap((provider) => [
+          { provider, hook: provider.setup },
+          ...(provider.boot ? [{ provider, hook: provider.boot }] : []),
+        ]),
+      ];
+      for (const { provider, hook } of hooks) {
         if (this.cancellation.signal.aborted) throw this.cancelled;
         let active = true;
         const acquisitions: Promise<unknown>[] = [];
@@ -650,7 +675,7 @@ class OwnedApplication implements Application {
           },
         });
         const operation = leasedOperation(
-          () => provider.setup(scope),
+          () => hook(scope),
           () => {
             active = false;
           },
@@ -797,5 +822,7 @@ export {
   valueService,
 } from "@getstrata/core/contracts/services";
 export type * from "../contracts/application";
+export type * from "../contracts/provider";
+export { defineProvider } from "../contracts/provider";
 export type * from "../contracts/services";
 export { CORE_EXECUTION_CONTEXT_TOKEN, createApplication };

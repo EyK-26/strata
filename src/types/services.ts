@@ -30,4 +30,8 @@ interface CacheLike {
   size(): Promise<number>;
 }
 
-export type { CacheLike };
+/** Read-through consumers need no invalidation or backend lifecycle authority. */
+type CacheReader = Pick<CacheLike, "get" | "remember">;
+type CacheWriter = Pick<CacheLike, "put" | "forever" | "forget">;
+
+export type { CacheLike, CacheReader, CacheWriter };

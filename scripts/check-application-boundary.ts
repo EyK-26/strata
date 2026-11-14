@@ -14,6 +14,7 @@ const neutralEdges: Readonly<
   [RUNTIME_PATH]: {
     values: [
       "contracts/container",
+      "contracts/provider",
       "contracts/services",
       "contracts/executionContext",
       "contracts/executionOperations",
@@ -27,6 +28,10 @@ const neutralEdges: Readonly<
     types: ["contracts/application", "contracts/services", "contracts/token"],
   },
   [CONTRACT_PATH]: { values: [], types: ["contracts/token", "contracts/services"] },
+  [PATH("contracts/provider")]: {
+    values: [],
+    types: ["contracts/application", "contracts/services"],
+  },
   [PATH("runtime/resourceJournal")]: { values: [], types: ["contracts/application"] },
   [PATH("runtime/executionTasks")]: {
     values: [],
@@ -351,7 +356,13 @@ const neutralEdges: Readonly<
       "database/relationships",
       "database/definitions",
     ],
-    types: ["pagination/index", "database/repositoryQuery", "database/types"],
+    types: [
+      "contracts/token",
+      "database/table",
+      "pagination/index",
+      "database/repositoryQuery",
+      "database/types",
+    ],
   },
   [PATH("auth/password")]: { values: [], types: [] },
   [PATH("database/modelAttributes")]: { values: ["auth/password"], types: [] },

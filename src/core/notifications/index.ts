@@ -5,5 +5,7 @@ export type {
   DatabaseNotificationStore,
   MailNotificationMessage,
   Notifiable,
+  NotificationChannel,
   NotificationChannelName,
+  NotificationChannels,
 } from "./types.ts";

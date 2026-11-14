@@ -211,6 +211,7 @@ ${workTracker ? 'import { WORK_TRACKER_OUTBOX } from "../domain/workTracker.ts";
 import { createApplicationContext, type InitializedAppContext } from "@getstrata/bootstrap/context";
 import { assertAppDependenciesComplete, type AppRouteMap, type ServiceProvider } from "@getstrata/bootstrap/contracts";
 import type { Application } from "@getstrata/core/contracts/application";
+import { defineProvider } from "@getstrata/core/runtime/application";
 import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
 import { createDatabaseBindings } from "@getstrata/core/database/bindings";
 import { CORE_QUEUE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
@@ -339,10 +340,10 @@ export async function bootstrapApp(options:BootstrapOptions={}):Promise<Bootstra
     },
     onConstructed:owner=>{invoke=owner.invoke;options.onConstructed?.(owner.application);return undefined;},
     providersFromScope:scope=>{readyRegistry=scope.resolve(QUEUE_JOB_REGISTRY_TOKEN);auditExport=scope.resolve(STARTER_AUDIT_EXPORT_TOKEN);readyQueueServices=scope.resolve(STARTER_QUEUE_SERVICES_TOKEN);const coordinator=scope.resolve(outbox.token);const publish=coordinator.publish;publisher=Object.freeze({publish:(...args:Parameters<SqlOutbox["publish"]>)=>publish.call(coordinator,...args)});return [...createStarterProviders(env,auth,scope.resolve(STARTER_CACHE_TOKEN),scope.resolve(STARTER_QUEUE_TOKEN),scope.resolve(STARTER_QUEUE_SERVICES_TOKEN),scope.resolve(APPLICATION_EVENT_BUS_TOKEN),scope.resolve(STARTER_BILLING_OPTIONS_TOKEN),scope.resolve(STARTER_STORAGE_TOKEN),selectedRegistry()),${workTracker ? '{name:"starter.workTracker",register({container}){container.set(WORK_TRACKER_OUTBOX,publisher!);}},' : ""}...modules.flatMap(module=>module.providers??[]),assembly];},
-    definition:{config:{application:{url:config.appUrl,production}},services:[
+    definition:{config:{application:{url:config.appUrl,production}},providers:[defineProvider({name:"starter.services",services:[
       ...(options.services??[]),...outbox.services,...createStarterServices(env,run),...createDatabaseReadinessBindings("main",env),...catalog.flatMap(declaration=>declaration.services),
       ...createDatabaseBindings({default:"main",connections:{main:dbOptions},preparation:[outbox.token],repositories:[...repositoryDefinitions,failedJobRepository,...(options.persistence?.repositories??[])],models:[...modelDefinitions,...(options.persistence?.models??[])],repositoryEffects:[...catalog.flatMap(declaration=>declaration.repositoryEffects),...(options.persistence?.repositoryEffects??[])]}),
-    ],providers:[],transports:[...(options.transports??[]),...(worker?[worker.transport]:[]),...(outboxWorker?[outboxWorker.transport]:[]),...(mode==="http"?[{name:"starter.http",async setup(scope:import("@getstrata/core/contracts/application").ProviderScope){
+    ]})],transports:[...(options.transports??[]),...(worker?[worker.transport]:[]),...(outboxWorker?[outboxWorker.transport]:[]),...(mode==="http"?[{name:"starter.http",async setup(scope:import("@getstrata/core/contracts/application").ProviderScope){
       if(!routes||!kernel)throw new Error("Route assembly did not finish before transport setup.");
       server=await scope.acquire(webServerResource({env,port:options.server?.port??config.port,native:{maxRequestBodySize:resolveHttpResponsePolicy(env).maxBodyBytes,...(config.hostname?{hostname:config.hostname}:{}),...options.server?.native},cors:resolveHttpResponsePolicy(env).cors,routes,errorView,publicDir:join(import.meta.dir,"../../public"),enter:(request,handler)=>kernel!.run(request,handler)}));
     }}]:[]) ]},

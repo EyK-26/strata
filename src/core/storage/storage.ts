@@ -1,4 +1,4 @@
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { CORE_STORAGE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { S3Client } from "bun";
@@ -6,10 +6,73 @@ import { copyApplicationConfig } from "../config/configSnapshot";
 import { assertPathUnderRoot } from "../security/safePath";
 
 /** Missing reads return null; deletion is idempotent. All other failures reject. */
-interface StorageDriver {
+interface Storage {
   put(path: string, contents: string | Uint8Array): Promise<string>;
   get(path: string): Promise<Uint8Array | null>;
   delete(path: string): Promise<void>;
+}
+
+/** Buffered consumers need no streaming or concrete manager dependency. */
+interface StorageDriver extends Storage {}
+
+/** Streams are single-use. Late read errors reject reader.read(); cancellation closes the source. */
+interface StreamingStorage extends Storage {
+  readStream(path: string): Promise<ReadableStream<Uint8Array> | null>;
+  writeStream(path: string, contents: ReadableStream<Uint8Array> | Blob): Promise<string>;
+}
+
+/** Narrow a consumer port when an operation requires native streaming support. */
+function requireStreamingStorage(storage: Storage): StreamingStorage {
+  if (
+    !("readStream" in storage) ||
+    typeof storage.readStream !== "function" ||
+    !("writeStream" in storage) ||
+    typeof storage.writeStream !== "function"
+  )
+    throw new TypeError("Storage does not support streaming.");
+  if (storage instanceof StorageManager) storage.streamingDriver();
+  return storage as StreamingStorage;
+}
+
+// Prime one chunk so native missing-object errors retain the buffered API's null result.
+async function openStream(
+  source: ReadableStream<Uint8Array>,
+  missingCode: string,
+): Promise<ReadableStream<Uint8Array> | null> {
+  const reader = source.getReader();
+  let first: Awaited<ReturnType<typeof reader.read>> | undefined;
+  try {
+    first = await reader.read();
+  } catch (error) {
+    reader.releaseLock();
+    if (hasErrorCode(error, missingCode)) return null;
+    throw error;
+  }
+  return new ReadableStream<Uint8Array>(
+    {
+      async pull(controller) {
+        try {
+          const next = first ?? (await reader.read());
+          first = undefined;
+          if (next.done) {
+            reader.releaseLock();
+            controller.close();
+          } else controller.enqueue(next.value);
+        } catch (error) {
+          reader.releaseLock();
+          controller.error(error);
+        }
+      },
+      async cancel(reason) {
+        try {
+          await reader.cancel(reason);
+        } finally {
+          reader.releaseLock();
+        }
+      },
+    },
+    { highWaterMark: 0 },
+  );
 }
 
 interface S3StorageConfig {
@@ -25,7 +88,7 @@ function hasErrorCode(error: unknown, code: string): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
 
-class LocalStorageDriver implements StorageDriver {
+class LocalStorageDriver implements StreamingStorage {
   private readonly rootDirectory: string;
 
   constructor(rootDirectory = "storage") {
@@ -55,6 +118,24 @@ class LocalStorageDriver implements StorageDriver {
     }
   }
 
+  async readStream(path: string): Promise<ReadableStream<Uint8Array> | null> {
+    const absolutePath = this.resolvePath(path);
+    try {
+      if (!(await stat(absolutePath)).isFile()) throw new Error("Storage path is not a file.");
+    } catch (error) {
+      if (hasErrorCode(error, "ENOENT")) return null;
+      throw error;
+    }
+    return openStream(Bun.file(absolutePath).stream(), "ENOENT");
+  }
+
+  async writeStream(path: string, contents: ReadableStream<Uint8Array> | Blob): Promise<string> {
+    const absolutePath = this.resolvePath(path);
+    await mkdir(dirname(absolutePath), { recursive: true });
+    await Bun.write(absolutePath, contents);
+    return path;
+  }
+
   async delete(path: string): Promise<void> {
     try {
       await unlink(this.resolvePath(path));
@@ -65,7 +146,7 @@ class LocalStorageDriver implements StorageDriver {
   }
 }
 
-class S3StorageDriver implements StorageDriver {
+class S3StorageDriver implements StreamingStorage {
   constructor(private readonly client: S3Client) {}
 
   async put(path: string, contents: string | Uint8Array): Promise<string> {
@@ -83,6 +164,40 @@ class S3StorageDriver implements StorageDriver {
     }
   }
 
+  readStream(path: string): Promise<ReadableStream<Uint8Array> | null> {
+    return openStream(this.client.file(path.replace(/^\/+/, "")).stream(), "NoSuchKey");
+  }
+
+  async writeStream(path: string, contents: ReadableStream<Uint8Array> | Blob): Promise<string> {
+    const file = this.client.file(path.replace(/^\/+/, ""));
+    if (contents instanceof Blob) await file.write(contents);
+    else {
+      const writer = file.writer();
+      try {
+        await contents.pipeTo(
+          new WritableStream<Uint8Array>({
+            async write(chunk) {
+              await writer.write(chunk);
+            },
+            async close() {
+              await writer.end();
+            },
+          }),
+        );
+      } catch (error) {
+        // A rejected sink write cancels the source but does not invoke sink.abort().
+        // Explicitly terminate native multipart state and preserve the transfer error.
+        try {
+          await writer.end(error instanceof Error ? error : new Error(String(error)));
+        } catch {
+          /* The original transfer failure takes precedence over cleanup failure. */
+        }
+        throw error;
+      }
+    }
+    return path;
+  }
+
   async delete(path: string): Promise<void> {
     try {
       await this.client.unlink(path.replace(/^\/+/, ""));
@@ -93,7 +208,7 @@ class S3StorageDriver implements StorageDriver {
   }
 }
 
-class StorageManager {
+class StorageManager implements StreamingStorage {
   constructor(private readonly driver: StorageDriver) {}
 
   put(path: string, contents: string | Uint8Array): Promise<string> {
@@ -102,6 +217,22 @@ class StorageManager {
 
   get(path: string): Promise<Uint8Array | null> {
     return this.driver.get(path);
+  }
+
+  streamingDriver(): StreamingStorage {
+    return requireStreamingStorage(this.driver);
+  }
+
+  readStream(path: string): Promise<ReadableStream<Uint8Array> | null> {
+    if (!("readStream" in this.driver) || typeof this.driver.readStream !== "function")
+      return Promise.reject(new TypeError("Storage driver does not support streaming reads."));
+    return this.driver.readStream(path);
+  }
+
+  writeStream(path: string, contents: ReadableStream<Uint8Array> | Blob): Promise<string> {
+    if (!("writeStream" in this.driver) || typeof this.driver.writeStream !== "function")
+      return Promise.reject(new TypeError("Storage driver does not support streaming writes."));
+    return this.driver.writeStream(path, contents);
   }
 
   delete(path: string): Promise<void> {
@@ -208,12 +339,13 @@ function createStorageDriver(config: StorageConfig): StorageDriver {
     : new LocalStorageDriver(snapshot.rootDirectory);
 }
 
-export type { S3StorageConfig, StorageConfig, StorageDriver };
+export type { S3StorageConfig, Storage, StorageConfig, StorageDriver, StreamingStorage };
 export {
   CORE_STORAGE_TOKEN,
   createS3Client,
   createStorageDriver,
   LocalStorageDriver,
+  requireStreamingStorage,
   resolveS3Config,
   resolveStorageConfig,
   S3StorageDriver,

@@ -1,5 +1,5 @@
 import type { CacheLike } from "../../types/services";
-import type { StorageManager } from "../storage/storage";
+import type { Storage } from "../storage/storage";
 import type {
   ConfigStore,
   ConfigStoreLike,
@@ -23,7 +23,7 @@ interface AppDependencies {
   readonly invoke: PersistenceInvocation;
   container: ServiceContainer;
   cache: CacheLike;
-  storage: StorageManager;
+  storage: Storage;
 }
 
 type MutableAppDependencies = Partial<Omit<AppDependencies, "container">> &

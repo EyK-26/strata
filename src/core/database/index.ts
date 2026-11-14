@@ -37,6 +37,7 @@ export {
   BaseRepository,
   BelongsToManyRelationQuery,
   BelongsToRelationQuery,
+  createModel,
   HasManyRelationQuery,
   HasManyThroughRelationQuery,
   HasOneRelationQuery,

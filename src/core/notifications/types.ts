@@ -1,4 +1,14 @@
-type NotificationChannelName = "mail" | "database";
+import type { Notification } from "./notification.ts";
+
+/** Channel names belong to the application; built-ins retain editor completion. */
+type NotificationChannelName = "mail" | "database" | (string & {});
+
+/** An application-owned delivery capability. Failures propagate to the caller. */
+interface NotificationChannel {
+  send(notifiable: Notifiable, notification: Notification): Promise<void>;
+}
+
+type NotificationChannels = Readonly<Record<string, NotificationChannel>>;
 
 interface MailNotificationMessage {
   subject: string;
@@ -30,5 +40,7 @@ export type {
   DatabaseNotificationStore,
   MailNotificationMessage,
   Notifiable,
+  NotificationChannel,
   NotificationChannelName,
+  NotificationChannels,
 };

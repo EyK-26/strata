@@ -4,10 +4,10 @@ import type { AuthReader } from "../auth/authReader";
 import type { PolicyGate } from "../auth/policy";
 import type { EventBus } from "../events/eventBusClass";
 import type { ThrottleQuotaPolicy } from "../http/throttleMiddleware";
-import type { Mailer } from "../mail/mailer";
+import type { MailSender } from "../mail/mailer";
 import type { Queue } from "../queue/index";
 import type { QueueServices } from "../queue/queueServices";
-import type { StorageManager } from "../storage/storage";
+import type { Storage } from "../storage/storage";
 import type { PublicTenancyOptions, TenantResolver } from "../tenant/tenantMiddleware";
 import type { TracingRuntime } from "../tracing/otel";
 import type { AuthAccountLookup } from "./authUserDirectory";
@@ -26,8 +26,8 @@ const CORE_HTTP_CLEANUP_TOKEN =
 
 const CORE_TRACING_RUNTIME_TOKEN = createServiceToken<TracingRuntime>("core.tracingRuntime");
 
-const CORE_MAIL_TOKEN = createServiceToken<Mailer>("core.mail");
-const CORE_STORAGE_TOKEN = createServiceToken<StorageManager>("core.storage");
+const CORE_MAIL_TOKEN = createServiceToken<MailSender>("core.mail");
+const CORE_STORAGE_TOKEN = createServiceToken<Storage>("core.storage");
 const CORE_JSON_RESPONSE_POLICY_TOKEN =
   createServiceToken<Readonly<{ etagEnabled: boolean }>>("core.jsonResponsePolicy");
 

@@ -47,14 +47,14 @@ async function installObserverFixture(app: string): Promise<void> {
     source;
   source = source
     .replace(
-      "const User = defineModel",
-      'const FixtureObserver=createServiceToken<ModelObserver<UserEntity>>("fixture.user.observer");\nexport function fixtureObserverService(observer:ModelObserver<UserEntity>){return valueService(FixtureObserver,observer); }\nconst User = defineModel',
+      "const User = createModel",
+      'const FixtureObserver=createServiceToken<ModelObserver<User>>("fixture.user.observer");\nexport function fixtureObserverService(observer:ModelObserver<User>){return valueService(FixtureObserver,observer); }\nconst User = createModel',
     )
     .replace(
       "  attributes: { fillable:",
       "  observers:[FixtureObserver],\n  attributes: { fillable:",
     );
-  if (!source.includes("observers:[FixtureObserver]"))
+  if (!source.includes("const FixtureObserver=") || !source.includes("observers:[FixtureObserver]"))
     throw new Error("Generated observer fixture did not match the immutable User declaration.");
   await writeFile(path, source);
 }

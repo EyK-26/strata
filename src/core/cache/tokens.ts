@@ -7,5 +7,5 @@ const CORE_CACHE_TOKEN = createServiceToken<CacheLike>("core.cache");
 /** Internal application backend; execution consumers depend on CORE_CACHE_TOKEN. */
 const CORE_CACHE_BACKEND_TOKEN = createServiceToken<CacheRepository>("core.cache.backend");
 
-export type { CacheLike };
+export type { CacheLike, CacheReader, CacheWriter } from "../../types/services";
 export { CORE_CACHE_BACKEND_TOKEN, CORE_CACHE_TOKEN };

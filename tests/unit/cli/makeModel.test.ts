@@ -34,12 +34,11 @@ test("make:model generates a discoverable declarative model with owned repositor
     await command("Invoice");
     const code = await readFile(join(root, "src/models/Invoice.ts"), "utf8");
     expect(code).toContain('from "@getstrata/core/database/model"');
-    expect(code).toContain('class Invoice extends Model<InvoiceRecord, "id">');
+    expect(code).toContain('type Invoice = Model<InvoiceRecord, "id">');
     expect(code).toContain('name: "invoices"');
-    expect(code).toContain("const InvoiceDefinition = defineModel({");
-    expect(code).toContain("const repository = defineRepository({");
-    expect(code).toContain("construct: (state, binding) => new Invoice(state, binding)");
-    expect(code).toContain("repository as InvoiceRepository");
+    expect(code).toContain("const InvoiceDefinition = createModel({");
+    expect(code).toContain("const InvoiceRepository = InvoiceDefinition.repository;");
+    expect(code).toContain("export { InvoiceDefinition, InvoiceRepository }");
     expect(code).not.toContain("registerModelClass");
     expect(code).toContain("attributes: { fillable: [], timestamps: false }");
     expect(await readFile(register, "utf8")).toBe("// app-owned orchestration\n");
@@ -56,9 +55,7 @@ test("make:model supports nested names and explicit legacy table/string key meta
       "--key-type=string",
     );
     const code = await readFile(join(root, "src/models/Billing/Invoice.ts"), "utf8");
-    expect(code).toContain(
-      'class BillingInvoice extends Model<BillingInvoiceRecord, "invoice_id">',
-    );
+    expect(code).toContain('type BillingInvoice = Model<BillingInvoiceRecord, "invoice_id">');
     expect(code).toContain("invoice_id: string");
     expect(code).toContain('name: "legacy_invoice"');
     expect(code).toContain('primaryKey: "invoice_id"');

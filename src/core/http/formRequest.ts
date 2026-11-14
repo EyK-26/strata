@@ -8,12 +8,20 @@ abstract class FormRequest<TOutput> {
 
   protected abstract parse(payload: unknown): TOutput;
 
+  validatePayload(payload: unknown): TOutput {
+    return this.parse(payload);
+  }
+
+  protected readPayload(request: Request): Promise<unknown> {
+    return parseJsonBody(request, (payload) => payload);
+  }
+
   async validate(request: Request): Promise<TOutput> {
-    if (!(await this.authorize(request))) {
+    if ((await this.authorize(request)) !== true) {
       throw new ForbiddenError();
     }
 
-    return await parseJsonBody(request, (payload) => this.parse(payload));
+    return this.validatePayload(await this.readPayload(request));
   }
 }
 
