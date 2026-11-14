@@ -51,11 +51,12 @@ function createMysqlAdapter(
   }
   const connection: MysqlConnection = {
     async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
+      // An admitted transaction owns its reserved connection until it settles, including during close.
+      const active = getActiveDatabaseConnection(connection);
+      if (transactions.has(active)) return active.unsafe<T>(query, params);
       assertOpen();
       return track(
         (async () => {
-          const active = getActiveDatabaseConnection(connection);
-          if (transactions.has(active)) return active.unsafe<T>(query, params);
           return executeMysql<T>(await getPool(), query, params);
         })(),
       );

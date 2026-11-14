@@ -57,19 +57,24 @@ function sessionCookieName(env: Readonly<Record<string, string | undefined>>): s
   return env.SESSION_COOKIE_NAME?.trim() || appCookieName("session", env);
 }
 
-function parsePositiveSeconds(raw: string | undefined, fallback: number): number {
+function sessionTtlSeconds(env: Readonly<Record<string, string | undefined>>): number {
   return resolveEnv(
-    { SESSION_TTL_SECONDS: { integer: true, minimum: 1, default: String(fallback) } },
-    { SESSION_TTL_SECONDS: raw },
+    { SESSION_TTL_SECONDS: { integer: true, minimum: 1, default: String(SESSION_TTL_SECONDS) } },
+    env,
   ).SESSION_TTL_SECONDS;
 }
 
-function sessionTtlSeconds(env: Readonly<Record<string, string | undefined>>): number {
-  return parsePositiveSeconds(env.SESSION_TTL_SECONDS, SESSION_TTL_SECONDS);
-}
-
 function sessionRememberTtlSeconds(env: Readonly<Record<string, string | undefined>>): number {
-  return parsePositiveSeconds(env.SESSION_REMEMBER_TTL_SECONDS, SESSION_REMEMBER_TTL_SECONDS);
+  return resolveEnv(
+    {
+      SESSION_REMEMBER_TTL_SECONDS: {
+        integer: true,
+        minimum: 1,
+        default: String(SESSION_REMEMBER_TTL_SECONDS),
+      },
+    },
+    env,
+  ).SESSION_REMEMBER_TTL_SECONDS;
 }
 
 function missingSessionSecret(): never {

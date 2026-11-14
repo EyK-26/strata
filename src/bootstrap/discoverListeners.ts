@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { APPLICATION_EVENT_BUS_TOKEN } from "@getstrata/bootstrap/providers/events";
 import type { ServiceDeclaration } from "@getstrata/core/contracts/services";
 import { resourceService, service } from "@getstrata/core/contracts/services";
 import { createServiceToken } from "@getstrata/core/contracts/token";
@@ -9,7 +10,6 @@ import {
   importInfrastructure,
   infrastructureFiles,
 } from "./infrastructureDiscovery";
-import { APPLICATION_EVENT_BUS_TOKEN } from "./providers/events";
 
 /** Inert graph declarations, collected before application construction and pool effects. */
 export interface ListenerDeclarations {

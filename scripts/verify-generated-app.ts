@@ -431,6 +431,24 @@ export function commitContract(database: DatabaseSession, transaction: Transacti
       if (core.defineModel !== models.defineModel || database.defineModel !== models.defineModel) throw new Error("Model definition factories differ");
       if (core.createModel !== models.createModel || database.createModel !== models.createModel) throw new Error("Model convenience factories differ");
       const { createApplication } = await import("@getstrata/core/runtime/application");
+      const { defineEventListener } = await import("@getstrata/bootstrap/discoverListeners");
+      const { createEventBindings, APPLICATION_EVENT_BUS_TOKEN } = await import("@getstrata/bootstrap/providers/events");
+      const received = [];
+      const listener = defineEventListener("packed.probe", payload => received.push(payload));
+      let eventBus;
+      const listenerApp = createApplication({
+        providers:[{name:"listener.probe",setup:scope=>{eventBus=scope.resolve(APPLICATION_EVENT_BUS_TOKEN);}}],
+        services:[...createEventBindings(), ...listener.services],
+      });
+      try {
+        await listenerApp.start();
+        await eventBus.emit("packed.probe", "active");
+      } finally {
+        const listenerStop = await listenerApp.stop();
+        if (!listenerStop.successful) throw new Error("Packed listener cleanup failed");
+      }
+      await eventBus.emit("packed.probe", "stopped");
+      if (JSON.stringify(received) !== '["active"]') throw new Error("Packed listener subscription lifetime differs");
       const { createDatabaseBindings } = await import("@getstrata/core/database/bindings");
       const { DATABASE_SESSION_TOKEN } = await import("@getstrata/core/database/tokens");
       const { Note, NoteRepository } = await import("./src/models/Note.ts");
