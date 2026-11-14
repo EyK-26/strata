@@ -1,5 +1,16 @@
 # @getstrata/core changelog
 
+## Unreleased
+
+- Add concise `createModel` declarations and matching generators while preserving explicit database/session ownership, observers and scopes.
+- Add declarative `defineProvider` bindings and phased setup/boot using the existing service graph.
+- Add Bun-backed local/S3 streaming storage, structural mail/storage ports and application-owned notification channels.
+- Share form-request validation; parse bodies by Content-Type, require explicit authorization and reject malformed integer query parameters.
+- Require atomic tagged cache loading, preserve notification HTML and reject invalid database notification IDs.
+- Preserve exact oversized MySQL integer results while retaining numeric safe IDs. Retain mysql2 following native-driver qualification.
+
+**Migration:** Custom cache stores must implement `getOrSetTagged`. Unknown notification channels and missing database channel configuration now fail explicitly. The built-in database channel requires positive safe-integer user IDs; custom channels may use other identifiers. See `docs/architecture/solid-laravel-bun-followup.md` for decisions and validation.
+
 ## 3.0.5
 
 - Fixed SQLite queries returning no rows when SQL begins with comments, including VALUES, PRAGMA, EXPLAIN, and compact RETURNING statements.
@@ -9,15 +20,7 @@
 - Fixed malformed intended-URL and flash cookies throwing errors.
 - Fixed CI package dry-runs failing when the package version was already published.
 
-**Migration:** Replace Redis TTL 0 used for permanent storage with forever(). For a permanent configured default, use . TTL units remain milliseconds.
-
-## Unreleased
-
-Align array and Redis expiration semantics: positive safe-integer millisecond TTLs expire; zero/negative TTLs remove entries and fence pending fills; omitted TTLs use the configured default. Add `put` and `forever` to repositories, tagged caches and execution-scoped caches. Explicit low-level `null` means forever. Redis callers using TTL zero for persistence must switch to `forever` (or a null configured default). Invalid numeric TTLs reject before effects.
-
-Reject control characters that can turn internal redirects into external destinations and preserve repeated query parameters. Prevent malformed intended-URL and flash cookies from throwing by using the shared cookie reader, including Bun's native cookie-map path. Fence old memory-cache fills after explicit writes, enforce capacity for empty keys, and reject invalid per-call TTLs before mutation or loader execution.
-
-Fix SQLite row detection using native prepared-statement column metadata. Leading comments no longer discard SELECT, CTE, PRAGMA or EXPLAIN results; VALUES and compact RETURNING forms also return their rows. Non-returning mutations still execute once and return an empty result.
+**Migration:** Replace Redis TTL 0 used for permanent storage with forever(). For a permanent configured default, use `null`. TTL units remain milliseconds.
 
 ## 3.0.4
 

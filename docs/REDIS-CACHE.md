@@ -95,3 +95,11 @@ The new format uses `APP_KEY_PREFIX:cache:v3:{namespace-hash}:…`. Legacy per-k
 Integration regressions use Redis 7.4 and Bun 1.4.2, including three actual Bun processes, lease renewal, killed and paused owners, ACLs denying keyspace enumeration, metadata pressure, idle expiration and unavailable Redis. They do not replace representative load tests or a production Redis failover exercise.
 
 Transport failures and command deadlines retire the failed connection and abort active local fills. The operation still rejects; uncertain commands are never automatically replayed. A later operation lazily opens a fresh connection through the same store. Replies from retired connections and ignored loader cancellation cannot publish into a successor's cache lifecycle. Explicit `close()` remains permanent. This permits recovery after Redis becomes available again without replacing the application's cache singleton, while retaining bounded commands and shared ownership/generation fencing.
+
+### Custom driver migration
+
+`CacheStore.getOrSetTagged` is required. It must bind the tags before starting the
+loader and prevent a fill invalidated during loading from being published as a current
+entry. Implement the atomic operation in the driver; do not emulate it by calling
+`getOrSet` followed by `attachTags`. Tagged repositories reject drivers missing this
+capability rather than silently weakening invalidation guarantees.

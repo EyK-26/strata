@@ -579,3 +579,12 @@ Child failure skips `afterCreating`. Otherwise, `afterCreating` callbacks run
 and are awaited in registration order. Counted parent creation is sequential.
 Parent and child operations are atomic only when explicitly bound to the
 appropriate transaction; factories do not introduce an implicit transaction.
+
+### MySQL numeric precision
+
+The mysql2 adapter returns safe integer values as numbers and integers outside
+JavaScript's safe range as exact strings. Decimal results remain strings; converting
+them with `Number` can lose precision. Declare these fields as strings (or a suitable
+number/string union) and use explicit domain conversions. The native Bun MySQL
+qualification and the decision to retain mysql2 are recorded in
+[the follow-up plan](architecture/solid-laravel-bun-followup.md#native-mysql-decision).

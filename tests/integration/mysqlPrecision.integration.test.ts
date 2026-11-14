@@ -16,6 +16,8 @@ suite("MySQL exact numeric transport", () => {
         big_value: "18446744073709551615",
         precise: "9007199254740993.12345678901234567890",
       });
+      const safe = await executeMysql<{ id: number }>(pool, "SELECT CAST(17 AS SIGNED) AS id", []);
+      expect(safe[0]?.id).toBe(17);
       const bound = await executeMysql<{ big_value: string }>(
         pool,
         "SELECT CAST(? AS UNSIGNED) AS big_value",
