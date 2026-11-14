@@ -1,7 +1,13 @@
 import { missingOptionalPeer } from "../runtime/optionalPeer.ts";
 
 type MysqlPromiseModule = {
-  createPool: (config: { uri: string; timezone: string; connectionLimit?: number }) => MysqlPool;
+  createPool: (config: {
+    uri: string;
+    timezone: string;
+    supportBigNumbers: true;
+    bigNumberStrings: false;
+    connectionLimit?: number;
+  }) => MysqlPool;
 };
 
 type MysqlExecutable = {
@@ -127,6 +133,8 @@ function createPoolFromModule(mysql: MysqlPromiseModule, url: string, max?: numb
   const pool = mysql.createPool({
     uri: url,
     timezone: "Z",
+    supportBigNumbers: true,
+    bigNumberStrings: false,
     ...(max === undefined ? {} : { connectionLimit: max }),
   });
   pool.on("connection", (connection) => {

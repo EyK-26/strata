@@ -152,6 +152,8 @@ test("raw MySQL factory confirms UTC on each acquired connection before SQL or p
     expect(fixture.config()).toEqual({
       uri: "mysql://fixture.invalid/owned",
       timezone: "Z",
+      supportBigNumbers: true,
+      bigNumberStrings: false,
       connectionLimit: 1,
     });
     expect(pool.capabilities.cancellableCheckout).toBe(false);
