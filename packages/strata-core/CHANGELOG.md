@@ -1,15 +1,17 @@
 # @getstrata/core changelog
 
-## Unreleased
+## 3.0.6
 
-- Add concise `createModel` declarations and matching generators while preserving explicit database/session ownership, observers and scopes.
-- Add declarative `defineProvider` bindings and phased setup/boot using the existing service graph.
-- Add Bun-backed local/S3 streaming storage, structural mail/storage ports and application-owned notification channels.
-- Share form-request validation; parse bodies by Content-Type, require explicit authorization and reject malformed integer query parameters.
-- Require atomic tagged cache loading, preserve notification HTML and reject invalid database notification IDs.
-- Preserve exact oversized MySQL integer results while retaining numeric safe IDs. Retain mysql2 following native-driver qualification.
+- Add concise `createModel` declarations and declarative `defineProvider` bindings with phased setup/boot, preserving explicit persistence ownership, observers and scopes.
+- Add `defineMigration` authoring, Bun-backed local/S3 streaming storage, structural mail/storage ports and application-owned notification channels.
+- Share form-request validation, parse bodies by Content-Type, require explicit authorization and reject malformed integer query parameters. Require atomic tagged-cache loading; preserve notification HTML and validate database notification IDs.
+- Preserve exact oversized MySQL integers without changing safe numeric IDs. Keep `mysql2` as the qualified optional MySQL adapter; it remains lazily loaded.
+- Prevent closed MySQL connections from reopening, drain admitted transactions through both SQL entrypoints, and seal raw MySQL/PostgreSQL pool admission while native cleanup is pending. Concurrent close shares one cleanup result.
+- Drain synchronous and asynchronous production queue jobs, including jobs that initiate shutdown, while preserving dispatch failures. Fix immediate outbox worker start/stop admission races.
+- Bind password-confirmation signatures to their purpose. Require matching browser state for OAuth callbacks and add dedicated secure SAML state-cookie helpers; OIDC retains its PKCE binding.
+- Keep valid short JWT lifetimes, reject malformed numeric settings and name the correct session TTL setting in validation errors. Narrow consumer capabilities and move test controls to `@getstrata/core/testing`.
 
-**Migration:** Custom cache stores must implement `getOrSetTagged`. Unknown notification channels and missing database channel configuration now fail explicitly. The built-in database channel requires positive safe-integer user IDs; custom channels may use other identifiers. See `docs/architecture/solid-laravel-bun-followup.md` for decisions and validation.
+**Upgrade:** This release includes consumer API changes. Custom cache stores must implement `getOrSetTagged`; missing/unknown notification channels now fail explicitly, and the built-in database channel requires positive safe-integer user IDs. Move removed test-control imports to the dedicated testing entrypoint. Existing password-confirmation cookies require one fresh confirmation; normal sessions remain valid. Custom callers of `verifyOAuthState` must issue the matching browser-state cookie. SAML browser flows require HTTPS. See [the release notes](../../docs/releases/3.0.6.md) and [migration decisions](../../docs/architecture/solid-laravel-bun-followup.md).
 
 ## 3.0.5
 
