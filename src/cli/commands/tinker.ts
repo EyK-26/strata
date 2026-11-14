@@ -4,7 +4,7 @@ import type { Application } from "@getstrata/core/contracts/application";
 import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
 import { createMailDriver, Mailer } from "../../core/mail/mailer";
 import { envFlagEnabled, isProductionEnv } from "../../core/runtime/appEnv";
-import type { StorageManager } from "../../core/storage/storage";
+import type { Storage } from "../../core/storage/storage";
 import { bootQueueApplication } from "./queueApplication";
 
 interface TinkerContext {
@@ -14,7 +14,7 @@ interface TinkerContext {
   invoke: PersistenceInvocation;
   stop(): Promise<void>;
   mailer: () => Mailer;
-  storage: () => StorageManager;
+  storage: () => Storage;
 }
 
 async function createTinkerContext(): Promise<TinkerContext> {

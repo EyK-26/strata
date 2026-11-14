@@ -6,6 +6,7 @@ import {
   createS3Client,
   createStorageDriver,
   LocalStorageDriver,
+  requireStreamingStorage,
   resolveS3Config,
   S3StorageDriver,
   StorageManager,
@@ -13,6 +14,200 @@ import {
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("storage", () => {
+  test("native local streams transfer large inputs, blobs, missing paths and reader cancellation", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "strata-streams-"));
+    const storage = requireStreamingStorage(new StorageManager(new LocalStorageDriver(directory)));
+    try {
+      let produced = 0;
+      const chunks = 256;
+      await storage.writeStream(
+        "large.bin",
+        new ReadableStream<Uint8Array>(
+          {
+            pull(controller) {
+              if (produced === chunks) return controller.close();
+              controller.enqueue(new Uint8Array(65536).fill(produced++ % 251));
+            },
+          },
+          { highWaterMark: 0 },
+        ),
+      );
+      const stream = await storage.readStream("large.bin");
+      expect(stream).not.toBeNull();
+      if (!stream) throw new Error("Expected stream");
+      const reader = stream.getReader();
+      let offset = 0;
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        for (let index = 0; index < value.length; index++)
+          if (value[index] !== Math.floor((offset + index) / 65536) % 251)
+            throw new Error("stream byte mismatch");
+        offset += value.length;
+      }
+      expect(offset).toBe(chunks * 65536);
+      const cancelled = await storage.readStream("large.bin");
+      if (!cancelled) throw new Error("Expected stream");
+      await cancelled.cancel("consumer done");
+      await storage.writeStream("blob.txt", new Blob(["blob contents"]));
+      expect(new TextDecoder().decode((await storage.get("blob.txt")) ?? new Uint8Array())).toBe(
+        "blob contents",
+      );
+      expect(await storage.readStream("missing")).toBeNull();
+      await expect(storage.readStream("../escape")).rejects.toThrow();
+      await expect(storage.writeStream("../escape", new Blob(["bad"]))).rejects.toThrow();
+      await mkdir(join(directory, "folder"));
+      await expect(storage.readStream("folder")).rejects.toThrow();
+      const broken = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.error(new Error("source failed"));
+        },
+      });
+      await expect(storage.writeStream("broken", broken)).rejects.toThrow("source failed");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("S3 streams preserve backpressure, cancellation, errors and normalized paths", async () => {
+    let pulls = 0;
+    let cancelled: unknown;
+    let missing = false;
+    let written = 0;
+    let activeWrites = 0;
+    const client = {
+      file: mock((_path: string) => ({
+        stream() {
+          return new ReadableStream<Uint8Array>(
+            {
+              pull(controller) {
+                if (missing)
+                  return controller.error(
+                    Object.assign(new Error("missing"), { code: "NoSuchKey" }),
+                  );
+                pulls++;
+                controller.enqueue(new Uint8Array(65536));
+              },
+              cancel(reason) {
+                cancelled = reason;
+              },
+            },
+            { highWaterMark: 0 },
+          );
+        },
+        write: mock(async (_blob: Blob) => undefined),
+        writer() {
+          return {
+            async write(chunk: Uint8Array) {
+              activeWrites++;
+              expect(activeWrites).toBe(1);
+              await Promise.resolve();
+              written += chunk.length;
+              activeWrites--;
+            },
+            end: mock(async (error?: Error) => {
+              if (error) throw error;
+            }),
+          };
+        },
+      })),
+    };
+    const storage = new S3StorageDriver(client as never);
+    const stream = await storage.readStream("/object");
+    if (!stream) throw new Error("Expected stream");
+    expect(client.file).toHaveBeenCalledWith("object");
+    expect(pulls).toBe(1);
+    await Promise.resolve();
+    expect(pulls).toBe(1);
+    await stream.cancel("stop");
+    expect(cancelled).toBe("stop");
+    missing = true;
+    expect(await storage.readStream("missing")).toBeNull();
+    let produced = 0;
+    await storage.writeStream(
+      "/large",
+      new ReadableStream<Uint8Array>(
+        {
+          pull(controller) {
+            if (produced++ === 128) return controller.close();
+            controller.enqueue(new Uint8Array(65536));
+          },
+        },
+        { highWaterMark: 0 },
+      ),
+    );
+    expect(written).toBe(128 * 65536);
+    await storage.writeStream("/blob", new Blob(["blob"]));
+    const failed = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.error(new Error("upload failed"));
+      },
+    });
+    await expect(storage.writeStream("bad", failed)).rejects.toThrow("upload failed");
+  });
+
+  test("stream failures propagate and upload failures cancel the input", async () => {
+    const failure = new Error("remote transfer failed");
+    let cancelled: unknown;
+    let reads = 0;
+    const driver = new S3StorageDriver({
+      file() {
+        return {
+          stream() {
+            return new ReadableStream<Uint8Array>(
+              {
+                pull(controller) {
+                  if (reads++ === 0) controller.enqueue(new Uint8Array([1]));
+                  else controller.error(failure);
+                },
+              },
+              { highWaterMark: 0 },
+            );
+          },
+          writer() {
+            return {
+              async write() {
+                throw failure;
+              },
+              async end() {},
+            };
+          },
+        };
+      },
+    } as never);
+    const stream = await driver.readStream("object");
+    if (!stream) throw new Error("Expected stream");
+    const reader = stream.getReader();
+    expect((await reader.read()).value).toEqual(new Uint8Array([1]));
+    await expect(reader.read()).rejects.toBe(failure);
+    const input = new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          controller.enqueue(new Uint8Array([1]));
+        },
+        cancel(reason) {
+          cancelled = reason;
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    await expect(driver.writeStream("object", input)).rejects.toBe(failure);
+    expect(cancelled).toBe(failure);
+  });
+
+  test("legacy drivers retain buffered compatibility without claiming streaming support", () => {
+    const storage = new StorageManager({
+      async get() {
+        return null;
+      },
+      async put(path) {
+        return path;
+      },
+      async delete() {},
+    });
+    expect(() => requireStreamingStorage(storage)).toThrow("streaming");
+  });
+
   test("local missing objects stay distinct from invalid paths and filesystem failures", async () => {
     const directory = await mkdtemp(join(tmpdir(), "strata-storage-errors-"));
     const storage = new StorageManager(new LocalStorageDriver(directory));
@@ -89,9 +284,14 @@ describe("storage", () => {
         "image bytes",
       );
       expect(methods).toEqual(["PUT", "GET"]);
+      await storage.writeStream("/image.jpg", new Blob(["image bytes"]));
+      const nativeStream = await storage.readStream("/image.jpg");
+      if (!nativeStream) throw new Error("Expected native stream");
+      expect(await Bun.readableStreamToText(nativeStream)).toBe("image bytes");
       errorCode = "NoSuchKey";
       status = 404;
       expect(await storage.get("image.jpg")).toBeNull();
+      expect(await storage.readStream("image.jpg")).toBeNull();
       expect(await storage.delete("image.jpg")).toBeUndefined();
       for (const [code, httpStatus] of [
         ["NoSuchBucket", 404],
@@ -104,6 +304,7 @@ describe("storage", () => {
           await expect(storage[operation]("image.jpg")).rejects.toMatchObject({ code });
         }
         await expect(storage.put("image.jpg", "replacement")).rejects.toMatchObject({ code });
+        await expect(storage.readStream("image.jpg")).rejects.toMatchObject({ code });
       }
       errorCode = undefined;
       expect(new TextDecoder().decode((await storage.get("image.jpg")) ?? new Uint8Array())).toBe(
