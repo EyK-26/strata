@@ -1,5 +1,16 @@
 # @getstrata/core changelog
 
+## 3.0.5
+
+- Fixed SQLite queries returning no rows when SQL begins with comments, including VALUES, PRAGMA, EXPLAIN, and compact RETURNING statements.
+- Aligned memory and Redis cache expiration. Added put and forever to ordinary, tagged, and execution-scoped caches. Zero or negative TTLs now remove entries; invalid numeric TTLs are rejected before effects.
+- Fixed stale cache loaders overwriting newer writes and empty cache keys bypassing memory limits.
+- Fixed internal redirect validation bypasses and preserved repeated query parameters.
+- Fixed malformed intended-URL and flash cookies throwing errors.
+- Fixed CI package dry-runs failing when the package version was already published.
+
+**Migration:** Replace Redis TTL 0 used for permanent storage with forever(). For a permanent configured default, use . TTL units remain milliseconds.
+
 ## Unreleased
 
 Align array and Redis expiration semantics: positive safe-integer millisecond TTLs expire; zero/negative TTLs remove entries and fence pending fills; omitted TTLs use the configured default. Add `put` and `forever` to repositories, tagged caches and execution-scoped caches. Explicit low-level `null` means forever. Redis callers using TTL zero for persistence must switch to `forever` (or a null configured default). Invalid numeric TTLs reject before effects.
