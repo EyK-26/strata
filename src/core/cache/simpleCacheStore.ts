@@ -8,9 +8,8 @@ class SimpleCacheStore implements CacheStore {
     return Promise.resolve(this.cache.get<T>(key));
   }
 
-  set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
+  async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
     this.cache.set(key, value, ttlMs);
-    return Promise.resolve();
   }
 
   getOrSet<T>(key: string, loader: () => Promise<T>, ttlMs?: number): Promise<T> {

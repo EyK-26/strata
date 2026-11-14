@@ -1,3 +1,4 @@
+import { readRequestCookie } from "../http/cookies";
 import { safeInternalRedirectPath, sanitizeInternalPath } from "../http/safeInternalPath";
 import { isProductionEnv } from "../runtime/appEnv";
 import { appCookieName } from "../runtime/appKeyPrefix";
@@ -70,24 +71,6 @@ function isStashableIntendedPath(path: string): boolean {
   return true;
 }
 
-function readCookieValue(request: Request, cookieName: string): string | null {
-  const cookieHeader = request.headers.get("cookie");
-
-  if (!cookieHeader) {
-    return null;
-  }
-
-  for (const part of cookieHeader.split(";")) {
-    const [name, ...rest] = part.trim().split("=");
-
-    if (name === cookieName) {
-      return decodeURIComponent(rest.join("="));
-    }
-  }
-
-  return null;
-}
-
 function createIntendedUrlCookie(path: string, options: IntendedUrlCookieOptions): string | null {
   const sanitized = sanitizeInternalPath(path, "");
 
@@ -110,7 +93,7 @@ function createIntendedUrlCookieFromRequest(
 }
 
 function readIntendedUrl(request: Request, options: IntendedUrlCookieOptions): string | null {
-  const cookieValue = readCookieValue(request, options.cookieName);
+  const cookieValue = readRequestCookie(request, options.cookieName);
 
   if (!cookieValue) {
     return null;

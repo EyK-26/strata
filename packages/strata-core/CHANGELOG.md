@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## Unreleased
+
+Reject control characters that can turn internal redirects into external destinations and preserve repeated query parameters. Prevent malformed intended-URL and flash cookies from throwing by using the shared cookie reader, including Bun's native cookie-map path. Fence old memory-cache fills after explicit writes, enforce capacity for empty keys, and reject invalid per-call TTLs before mutation or loader execution.
+
 ## 3.0.4
 
 Restore workspace-based npm publication and remove custom archive packing/recovery. Skip confirmed existing versions, stop on registry lookup failures, and accept successful npm uploads without requiring immediate registry visibility. Retain release quality gates, pinned npm, provenance and publication dry-runs. The v3.0.3 attempt published only @getstrata/core before its visibility check failed.

@@ -4,10 +4,14 @@ type CacheEntry<T> = {
   lastAccessedAt: number;
 };
 
-function validateSimpleCacheOptions(ttlMs: number, maxEntries: number): void {
+function validateTtl(ttlMs: number): void {
   if (!Number.isFinite(ttlMs) || ttlMs < 0) {
     throw new RangeError("ttlMs must be a non-negative number.");
   }
+}
+
+function validateSimpleCacheOptions(ttlMs: number, maxEntries: number): void {
+  validateTtl(ttlMs);
   if (!Number.isInteger(maxEntries) || maxEntries < 1) {
     throw new RangeError("maxEntries must be a positive integer.");
   }
@@ -33,6 +37,10 @@ class SimpleCache {
   set<T>(key: string, value: T, ttlMs?: number): void {
     const now = Date.now();
     const resolvedTtlMs = ttlMs ?? this.ttlMs;
+    validateTtl(resolvedTtlMs);
+
+    // A later explicit write owns the key; an older loader may only return to its caller.
+    this.inflight.delete(key);
 
     this.cache.set(key, {
       value,
@@ -53,6 +61,7 @@ class SimpleCache {
     tags: string[],
     ttlMs?: number,
   ): Promise<T> {
+    validateTtl(ttlMs ?? this.ttlMs);
     this.pruneExpired();
 
     const cachedEntry = this.getFreshEntry<T>(key);
@@ -237,7 +246,7 @@ class SimpleCache {
         }
       }
 
-      if (!oldestKey) {
+      if (oldestKey === undefined) {
         return;
       }
 

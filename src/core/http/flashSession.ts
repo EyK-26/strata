@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { isProductionEnv } from "../runtime/appEnv";
 import { appCookieName, requireConfiguredSecret } from "../runtime/appKeyPrefix";
+import { readRequestCookie } from "./cookies";
 
 const FLASH_COOKIE = "strata_flash";
 const FLASH_TTL_MS = 60 * 1000;
@@ -36,24 +37,6 @@ function signFlashPayload(payload: string, issuedAt: number, options: FlashSessi
     .digest("hex");
 
   return `${payload}.${issuedAt}.${signature}`;
-}
-
-function readFlashCookie(request: Request, options: FlashSessionOptions): string | null {
-  const cookieHeader = request.headers.get("cookie");
-
-  if (!cookieHeader) {
-    return null;
-  }
-
-  for (const part of cookieHeader.split(";")) {
-    const [name, ...rest] = part.trim().split("=");
-
-    if (name === options.cookieName) {
-      return decodeURIComponent(rest.join("="));
-    }
-  }
-
-  return null;
 }
 
 function parseFlashCookie(cookieValue: string, options: FlashSessionOptions): FlashMessage | null {
@@ -126,7 +109,7 @@ function clearFlashCookie(options: FlashSessionOptions): string {
 }
 
 function pullFlash(request: Request, options: FlashSessionOptions): FlashMessage | null {
-  const cookieValue = readFlashCookie(request, options);
+  const cookieValue = readRequestCookie(request, options.cookieName);
 
   if (!cookieValue) {
     return null;
