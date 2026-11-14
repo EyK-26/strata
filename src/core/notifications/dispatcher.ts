@@ -8,7 +8,7 @@ class NotificationDispatcher {
 
   constructor(
     private readonly mailer: MailSender,
-    private readonly databaseStore: DatabaseNotificationStore | null = null,
+    databaseStore: DatabaseNotificationStore | null = null,
     channels: NotificationChannels = {},
   ) {
     if (!mailer || typeof mailer.send !== "function") {
@@ -22,7 +22,7 @@ class NotificationDispatcher {
     registrations.mail = { send: (recipient, message) => this.sendMail(recipient, message) };
     if (databaseStore) {
       registrations.database = {
-        send: (recipient, message) => this.sendDatabase(recipient, message),
+        send: (recipient, message) => this.sendDatabase(databaseStore, recipient, message),
       };
     }
     for (const [name, channel] of Object.entries(channels)) {
@@ -86,11 +86,11 @@ class NotificationDispatcher {
     });
   }
 
-  private async sendDatabase(notifiable: Notifiable, notification: Notification): Promise<void> {
-    if (!this.databaseStore) {
-      throw new Error('Notification channel "database" requires a database store.');
-    }
-
+  private async sendDatabase(
+    store: DatabaseNotificationStore,
+    notifiable: Notifiable,
+    notification: Notification,
+  ): Promise<void> {
     const payload = notification.toDatabase(notifiable);
 
     if (!payload) {
@@ -105,7 +105,7 @@ class NotificationDispatcher {
       );
     }
 
-    await this.databaseStore.create({
+    await store.create({
       ...payload,
       userId,
     });

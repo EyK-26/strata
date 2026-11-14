@@ -5,6 +5,7 @@ export {
   BelongsToRelationQuery,
   BoundModelFacade,
   createBoundModel,
+  createModel,
   getModelBinding,
   HasManyRelationQuery,
   HasManyThroughRelationQuery,

@@ -11,6 +11,7 @@ import type {
 import { defineModel, defineRepository } from "@getstrata/core/database/definitions";
 import { isUniqueConstraintError, RecordNotFoundError } from "@getstrata/core/database/errors";
 import { getBindingPorts } from "#strata-orm-internal";
+import type { ServiceToken } from "../contracts/token";
 import type { KeysetOptions } from "../pagination/index.ts";
 import BaseRepository, { getRepositoryBinding } from "./baseRepository.ts";
 import { foreignKeyFromTable, pivotTableName } from "./inflection.ts";
@@ -1508,6 +1509,9 @@ function createModel<R extends object, K extends keyof R & string>(options: {
   name: string;
   table: TableDefinition<R, K>;
   attributes: ModelAttributeOptions<R>;
+  aliases?: readonly string[];
+  observers?: readonly ServiceToken<ModelObserver<Model<R, K>>>[];
+  scopes?: readonly ((query: RepositoryQuery<R, K>) => RepositoryQuery<R, K>)[];
 }): ModelDefinition<R, K, Model<R, K>> & {
   readonly repository: RepositoryDefinition<R, K, BaseRepository<R, K>>;
 } {
@@ -1518,12 +1522,14 @@ function createModel<R extends object, K extends keyof R & string>(options: {
     const descriptor = Object.getOwnPropertyDescriptor(options, key);
     if (
       typeof key !== "string" ||
-      !["name", "table", "attributes"].includes(key) ||
+      !["name", "table", "attributes", "aliases", "observers", "scopes"].includes(key) ||
       !descriptor ||
       !("value" in descriptor)
     )
       throw new TypeError("Invalid model declaration field.");
   }
+  if (typeof options.name !== "string" || !options.name.trim())
+    throw new TypeError("Model names must be nonempty strings.");
   const repository = defineRepository({
     name: `${options.name}.repository`,
     table: options.table,
@@ -1534,6 +1540,9 @@ function createModel<R extends object, K extends keyof R & string>(options: {
     name: options.name,
     repository,
     dependencies: [],
+    aliases: options.aliases,
+    observers: options.observers,
+    scopes: options.scopes,
     attributes: Object.create(Object.getPrototypeOf(options.attributes), {
       timestamps: { value: false, enumerable: true, configurable: true },
       ...Object.getOwnPropertyDescriptors(options.attributes),

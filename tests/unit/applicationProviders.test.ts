@@ -161,8 +161,19 @@ test("boot failure cleans resources acquired through its provider owner", async 
 });
 
 test("invalid provider hooks and declarations fail before startup", () => {
+  assert.throws(
+    () => createApplication({ providers: [{ name: "bad", setup() {}, services: {} as never }] }),
+    /services must be an array/,
+  );
+  assert.throws(
+    () => createApplication({ providers: [{ name: "bad", setup() {}, boot: 1 as never }] }),
+    /boot must be a function/,
+  );
   assert.throws(() => defineProvider({ name: "" }), /nonempty/);
   assert.throws(() => defineProvider({ name: "bad", boot: 1 as never }), /hooks/);
+  assert.throws(() => defineProvider({ name: "bad", setup: 1 as never }), /hooks/);
+  assert.throws(() => defineProvider({ name: "bad", requires: "first" as never }), /dependencies/);
+  assert.throws(() => defineProvider({ name: "bad", requires: [""] }), /dependencies/);
   assert.throws(() => defineProvider({ name: "bad", services: {} as never }), /array/);
   assert.throws(() =>
     createApplication({ providers: [defineProvider({ name: "bad", services: [{} as never] })] }),

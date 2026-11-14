@@ -82,3 +82,15 @@ test("declaration metadata remains snapshotted and rejects accessors without eva
     createModel({ name: "Invalid", table, attributes: { unsafe: true } } as never),
   ).toThrow();
 });
+
+test("model names cannot invoke coercion hooks before validation", () => {
+  let calls = 0;
+  const name = {
+    toString() {
+      calls++;
+      return "Unsafe";
+    },
+  } as unknown as string;
+  expect(() => createModel({ name, table, attributes: {} })).toThrow("Model names");
+  expect(calls).toBe(0);
+});
