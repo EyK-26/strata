@@ -19,16 +19,6 @@ function sqliteFilename(filename: string): string {
     throw new Error("SQLite path is not configured. Pass a filename or :memory:.");
   return filename === ":memory:" ? filename : resolve(filename);
 }
-function isRowReturning(sql: string): boolean {
-  const upper = sql.replace(/\s+/g, " ").trim().toUpperCase();
-  return (
-    upper.includes(" RETURNING ") ||
-    upper.startsWith("SELECT") ||
-    upper.startsWith("WITH") ||
-    upper.startsWith("PRAGMA") ||
-    upper.startsWith("EXPLAIN")
-  );
-}
 function openRawSqlitePool(options: SqliteDatabaseOptions): OpenOutcome<RawPool> {
   let filename: string;
   try {
@@ -73,7 +63,9 @@ function openRawSqlitePool(options: SqliteDatabaseOptions): OpenOutcome<RawPool>
       const params = statement.params.map((value) =>
         value instanceof Date ? value.toISOString() : value,
       ) as never[];
-      if (isRowReturning(statement.text)) return Promise.resolve(query.all(...params) as Row[]);
+      // SQLite describes result columns after preparing the actual statement;
+      // SQL prefixes and whitespace cannot reliably distinguish reads from writes.
+      if (query.columnNames.length > 0) return Promise.resolve(query.all(...params) as Row[]);
       query.run(...params);
       return Promise.resolve([]);
     } catch (error) {
