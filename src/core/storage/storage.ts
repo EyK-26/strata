@@ -30,7 +30,7 @@ function requireStreamingStorage(storage: Storage): StreamingStorage {
     typeof storage.writeStream !== "function"
   )
     throw new TypeError("Storage does not support streaming.");
-  if (storage instanceof StorageManager) return requireStreamingStorage(storage.streamingDriver());
+  if (storage instanceof StorageManager) storage.streamingDriver();
   return storage as StreamingStorage;
 }
 

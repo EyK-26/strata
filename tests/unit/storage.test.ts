@@ -195,6 +195,41 @@ describe("storage", () => {
     expect(cancelled).toBe(failure);
   });
 
+  test("streaming capability narrowing preserves manager identity and subclass overrides", async () => {
+    let writes = 0;
+    const driver = {
+      async get() {
+        return null;
+      },
+      async put(path: string) {
+        return path;
+      },
+      async delete() {},
+      async readStream() {
+        return null;
+      },
+      async writeStream(path: string) {
+        writes++;
+        return path;
+      },
+    };
+    class AuthorizedStorage extends StorageManager {
+      override async writeStream(
+        _path: string,
+        _contents: ReadableStream<Uint8Array> | Blob,
+      ): Promise<string> {
+        throw new Error("Access denied");
+      }
+    }
+    const manager = new AuthorizedStorage(driver);
+    const storage = requireStreamingStorage(manager);
+    expect(storage).toBe(manager);
+    await expect(storage.writeStream("private", new Blob(["secret"]))).rejects.toThrow(
+      "Access denied",
+    );
+    expect(writes).toBe(0);
+  });
+
   test("legacy drivers retain buffered compatibility without claiming streaming support", () => {
     const storage = new StorageManager({
       async get() {
