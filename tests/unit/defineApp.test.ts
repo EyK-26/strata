@@ -262,6 +262,8 @@ test("production entrypoint snapshots host policy and drains HTTP on its install
     APP_DEBUG: "false",
     AUTH_DEV_HEADERS: "false",
     TENANT_DEV_HEADERS: "false",
+    // CI enables SCIM for the shared fixture; this app has no SCIM integration or token.
+    FEATURE_SCIM: "false",
     CSRF_TARGET_ORIGIN: "https://app.example.test",
   });
   for (const key of [
