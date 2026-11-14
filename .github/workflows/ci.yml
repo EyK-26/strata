@@ -94,7 +94,7 @@ jobs:
           node-version: "24"
           package-manager-cache: false
 
-      - name: Verify workspace publication dry-run with the release toolchain
+      - name: Verify workspace package dry-run with the release toolchain
         run: |
           npm install -g "npm@$(cat .npm-version)"
           bun run build:starter

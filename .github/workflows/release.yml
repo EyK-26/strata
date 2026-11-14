@@ -184,7 +184,7 @@ jobs:
           bun run --filter @getstrata/starter build
           bun run --filter create-strata build
 
-      - name: Verify workspace publication dry-run
+      - name: Verify workspace package dry-run
         run: bun scripts/release-publication.ts dry-run
 
       - name: Publish workspaces to npm
