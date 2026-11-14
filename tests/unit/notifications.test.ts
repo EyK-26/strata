@@ -352,3 +352,78 @@ test("allows explicit replacement of built-in channels", async () => {
   await dispatcher.send(new TestUser(1, "one@example.test"), new WelcomeNotification());
   expect(calls).toEqual(["mail override", "database override"]);
 });
+
+test("built-in database delivery rejects malformed and unsafe user IDs before calling the store", async () => {
+  const stored: number[] = [];
+  const dispatcher = createNotificationDispatcher(
+    { async send() {} },
+    {
+      async create(input) {
+        stored.push(input.userId);
+        return { ...input };
+      },
+    },
+  );
+  class DatabaseOnlyNotification extends WelcomeNotification {
+    override via(): Array<"database"> {
+      return ["database"];
+    }
+  }
+  const notification = new DatabaseOnlyNotification();
+  for (const key of [
+    "a1b2-uuid",
+    "",
+    " ",
+    "1.5",
+    "1e3",
+    "0x10",
+    " 1",
+    "+1",
+    "-1",
+    "0",
+    "9007199254740993",
+    0,
+    -1,
+    1.5,
+    NaN,
+    Infinity,
+    Number.MAX_SAFE_INTEGER + 1,
+  ]) {
+    const recipient: Notifiable = {
+      getNotificationKey: () => key,
+      routeNotificationFor: () => null,
+    };
+    await expect(dispatcher.send(recipient, notification)).rejects.toThrow(
+      'Notification channel "database" requires a positive safe-integer user ID.',
+    );
+  }
+  expect(stored).toEqual([]);
+  for (const key of [1, "42", Number.MAX_SAFE_INTEGER, String(Number.MAX_SAFE_INTEGER)]) {
+    await dispatcher.send(
+      { getNotificationKey: () => key, routeNotificationFor: () => null },
+      notification,
+    );
+  }
+  expect(stored).toEqual([1, 42, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER]);
+});
+
+test("custom database handlers support application-specific identifiers", async () => {
+  const keys: Array<string | number> = [];
+  const dispatcher = createNotificationDispatcher({ async send() {} }, undefined, {
+    database: {
+      async send(recipient) {
+        keys.push(recipient.getNotificationKey());
+      },
+    },
+  });
+  class DatabaseOnlyNotification extends Notification {
+    override via() {
+      return ["database"];
+    }
+  }
+  await dispatcher.send(
+    { getNotificationKey: () => "uuid-account", routeNotificationFor: () => null },
+    new DatabaseOnlyNotification(),
+  );
+  expect(keys).toEqual(["uuid-account"]);
+});

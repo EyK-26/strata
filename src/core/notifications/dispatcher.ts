@@ -97,9 +97,17 @@ class NotificationDispatcher {
       return;
     }
 
+    const key = notifiable.getNotificationKey();
+    const userId = typeof key === "string" && /^[0-9]+$/.test(key) ? Number(key) : key;
+    if (typeof userId !== "number" || !Number.isSafeInteger(userId) || userId <= 0) {
+      throw new TypeError(
+        'Notification channel "database" requires a positive safe-integer user ID.',
+      );
+    }
+
     await this.databaseStore.create({
-      userId: Number(notifiable.getNotificationKey()),
       ...payload,
+      userId,
     });
   }
 }
