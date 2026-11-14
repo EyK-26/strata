@@ -738,7 +738,7 @@ describe("create-strata generate", () => {
     expect(existsSync(join(app, "src/bootstrap/ensureDatabase.ts"))).toBe(true);
     const ensure = await readFile(join(app, "src/bootstrap/ensureDatabase.ts"), "utf8");
     // The database name must come from DATABASE_URL, never a hardcoded rename.
-    expect(ensure).toContain("resolveAppDatabaseUrl");
+    expect(ensure).toContain("resolveDatabaseOptions(environment");
     expect(ensure).not.toContain("acme_test");
     expect(ensure).not.toMatch(/url\.pathname\s*=/);
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");

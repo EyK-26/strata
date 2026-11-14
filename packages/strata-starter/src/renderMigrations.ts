@@ -189,60 +189,20 @@ export default migration;
 `;
 }
 
-function renderMigrationRuntimeTs(plan: StarterFeaturePlan): string {
-  const layers = plan.layers;
-  const driver = plan.decisions.sqlDriver;
-  const imports =
-    layers.database === "postgres"
-      ? `import { grantPostgresAppRolePrivileges, openPostgresAdminConnection, postgresDatabaseNameFromUrl } from "@getstrata/core/tenant/enableTenantRls";`
-      : layers.database === "mysql"
-        ? `import { createMysqlConnection } from "@getstrata/core/database/mysqlConnection";`
-        : `import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
-import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";`;
-  const opening =
-    layers.database === "postgres"
-      ? `const connection = await openPostgresAdminConnection({runtimeUrl: options.url, migrationUrl: process.env.MIGRATION_DATABASE_URL});`
-      : layers.database === "mysql"
-        ? `const connection = createMysqlConnection(process.env.MIGRATION_DATABASE_URL?.trim() || options.url);`
-        : `if (options.filename !== ":memory:") mkdirSync(dirname(options.filename), { recursive: true });
-  const connection = createSqliteConnection(options.filename);`;
-  const grantOption =
-    layers.database === "postgres"
-      ? `,
-  controls: { grantRuntimePrivileges?: boolean } = {}`
-      : "";
-  const grants =
-    layers.database === "postgres"
-      ? `
-    if (controls.grantRuntimePrivileges !== false) await grantPostgresAppRolePrivileges(connection, {database: postgresDatabaseNameFromUrl(options.url)});`
-      : "";
+function renderMigrationRuntimeTs(_plan: StarterFeaturePlan): string {
   return `import { join } from "node:path";
 import { loadMigrationsFromDirectory } from "@getstrata/core/database/migrations";
 import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
-import { runWithSqlDialect } from "@getstrata/core/database/dialect";
-${imports}
+import { withMigrationDatabase as runMigrationDatabase } from "@getstrata/bootstrap/databaseCommands";
 import { databaseOptions } from "../bootstrap/database.ts";
 
-const MIGRATIONS_DIRECTORY = join(import.meta.dir, "migrations");
-
-export async function loadStarterMigrations() {
-  return loadMigrationsFromDirectory(MIGRATIONS_DIRECTORY);
+export function loadStarterMigrations() {
+  return loadMigrationsFromDirectory(join(import.meta.dir, "migrations"));
 }
 
-/** Schema commands own this connection; it never becomes the runtime pool. */
-export async function withMigrationDatabase<T>(
-  fn: (db: MigrationDatabase) => Promise<T>${grantOption},
-): Promise<T> {
-  const options = databaseOptions();
-  if (options.driver !== "${driver}") throw new Error("Unexpected migration database driver");
-  ${opening}
-  try {
-    const result = await runWithSqlDialect("${driver}", () => fn(connection));${grants}
-    return result;
-  } finally {
-    await connection.close?.();
-  }
+export function withMigrationDatabase<T>(operation: (db: MigrationDatabase) => Promise<T>, controls: { grantRuntimePrivileges?: boolean } = {}): Promise<T> {
+  const environment = Object.freeze({ ...process.env });
+  return runMigrationDatabase(databaseOptions(environment), operation, { ...controls, environment });
 }
 `;
 }

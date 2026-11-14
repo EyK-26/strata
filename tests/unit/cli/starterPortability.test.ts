@@ -119,10 +119,9 @@ describe("MySQL portability", () => {
     const app = generateFromArgs(root, ["myapp2", "--database=mysql", "--yes"]);
     const ensure = await readFile(join(app, "src/bootstrap/ensureDatabase.ts"), "utf8");
 
-    expect(ensure).toContain("CREATE DATABASE IF NOT EXISTS");
-    expect(ensure).toContain('from "mysql2/promise"');
-    expect(ensure).toContain("connection.end()");
-    expect(ensure).toContain("safeDatabaseName");
+    expect(ensure).toContain("ensureDatabase({ driver: connection.driver");
+    expect(ensure).toContain('from "@getstrata/bootstrap/databaseCommands"');
+    expect(ensure).not.toContain("CREATE DATABASE");
 
     const pkg = JSON.parse(await readFile(join(app, "package.json"), "utf8")) as {
       dependencies: Record<string, string>;
@@ -164,8 +163,8 @@ describe("MySQL portability", () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["myclose", "--database=mysql", "--yes"]);
     const runtime = await readFile(join(app, "src/db/migrationRuntime.ts"), "utf8");
-    expect(runtime).toContain("export async function withMigrationDatabase<T>");
-    expect(runtime).toMatch(/finally\s*\{\s*await connection\.close\?\.\(\)/);
+    expect(runtime).toContain("export function withMigrationDatabase<T>");
+    expect(runtime).toContain("runMigrationDatabase(databaseOptions(environment), operation");
     for (const file of ["migrate", "fresh"]) {
       const source = await readFile(join(app, `src/db/${file}.ts`), "utf8");
       expect(source).toContain("await withMigrationDatabase(async (db)");
@@ -192,7 +191,7 @@ describe("database name resolution", () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["ovr", "--database=postgres", "--yes"]);
     const ensure = await readFile(join(app, "src/bootstrap/ensureDatabase.ts"), "utf8");
-    expect(ensure).toContain("APP_DATABASE_URL");
+    expect(ensure).toContain("resolveDatabaseOptions(environment");
     expect(ensure).toContain("DATABASE_URL");
 
     // The override is discoverable from the app itself, not only from source.
