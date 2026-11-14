@@ -33,27 +33,15 @@ import {
   renderVerifyEmailView,
 } from "./renderAuth.ts";
 import {
-  renderConfigProvider,
   renderConfigTs,
   renderCreateAppTs,
   renderOutboxRegistryTs,
-  renderPolicyProvider,
-  renderPreloadTs,
-  renderProvidersIndex,
-  renderQueueProvider,
-  renderRoutesTs,
   renderScheduleTs,
-  renderViewProvider,
+  renderServerTs,
+  renderStrataConfigTs,
 } from "./renderBootstrap.ts";
-import {
-  renderCliOpenApiTs,
-  renderCliOutboxWorkTs,
-  renderCliQueueFailedTs,
-  renderCliQueueWorkTs,
-  renderCliRegisterTs,
-  renderCliScheduleRunTs,
-} from "./renderCli.ts";
-import { renderDatabaseTs, renderEnsureDatabaseTs, renderSidecarsTs } from "./renderDatabase.ts";
+import { renderCliRegisterTs } from "./renderCli.ts";
+import { renderDatabaseTs, renderEnsureDatabaseTs } from "./renderDatabase.ts";
 import { renderDockerCompose, renderDockerfile, renderDockerignore } from "./renderDocker.ts";
 import {
   renderApiDocs,
@@ -243,11 +231,10 @@ export const TENANCY_ENABLED = ${decisions.tenantTable};
     removeIfExists(join(targetDir, "docker/postgres-init"));
   }
 
-  writeText(join(src, "routes.ts"), renderRoutesTs());
-  writeText(join(src, "bootstrap/providers/view.ts"), renderViewProvider(plan));
-  writeText(join(src, "bootstrap/config.ts"), renderConfigTs());
-  writeText(join(src, "bootstrap/preload.ts"), renderPreloadTs(plan, projectName));
-  writeText(join(src, "bootstrap/database.ts"), renderDatabaseTs(plan));
+  writeText(join(src, "config/app.ts"), renderConfigTs(plan, projectName));
+  writeText(join(src, "bootstrap/server.ts"), renderServerTs());
+  writeText(join(targetDir, "strata.config.ts"), renderStrataConfigTs());
+  writeText(join(src, "bootstrap/database.ts"), renderDatabaseTs(plan, projectName));
   const ensureDatabase = renderEnsureDatabaseTs(plan, projectName);
   if (ensureDatabase) {
     writeText(join(src, "bootstrap/ensureDatabase.ts"), ensureDatabase);
@@ -266,17 +253,8 @@ export const TENANCY_ENABLED = ${decisions.tenantTable};
     removeIfExists(join(src, "cli/initialAdmin.ts"));
     removeIfExists(join(src, "db/migrations/0004_initial_admin_provisioning.ts"));
   }
-  writeText(join(src, "cli/queueWork.ts"), renderCliQueueWorkTs());
-  writeText(join(src, "cli/outboxWork.ts"), renderCliOutboxWorkTs());
   writeText(join(src, "outbox/registry.ts"), renderOutboxRegistryTs(plan));
-  writeText(join(src, "cli/queueFailed.ts"), renderCliQueueFailedTs());
-  writeText(join(src, "cli/openapi.ts"), renderCliOpenApiTs());
-  writeText(join(src, "cli/scheduleRun.ts"), renderCliScheduleRunTs());
-  writeText(join(src, "bootstrap/providers/config.ts"), renderConfigProvider(plan));
-  writeText(join(src, "bootstrap/providers/queue.ts"), renderQueueProvider());
-  writeText(join(src, "bootstrap/providers/policy.ts"), renderPolicyProvider());
-  writeText(join(src, "bootstrap/providers/index.ts"), renderProvidersIndex());
-  writeText(join(src, "bootstrap/providers/auth.ts"), renderAuthProvider(plan));
+  writeText(join(src, "bootstrap/auth.ts"), renderAuthProvider(plan));
   writeText(join(src, "models/Note.ts"), renderNoteModel(plan));
   if (decisions.users) {
     writeText(join(src, "models/User.ts"), renderUserModel(plan));
@@ -317,16 +295,11 @@ export const TENANCY_ENABLED = ${decisions.tenantTable};
   writeText(join(src, "db/seed.ts"), renderSeedTs());
   writeText(join(src, "db/status.ts"), renderStatusTs(plan));
   writeText(join(src, "db/rollback.ts"), renderRollbackTs(plan));
-  writeText(join(src, "modules/site/index.ts"), renderSiteModule(plan));
+  if (decisions.serverViews) writeText(join(src, "modules/site/index.ts"), renderSiteModule(plan));
 
   const directory = renderAuthDirectory(plan);
   if (directory) {
     writeText(join(src, "bootstrap/authDirectory.ts"), directory);
-  }
-
-  const sidecars = renderSidecarsTs(plan);
-  if (sidecars) {
-    writeText(join(src, "bootstrap/sidecars.ts"), sidecars);
   }
 
   const authModule = renderAuthModule(plan);
@@ -369,24 +342,27 @@ export const TENANCY_ENABLED = ${decisions.tenantTable};
     removeIfExists(join(src, "bootstrap/pendingMfa.ts"));
   }
 
-  writeText(join(targetDir, "public/assets/site.css"), renderSiteCss());
-  // HTMX 2.0.4 from unpkg. See templates/public/assets/htmx.min.js.version.
-  const htmxSource = join(
-    options.templateRoot ?? starterPackageRoot(),
-    "public/assets/htmx.min.js",
-  );
-  const htmxFallback = join(starterPackageRoot(), "templates/public/assets/htmx.min.js");
-  const htmxPath = existsSync(htmxSource) ? htmxSource : htmxFallback;
-  if (existsSync(htmxPath)) {
-    mkdirSync(join(targetDir, "public/assets"), { recursive: true });
-    copyFileSync(htmxPath, join(targetDir, "public/assets/htmx.min.js"));
-    const versionSidecar = `${htmxPath}.version`;
-    if (existsSync(versionSidecar)) {
-      copyFileSync(versionSidecar, join(targetDir, "public/assets/htmx.min.js.version"));
+  if (decisions.serverViews || decisions.mfaViews) {
+    writeText(join(targetDir, "public/assets/site.css"), renderSiteCss());
+    // HTMX 2.0.4 from unpkg. See templates/public/assets/htmx.min.js.version.
+    const htmxSource = join(
+      options.templateRoot ?? starterPackageRoot(),
+      "public/assets/htmx.min.js",
+    );
+    const htmxFallback = join(starterPackageRoot(), "templates/public/assets/htmx.min.js");
+    const htmxPath = existsSync(htmxSource) ? htmxSource : htmxFallback;
+    if (existsSync(htmxPath)) {
+      mkdirSync(join(targetDir, "public/assets"), { recursive: true });
+      copyFileSync(htmxPath, join(targetDir, "public/assets/htmx.min.js"));
+      const versionSidecar = `${htmxPath}.version`;
+      if (existsSync(versionSidecar)) {
+        copyFileSync(versionSidecar, join(targetDir, "public/assets/htmx.min.js.version"));
+      }
     }
+    if (decisions.serverViews)
+      writeText(join(targetDir, "views/home.eta"), renderHomeView(projectName, plan));
+    writeText(join(targetDir, "views/layouts/app.eta"), renderLayout(plan, projectName));
   }
-  writeText(join(targetDir, "views/home.eta"), renderHomeView(projectName, plan));
-  writeText(join(targetDir, "views/layouts/app.eta"), renderLayout(plan, projectName));
   if (decisions.htmlAuth) {
     writeText(join(targetDir, "views/auth/login.eta"), renderLoginView(plan));
     writeText(join(targetDir, "views/auth/register.eta"), renderRegisterView());
@@ -477,7 +453,12 @@ function generateProject(options: GenerateOptions): StarterFeaturePlan {
   }
   const owned = lstatSync(options.targetDir);
   try {
-    copyTree(options.templateRoot, options.targetDir, options.projectName, new Set(["overlays"]));
+    copyTree(
+      options.templateRoot,
+      options.targetDir,
+      options.projectName,
+      new Set(["overlays", "public", "views"]),
+    );
     applyFrontendOverlays(options.overlayRoot, options.targetDir, plan);
     writeGeneratedFiles({ ...options, layers: plan.layers }, plan);
     for (const artifact of plan.artifacts) {
@@ -491,12 +472,12 @@ function generateProject(options: GenerateOptions): StarterFeaturePlan {
         return entry.isDirectory() ? inventory(join(directory, entry.name), path) : [path];
       });
     writeText(
-      join(options.targetDir, "strata.features.json"),
+      join(options.targetDir, ".strata/generator.json"),
       JSON.stringify(
         {
           ...plan,
           emittedArtifacts: [
-            ...new Set([...inventory(options.targetDir), "strata.features.json"]),
+            ...new Set([...inventory(options.targetDir), ".strata/generator.json"]),
           ].sort(),
         },
         null,

@@ -10,7 +10,9 @@ export function renderAuthImports({
   AuthRenderingContext,
   "plan" | "cookie" | "github" | "oidc" | "mfa" | "verify" | "bearerApi" | "jsonCookieAccounts"
 >) {
-  const imports: string[] = [];
+  const imports: string[] = [
+    `import { prepareAccountMail, registerAccount, completeAccountToken, authenticatePasswordAccount, withLoginAccount, parseLoginCredentials, parseRegisterCredentials, parseForgotPasswordEmail } from "@getstrata/bootstrap/auth/accountWorkflows";`,
+  ];
 
   if (plan.decisions.token || cookie) {
     imports.push(`import { randomBytes } from "node:crypto";`);
@@ -20,7 +22,7 @@ export function renderAuthImports({
   );
   imports.push(`import type { SelectedSession } from "@getstrata/core/contracts/persistence";`);
   imports.push(
-    `import { STARTER_AUTH_SERVICES, type StarterAuthServices } from "../../bootstrap/providers/auth.ts";`,
+    `import { STARTER_AUTH_SERVICES, type StarterAuthServices } from "../../bootstrap/auth.ts";`,
   );
   imports.push(`import type { AppModule } from "@getstrata/bootstrap/contracts";`);
   if (cookie) {
@@ -45,7 +47,7 @@ export function renderAuthImports({
     `import { AUTH_ONE_TIME_PURPOSES, consumeOneTimeToken, generateOneTimeToken, hashOneTimeToken, revokeUserSessions as revokeStoredUserSessions } from "@getstrata/core/auth/oneTimeToken";`,
   );
   imports.push(
-    `import { completePasswordLogin, persistConsumedRecoveryHash, type PasswordLoginResult } from "@getstrata/core/auth/passwordLogin";`,
+    `import { completePasswordLogin, persistConsumedRecoveryHash } from "@getstrata/core/auth/passwordLogin";`,
   );
   if (mfa) {
     imports.push(
@@ -53,7 +55,7 @@ export function renderAuthImports({
     );
   }
   imports.push(
-    `import { emailRule, minLength, required, stringRule, validateObject } from "@getstrata/core/validation/rules";`,
+    `import { required, stringRule, validateObject } from "@getstrata/core/validation/rules";`,
   );
   imports.push(`import { parseJsonBody } from "@getstrata/core/http/validation";`);
   if (plan.decisions.token) {

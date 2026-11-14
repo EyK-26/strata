@@ -3,10 +3,10 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   createMemoryLoginThrottleMiddleware,
-  resetMemoryLoginThrottleForTests,
   resolveLoginEmail,
 } from "@getstrata/core/http/loginThrottleMiddleware";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
+import { resetMemoryLoginThrottleForTests } from "@getstrata/core/testing";
 
 import { createGeneratedSourceApps } from "../helpers/generatedSourceApps";
 

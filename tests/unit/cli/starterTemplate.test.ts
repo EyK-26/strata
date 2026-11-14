@@ -2,12 +2,15 @@ import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { compileStarterFeatures } from "../../../packages/strata-starter/src/featurePlan.ts";
+import { renderPackageJson } from "../../../packages/strata-starter/src/renderProjectMetadata";
+import { createConfigProvider } from "../../../src/bootstrap/application/services";
+import { CSRF_TARGET_ORIGIN_CONFIG_KEY } from "../../../src/bootstrap/config";
+import { ConfigStore, ServiceContainer } from "../../../src/core/contracts/container";
+import type { ServiceProvider } from "../../../src/core/contracts/di";
 
 describe("starter template CLI", () => {
   test("depends on @getstrata/cli and uses strata scripts", async () => {
-    const packageJson = JSON.parse(
-      await readFile(join(process.cwd(), "packages/strata-starter/templates/package.json"), "utf8"),
-    ) as {
+    const packageJson = JSON.parse(renderPackageJson("template-contract")) as {
       scripts: Record<string, string>;
       dependencies: Record<string, string>;
     };
@@ -57,9 +60,6 @@ test("generated CORS examples remain explicit opt-ins and preserve safe defaults
 
 test("generated CSRF target example is opt-in and config providers wire its explicit value", async () => {
   const { renderEnvExample } = await import("../../../packages/strata-starter/src/renderEnv.ts");
-  const { renderConfigProvider } = await import(
-    "../../../packages/strata-starter/src/renderBootstrap.ts"
-  );
   const { layersFromFlags, parseCreateStrataArgs } = await import(
     "../../../packages/strata-starter/src/parseArgs.ts"
   );
@@ -67,58 +67,38 @@ test("generated CSRF target example is opt-in and config providers wire its expl
   const env = renderEnvExample("csrf-app", compileStarterFeatures(layers));
   expect(env).toContain("# CSRF_TARGET_ORIGIN=https://app.example.com");
   expect(env.split("\n").some((line) => line.startsWith("CSRF_TARGET_ORIGIN="))).toBe(false);
-  expect(renderConfigProvider(compileStarterFeatures(layers))).toContain(
-    "config.set(CSRF_TARGET_ORIGIN_CONFIG_KEY, env.CSRF_TARGET_ORIGIN)",
+  const values = await registerConfig(
+    createConfigProvider(appConfig, { CSRF_TARGET_ORIGIN: "https://app.example.com" }),
   );
+  expect(values.get(CSRF_TARGET_ORIGIN_CONFIG_KEY)).toBe("https://app.example.com");
+  const unset = await registerConfig(createConfigProvider(appConfig, {}));
+  expect(unset.has(CSRF_TARGET_ORIGIN_CONFIG_KEY)).toBe(false);
 });
 
-test("generated config providers capture each owner's debug setting before registration", async () => {
-  const { renderConfigProvider } = await import(
-    "../../../packages/strata-starter/src/renderBootstrap.ts"
-  );
-  const { layersFromFlags, parseCreateStrataArgs } = await import(
-    "../../../packages/strata-starter/src/parseArgs.ts"
-  );
-  const layers = layersFromFlags(parseCreateStrataArgs(["debug-owner"]));
-  const rendered = renderConfigProvider(compileStarterFeatures(layers));
-  const executable = new Bun.Transpiler({ loader: "ts" })
-    .transformSync(rendered.replace(/^import[\s\S]*?;\n/gm, ""))
-    .replace("export function", "function");
-  const create = new Function(
-    "CORE_CONFIG_TOKEN",
-    "CORE_PUBLIC_TENANCY_TOKEN",
-    "CSRF_TARGET_ORIGIN_CONFIG_KEY",
-    "DATABASE_URL_CONFIG_KEY",
-    "APP_PORT_CONFIG_KEY",
-    "REDIS_URL_CONFIG_KEY",
-    "isProductionEnv",
-    "normalizeTenantHostname",
-    `${executable}; return createConfigProvider;`,
-  )(
-    "config",
-    "tenant",
-    "csrf",
-    "db",
-    "port",
-    "redis",
-    () => false,
-    (value: string) => value,
-  );
-  const firstEnv = { APP_DEBUG: "true" };
-  const secondEnv = { APP_DEBUG: "false" };
-  const appConfig = { appUrl: "https://owner.test", databaseUrl: "sqlite::memory:", port: 3000 };
-  const first = create(appConfig, firstEnv);
-  const second = create(appConfig, secondEnv);
+const appConfig = { appUrl: "https://owner.test", databaseUrl: "sqlite::memory:", port: 3000 };
+async function registerConfig(provider: ServiceProvider): Promise<ConfigStore> {
+  const config = new ConfigStore(),
+    container = new ServiceContainer();
+  const invoke = async () => {
+    throw new Error("Config registration must not invoke persistence.");
+  };
+  await provider.register?.({
+    config,
+    container,
+    invoke,
+    dependencies: { container, invoke },
+    onCleanup: () => {},
+  });
+  return config;
+}
+
+test("config providers capture each owner's debug setting before registration", async () => {
+  const firstEnv = { APP_DEBUG: "true" },
+    secondEnv = { APP_DEBUG: "false" };
+  const first = createConfigProvider(appConfig, firstEnv),
+    second = createConfigProvider(appConfig, secondEnv);
   firstEnv.APP_DEBUG = "false";
   secondEnv.APP_DEBUG = "true";
-  const register = (provider: typeof first) => {
-    const values = new Map<string, unknown>();
-    provider.register({
-      container: { set: () => {} },
-      config: { set: (key: string, value: unknown) => values.set(key, value) },
-    });
-    return values;
-  };
-  expect(register(first).get("app.debug")).toBe(true);
-  expect(register(second).get("app.debug")).toBe(false);
+  expect((await registerConfig(first)).get("app.debug")).toBe(true);
+  expect((await registerConfig(second)).get("app.debug")).toBe(false);
 });

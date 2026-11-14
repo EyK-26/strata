@@ -1,6 +1,5 @@
 import { renderMfaChallengeRoutes } from "./renderBrowserRoutes.ts";
 import type { AuthRenderingContext } from "./renderingContext.ts";
-import { portAuthRouteSource } from "./routePersistence.ts";
 
 export function renderApiAuthRoutes({
   plan,
@@ -34,7 +33,7 @@ ${renderMfaChallengeRoutes()}
   const tokenLogin = plan.decisions.token
     ? `
         "/api/v1/auth/login": {
-          POST: kernel.wrap("api", kernel.wrapLogin(async (request, _ports) => {
+          POST: kernel.wrap("api", kernel.wrapLogin(kernel.wrapIdentity(async (request, _ports) => {
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
             return runWithLoginUser(_ports, email, async (candidate, _ports) => {
             const mfaResult = await authenticatePasswordUser(_ports, authServices, candidate, password, mfa_code);
@@ -71,10 +70,10 @@ ${renderMfaChallengeRoutes()}
                 : ""
             }return payload;
             });
-          })),
+          }))),
         },
         "/api/v1/auth/me": {
-          GET: kernel.wrapApi(async (request, _ports) => {
+          GET: kernel.wrapApi(kernel.wrapIdentity(async (request, _ports) => {
             const user = await _ports.auth.requireUser(request);
             const record = await authServices.directory(_ports).findByIdOrThrow(Number(user.id));
             return privateJsonResponse({
@@ -83,14 +82,14 @@ ${renderMfaChallengeRoutes()}
               email: record.email,
               role: record.role,
             });
-          }),
+          })),
         },`
     : "";
 
   const jsonRegister = jsonAccounts
     ? `
         "/api/v1/auth/register": {
-          POST: kernel.wrap("api", kernel.wrapRegister(async (request, _ports) => {
+          POST: kernel.wrap("api", kernel.wrapRegister(kernel.wrapIdentity(async (request, _ports) => {
             if (!authServices.config.registrationEnabled) {
               return privateJsonResponse({ error: "Not found" }, { status: 404 });
             }
@@ -104,14 +103,14 @@ ${renderMfaChallengeRoutes()}
             ${verify ? "const verificationMail = " : ""}await createRegistration(_ports, authServices, { name, email, password: hashed }${verify ? ', "/api/v1/auth/verify-email"' : ""});
             ${verify ? "// SMTP follows the outermost commit, including request RLS.\n            if (verificationMail) await deferAuthEffect(_ports, () => authServices.mail.send(verificationMail));" : ""}
             return privateJsonResponse({ ok: true }, { status: 201 });
-          })),
+          }))),
         },`
     : "";
 
   const jwtLogin = plan.decisions.jwt
     ? `
         "/api/auth/token": {
-          POST: kernel.wrap("api", kernel.wrapLogin(async (request, _ports) => {
+          POST: kernel.wrap("api", kernel.wrapLogin(kernel.wrapIdentity(async (request, _ports) => {
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
             return runWithLoginUser(_ports, email, async (candidate, _ports) => {
             const mfaResult = await authenticatePasswordUser(_ports, authServices, candidate, password, mfa_code);
@@ -137,7 +136,7 @@ ${renderMfaChallengeRoutes()}
               expires_in: authServices.config.jwtTtlSeconds,
             });
             });
-          })),
+          }))),
         },`
     : "";
 
@@ -150,7 +149,7 @@ ${renderMfaChallengeRoutes()}
           }),
         },
         "/api/v1/auth/logout": {
-          POST: kernel.wrap("api", async (request, _ports) => {
+          POST: kernel.wrap("api", ${cookie ? "kernel.wrapIdentity(" : ""}async (request, _ports) => {
             const payload = privateJsonResponse({ ok: true });
             ${
               cookie
@@ -160,43 +159,43 @@ ${renderMfaChallengeRoutes()}
             `
                 : ""
             }return payload;
-          }),
+          }${cookie ? ")" : ""}),
         },`
     : "";
 
   const jsonPassword = jsonAccounts
     ? `
         "/api/v1/auth/forgot-password": {
-          POST: kernel.wrap("api", async (request, _ports) => {
+          POST: kernel.wrap("api", kernel.wrapIdentity(async (request, _ports) => {
             const email = await parseJsonBody(request, parseForgotPasswordEmail);
             const user = await authServices.directory(_ports).findByEmail?.(email);
             if (user) {
               await issueSignedAuthMail(_ports, authServices, email, "Reset your password", "/api/v1/auth/reset-password", AUTH_ONE_TIME_PURPOSES.passwordReset, user.id, { email });
             }
             return privateJsonResponse({ ok: true });
-          }),
+          })),
         },
         "/api/v1/auth/reset-password": {
-          POST: kernel.wrap("api", kernel.wrapSigned(async (request, _ports) => {
+          POST: kernel.wrap("api", kernel.wrapSigned(kernel.wrapIdentity(async (request, _ports) => {
             const body = await parseJsonBody(request, (payload) => payload);
             const password = typeof body === "object" && body !== null && "password" in body ? body.password : undefined;
             if (!(await completeSignedPasswordReset(_ports, request, password))) {
               return privateJsonResponse({ error: "Invalid or expired reset link." }, { status: 403 });
             }
             return privateJsonResponse({ ok: true });
-          })),
+          }))),
         },`
     : "";
 
   const jsonVerify = plan.decisions.jsonVerification
     ? `
         "/api/v1/auth/verify-email": {
-          POST: kernel.wrap("api", kernel.wrapSigned(async (request, _ports) => {
+          POST: kernel.wrap("api", kernel.wrapSigned(kernel.wrapIdentity(async (request, _ports) => {
             if (!(await completeSignedEmailVerification(_ports, request))) {
               return privateJsonResponse({ error: "Invalid or expired verification link." }, { status: 403 });
             }
             return privateJsonResponse({ ok: true });
-          })),
+          }))),
         },`
     : "";
 
@@ -205,21 +204,21 @@ ${renderMfaChallengeRoutes()}
         ${
           verify
             ? `"/api/v1/auth/verification-notification": {
-          POST: kernel.wrapApi(async (request, _ports) => {
+          POST: kernel.wrapApi(kernel.wrapIdentity(async (request, _ports) => {
             const user = await _ports.auth.requireUser(request);
             await runWithLockedAccount(_ports, Number(user.id), async (record, _ports) => {
               if (!record?.is_active || record.auth_version !== user.authVersion) throw new ConflictError("Account changed. Sign in again.");
               if (!record.email_verified_at) await issueSignedAuthMail(_ports, authServices, record.email ?? "", "Verify your email", "/api/v1/auth/verify-email", AUTH_ONE_TIME_PURPOSES.emailVerify, record.id, { id: String(record.id) });
             });
             return privateJsonResponse({ ok: true });
-          }),
+          })),
         },`
             : ""
         }
         ${
           mfa
             ? `"/api/v1/auth/confirm-password": {
-          POST: kernel.wrap("api", kernel.wrapVerified(async (request, _ports) => {
+          POST: kernel.wrap("api", kernel.wrapVerified(kernel.wrapIdentity(async (request, _ports) => {
             const user = await _ports.auth.requireUser(request);
             const { password } = await parseJsonBody(request, (payload) => validateObject(payload, { password: [required(), stringRule()] }));
             return runWithLockedAccount(_ports, Number(user.id), async (record, _ports) => {
@@ -229,23 +228,23 @@ ${renderMfaChallengeRoutes()}
               response.headers.append("set-cookie", createPasswordConfirmCookie(Number(user.id), record.auth_version, authServices.config.passwordConfirmation));
               return response;
             });
-          })),
+          }))),
         },
         "/api/v1/auth/mfa": {
-          GET: kernel.wrap("api", kernel.wrapVerified(async (request, _ports) => {
+          GET: kernel.wrap("api", kernel.wrapVerified(kernel.wrapIdentity(async (request, _ports) => {
             const user = await _ports.auth.requireUser(request);
             const record = await authServices.directory(_ports).findByIdOrThrow(Number(user.id));
             const secret = generateTotpSecret();
             return privateJsonResponse({ secret, otpauth: buildOtpauthUrl({ secret, account: record.email ?? "user", issuer: authServices.config.appName }) });
-          })),
-          POST: kernel.wrap("api", kernel.wrapVerified(kernel.wrapPasswordConfirm(async (request, _ports) => {
+          }))),
+          POST: kernel.wrap("api", kernel.wrapVerified(kernel.wrapPasswordConfirm(kernel.wrapIdentity(async (request, _ports) => {
             const user = await _ports.auth.requireUser(request);
             const fields = await parseJsonBody(request, (payload) => validateObject(payload, { secret: [required(), stringRule()], code: [required(), stringRule()] }));
             const secret = String(fields.secret).trim();
             if (!verifyTotp(secret, String(fields.code).trim())) return privateJsonResponse({ error: "Could not confirm that code." }, { status: 422 });
             const recoveryCodes = await enrollMfa(_ports, authServices, user, secret);
             return privateJsonResponse({ recoveryCodes });
-          }))),
+          })))),
         },`
             : ""
         }`
@@ -261,7 +260,7 @@ ${renderMfaChallengeRoutes()}
   const cookieJsonAuth = plan.decisions.cookieJsonLogin
     ? `
         "/api/v1/auth/login": {
-          POST: kernel.wrap("api", kernel.wrapLogin(async (request, _ports) => {
+          POST: kernel.wrap("api", kernel.wrapLogin(kernel.wrapIdentity(async (request, _ports) => {
             const { email, password, mfa_code } = await parseJsonBody(request, parseLoginCredentials);
             return runWithLoginUser(_ports, email, async (candidate, _ports) => {
             const mfaResult = await authenticatePasswordUser(_ports, authServices, candidate, password, mfa_code);
@@ -278,10 +277,10 @@ ${renderMfaChallengeRoutes()}
             payload.headers.append("set-cookie", setCookie);
             return payload;
             });
-          })),
+          }))),
         },
         "/api/v1/auth/me": {
-          GET: kernel.wrapApi(async (request, _ports) => {
+          GET: kernel.wrapApi(kernel.wrapIdentity(async (request, _ports) => {
             const user = await _ports.auth.requireUser(request);
             const record = await authServices.directory(_ports).findByIdOrThrow(Number(user.id));
             return privateJsonResponse({
@@ -290,16 +289,16 @@ ${renderMfaChallengeRoutes()}
               email: record.email,
               role: record.role,
             });
-          }),
+          })),
         },
         "/api/v1/auth/logout": {
-          POST: kernel.wrap("api", async (request, _ports) => {
+          POST: kernel.wrap("api", kernel.wrapIdentity(async (request, _ports) => {
             const sessionAuth = authServices.session(_ports);
             const { setCookie } = await sessionAuth.signOut(request);
             const payload = privateJsonResponse({ ok: true });
             payload.headers.append("set-cookie", setCookie);
             return payload;
-          }),
+          })),
         },`
     : "";
 
@@ -316,7 +315,7 @@ ${renderMfaChallengeRoutes()}
           }),
         },
         "/auth/saml/acs": {
-          POST: kernel.wrap("api", async (request, _ports) => {
+          POST: kernel.wrap("api", kernel.wrapIdentity(async (request, _ports) => {
             if (!authServices.config.samlEnabled) {
               return new Response("Not found", { status: 404 });
             }
@@ -333,7 +332,7 @@ ${renderMfaChallengeRoutes()}
               return privateJsonResponse({ error: "Invalid SAML response." }, { status: 400 });
             }
             return completeBrowserSsoLogin(_ports, authServices, profile, "SAML");
-          }),
+          })),
         },`
     : "";
 
@@ -356,7 +355,7 @@ ${renderMfaChallengeRoutes()}
           }),
         },
         "/auth/github/callback": {
-          GET: kernel.wrap("api", async (request, _ports) => {
+          GET: kernel.wrap("api", kernel.wrapIdentity(async (request, _ports) => {
             if (!authServices.config.oauthEnabled) {
               return new Response("Not found", { status: 404 });
             }
@@ -379,7 +378,7 @@ ${renderMfaChallengeRoutes()}
               return privateJsonResponse({ error: "Invalid GitHub OAuth response." }, { status: 400 });
             }
             return completeBrowserSsoLogin(_ports, authServices, profile, "GitHub");
-          }),
+          })),
         },`
     : "";
 
@@ -409,7 +408,7 @@ ${renderMfaChallengeRoutes()}
           }),
         },
         "/auth/oidc/callback": {
-          GET: kernel.wrap("api", async (request, _ports) => {
+          GET: kernel.wrap("api", kernel.wrapIdentity(async (request, _ports) => {
             if (!authServices.config.oauthEnabled) {
               return new Response("Not found", { status: 404 });
             }
@@ -440,7 +439,7 @@ ${renderMfaChallengeRoutes()}
             const login = await completeBrowserSsoLogin(_ports, authServices, profile, "OIDC");
             login.headers.append("set-cookie", clearOidcPkceCookie(authServices.config.oauth));
             return login;
-          }),
+          })),
         },`
     : "";
 
@@ -458,5 +457,5 @@ ${renderMfaChallengeRoutes()}
       };
     },`
     : "";
-  return portAuthRouteSource(apiRoutes);
+  return apiRoutes;
 }

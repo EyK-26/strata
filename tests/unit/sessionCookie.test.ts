@@ -439,8 +439,8 @@ describe("sessionCookie", () => {
 
     process.env.SESSION_TTL_SECONDS = "0";
     process.env.SESSION_REMEMBER_TTL_SECONDS = "nope";
-    expect(sessionTtlSeconds(process.env)).toBe(SESSION_TTL_SECONDS);
-    expect(sessionRememberTtlSeconds(process.env)).toBe(SESSION_REMEMBER_TTL_SECONDS);
+    expect(() => sessionTtlSeconds(process.env)).toThrow();
+    expect(() => sessionRememberTtlSeconds(process.env)).toThrow();
   });
 
   test("isSessionInvalidated compares issuedAt against session_valid_after", () => {

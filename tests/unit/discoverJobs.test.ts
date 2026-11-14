@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { resetDiscoverJobsForTests } from "@getstrata/bootstrap/testing";
 import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
 
 const jobRegistry = new JobRegistry();
@@ -22,7 +23,6 @@ async function writeJob(directory: string, fileName: string, source: string): Pr
 describe("discoverJobs", () => {
   afterEach(async () => {
     process.chdir(repoRoot);
-    const { resetDiscoverJobsForTests } = await import("../../src/bootstrap/discoverJobs");
     resetDiscoverJobsForTests(jobRegistry);
     while (tempDirectories.length > 0) {
       const directory = tempDirectories.pop();
@@ -33,9 +33,7 @@ describe("discoverJobs", () => {
   });
 
   test("returns no names when src/jobs is absent", async () => {
-    const { discoverJobs, resetDiscoverJobsForTests } = await import(
-      "../../src/bootstrap/discoverJobs"
-    );
+    const { discoverJobs } = await import("../../src/bootstrap/discoverJobs");
     resetDiscoverJobsForTests(jobRegistry);
 
     expect(await discoverJobs(jobRegistry)).toEqual([]);
@@ -46,9 +44,7 @@ describe("discoverJobs", () => {
     await mkdir(join(root, "src", "jobs"), { recursive: true });
 
     process.chdir(root);
-    const { discoverJobs, resetDiscoverJobsForTests } = await import(
-      "../../src/bootstrap/discoverJobs"
-    );
+    const { discoverJobs } = await import("../../src/bootstrap/discoverJobs");
     resetDiscoverJobsForTests(jobRegistry);
 
     expect(await discoverJobs(jobRegistry)).toEqual([]);
@@ -69,9 +65,7 @@ describe("discoverJobs", () => {
     );
 
     process.chdir(root);
-    const { discoverJobs, resetDiscoverJobsForTests } = await import(
-      "../../src/bootstrap/discoverJobs"
-    );
+    const { discoverJobs } = await import("../../src/bootstrap/discoverJobs");
     resetDiscoverJobsForTests(jobRegistry);
 
     expect(await discoverJobs(jobRegistry)).toEqual(["echo"]);
@@ -109,9 +103,7 @@ describe("discoverJobs", () => {
     );
 
     process.chdir(root);
-    const { discoverJobs, resetDiscoverJobsForTests } = await import(
-      "../../src/bootstrap/discoverJobs"
-    );
+    const { discoverJobs } = await import("../../src/bootstrap/discoverJobs");
     resetDiscoverJobsForTests(jobRegistry);
 
     expect(await discoverJobs(jobRegistry)).toEqual(["echo"]);
@@ -138,9 +130,7 @@ describe("discoverJobs", () => {
     await writeFile(join(root, "src", "jobs"), "not a directory\n");
 
     process.chdir(root);
-    const { discoverJobs, resetDiscoverJobsForTests } = await import(
-      "../../src/bootstrap/discoverJobs"
-    );
+    const { discoverJobs } = await import("../../src/bootstrap/discoverJobs");
     resetDiscoverJobsForTests(jobRegistry);
 
     await expect(discoverJobs(jobRegistry)).rejects.toThrow();

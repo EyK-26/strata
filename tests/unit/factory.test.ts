@@ -584,3 +584,23 @@ test("a failed user-state fork leaves the source core cursor unchanged", () => {
   expect(observed).toBe(original);
   expect(source.make()).toEqual({ serial: 1, sequence: 1 });
 });
+
+test("createFactory keeps selected persistence explicit and isolated", async () => {
+  const { createFactory } = await import("@getstrata/core/database/factory");
+  const calls: string[] = [];
+  const selected = (owner: string) =>
+    createFactory({
+      definition: () => ({ id: 0, name: "Widget" }),
+      persist: async (values) => {
+        calls.push(owner);
+        return { id: 1, name: values.name ?? "Widget" };
+      },
+    });
+  expect(selected("first").make()).toEqual({ id: 0, name: "Widget" });
+  await selected("first").create();
+  await selected("second").create();
+  expect(calls).toEqual(["first", "second"]);
+  await expect(createFactory({ definition: () => ({ id: 0 }) }).create()).rejects.toThrow(
+    "persist",
+  );
+});

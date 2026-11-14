@@ -64,7 +64,7 @@ test("canonical module inventory retains the three existing profiles", () => {
   expect(baselines.map(({ profile }) => profile)).toEqual(historical.map(({ profile }) => profile));
 });
 
-test("emitted module provider typechecks and registers its genuine typed policy", async () => {
+test("emitted module declaration typechecks and carries its genuine typed policy", async () => {
   const directory = await mkdtemp(join(tmpdir(), "strata-module-provider-"));
   const repository = join(import.meta.dir, "../../..");
   try {
@@ -72,28 +72,19 @@ test("emitted module provider typechecks and registers its genuine typed policy"
       moduleSlug: "invoice",
       moduleName: "Invoice",
       moduleIdentifier: "invoice",
-      withWeb: false,
+      withWeb: true,
     });
-    for (const name of ["provider.ts", "policy.ts", "types.ts"]) {
-      const source = rendered.files.get(name);
-      if (!source) throw new Error(`Missing generated ${name}`);
+    for (const [name, source] of [...rendered.files, ...rendered.webFiles]) {
       await writeFile(join(directory, name), source);
     }
-    const consumer = `import provider, { invoicePolicyToken } from "./provider";
+    const consumer = `import module from "./index";
 import InvoicePolicy from "./policy";
-import { ConfigStore, ServiceContainer } from "@getstrata/core/contracts/container";
-import { CORE_POLICY_GATE_TOKEN } from "@getstrata/core/contracts/serviceTokens";
 import { PolicyGate } from "@getstrata/core/auth/policy";
-import type { ProviderContext } from "@getstrata/core/contracts/di";
-const container = new ServiceContainer();
 const gate = new PolicyGate();
-container.set(CORE_POLICY_GATE_TOKEN, gate);
-const context: ProviderContext = { container, config: new ConfigStore(), dependencies: { container }, invoke: async () => { throw new Error("No persistence in provider fixture."); }, onCleanup() {} };
-await provider.register?.(context);
-const policy: InvoicePolicy = container.resolve(invoicePolicyToken);
-if (!(policy instanceof InvoicePolicy)) throw new Error("Generated provider lost genuine policy construction.");
-await provider.boot?.(context);
-if (!(await gate.allows("invoice", "create", { id: 1, role: "member" }))) throw new Error("Generated provider did not register typed policy.");
+const policy = module.policies?.invoice;
+if (!(policy instanceof InvoicePolicy)) throw new Error("Generated module lost genuine policy construction.");
+for (const [name, policy] of Object.entries(module.policies ?? {})) gate.register(name,policy);
+if (!(await gate.allows("invoice", "create", { id: 1, role: "member" }))) throw new Error("Generated module did not declare typed policy.");
 console.log("typed generated policy registered");
 `;
     await writeFile(join(directory, "consumer.ts"), consumer);

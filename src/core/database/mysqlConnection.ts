@@ -1,4 +1,12 @@
 import {
+  createMysqlPool,
+  executeMysql,
+  loadMysql,
+  type MysqlExecutable,
+  type MysqlPool,
+  type MysqlPoolConnection,
+} from "#strata-mysql-native";
+import {
   type ActiveDatabaseHandle,
   getActiveDatabaseConnection,
   runWithDatabaseConnection,
@@ -9,15 +17,6 @@ import {
   type ReadOnlyObservationOptions,
 } from "./isolatedReadOnlyObservation.ts";
 import { legacyNativeTransaction } from "./legacyNativeTransaction";
-import {
-  createMysqlPool,
-  executeMysql,
-  loadMysql,
-  type MysqlExecutable,
-  type MysqlPool,
-  type MysqlPoolConnection,
-  resetMysqlLoaderForTests,
-} from "./mysqlNative";
 import { createMysqlPin } from "./rawMysql";
 
 type MysqlConnection = ActiveDatabaseHandle & {
@@ -40,21 +39,41 @@ function createMysqlAdapter(
   const transactions = new WeakSet<ActiveDatabaseHandle>();
   const observations = new Set<Promise<unknown>>();
   let observationsClosed = false;
+  let closing: Promise<void> | undefined;
+  const operations = new Set<Promise<unknown>>();
+  function assertOpen(): void {
+    if (observationsClosed) throw new Error("MySQL connection is closed.");
+  }
+  function track<T>(operation: Promise<T>): Promise<T> {
+    operations.add(operation);
+    void operation.finally(() => operations.delete(operation)).catch(() => {});
+    return operation;
+  }
   const connection: MysqlConnection = {
     async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
-      const active = getActiveDatabaseConnection(connection);
-      if (transactions.has(active)) return active.unsafe<T>(query, params);
-      return executeMysql<T>(await getPool(), query, params);
+      assertOpen();
+      return track(
+        (async () => {
+          const active = getActiveDatabaseConnection(connection);
+          if (transactions.has(active)) return active.unsafe<T>(query, params);
+          return executeMysql<T>(await getPool(), query, params);
+        })(),
+      );
     },
     async begin<T>(callback: (transaction: ActiveDatabaseHandle) => Promise<T>): Promise<T> {
-      if (transactions.has(getActiveDatabaseConnection(connection))) {
-        throw new Error("Use the active transaction handle for nested MySQL work.");
-      }
-      const pool = await getPool();
-      if (!pool.getConnection)
-        throw new Error("MySQL transactions require a pool with getConnection().");
-      const reserved = await pool.getConnection();
-      return legacyNativeTransaction(createMysqlPin(reserved), callback, transactions);
+      assertOpen();
+      return track(
+        (async () => {
+          if (transactions.has(getActiveDatabaseConnection(connection))) {
+            throw new Error("Use the active transaction handle for nested MySQL work.");
+          }
+          const pool = await getPool();
+          if (!pool.getConnection)
+            throw new Error("MySQL transactions require a pool with getConnection().");
+          const reserved = await pool.getConnection();
+          return legacyNativeTransaction(createMysqlPin(reserved), callback, transactions);
+        })(),
+      );
     },
     async observeReadOnly<T>(
       operation: (connection: DatabaseConnection) => Promise<T>,
@@ -73,10 +92,17 @@ function createMysqlAdapter(
         observations.delete(work);
       }
     },
-    async close() {
+    close() {
+      if (transactions.has(getActiveDatabaseConnection(connection)))
+        return Promise.reject(new Error("Cannot close MySQL from inside its active transaction."));
+      if (closing) return closing;
       observationsClosed = true;
-      await Promise.allSettled([...observations]);
-      await close();
+      closing = Promise.resolve().then(async () => {
+        while (operations.size || observations.size)
+          await Promise.allSettled([...operations, ...observations]);
+        await close();
+      });
+      return closing;
     },
   };
   return connection;
@@ -128,9 +154,4 @@ function createMysqlConnection(url: string): MysqlConnection {
 }
 
 export type { MysqlConnection, MysqlExecutable, MysqlPool, MysqlPoolConnection };
-export {
-  createMysqlConnection,
-  createMysqlConnectionFromPool,
-  createMysqlPool,
-  resetMysqlLoaderForTests,
-};
+export { createMysqlConnection, createMysqlConnectionFromPool, createMysqlPool };

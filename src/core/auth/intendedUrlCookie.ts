@@ -1,3 +1,4 @@
+import { resolveEnv } from "../config/envSchema";
 import { readRequestCookie } from "../http/cookies";
 import { safeInternalRedirectPath, sanitizeInternalPath } from "../http/safeInternalPath";
 import { isProductionEnv } from "../runtime/appEnv";
@@ -38,8 +39,16 @@ function intendedUrlCookieName(env: Readonly<Record<string, string | undefined>>
 }
 
 function intendedUrlTtlSeconds(env: Readonly<Record<string, string | undefined>>): number {
-  const parsed = Number.parseInt(env.INTENDED_URL_TTL_SECONDS ?? "", 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_INTENDED_URL_TTL_SECONDS;
+  return resolveEnv(
+    {
+      INTENDED_URL_TTL_SECONDS: {
+        integer: true,
+        minimum: 1,
+        default: String(DEFAULT_INTENDED_URL_TTL_SECONDS),
+      },
+    },
+    env,
+  ).INTENDED_URL_TTL_SECONDS;
 }
 
 function cookieSecureFlag(options: IntendedUrlCookieOptions): string {

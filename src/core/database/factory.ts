@@ -330,3 +330,10 @@ export type {
   StatelessFactoryConstruction,
 };
 export { defineFactory, Factory };
+
+/** Create a factory with explicit persistence supplied by the active invocation. */
+function createFactory<R extends object>(behavior: FactoryBehavior<R>): Factory<R> {
+  return Factory.from(defineFactory<R>({ construct: () => behavior }));
+}
+
+export { createFactory };

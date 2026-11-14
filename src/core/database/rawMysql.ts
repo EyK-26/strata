@@ -1,3 +1,4 @@
+import { createMysqlPool, executeMysql, type MysqlPoolConnection } from "#strata-mysql-native";
 import type { OpenOutcome } from "../contracts/application";
 import type {
   CheckoutOptions,
@@ -9,7 +10,6 @@ import type {
   RawTransaction,
   SqlStatement,
 } from "./driverPorts";
-import { createMysqlPool, executeMysql, type MysqlPoolConnection } from "./mysqlNative";
 import { nativeTransaction } from "./nativeTransactions";
 import { dialectFor } from "./sqlDialects";
 

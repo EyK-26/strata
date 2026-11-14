@@ -60,7 +60,10 @@ describe("@getstrata/core published bundle singletons", () => {
     expect(main.createMysqlPool).toBe(subpath.createMysqlPool);
     expect(main.createMysqlConnection).toBe(subpath.createMysqlConnection);
     expect(main.createMysqlConnectionFromPool).toBe(subpath.createMysqlConnectionFromPool);
-    expect(main.resetMysqlLoaderForTests).toBe(subpath.resetMysqlLoaderForTests);
+    const testing = await import(join(CORE_DIST, "entries/testing.js"));
+    expect(main.resetMysqlLoaderForTests).toBeUndefined();
+    expect(subpath.resetMysqlLoaderForTests).toBeUndefined();
+    expect(typeof testing.resetMysqlLoaderForTests).toBe("function");
   });
 
   test("main and outbox subpath retain durable identity without ambient owners", async () => {

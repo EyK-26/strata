@@ -1,3 +1,4 @@
+import { testState } from "#strata-test-state";
 import { missingOptionalPeer } from "../../runtime/optionalPeer";
 import { timingSafeCompareString } from "../../security/timingSafeCompare";
 import type { OAuthProfile } from "../oauth/types";
@@ -168,9 +169,7 @@ function readSamlEnvOptions(
   };
 }
 
-type NodeSamlModule = { SAML: new (options: Record<string, unknown>) => NodeSamlClient };
-
-let nodeSamlLoader: (() => Promise<NodeSamlModule>) | null = null;
+export type NodeSamlModule = { SAML: new (options: Record<string, unknown>) => NodeSamlClient };
 
 async function defaultLoadNodeSaml(): Promise<NodeSamlModule> {
   return (await import("@node-saml/node-saml")) as unknown as NodeSamlModule;
@@ -178,14 +177,10 @@ async function defaultLoadNodeSaml(): Promise<NodeSamlModule> {
 
 async function loadNodeSaml(): Promise<NodeSamlModule> {
   try {
-    return await (nodeSamlLoader ?? defaultLoadNodeSaml)();
+    return await (testState.nodeSamlLoader ?? defaultLoadNodeSaml)();
   } catch (error) {
     throw missingOptionalPeer("@node-saml/node-saml", "to verify SAML assertions", error);
   }
-}
-
-function setNodeSamlLoaderForTests(loader: (() => Promise<NodeSamlModule>) | null): void {
-  nodeSamlLoader = loader;
 }
 
 class SamlServiceProvider {
@@ -303,5 +298,4 @@ export {
   REPLAY_RETENTION_MS,
   readSamlEnvOptions,
   SamlServiceProvider,
-  setNodeSamlLoaderForTests,
 };

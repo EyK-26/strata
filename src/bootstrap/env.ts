@@ -56,7 +56,7 @@ const appEnvSchema: EnvSchema = defineEnvSchema({
   },
   JWT_TTL_SECONDS: {
     integer: true,
-    minimum: 60,
+    minimum: 1,
     default: "3600",
   },
   APP_ENV: {

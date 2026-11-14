@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadAppCommands, resolveApp, runCli } from "@getstrata/cli";
@@ -13,10 +13,7 @@ import {
   layersFromFlags,
   parseCreateStrataArgs,
 } from "../../../packages/strata-starter/src/parseArgs.ts";
-import {
-  renderCliQueueWorkTs,
-  renderCliRegisterTs,
-} from "../../../packages/strata-starter/src/renderCli.ts";
+import { renderCliRegisterTs } from "../../../packages/strata-starter/src/renderCli.ts";
 import { createGeneratedSourceApps } from "../../helpers/generatedSourceApps.ts";
 import { captureConsole, repoRoot } from "./helpers";
 
@@ -73,43 +70,24 @@ const PRODUCT_COMMANDS = [
 ] as const;
 
 describe("generated src/cli/register.ts", () => {
-  test("queue:work boots the app, not coreProviders", () => {
+  test("application commands and scaffold commands are owned by the package", () => {
     const register = renderCliRegisterTs();
-    const queueWork = renderCliQueueWorkTs();
-    expect(queueWork).toContain('bootstrapApp({migrate:false,mode:"worker"})');
-    expect(queueWork).toContain('import { bootstrapApp } from "../bootstrap/createApp.ts";');
-    expect(queueWork).toContain("runQueueWorkerCommand");
-    expect(queueWork).toContain("@getstrata/cli/queueWorker");
-    expect(queueWork).not.toContain("closeDatabase");
-    expect(queueWork).not.toContain("new RedisQueue");
-    expect(register).toContain('"queue:work"');
-    expect(register).toContain("make:module");
-    expect(register).toContain("make:job");
-    expect(register).toContain("make:migration");
-    expect(register).toContain("openapi:generate");
-    expect(register).toContain("schedule:run");
+    for (const command of PRODUCT_COMMANDS) expect(register).not.toContain(`"${command}"`);
     expect(register).not.toContain("coreProviders");
-    expect(register).not.toContain("collectProviders");
-    expect(register).not.toContain("@getstrata/bootstrap/context");
-    expect(register).not.toContain("createAppContext");
-    expect(queueWork).not.toContain("assertProductionSecrets");
-    expect(queueWork).not.toContain("coreProviders");
-    expect(queueWork).not.toContain("collectProviders");
-    expect(queueWork).not.toContain("@getstrata/bootstrap/context");
-    expect(queueWork).not.toContain("createAppContext");
   });
 
   test("generate writes register.ts and strata.config points at it", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["cli-register", "--yes"]);
     const register = await readFile(join(app, "src/cli/register.ts"), "utf8");
-    const queueWork = await readFile(join(app, "src/cli/queueWork.ts"), "utf8");
+    await expect(access(join(app, "src/cli/queueWork.ts"))).rejects.toThrow();
     const config = await readFile(join(app, "strata.config.ts"), "utf8");
     const pkg = JSON.parse(await readFile(join(app, "package.json"), "utf8")) as {
       scripts: Record<string, string>;
     };
 
-    expect(queueWork).toContain('bootstrapApp({migrate:false,mode:"worker"})');
+    expect(config).toContain('application: "./src/bootstrap/createApp.ts"');
+    expect(config).toContain('schedule: "./src/bootstrap/schedule.ts"');
     expect(register).not.toContain("coreProviders");
     expect(register).not.toContain("collectProviders");
     expect(register).not.toContain("@getstrata/bootstrap/context");
@@ -129,9 +107,9 @@ describe("generated src/cli/register.ts", () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["cli-register-streams", "--queue", "redis", "--yes"]);
     const env = await readFile(join(app, ".env.example"), "utf8");
-    const preload = await readFile(join(app, "src/bootstrap/preload.ts"), "utf8");
+    const defaults = await readFile(join(app, "src/config/app.ts"), "utf8");
     expect(env).toContain("QUEUE_REDIS_TRANSPORT=streams");
-    expect(preload).toContain('process.env.QUEUE_REDIS_TRANSPORT ??= "streams"');
+    expect(defaults).toContain('"QUEUE_REDIS_TRANSPORT": "streams"');
     const readme = await readFile(join(app, "README.md"), "utf8");
     expect(readme).toContain("Redis jobs need `bun run queue:work` in another terminal");
     expect(readme).not.toContain("The synchronous queue handles jobs inline");
@@ -157,7 +135,8 @@ describe("generated src/cli/register.ts", () => {
     const commands = await loadAppCommands(resolved);
 
     expect(resolved.commandsModule).toBe(join(app, "src/cli/register.ts"));
-    expect(Object.keys(commands).sort()).toEqual([...PRODUCT_COMMANDS].sort());
+    expect(Object.keys(commands)).toEqual([]);
+    expect(resolved.application).toBe(join(app, "src/bootstrap/createApp.ts"));
 
     const output = captureConsole();
     try {
@@ -173,6 +152,7 @@ describe("generated src/cli/register.ts", () => {
     }
 
     const help = output.logs.join("\n");
+    for (const command of PRODUCT_COMMANDS) expect(help).toContain(command);
     expect(help).toContain("queue:work");
     expect(help).toContain("outbox:work");
     expect(help).toContain("dev/start do not start workers");
@@ -209,7 +189,9 @@ describe("generated src/cli/register.ts", () => {
     await writeFile(
       join(app, "queue-probe.ts"),
       `import assert from "node:assert/strict";
-import { queueWorkCommand } from "./src/cli/queueWork.ts";
+import { applicationCommands } from ${JSON.stringify(join(repoRoot, "packages/strata-cli/src/applicationCommands.ts"))};
+import { resolveApp } from "@getstrata/cli";
+const queueWorkCommand = await applicationCommands(await resolveApp())["queue:work"]!();
 import { bootstrapApp } from "./src/bootstrap/createApp.ts";
 let constructed = 0;
 await assert.rejects(queueWorkCommand(), {message:"queue:work requires REDIS_URL."});
@@ -247,16 +229,16 @@ console.log("missing-redis-before-application");
   });
 
   test("all three generated example profiles ship the same CLI registrar as the renderer", async () => {
-    const expectedQueueWork = renderCliQueueWorkTs();
     const fixtures = createGeneratedSourceApps();
     try {
       for (const app of [fixtures.rls, fixtures.hobby, fixtures.team]) {
         const { layers } = JSON.parse(await readFile(join(app, "strata.layers.json"), "utf8"));
         const expectedRegister = renderCliRegisterTs(compileStarterFeatures(layers));
         const actualRegister = await readFile(join(app, "src/cli/register.ts"), "utf8");
-        const actualQueueWork = await readFile(join(app, "src/cli/queueWork.ts"), "utf8");
+        await expect(access(join(app, "src/cli/queueWork.ts"))).rejects.toThrow();
         expect(actualRegister).toBe(expectedRegister);
-        expect(actualQueueWork).toBe(expectedQueueWork);
+        const config = await readFile(join(app, "strata.config.ts"), "utf8");
+        expect(config).toContain('application: "./src/bootstrap/createApp.ts"');
       }
     } finally {
       fixtures.close();

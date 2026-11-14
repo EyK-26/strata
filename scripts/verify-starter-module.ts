@@ -317,12 +317,16 @@ try {
     "Scaffolding must leave application repository registration unchanged.",
   );
   // Static composition supplies the SAME definition to runtime bindings and cache effects.
-  const declaration = "export const repositoryDefinitions = Object.freeze([";
-  assert.equal(registerBefore.split(declaration).length, 2);
+  const repositories = "export const repositoryDefinitions = Object.freeze([";
+  const models = "export const modelDefinitions = Object.freeze([";
+  assert.equal(registerBefore.split(repositories).length, 2);
+  assert.equal(registerBefore.split(models).length, 2);
   await writeFile(
     registerPath,
-    "import {targetRepository} from '../modules/target/repository.ts';\n" +
-      registerBefore.replace(declaration, `${declaration}targetRepository, `),
+    "import {TargetDefinition,targetRepository} from '../modules/target/model.ts';\n" +
+      registerBefore
+        .replace(repositories, `${repositories}targetRepository, `)
+        .replace(models, `${models}TargetDefinition, `),
   );
   if (process.argv.includes("--typed-handlers")) {
     await writeFile(
@@ -704,5 +708,5 @@ if(errors.length===1)throw errors[0];if(errors.length>1)throw new AggregateError
 if (redisReceipt) console.log(JSON.stringify({ ownedModuleRedisCleanup: redisReceipt }));
 throwFailures(failures, "Installed module verification and cleanup failed.");
 console.log(
-  `PASS installed module ${database}/${auth}/${dev ? "dev" : "start"}: explicit repository registration, CLI module discovery, API-only OpenAPI, guest 401, unscoped identity 403 and shutdown`,
+  `PASS installed module ${database}/${auth}/${dev ? "dev" : "start"}: explicit model/repository registration, CLI module discovery, API-only OpenAPI, guest 401, unscoped identity 403 and shutdown`,
 );

@@ -16,7 +16,7 @@ import { BadRequestError } from "@getstrata/core/errors/http";
 import { parsePositiveIntParam } from "@getstrata/core/http/validation";
 import { createScimThrottleMiddleware } from "@getstrata/core/http/scimThrottleMiddleware";
 import { User } from "../../models/User.ts";
-import { STARTER_AUTH_SERVICES, type StarterAuthServices } from "../../bootstrap/providers/auth.ts";
+import { STARTER_AUTH_SERVICES, type StarterAuthServices } from "../../bootstrap/auth.ts";
 
 const USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
 const LIST_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:ListResponse";

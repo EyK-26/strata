@@ -18,6 +18,7 @@ import { renderSubpathEntry } from "./subpath-entry.ts";
 const ROOT = join(import.meta.dir, "..");
 
 const CORE_SUBPATHS = [
+  "testing",
   "auth/accountState",
   "auth/accountStateMigration",
   "auth/accessControl",
@@ -227,6 +228,11 @@ const CORE_SUBPATHS = [
 ] as const;
 
 const BOOTSTRAP_SUBPATHS = [
+  "application",
+  "auth/accountWorkflows",
+  "auth/runtimeConfig",
+  "databaseCommands",
+  "testing",
   "buildModuleRoutes",
   "buildWebModuleRoutes",
   "cache/modelCacheTags",
@@ -356,6 +362,10 @@ async function writeEntryFiles(
       continue;
     }
 
+    if (srcLayer === "bootstrap" && subpath === "application") {
+      await rm(join(entriesDir, "application.ts"), { force: true });
+      continue;
+    }
     const entryPath = join(entriesDir, `${subpath}.ts`);
     await mkdir(dirname(entryPath), { recursive: true });
 
@@ -426,13 +436,13 @@ async function updatePackageJson(
     (subpath) => ` --external @getstrata/core/${subpath}`,
   ).join("");
   const privateExternal = packageDir.includes("strata-core")
-    ? " --external '#strata-orm-internal' --external '#strata-orm-runtime'"
-    : " --external '#strata-http-route'";
+    ? " --external '#strata-orm-internal' --external '#strata-orm-runtime' --external '#strata-test-state' --external '#strata-mysql-native'"
+    : " --external '#strata-http-route' --external '#strata-job-discovery'";
   packageJson.scripts["build:bundle"] =
     `bun build index.ts --outdir dist --target bun --external bun${telemetryExternals} --external eta --external mysql2${optionalPeerExternals}${standaloneExternal}${privateExternal}`;
   packageJson.scripts["build:shims"] = packageDir.includes("strata-core")
     ? "bun ../../scripts/write-core-shared-shims.ts"
-    : "true";
+    : "bun ../../scripts/write-bootstrap-shared-shims.ts";
   const coreExternal = packageDir.includes("strata-core")
     ? ` ${coreSubpathExternalFlags(CORE_SUBPATHS)}`
     : "";
@@ -449,6 +459,14 @@ async function updatePackageJson(
     // Package-private identity shared by root and subpath bundles, never exported.
     packageJson.imports = {
       ...packageJson.imports,
+      "#strata-test-state": {
+        types: "./dist/core/testingState.d.ts",
+        default: "./dist/internal/testingState.js",
+      },
+      "#strata-mysql-native": {
+        types: "./dist/core/database/mysqlNative.d.ts",
+        default: "./dist/internal/mysqlNative.js",
+      },
       "#strata-orm-internal": {
         types: "./dist/core/database/ormInternal.d.ts",
         default: "./dist/internal/ormInternal.js",
@@ -459,19 +477,23 @@ async function updatePackageJson(
       },
     };
     packageJson.scripts["build:internal"] =
-      `bun build internal/ormInternal.ts internal/ormRuntime.ts --outdir dist/internal --target bun${coreExternal}${privateExternal}`;
+      `bun build internal/testingState.ts internal/mysqlNative.ts internal/ormInternal.ts internal/ormRuntime.ts --outdir dist/internal --target bun --external mysql2${coreExternal}${privateExternal}`;
     packageJson.scripts["build:verify-standalone"] =
       "bun ../../scripts/verify-core-standalone-subpaths.ts";
   } else {
     packageJson.imports = {
       ...packageJson.imports,
+      "#strata-job-discovery": {
+        types: "./dist/bootstrap/jobDiscoveryState.d.ts",
+        default: "./dist/internal/jobDiscoveryState.js",
+      },
       "#strata-http-route": {
         types: "./dist/bootstrap/ownedHttpRoute.d.ts",
         default: "./dist/internal/ownedHttpRoute.js",
       },
     };
     packageJson.scripts["build:internal"] =
-      `bun build internal/ownedHttpRoute.ts --outdir dist/internal --target bun${bootstrapExternal}${privateExternal}`;
+      `bun build internal/ownedHttpRoute.ts internal/jobDiscoveryState.ts --outdir dist/internal --target bun${bootstrapExternal}${privateExternal}`;
   }
   // Clear dist so removed subpaths do not linger in the tarball.
   packageJson.scripts["build"] =

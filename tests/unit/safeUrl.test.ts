@@ -4,10 +4,9 @@ import {
   assertSafeOutboundUrlResolved,
   isBlockedHostname,
   pinUrlToAddress,
-  resetDnsLookupForTests,
   resolveSafeOutboundTarget,
-  setDnsLookupForTests,
 } from "@getstrata/core/security/safeUrl";
+import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/testing";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 afterEach(() => {
@@ -216,4 +215,13 @@ describe("pinUrlToAddress", () => {
       pinUrlToAddress(new URL("https://example.com/hook"), "[2001:4860:4860::8888]").href,
     ).toBe("https://[2001:4860:4860::8888]/hook");
   });
+});
+
+test("native resolver errors fail closed after testing overrides are cleared", async () => {
+  setDnsLookupForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
+  resetDnsLookupForTests();
+  // DNS labels over 63 bytes are invalid; the native resolver rejects this locally.
+  await expect(resolveSafeOutboundTarget(`https://${"a".repeat(64)}.invalid/hook`)).rejects.toThrow(
+    "blocked host",
+  );
 });

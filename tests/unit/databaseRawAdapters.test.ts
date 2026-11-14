@@ -5,12 +5,13 @@ import { EventEmitter } from "node:events";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { resetMysqlLoaderForTests } from "@getstrata/core/testing";
 import { resourceService } from "../../src/core/contracts/services";
 import type { ServiceToken } from "../../src/core/contracts/token";
 import { createTransactionAcquisitionMetrics } from "../../src/core/database/acquisitionMetrics";
 import { createDatabaseBindings } from "../../src/core/database/bindings";
 import type { RawPin, RawPool, Terminal } from "../../src/core/database/driverPorts";
-import { loadMysql, resetMysqlLoaderForTests } from "../../src/core/database/mysqlNative";
+import { loadMysql } from "../../src/core/database/mysqlNative";
 import {
   createMysqlPin,
   createRawMysqlPool,

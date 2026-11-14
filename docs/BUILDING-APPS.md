@@ -41,9 +41,9 @@ Set `FRONTEND_MODE`. Allowed values live in `@getstrata/core/runtime/frontendMod
 
 ## Cookie HTML apps
 
-Generated `src/bootstrap/providers/auth.ts` constructs cookie authentication from the current execution's explicit database session and scoped policy. `createCookieSessionAuthManager` requires `{ selected, policy, secret, production, rls }`; optional `cookieName`, `loadSessionUser` and `mapUser` customize the application schema and identity. Keep that manager within the execution that supplied its session and policy rather than retaining a request-bound manager as an application singleton.
+Generated `src/bootstrap/auth.ts` constructs cookie authentication from the current execution's explicit database session and scoped policy. `createCookieSessionAuthManager` requires `{ selected, policy, secret, production, rls }`; optional `cookieName`, `loadSessionUser` and `mapUser` customize the application schema and identity. Keep that manager within the execution that supplied its session and policy rather than retaining a request-bound manager as an application singleton.
 
-Set `cookieName` to `"myapp_session"` in the generated auth configuration to rename the cookie. Supply `loadSessionUser` when the default session/user query does not match your schema; its arguments are the selected session, scoped policy, RLS flag and session ID. Preserve live account status and auth-version metadata when mapping users. Generated cookie apps map `is_admin` in `src/bootstrap/providers/auth.ts`.
+Set `cookieName` to `"myapp_session"` in the generated auth configuration to rename the cookie. Supply `loadSessionUser` when the default session/user query does not match your schema; its arguments are the selected session, scoped policy, RLS flag and session ID. Preserve live account status and auth-version metadata when mapping users. Generated cookie apps map `is_admin` in `src/bootstrap/auth.ts`.
 
 Use `signIn` / `signOut` (or the redirect helpers). Do not mint cookies in controllers.
 
@@ -53,27 +53,47 @@ Cookie apps from `create-strata` include restyleable welcome, login, register, a
 
 ## Adding API tokens, JWT, or Basic
 
-Compose guards with explicit capabilities in `src/bootstrap/providers/auth.ts`. `DatabaseTokenGuard` takes an `AuthBearerResolver`; `JwtGuard` takes `{ directory, secret }`. `BasicAuthGuard` takes account lookup, an MFA secret codec, recovery-code persistence and email lookup or credential verification. Register the resulting guards with `auth.registerGuard(name, guard)`. A service container is not a guard constructor argument.
+Compose guards with explicit capabilities in `src/bootstrap/auth.ts`. `DatabaseTokenGuard` takes an `AuthBearerResolver`; `JwtGuard` takes `{ directory, secret }`. `BasicAuthGuard` takes account lookup, an MFA secret codec, recovery-code persistence and email lookup or credential verification. Register the resulting guards with `auth.registerGuard(name, guard)`. A service container is not a guard constructor argument.
 
-Use the generated auth service composition and `src/bootstrap/authDirectory.ts` to select those capabilities from the owning execution. See [AUTH.md](./AUTH.md).
+Use the generated auth service composition and `src/bootstrap/auth.ts` to select those capabilities from the owning execution. See [AUTH.md](./AUTH.md).
 
 ## HTTP kernel
 
 `createHttpKernel(dependencies)` groups middleware (`web`, `api`, `authenticated`). Generated apps use `buildModuleRoutes` / `buildWebModuleRoutes`. `@getstrata/bootstrap/createRoutes` still assembles leftover fixture HTTP for framework tests. It is not your starter.
 
-## Module providers and infra defaults
+## Application startup and modules
 
-After `const modules = await ensureModulesLoaded({ modulesDir })`, generated apps run each module's `providers` through the same `register` / `boot` phases as `starterProviders`. Module DI (services, policies) therefore works without calling `collectProviders()` (which would swap in the monorepo `coreProviders` auth stack).
+Strata aims for Laravel's application workflow with native Bun HTTP, SQL and tooling.
+Start with the generated application definition and the `defineApp` factory from
+`@getstrata/bootstrap/application`. The package supplies `bootstrapApp`, `createApp`
+and `createAppServer`; keep the generated entrypoints small and put application
+choices in the definition. `src/config/app.ts` holds the selected frontend, tenancy,
+views, extras and environment-default snapshot; it does not mutate `process.env`.
+Native Bun request and server options remain available. Module routes are assembled
+by default; `defineApp.routes` is an optional callback for custom route composition.
+A separate `src/routes.ts` file is unnecessary.
 
-Starter apps call `registerDefaultJobs(registry)` and `await discoverJobs(registry)` with their owned job registry. `await discoverListeners({ directory })` returns listener declarations; generated composition includes their services and repository effects alongside `createModelCacheInvalidationEffects`. The removed `registerInvalidateCacheOnModelWriteListeners` API is not part of v3 startup. See the recoverable cache invalidation section below for durable SQL outbox delivery.
+A simple module needs a model, controller, request and policy. Controllers can use
+models selected from their owned execution (`database.model(definition)`) directly.
+Add a service when it coordinates business work or owns a reusable capability;
+pass-through service and repository classes are unnecessary. Use `createModel` for
+ordinary model declarations; custom repositories and low-level adapter APIs remain
+supported for applications that need them.
 
-Generated `bootstrapApp()` discovers modules and listeners before constructing the application. It uses `createApplicationContext(providers, options)` with an explicit application `definition` and selected `connection`, then awaits `handle.start()`. Its `providersFromScope` composes starter providers, module providers and route assembly using application-owned services. All registrations finish before any boot hook runs, preserving the declared provider order. Modules should register bindings in `register` and consume bindings in `boot`; registration cannot depend on a later registration having run. Do not substitute `collectProviders()`: its monorepo defaults differ from the generated auth/config composition.
+Jobs and listener declarations are discovered before startup completes. The
+application owns its registry, services, database, cache and queue resources.
+For application services and startup work, use `defineProvider` with declarative
+services and `setup` / `boot` hooks in the application definition's `providers`.
+Owned resources use `resourceService` or `scope.acquire`; cleanup stays with the
+application lifecycle. See [authoring providers](application-providers.md).
+Module `register` / `boot` providers remain an advanced bootstrap adapter surface.
 
-Provider `register` and `boot` hooks accept synchronous implementations or `Promise<void>`. Register cleanup immediately through `context.onCleanup(() => resource.close())`, optionally choosing `"drain"` or `"flush"`. Cleanup captures the owned resource, runs once in reverse acquisition order and awaits each handler. Startup and cleanup failures are reported by the application owner; cleanup cannot roll back external business effects. Application service/resource declarations own pools, cache and queue clients; custom providers must declare or register their own resources.
-
-**Startup API migration:** prefer the generated async `bootstrapApp()`, `createApp()` and `createAppServer()` entrypoints. Low-level `createAppContext(providers, options)` also requires an explicit definition and connection and must be awaited; `runProviderPhase()` requires a complete `ProviderContext`. The process-wide `appContext` registry and ownerless startup defaults are removed. Keep the returned `application` and `invoke` handles explicitly.
-
-Declare HTTP and worker transports before application startup. Generated HTTP acquires its socket after provider and route assembly; failed acquisition stays with the same application owner for cleanup. Queue and outbox workers boot their application before starting polling. Scheduled commands await boot before inspecting tasks and stop their application on completion/failure. Shutdown uses `await app.application.stop({ reason: "MANUAL" })` and checks `result.successful`; the owner stops admission, drains work, flushes and closes its resources, including its database. Do not add a separate context-disposal/database-close chain. Custom background runners must register cancellation and drain with that owner before startup. Generated signal handlers use `LifecycleCoordinator` to request application stop; see [lifecycle](LIFECYCLE.md). Deployment outage and forced-termination qualification still requires application operational tests.
+Keep the returned application handle. Stop it with
+`await app.application.stop({ reason: "MANUAL" })` and inspect `result.successful`.
+The owner stops admission, drains work, flushes and closes its resources. Custom
+background runners register cancellation and drain before startup. See
+[application ownership](APPLICATION-OWNERSHIP.md), [discovery](DISCOVERY.md) and
+[lifecycle](LIFECYCLE.md) for advanced composition and operational contracts.
 
 ## Database migrations
 
@@ -112,7 +132,7 @@ Apps scaffolded before file migrations often loop `db.unsafe(...)` in one file a
 
 When history is untrustworthy:
 
-- **Local / empty data:** `strata migrate:fresh` (generated `src/db/fresh.ts` → `freshDatabase`) runs `down` for recorded files with an explicit development-reset context, clears `framework_migrations`, then applies all files. It is destructive. Do not use it on production data.
+- **Local / empty data:** `strata migrate:fresh` (generated `src/db/fresh.ts` → `freshDatabase`) runs `down` for recorded files with an explicit development-reset context, removes each successfully reversed history record, then applies all files. It is destructive. Do not use it on production data.
 - **Production / keep rows:** keep `IF NOT EXISTS`, run `migrate` once so the runner records the files, then add later changes as **new** numbered files. Do not hand-insert `framework_migrations` rows unless a file must never run (document why). `migrate:status` shows pending vs `up`.
 
 Do not mix the monorepo fixture runner with a product app’s `src/db/migrations/` on the same database.
@@ -168,19 +188,32 @@ Use `parseMultipartUpload(request, "file")` when the request is only that one fi
 
 ## Extending the CLI
 
-Generated apps depend on `@getstrata/cli` (lifecycle commands plus whatever `src/cli/register.ts` exports). The starter writes `src/cli/register.ts` with `queue:work`, failed-job commands, `make:*`, `openapi:*`, and `schedule:run`. `queue:work` boots an application with its worker transport declared (`mode: "worker"`) through `@getstrata/cli/queueWorker` so starter and module providers load. Do not copy the monorepo `queue:work` command (its `coreProviders` composition).
+Generated apps depend on `@getstrata/cli`. Configure the application and schedule
+entrypoints through `strata.config.ts` (`application` and `schedule`). Package-owned
+commands provide `queue:work`, failed-job operations, `make:*`, `openapi:*` and
+`schedule:run`, booting the selected application when necessary. Existing apps
+adopt the generated configuration when upgrading; installing a package does not
+rewrite their local adapters.
 
-To add more commands, extend that file (`commands` or `registerCommands()`). Scaffold commands write under `process.cwd()` (`src/modules`, `src/db/migrations`, `src/jobs`). `openapi:*` uses `createApp()` routes. `schedule:run` loads `src/bootstrap/schedule.ts` after boot.
+Use `src/cli/register.ts` (`commands` or `registerCommands()`) for application
+commands. Scaffold commands resolve paths from the app working directory
+(`src/db/migrations`, `src/jobs`, `views/`). `modulesDirectory` selects the same
+module root for application discovery, scaffolding and OpenAPI. `openapi:*` uses the
+application's routes; scheduled commands boot before running the configured
+schedule and close their application afterward.
 
 ## Optional feature flags
 
-The starter wizard covers MFA, email verification, SCIM, metrics, plus optional `--oauth-github`, `--oidc`, `--billing`, and `--webhooks` (all off by default). SIEM export and hybrid SPA stay env-driven or deferred. See [INTEGRATIONS.md](./INTEGRATIONS.md) and [PRODUCTION.md](./PRODUCTION.md). Outbound webhooks use `await discoverJobs()`, not a `registerWebhookJobs()` helper (that symbol was never exported).
+The starter wizard covers MFA, email verification, SCIM, metrics, plus optional `--oauth-github`, `--oidc`, `--billing`, and `--webhooks` (all off by default). SIEM export and hybrid SPA stay env-driven or deferred. See [INTEGRATIONS.md](./INTEGRATIONS.md) and [PRODUCTION.md](./PRODUCTION.md). Outbound webhooks use discovery with the application-owned job registry, not a `registerWebhookJobs()` helper (that symbol was never exported).
 
 ## Views and errors
 
 Configure layout data (`currentUser`, `csrfToken`, `flash`) and error templates (`errors/not-found.eta`, `errors/forbidden.eta`, `errors/error.eta`). Production 5xx must not leak stacks.
 
-For per-app HTML rendering, register `createViewProvider` from
+Generated HTML applications enable packaged views through application configuration.
+Controllers resolve the typed `CORE_VIEW_RENDERER_TOKEN` from their owned execution.
+
+For advanced custom view composition, register `createViewProvider` from
 `@getstrata/bootstrap/providers/view` in your provider list, then inject the
 typed `CORE_VIEW_RENDERER_TOKEN` from `@getstrata/core/view` into controllers:
 
@@ -510,31 +543,33 @@ Middleware still receives standard `Request` and invokes its continuation withou
 
 ### Inferred model results
 
-Static model lookups and writes, query chains, awaited queries, pagination and chunk callbacks preserve the concrete model class and its declared record type:
+Owned model lookups and writes, query chains, awaited queries, pagination and chunk callbacks preserve the concrete model class and its declared record type:
 
 ```ts
 class Product extends Model<ProductRecord, "id"> {
   label() { return this.get("title"); }
 }
-const product = await Product.with("category").findOrFail(id);
+// productModel is the definition whose construct callback creates Product.
+const products = database.model(productModel);
+const product = await products.with("category").findOrFail(id);
 const record: ProductRecord = product.toObject();
 product.label();
-const page = await Product.query().paginate({ page: 1, perPage: 20 });
+const page = await products.query().paginate({ page: 1, perPage: 20 });
 // page.data is Product[], while find()/first()/firstWhere() remain nullable.
 ```
 
 Declare record fields to match hydrated values, including configured casts. These types do not validate database rows, cast definitions, mass-assignment input, or dynamically named loaded relations. `withCount("reviews")` adds `reviews_count` to the result record; a custom alias and multiple counts are preserved. Count values remain `unknown` because driver scalar representations and model casts differ; normalize them explicitly before arithmetic. Prefer aliases that do not overwrite model fields.
 
-Writes and filters infer declared field names and value types. Use `Product.query().select("title", "price").get()` for plain selected records with model casts; these rows have no model methods or unselected fields. Model-returning `all` and `firstWhere` helpers do not accept partial selects. Repository queries, direct SQL and bulk operations remain available; `pluck` and `value` retain their existing `unknown` results. Use `newFromTrustedRecord` for deliberate partial SQL hydration, where the caller owns completeness. See [typed model inputs and projections](./DATABASE.md#typed-model-inputs-and-projections) for defaults, cast boundaries, dynamic predicates and source compatibility.
+Writes and filters infer declared field names and value types. Use `products.query().select("title", "price").get()` for plain selected records with model casts; these rows have no model methods or unselected fields. Model-returning `all` and `firstWhere` helpers do not accept partial selects. Repository queries, direct SQL and bulk operations remain available; `pluck` and `value` retain their existing `unknown` results. Use `newFromTrustedRecord` for deliberate partial SQL hydration, where the caller owns completeness. See [typed model inputs and projections](./DATABASE.md#typed-model-inputs-and-projections) for defaults, cast boundaries, dynamic predicates and source compatibility.
 
 ### Model composition
 
-For ordinary SQL models, declare `defineRepository({ name, table, dependencies, create })`
-and `defineModel({ name, repository, dependencies, attributes, construct })`, then
-register those definitions with the application's `createDatabaseBindings`. An owned
-execution selects `database.model(definition)`; that bound facade provides query,
-create and instance write APIs. There is no global model discovery, registration or
-default repository. See [DATABASE.md](DATABASE.md#declarative-model-binding).
+For ordinary SQL models, use `createModel({ name, table, attributes })` from
+`@getstrata/core/database/model`. Register the definition with the application and
+select `database.model(definition)` from the current execution or transaction.
+The bound facade provides query, create and instance write APIs. Advanced
+`defineRepository` / `defineModel` declarations support custom behavior and
+explicit dependencies. See [DATABASE.md](DATABASE.md#declarative-model-binding).
 
 ### Graceful lifecycle
 
@@ -613,7 +648,7 @@ Validation is not casting: `validateObject` trims strings but keeps valid numeri
 
 ### Controlled outbound transport in installed-package tests
 
-`setDnsLookupForTests` and `resetDnsLookupForTests` from `@getstrata/core/security/safeUrl` control the process-wide resolver used by the packaged `safeFetch` API and its consumers, including `GitHubOAuthProvider`. Always restore the hook in `finally` and isolate these tests in their own process. This is a test fixture seam, not an application DNS-policy configuration API.
+`setDnsLookupForTests` and `resetDnsLookupForTests` from `@getstrata/core/testing` control the process-wide resolver used by the packaged `safeFetch` API and its consumers, including `GitHubOAuthProvider`. Always restore the hook in `finally` and isolate these tests in their own process. This is a test fixture seam, not an application DNS-policy configuration API.
 
 A controlled resolver does not disable URL/IP validation, address pinning, redirect policy or the whole-request deadline. Private DNS answers remain rejected before transport. Pair synthetic DNS answers with a controlled fetch transport: returning a public address alone does not create an owned HTTP server at that address. Such a fixture qualifies installed API composition and request/response contracts; it does not qualify live provider DNS, TLS, availability, credentials or account settings. Do not replace the provider or patch installed framework code to make a callback test pass.
 

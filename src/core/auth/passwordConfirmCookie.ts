@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { resolveEnv } from "../config/envSchema";
 import { readRequestCookie } from "../http/cookies";
 import { isProductionEnv } from "../runtime/appEnv";
 import { appCookieName, requireConfiguredSecret } from "../runtime/appKeyPrefix";
@@ -12,8 +13,16 @@ function passwordConfirmCookieName(env: Readonly<Record<string, string | undefin
 }
 
 function passwordConfirmTtlSeconds(env: Readonly<Record<string, string | undefined>>): number {
-  const parsed = Number.parseInt(env.PASSWORD_CONFIRM_TIMEOUT ?? "", 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_PASSWORD_CONFIRM_TTL_SECONDS;
+  return resolveEnv(
+    {
+      PASSWORD_CONFIRM_TIMEOUT: {
+        integer: true,
+        minimum: 1,
+        default: String(DEFAULT_PASSWORD_CONFIRM_TTL_SECONDS),
+      },
+    },
+    env,
+  ).PASSWORD_CONFIRM_TIMEOUT;
 }
 
 export function passwordConfirmOptionsFromEnvironment(

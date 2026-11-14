@@ -89,3 +89,37 @@ function validateEnv(
 
 export type { EnvRule, EnvSchema };
 export { defineEnvSchema, validateEnv };
+
+type BlankDefault<Value extends string> = Value extends `${" " | "\t" | "\r" | "\n"}${infer Rest}`
+  ? BlankDefault<Rest>
+  : Value extends ""
+    ? true
+    : false;
+type ResolvedRule<Rule extends EnvRule> = Rule extends { integer: true } ? number : string;
+export type ResolvedEnv<Schema extends EnvSchema> = Readonly<{
+  [Name in keyof Schema]: Schema[Name] extends { required: true }
+    ? ResolvedRule<Schema[Name]>
+    : Schema[Name] extends { default: infer Default extends string }
+      ? BlankDefault<Default> extends true
+        ? ResolvedRule<Schema[Name]> | undefined
+        : ResolvedRule<Schema[Name]>
+      : ResolvedRule<Schema[Name]> | undefined;
+}>;
+
+/** Validate once and freeze a typed snapshot; blanks keep validateEnv's default semantics. */
+export function resolveEnv<const Schema extends EnvSchema>(
+  schema: Schema,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): ResolvedEnv<Schema> {
+  const validated = validateEnv(schema, env);
+  const resolved: Record<string, string | number | undefined> = {};
+  for (const [name, rule] of Object.entries(schema)) {
+    const value = validated[name];
+    // An optional blank default is omitted by validateEnv, and stays absent here.
+    Object.defineProperty(resolved, name, {
+      value: value === undefined ? undefined : rule.integer ? Number(value) : value,
+      enumerable: true,
+    });
+  }
+  return Object.freeze(resolved) as ResolvedEnv<Schema>;
+}

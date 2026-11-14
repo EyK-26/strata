@@ -1,15 +1,9 @@
 import { lookup as dnsLookupImpl } from "node:dns/promises";
 import { BadRequestError } from "@getstrata/core/errors/http";
+import { testState } from "#strata-test-state";
 import { isProductionEnv } from "../runtime/appEnv";
 
 type DnsLookupResult = { address: string; family: number };
-type DnsLookup = (
-  hostname: string,
-  options: { all: true; verbatim: true },
-) => Promise<DnsLookupResult[]>;
-
-let dnsLookup: DnsLookup = dnsLookupImpl;
-
 const BLOCKED_HOSTNAMES = new Set([
   "localhost",
   "127.0.0.1",
@@ -322,7 +316,9 @@ async function resolveSafeOutboundTarget(
 
   let results: DnsLookupResult[];
   try {
-    results = await dnsLookup(hostname, { all: true, verbatim: true });
+    results = testState.dnsLookup
+      ? await testState.dnsLookup(hostname, { all: true, verbatim: true })
+      : await dnsLookupImpl(hostname, { all: true, verbatim: true });
   } catch {
     throw new BadRequestError("Webhook URL targets a blocked host.");
   }
@@ -346,14 +342,6 @@ async function assertSafeOutboundUrlResolved(
   return (await resolveSafeOutboundTarget(rawUrl, options)).url;
 }
 
-function setDnsLookupForTests(lookupFn: DnsLookup): void {
-  dnsLookup = lookupFn;
-}
-
-function resetDnsLookupForTests(): void {
-  dnsLookup = dnsLookupImpl;
-}
-
 export type { ResolvedOutboundUrl };
 export {
   assertSafeOutboundUrl,
@@ -361,7 +349,5 @@ export {
   isBlockedHostname,
   isBlockedIpAddress,
   pinUrlToAddress,
-  resetDnsLookupForTests,
   resolveSafeOutboundTarget,
-  setDnsLookupForTests,
 };

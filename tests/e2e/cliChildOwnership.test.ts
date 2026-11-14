@@ -99,7 +99,14 @@ test("installed CLI start, run and dev supervise real children through candidate
       const output = new Response(parent.stdout).text();
       const errors = new Response(parent.stderr).text();
       try {
-        const report = await ready(join(root, "ready.json"));
+        const report = await ready(join(root, "ready.json")).catch(async (error) => {
+          if (parent.exitCode === null && parent.signalCode === null) parent.kill("SIGTERM");
+          await parent.exited;
+          throw new Error(
+            `${error instanceof Error ? error.message : String(error)}\nstdout:\n${await output}\nstderr:\n${await errors}`,
+            { cause: error },
+          );
+        });
         childPid = report.pid;
         assert.notEqual(childPid, parent.pid);
         assert.equal(report.cwd, root);

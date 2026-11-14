@@ -3,9 +3,9 @@ import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import type { StrataAppConfig } from "../types.ts";
 
 type MigrateModule = {
-  migrate?: (...args: string[]) => Promise<void> | void;
-  seed?: (...args: string[]) => Promise<void> | void;
-  fresh?: (...args: string[]) => Promise<void> | void;
+  migrate?: (environment?: Readonly<Record<string, string | undefined>>) => Promise<void> | void;
+  seed?: (environment?: Readonly<Record<string, string | undefined>>) => Promise<void> | void;
+  fresh?: (environment?: Readonly<Record<string, string | undefined>>) => Promise<void> | void;
   close?: () => Promise<void> | void;
 };
 
@@ -24,6 +24,7 @@ async function closeEntry(entry: MigrateModule): Promise<void> {
 }
 
 async function migrateCommand(app: StrataAppConfig, args: string[]): Promise<void> {
+  const environment = Object.freeze({ ...process.env });
   if (!app.migrate) {
     throw new Error(
       "No migrate entry found. Add src/db/migrate.ts or set migrate in strata.config.ts.",
@@ -39,10 +40,10 @@ async function migrateCommand(app: StrataAppConfig, args: string[]): Promise<voi
   }
 
   try {
-    await entry.migrate(...args);
+    await entry.migrate(environment);
 
     if (args.includes("--seed") && typeof entry.seed === "function") {
-      await entry.seed(...args);
+      await entry.seed(environment);
     }
   } finally {
     await closeEntry(entry);
@@ -51,8 +52,9 @@ async function migrateCommand(app: StrataAppConfig, args: string[]): Promise<voi
 }
 
 async function migrateFreshCommand(app: StrataAppConfig, args: string[]): Promise<void> {
+  const environment = Object.freeze({ ...process.env });
   if (args.some((arg) => arg !== "--seed")) throw new Error("migrate:fresh supports only --seed.");
-  if (isProductionEnv())
+  if (isProductionEnv(environment))
     throw new Error("migrate:fresh is only available in development/test environments.");
   if (app.fresh) {
     const entry = await importEntry(app.fresh);
@@ -70,9 +72,9 @@ async function migrateFreshCommand(app: StrataAppConfig, args: string[]): Promis
       throw new Error("--seed requires a seed() export on the migration or fresh entry.");
     }
     try {
-      await entry.fresh(...args);
+      await entry.fresh(environment);
       if (seedEntry?.seed) {
-        await seedEntry.seed(...args);
+        await seedEntry.seed(environment);
       }
     } finally {
       await closeEntry(entry);

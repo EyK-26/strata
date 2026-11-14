@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { CORE_AUTH_TOKEN, CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
+import {
+  CORE_AUTH_TOKEN,
+  CORE_POLICY_GATE_TOKEN,
+  CORE_POLICY_REGISTRY_TOKEN,
+} from "@getstrata/bootstrap/config";
 import type { AppDependencies } from "@getstrata/bootstrap/contracts";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
 import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
@@ -27,7 +31,9 @@ import { createMockDependencies } from "./testHelpers";
 function createKernelDependencies(): AppDependencies {
   const container = new ServiceContainer();
   container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard(guestGuardOptions())));
-  container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
+  const gate = new PolicyGate();
+  container.set(CORE_POLICY_GATE_TOKEN, gate);
+  container.set(CORE_POLICY_REGISTRY_TOKEN, gate);
 
   return createMockDependencies(
     container,
@@ -87,7 +93,7 @@ describe("HttpKernel.wrapPolicy", () => {
   });
   test("applies auth and policy middleware to route handlers", async () => {
     const dependencies = createKernelDependencies();
-    const gate = dependencies.container.resolve(CORE_POLICY_GATE_TOKEN);
+    const gate = dependencies.container.resolve(CORE_POLICY_REGISTRY_TOKEN);
     gate.register("project", new ProjectPolicy());
 
     const kernel = createHttpKernel(dependencies);

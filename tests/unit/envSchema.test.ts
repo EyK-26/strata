@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { defineEnvSchema, validateEnv } from "@getstrata/core/config/envSchema";
+import { defineEnvSchema, resolveEnv, validateEnv } from "@getstrata/core/config/envSchema";
 import { FRONTEND_MODE_PATTERN } from "@getstrata/core/runtime/frontendMode";
 
 describe("validateEnv", () => {
@@ -107,4 +107,24 @@ describe("complete integer environment values", () => {
       'Environment variable "COUNT" must be an integer.',
     );
   });
+});
+
+describe("resolveEnv typed snapshot", () => {
+  test("resolves integer defaults and optional blanks once", () => {
+    const env = { PORT: " 42 ", EXPIRY: " " };
+    const resolved = resolveEnv(
+      { PORT: { integer: true, default: "3000" }, EXPIRY: { integer: true, minimum: 1 } },
+      env,
+    );
+    env.PORT = "99";
+    expect(resolved.PORT).toBe(42);
+    expect(resolved.EXPIRY).toBeUndefined();
+    expect(Object.isFrozen(resolved)).toBe(true);
+  });
+  test.each(["12junk", "1.5", "9007199254740992"])(
+    "rejects malformed or unsafe integers: %s",
+    (value) => {
+      expect(() => resolveEnv({ TTL: { integer: true, minimum: 1 } }, { TTL: value })).toThrow();
+    },
+  );
 });

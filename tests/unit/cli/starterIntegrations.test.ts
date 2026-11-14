@@ -115,9 +115,10 @@ describe("create-strata integration extras", () => {
     const login = await readFile(join(app, "views/auth/login.eta"), "utf8");
     expect(login).toContain("it.oidcLogin");
     expect(login).toContain('href="/auth/oidc"');
-    const view = await readFile(join(app, "src/bootstrap/providers/view.ts"), "utf8");
-    expect(view).toContain('FEATURE_OAUTH === "true"');
-    expect(view).toContain("OIDC_CLIENT_ID");
+    const composition = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
+    expect(composition).toContain("defineApp({");
+    const config = await readFile(join(app, "src/config/app.ts"), "utf8");
+    expect(config).toContain('"views": true');
     expect(auth).toContain("profile.email.trim().toLowerCase()");
   });
 
@@ -158,13 +159,9 @@ describe("create-strata integration extras", () => {
     expect(env).toMatch(/^STRIPE_WEBHOOK_SECRET=.*change-me/m);
     const api = await readFile(join(app, "docs/API.md"), "utf8");
     expect(api).toContain("/billing/webhooks/stripe");
-    const queue = await readFile(join(app, "src/bootstrap/providers/queue.ts"), "utf8");
-    expect(queue).toContain(
-      "export function createQueueProvider(queue:Queue,services:QueueServices)",
-    );
-    expect(await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8")).toContain(
-      "discoverJobs(registry)",
-    );
+    const composition = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
+    expect(composition).toContain("defineApp({");
+    expect(existsSync(join(app, "src/bootstrap/providers/queue.ts"))).toBe(false);
   });
 
   test("--webhooks writes webhook.dispatch and a notes.created listener", async () => {
@@ -175,9 +172,7 @@ describe("create-strata integration extras", () => {
     expect(job).toContain("signWebhookBody");
     expect(job).toContain("const allowPrivate = payload.allowPrivate === true");
     expect(job).toContain("allowHttp: allowPrivate");
-    expect(await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8")).toContain(
-      'allowPrivate:!isProductionEnv(env)&&env.WEBHOOK_ALLOW_PRIVATE==="true"',
-    );
+    expect(job).toContain("payload.allowPrivate === true");
     expect(job).toContain("VALUES (?, ?, ?, ?, ?, ?)");
     expect(job).toContain("payload.event");
     expect(job).toContain("await context.database.execute({");
@@ -196,11 +191,10 @@ describe("create-strata integration extras", () => {
     );
     expect(listener).toContain("event,");
     expect(existsSync(join(app, "src/db/migrations/0002_webhooks_schema.ts"))).toBe(true);
-    const providers = await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8");
-    expect(await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8")).toContain(
-      "await discoverListeners({directory:",
-    );
-    expect(providers).not.toContain("setActiveApplicationContext");
+    const composition = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
+    expect(composition).toContain("defineApp({");
+    expect(listener).toContain('from "@getstrata/bootstrap/application"');
+    expect(listener).not.toContain("setActiveApplicationContext");
   });
 
   test("postgres webhooks and billing use $1 placeholders", async () => {
@@ -228,4 +222,38 @@ describe("create-strata integration extras", () => {
     expect(existsSync(join(app, "src/db/migrations/0002_webhooks_schema.ts"))).toBe(true);
     expect(existsSync(join(app, "src/db/migrations/0003_billing_schema.ts"))).toBe(true);
   });
+});
+
+test("packaged webhook options retain production private-network restriction and owner snapshot", async () => {
+  const { createApplicationServices, APPLICATION_WEBHOOKS } = await import(
+    "../../../src/bootstrap/application/services"
+  );
+  const { createApplication, defineProvider } = await import("@getstrata/core/runtime/application");
+  for (const APP_ENV of ["local", "production"]) {
+    const environment = {
+      APP_ENV,
+      WEBHOOK_ALLOW_PRIVATE: "true",
+      CACHE_DRIVER: "array",
+      QUEUE_DRIVER: "sync",
+    };
+    const services = createApplicationServices(
+      environment,
+      async () => {
+        throw new Error("No database should be used by webhook configuration.");
+      },
+      process.cwd(),
+    );
+    environment.WEBHOOK_ALLOW_PRIVATE = "false";
+    const application = createApplication({
+      providers: [defineProvider({ name: "webhook.options", services })],
+    });
+    try {
+      await application.start();
+      await application.run((scope) =>
+        expect(scope.resolve(APPLICATION_WEBHOOKS).allowPrivate).toBe(APP_ENV === "local"),
+      );
+    } finally {
+      await application.stop();
+    }
+  }
 });

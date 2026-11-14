@@ -583,3 +583,66 @@ for (const mode of ["sqlite-rls", "missing-connection", "postgres-single"] as co
     }
   });
 }
+
+for (const scenario of ["immediate-stop", "independent-failure"] as const)
+  test(`outbox deferred admission preserves ${scenario} shutdown outcome`, async () => {
+    const entered = deferred(),
+      release = deferred();
+    const failure = new Error("APPLICATION_NOT_READY");
+    let invocations = 0;
+    const binding = createSqlOutboxBindings({
+      connection: "main",
+      tenancy: "none",
+      listeners: [],
+      invoke: async () => {
+        invocations++;
+        entered.resolve();
+        await release.promise;
+        throw failure;
+      },
+    });
+    const worker = createOutboxWorkerTransport(binding.token);
+    const app = createApplication({
+      providers: [],
+      transports: [worker.transport],
+      services: [
+        ...binding.services,
+        ...createDatabaseBindings({
+          default: "main",
+          connections: { main: { driver: "sqlite", filename: ":memory:" } },
+          preparation: [binding.token],
+        }),
+      ],
+    });
+    try {
+      await app.start();
+      const running = worker.start();
+      if (scenario === "independent-failure") await bounded(entered.promise);
+      const stopping = app.stop();
+      release.resolve();
+      if (scenario === "immediate-stop") {
+        await bounded(running);
+        const result = await bounded(stopping);
+        assert.equal(
+          invocations,
+          0,
+          "Stopping the owner before deferred admission must prevent its invocation.",
+        );
+        assert.equal(result.successful, true);
+        assert.deepEqual(result.snapshot.retainedResources, []);
+      } else {
+        await assert.rejects(bounded(running), (error) => error === failure);
+        await assert.rejects(bounded(worker.completion), (error) => error === failure);
+        const result = await bounded(stopping);
+        assert.equal(result.successful, false);
+        assert.ok(
+          result.snapshot.errors.some((error) =>
+            aggregateOccurrences(error.error).includes(failure),
+          ),
+        );
+      }
+    } finally {
+      release.resolve();
+      await app.stop();
+    }
+  });

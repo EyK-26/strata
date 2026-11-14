@@ -30,9 +30,9 @@ describe("jwt helpers", () => {
     const invalid = process.env.JWT_TTL_SECONDS;
     process.env.JWT_TTL_SECONDS = "nope";
     try {
-      expect(jwtOptionsFromEnvironment(process.env).ttlSeconds).toBe(3600);
-      expect(jwtTtlSeconds(1.5)).toBe(3600);
-      expect(jwtTtlSeconds(0)).toBe(3600);
+      expect(() => jwtOptionsFromEnvironment(process.env).ttlSeconds).toThrow();
+      expect(() => jwtTtlSeconds(1.5)).toThrow();
+      expect(() => jwtTtlSeconds(0)).toThrow();
     } finally {
       restoreEnvVar("JWT_TTL_SECONDS", invalid);
     }

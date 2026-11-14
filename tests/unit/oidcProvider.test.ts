@@ -3,7 +3,7 @@ import { createSign, generateKeyPairSync } from "node:crypto";
 import { signJwt } from "@getstrata/core/auth/jwt";
 import { oidcAccessTokenHash } from "@getstrata/core/auth/oauth/oidcIdToken";
 import { createOidcHandshake, OidcProvider } from "@getstrata/core/auth/oauth/oidcProvider";
-import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/security/safeUrl";
+import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/testing";
 
 const originalFetch = globalThis.fetch;
 

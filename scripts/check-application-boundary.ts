@@ -366,8 +366,13 @@ const neutralEdges: Readonly<
   },
   [PATH("auth/password")]: { values: [], types: [] },
   [PATH("database/modelAttributes")]: { values: ["auth/password"], types: [] },
+  [PATH("database/modelRelationLoader")]: {
+    values: [],
+    types: ["database/baseRepository", "database/relationQuery"],
+  },
   [PATH("database/modelQuery")]: {
     values: [
+      "database/modelRelationLoader",
       "database/errors",
       "database/ormInternal",
       "database/model",
@@ -596,6 +601,7 @@ function dependencyEdge(tokens: Token[], index: number): DependencyEdge | undefi
 const privateAliases: Readonly<Record<string, string>> = {
   "#strata-orm-internal": PATH("database/ormInternal"),
   "#strata-orm-runtime": PATH("database/ormRuntime"),
+  "#strata-mysql-native": PATH("database/mysqlNative"),
 };
 function resolveEdge(file: string, edge: string): string | undefined {
   if (Object.hasOwn(privateAliases, edge)) return privateAliases[edge];

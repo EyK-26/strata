@@ -458,7 +458,7 @@ try {
     join(fixture.app, "frontend/src/main.tsx"),
     '\nimport {apiFetch as acceptanceFetch,fetchResourceEtag as acceptanceEtag} from "./api/client";\nObject.assign(window,{acceptanceFetch,acceptanceEtag});\n',
   );
-  await mkdir(join(fixture.app, "src/modules/acceptance"));
+  await mkdir(join(fixture.app, "src/modules/acceptance"), { recursive: true });
   await writeFile(
     join(fixture.app, "src/modules/acceptance/index.ts"),
     `import type {AppModule} from '@getstrata/bootstrap/contracts';

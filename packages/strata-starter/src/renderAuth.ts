@@ -182,46 +182,20 @@ function renderAuthProvider(plan: StarterFeaturePlan): string {
   const users = plan.decisions.users;
   const cookie = plan.decisions.cookie;
   const mechanisms = plan.decisions.authMechanisms;
-  return `import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
-import type { ServiceProvider } from "@getstrata/bootstrap/contracts";
+  return `import { createAuthRuntimeConfig } from "@getstrata/bootstrap/auth/runtimeConfig";
 import type { MetadataFactory } from "@getstrata/bootstrap/persistenceContracts";
 ${users ? 'import { createMetadataAuthManager, type MetadataAuthOptions } from "@getstrata/bootstrap/providers/auth";' : 'import type { MetadataAuthOptions } from "@getstrata/bootstrap/providers/auth";'}
-${cookie ? 'import { createCookieSessionAuthManager, type CookieSessionAuthManager } from "@getstrata/bootstrap/web/session";\n' : ""}import { establishedAuthReader } from "@getstrata/core/auth/authReader";
-${users ? 'import { persistConsumedRecoveryHash } from "@getstrata/core/auth/passwordLogin";\n' : 'import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";\n'}import { createTokenAbilityChecker } from "@getstrata/core/auth/tokenAbilityChecker";
-import { csrfTokenOptionsFromEnvironment } from "@getstrata/core/http/csrfToken";
+${cookie ? 'import { createCookieSessionAuthManager, type CookieSessionAuthManager } from "@getstrata/bootstrap/web/session";\n' : ""}${users ? 'import { persistConsumedRecoveryHash } from "@getstrata/core/auth/passwordLogin";\n' : 'import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";\n'}import { csrfTokenOptionsFromEnvironment } from "@getstrata/core/http/csrfToken";
 import { intendedUrlCookieOptionsFromEnvironment } from "@getstrata/core/auth/intendedUrlCookie";
 import { flashSessionOptionsFromEnvironment } from "@getstrata/core/http/flashSession";
-import { resolveScimTenantFromToken } from "@getstrata/core/security/scimTenantTokens";
 ${users ? 'import { createFieldEncryptionCodec } from "@getstrata/core/crypto/fieldEncryption";\nimport { createMfaSecretCodec } from "@getstrata/core/crypto/mfaSecret";\n' : ""}
-import type { OAuthStateOptions } from "@getstrata/core/security/oauthState";
-${cookie ? 'import { createSamlServiceProvider, createSqlSamlAssertionReplayStore, readSamlEnvOptions, type SamlServiceProvider, type SamlServiceProviderConfig } from "@getstrata/core/auth/saml/samlServiceProvider";\n' : ""}${users ? 'import { Mailer, createMailDriver } from "@getstrata/core/mail/mailer";\nimport { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";\n' : ""}
-import { ${cookie ? "passwordConfirmCookieName, passwordConfirmTtlSeconds, " : ""}type PasswordConfirmWriteOptions } from "@getstrata/core/auth/passwordConfirmCookie";
-${plan.decisions.pendingMfa ? 'import { createPendingMfaHelpers } from "../pendingMfa.ts";\n' : ""}import { CORE_ABILITY_CHECKER_TOKEN } from "@getstrata/core/contracts/serviceTokens";
-import { createServiceToken } from "@getstrata/core/contracts/token";
+${cookie ? 'import { createSamlServiceProvider, createSqlSamlAssertionReplayStore, type SamlServiceProvider } from "@getstrata/core/auth/saml/samlServiceProvider";\n' : ""}${users ? 'import { Mailer, createMailDriver } from "@getstrata/core/mail/mailer";\n' : ""}
+import { type PasswordConfirmWriteOptions } from "@getstrata/core/auth/passwordConfirmCookie";
+${plan.decisions.pendingMfa ? 'import { createPendingMfaHelpers } from "./pendingMfa.ts";\n' : ""}import { createServiceToken } from "@getstrata/core/contracts/token";
 import type { ExecutionPersistence } from "@getstrata/core/contracts/persistence";
-${plan.decisions.tenantTable ? 'import { resolveTenant } from "@getstrata/core/tenant/resolveTenant";\n' : ""}${users ? 'import { createStarterAuthDirectory, withAuthIdentifier, type StarterAuthPersistence } from "../authDirectory.ts";\n' : ""}${plan.decisions.tenantUsers ? 'import { User } from "../../models/User.ts";\n' : ""}
+${plan.decisions.tenantTable ? 'import { resolveTenant } from "@getstrata/core/tenant/resolveTenant";\n' : ""}${users ? 'import { createStarterAuthDirectory, withAuthIdentifier, type StarterAuthPersistence } from "./authDirectory.ts";\n' : ""}${plan.decisions.tenantUsers ? 'import { User } from "../models/User.ts";\n' : ""}
 export type StarterAuthServicesOptions = Omit<MetadataAuthOptions, "mechanisms" | "sessionGuard" | "mfaSecrets"> & { readonly environment:Readonly<Record<string,string|undefined>>; readonly sessionSecret?: string; readonly signatureSecret?:string; readonly oauthStateSecret?:string; readonly passwordConfirmation?:PasswordConfirmWriteOptions };
-export interface StarterAuthRuntime {
-  readonly registrationEnabled: boolean;
-  readonly scimEnabled: boolean;
-  readonly redisUrl: string | undefined;
-  readonly samlEnabled: boolean;
-  readonly oauthEnabled: boolean;
-  readonly appName: string;
-  readonly appUrl: string;${cookie ? "\n  readonly saml: Readonly<SamlServiceProviderConfig> | undefined;" : ""}
-  readonly github: Readonly<{clientId:string;clientSecret:string;redirectUri:string;production:boolean;userAgent:string}>;
-  readonly oidc: Readonly<{issuer:string;clientId:string;clientSecret:string;redirectUri:string;networkPolicy:Readonly<{production:boolean;allowPrivate:boolean}>}>;
-  readonly throttleNamespace:string;
-  readonly trustForwardedFor:boolean;
-  readonly scimTenantForToken:(token:string)=>number|null;
-  readonly tokenExpiryDays: number | null;
-  readonly jwtTtlSeconds: number;
-  readonly jwtSecret: string;
-  readonly signatureSecret: string;
-  readonly sessionCookie:Readonly<{cookieName:string;production:boolean}>;
-  readonly oauth: OAuthStateOptions;
-  readonly passwordConfirmation: PasswordConfirmWriteOptions;
-}
+export type StarterAuthRuntime = ReturnType<typeof createAuthRuntimeConfig>;
 export interface StarterAuthServices {
   readonly config: StarterAuthRuntime;${users ? "\n  readonly mail: Mailer;" : ""}${cookie ? "\n  readonly saml: (ports:StarterAuthPersistence) => SamlServiceProvider;" : ""}${plan.decisions.pendingMfa ? "\n  readonly pendingMfa: ReturnType<typeof createPendingMfaHelpers>;" : ""}
   readonly csrf: ReturnType<typeof csrfTokenOptionsFromEnvironment>;
@@ -233,28 +207,7 @@ export const STARTER_AUTH_SERVICES = createServiceToken<StarterAuthServices>("st
 export function createStarterAuthServices(options: StarterAuthServicesOptions): StarterAuthServices {
   const env = Object.freeze({...options.environment});
   const snapshot = Object.freeze({ ...options, abilities: Object.freeze({ admin: Object.freeze([...options.abilities.admin]), member: Object.freeze([...options.abilities.member]) }) });
-  ${users ? "const secretsEnv = Object.freeze({...env,...(snapshot.sessionSecret ? {SESSION_SECRET:snapshot.sessionSecret} : {})});" : ""}
-  ${plan.decisions.jwt ? 'if (!snapshot.jwtSecret.trim()) throw new TypeError("An explicit JWT secret is required.");' : ""}
-  const configuredAppUrl = env.APP_URL ?? "http://localhost:3000";
-  const appUrl = configuredAppUrl.endsWith("/") ? configuredAppUrl.slice(0, -1) : configuredAppUrl;
-  const config: StarterAuthRuntime = Object.freeze({
-    sessionCookie:Object.freeze({cookieName:env.SESSION_COOKIE_NAME?.trim() || (env.APP_KEY_PREFIX?.trim() || "strata") + "_session",production:snapshot.production}),
-    registrationEnabled: (env.FEATURE_REGISTRATION ?? "true") !== "false",
-    scimEnabled: (env.FEATURE_SCIM ?? "false") === "true", redisUrl:env.REDIS_URL,
-    samlEnabled: env.FEATURE_SAML === "true",
-    oauthEnabled: env.FEATURE_OAUTH === "true",
-    appName: env.APP_NAME ?? "Strata", appUrl,${cookie ? '\n    saml: env.FEATURE_SAML === "true" ? Object.freeze(readSamlEnvOptions(env)) : undefined,' : ""}
-    github: Object.freeze({clientId:env.GITHUB_CLIENT_ID?.trim() ?? "",clientSecret:env.GITHUB_CLIENT_SECRET?.trim() ?? "",redirectUri:env.GITHUB_REDIRECT_URI?.trim() || appUrl + "/auth/github/callback",production:snapshot.production,userAgent:env.APP_USER_AGENT?.trim()||env.APP_KEY_PREFIX?.trim()||"strata"}),
-    oidc: Object.freeze({issuer:env.OIDC_ISSUER?.trim() ?? "",clientId:env.OIDC_CLIENT_ID?.trim() ?? "",clientSecret:env.OIDC_CLIENT_SECRET?.trim() ?? "",redirectUri:env.OIDC_REDIRECT_URI?.trim() || appUrl + "/auth/oidc/callback",networkPolicy:Object.freeze({production:snapshot.production,allowPrivate:env.OIDC_ALLOW_PRIVATE === "true"})}),
-    throttleNamespace:env.APP_KEY_PREFIX?.trim()||"strata",
-    trustForwardedFor:env.TRUST_FORWARDED_FOR === "true",
-    scimTenantForToken:(token:string)=>resolveScimTenantFromToken(token,env),
-    tokenExpiryDays: ${plan.decisions.token ? '(() => { const days=Number.parseInt(env.API_TOKEN_DEFAULT_EXPIRY_DAYS?.trim() ?? "",10); return Number.isInteger(days) && days > 0 ? days : null; })()' : "null"},
-    jwtTtlSeconds: ${plan.decisions.jwt ? '(() => { const ttl=Number.parseInt(env.JWT_TTL_SECONDS ?? "",10); return Number.isInteger(ttl) && ttl > 0 ? ttl : 3600; })()' : "3600"}, jwtSecret:snapshot.jwtSecret,
-    signatureSecret: ${plan.decisions.signedUrls ? 'options.signatureSecret ?? requireConfiguredSecret(["SIGNED_URL_SECRET","SESSION_SECRET","OAUTH_STATE_SECRET"],"signed-url-secret",secretsEnv)' : "options.signatureSecret ?? snapshot.jwtSecret"},
-    oauth: Object.freeze({secret:${cookie ? 'options.oauthStateSecret ?? requireConfiguredSecret(["OAUTH_STATE_SECRET","SESSION_SECRET"],"oauth-state-secret",secretsEnv)' : "options.oauthStateSecret ?? snapshot.jwtSecret"},production:snapshot.production}),
-    passwordConfirmation: Object.freeze(options.passwordConfirmation ? {...options.passwordConfirmation} : {secret:${cookie ? 'requireConfiguredSecret(["SESSION_SECRET","OAUTH_STATE_SECRET"],"session-secret",secretsEnv)' : "snapshot.jwtSecret"},cookieName:${cookie ? "passwordConfirmCookieName(env)" : JSON.stringify("strata_password_confirmed")},ttlSeconds:${cookie ? "passwordConfirmTtlSeconds(env)" : "10800"},production:snapshot.production}),
-  });
+  const config: StarterAuthRuntime = createAuthRuntimeConfig(options, ${JSON.stringify({ users, cookie, token: plan.decisions.token, jwt: plan.decisions.jwt, signedUrls: plan.decisions.signedUrls })});
   ${cookie ? `if (!snapshot.sessionSecret?.trim()) throw new TypeError("SESSION_SECRET is required for cookie authentication.");\n  const session = (ports: StarterAuthPersistence) => createCookieSessionAuthManager({ selected: ports.database, policy: ports.policy, secret: snapshot.sessionSecret!, production: snapshot.production, rls: ${String(plan.decisions.rls)}, cookieName: config.sessionCookie.cookieName, mapUser: user => ({ id: user.id, name: user.name, email: user.email, authVersion: user.auth_version, isActive: user.is_active, role: user.is_admin ? "admin" : "member", ...(user.email_verified_at !== undefined ? {emailVerifiedAt:user.email_verified_at} : {}) }) });` : ""}
   ${users ? "const fieldEncryption=createFieldEncryptionCodec(env), mfaSecrets=createMfaSecretCodec(env);" : ""}
   const metadata: MetadataFactory = (${users || plan.decisions.tenantTable ? "ports" : "_ports"}: ExecutionPersistence) => {
@@ -285,16 +238,6 @@ export function createStarterAuthServices(options: StarterAuthServicesOptions): 
     };
   };
   return Object.freeze({ config, metadata, csrf:csrfTokenOptionsFromEnvironment(env), intendedUrl:intendedUrlCookieOptionsFromEnvironment(env),flash:flashSessionOptionsFromEnvironment(env)${users ? ",fieldEncryption,mfaSecrets" : ""}${users ? ", mail: new Mailer(createMailDriver(env))" : ""}${cookie ? ', saml: (ports:StarterAuthPersistence) => { if(!config.saml) throw new Error("SAML is not configured.");return createSamlServiceProvider({...config.saml,replayStore:createSqlSamlAssertionReplayStore(ports.database)}); }' : ""}${plan.decisions.pendingMfa ? ", pendingMfa: createPendingMfaHelpers({secret:snapshot.sessionSecret!,production:snapshot.production})" : ""}${users ? ", directory: createStarterAuthDirectory" : ""}${cookie ? ", session" : ""} });
-}
-export function createStarterAuthProvider(services: StarterAuthServices): ServiceProvider {
-  return {
-    name: "starter.auth",
-    register({ container }) {
-      container.set(STARTER_AUTH_SERVICES, services);
-      container.set(CORE_AUTH_TOKEN, establishedAuthReader);
-      container.set(CORE_ABILITY_CHECKER_TOKEN, createTokenAbilityChecker());
-    },
-  };
 }
 `;
 }

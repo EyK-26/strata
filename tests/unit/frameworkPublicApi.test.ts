@@ -87,7 +87,7 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.createBunSqlPool).toBe("function");
     expect(typeof core.createDatabaseQueryProxy).toBe("function");
     expect(typeof core.rssResponse).toBe("function");
-    expect(typeof core.resetMemoryThrottleForTests).toBe("function");
+    expect("resetMemoryThrottleForTests" in core).toBe(false);
     expect(typeof core.createCacheStore).toBe("function");
     expect("configureContentSecurityPolicy" in core).toBe(false);
     expect("resetContentSecurityPolicyForTests" in core).toBe(false);
@@ -96,7 +96,7 @@ describe("@getstrata/core public API", () => {
     expect(typeof core.envFlagEnabled).toBe("function");
     expect(typeof core.appDisplayName).toBe("function");
     expect(typeof core.requireConfiguredSecret).toBe("function");
-    expect(typeof core.resetMysqlLoaderForTests).toBe("function");
+    expect("resetMysqlLoaderForTests" in core).toBe(false);
     expect(typeof core.createMysqlPool).toBe("function");
     expect(typeof core.createMysqlConnectionFromPool).toBe("function");
     expect(typeof core.loginRedirectLocation).toBe("function");

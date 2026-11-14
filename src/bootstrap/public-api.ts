@@ -1,3 +1,15 @@
+export {
+  APPLICATION_BILLING,
+  APPLICATION_QUEUE,
+  APPLICATION_WEBHOOKS,
+  type AppDefinition,
+  type ApplicationAuthOptions,
+  type ApplicationAuthServices,
+  type BootstrapOptions,
+  type BootstrappedApp,
+  defineApp,
+  serveApplication,
+} from "./application";
 /**
  * @getstrata/bootstrap: application shell for Strata apps.
  */
@@ -31,6 +43,7 @@ export {
   CORE_CONFIG_TOKEN,
   CORE_EVENT_BUS_TOKEN,
   CORE_POLICY_GATE_TOKEN,
+  CORE_POLICY_REGISTRY_TOKEN,
   CORE_QUEUE_TOKEN,
   CSRF_TARGET_ORIGIN_CONFIG_KEY,
   DATABASE_URL_CONFIG_KEY,
@@ -62,7 +75,7 @@ export type { CreateWebRoutesOptions } from "./createWebRoutes.ts";
 export { createWebRoutes, mergeWebRoutes } from "./createWebRoutes.ts";
 export { createAppDependencies } from "./dependencies.ts";
 export type { DiscoveredJobClass, DiscoverJobsOptions, JobManifestEntry } from "./discoverJobs.ts";
-export { discoverJobs, resetDiscoverJobsForTests } from "./discoverJobs.ts";
+export { discoverJobs } from "./discoverJobs.ts";
 export type { DiscoverModelsOptions } from "./discoverModels.ts";
 export { discoverModels } from "./discoverModels.ts";
 export type { DiscoverModulesOptions } from "./discoverModules.ts";

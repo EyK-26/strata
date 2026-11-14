@@ -93,7 +93,11 @@ function createOutboxWorkerTransport(
         [workerApplicationShutdown]: applicationShutdown,
       });
       running = Promise.resolve()
-        .then(() => (controller.signal.aborted ? undefined : selected.work(workOptions)))
+        .then(() =>
+          controller.signal.aborted || applicationShutdown?.aborted
+            ? undefined
+            : selected.work(workOptions),
+        )
         .catch((error: unknown) => {
           if ((!controller.signal.aborted && !applicationShutdown?.aborted) || !expectedStop(error))
             throw error;

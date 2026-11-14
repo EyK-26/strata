@@ -32,24 +32,45 @@ for (const database of ["postgres", "mysql"] as const)
       overlayRoot: resolveOverlayRoot(),
     });
     const createApp = await readFile(join(dir, "src/bootstrap/createApp.ts"), "utf8");
-    expect(createApp).toContain("ensureAppDatabase({provision:!production&&runMigrate})");
-    expect(createApp).toContain("const runMigrate=options.migrate??!production");
+    expect(createApp).toContain("ensureDatabase: ensureAppDatabase");
+    expect(createApp).toContain("defineApp({");
     for (const file of ["migrate", "fresh"])
       expect(await readFile(join(dir, `src/db/${file}.ts`), "utf8")).toContain(
-        "ensureAppDatabase({ provision: true })",
+        "ensureAppDatabase({ provision: true, environment })",
       );
     for (const file of ["status", "rollback"])
       expect(await readFile(join(dir, `src/db/${file}.ts`), "utf8")).toContain(
-        "ensureAppDatabase({ provision: false })",
+        "ensureAppDatabase({ provision: false, environment })",
       );
     let helper = await readFile(join(dir, "src/bootstrap/ensureDatabase.ts"), "utf8");
     helper = helper
+      .replace('"@getstrata/bootstrap/databaseCommands"', '"./databaseCommands.ts"')
       .replace(
         '"@getstrata/core/runtime/appEnv"',
         JSON.stringify(join(import.meta.dir, "../../../src/core/runtime/appEnv.ts")),
+      );
+    const packaged = (
+      await readFile(join(import.meta.dir, "../../../src/bootstrap/databaseCommands.ts"), "utf8")
+    )
+      .replaceAll(
+        '"@getstrata/core/runtime/appEnv"',
+        JSON.stringify(join(import.meta.dir, "../../../src/core/runtime/appEnv.ts")),
       )
-      .replace('"@getstrata/core/tenant/enableTenantRls"', '"./fake.ts"')
-      .replace('"mysql2/promise"', '"./fake.ts"');
+      .replaceAll(
+        '"@getstrata/core/database/dialect"',
+        JSON.stringify(join(import.meta.dir, "../../../src/core/database/dialect.ts")),
+      )
+      .replaceAll('"@getstrata/core/tenant/enableTenantRls"', '"./fake.ts"')
+      .replaceAll('"mysql2/promise"', '"./fake.ts"');
+    await Bun.write(join(dir, "databaseCommands.ts"), packaged);
+    const databaseSource = (await readFile(join(dir, "src/bootstrap/database.ts"), "utf8"))
+      .replace('"@getstrata/bootstrap/databaseCommands"', '"./databaseCommands.ts"')
+      .replace(
+        '"@getstrata/core/runtime/appEnv"',
+        JSON.stringify(join(import.meta.dir, "../../../src/core/runtime/appEnv.ts")),
+      );
+    await Bun.write(join(dir, "database.ts"), databaseSource);
+
     await Bun.write(join(dir, "helper.ts"), helper);
     await Bun.write(
       join(dir, "fake.ts"),
@@ -71,7 +92,7 @@ for (const mode of ["production","staging"]) {
   assert.equal(await ensureAppDatabase(),url); assert.equal(calls.length,0);
   process.env.APP_DATABASE_URL=url.replace("existing","override");
   assert.equal(await ensureAppDatabase({provision:false}),process.env.APP_DATABASE_URL);
-  assert.equal(process.env.DATABASE_URL,process.env.APP_DATABASE_URL); assert.equal(calls.length,0);
+  assert.equal(process.env.DATABASE_URL,url); assert.equal(calls.length,0);
   delete process.env.APP_DATABASE_URL; delete process.env.DATABASE_URL;
   await assert.rejects(()=>ensureAppDatabase(),/required in production/);
   process.env.DATABASE_URL=url;
@@ -87,6 +108,10 @@ for (const mode of ["production","staging"]) {
   }
   await ensureAppDatabase({provision:true}); assert.ok(calls.length>0); calls.length=0;
 }
+const captured=Object.freeze({APP_ENV:"local",DATABASE_URL:url});
+process.env.DATABASE_URL=url.replace("existing","changed_after_capture");
+assert.equal(await ensureAppDatabase({provision:false,environment:captured}),url);
+assert.equal(process.env.DATABASE_URL,url.replace("existing","changed_after_capture"));
 process.env.APP_ENV="local"; delete process.env.APP_DATABASE_URL; process.env.DATABASE_URL=url;
 await ensureAppDatabase(); assert.ok(calls.length>0);
 ${

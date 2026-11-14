@@ -18,7 +18,9 @@
       "@getstrata/bootstrap": ["../../src/bootstrap/public-api.ts"],
       "@getstrata/bootstrap/*": ["../../src/bootstrap/*"],
       "#strata-orm-internal": ["../../src/core/database/ormInternal.ts"],
-      "#strata-orm-runtime": ["../../src/core/database/ormRuntime.ts"]
+      "#strata-orm-runtime": ["../../src/core/database/ormRuntime.ts"],
+      "#strata-test-state": ["../../src/core/testingState.ts"],
+      "#strata-mysql-native": ["../../src/core/database/mysqlNative.ts"]
     }
   },
   "include": ["../../src/framework/public-api.ts", "../../src/core/**/*.ts"]

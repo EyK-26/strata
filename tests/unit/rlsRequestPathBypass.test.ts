@@ -120,15 +120,11 @@ const allowed: Readonly<Record<string, number>> = {
   "src/core/database/ownedReadOnlyObservation.ts": 1,
   "src/core/events/outbox/index.ts": 2,
   "src/bootstrap/providers/queue.ts": 1,
+  "src/bootstrap/application.ts": 1,
+  "src/bootstrap/application/services.ts": 1,
   "src/cli/commands/scheduleRun.ts": 1,
-  "generated.rls/src/bootstrap/createApp.ts": 1,
-  "generated.rls/src/bootstrap/providers/index.ts": 1,
   "generated.rls/src/cli/initialAdmin.ts": 1,
   "generated.rls/src/db/migrate.ts": 1,
-  "generated.team/src/bootstrap/createApp.ts": 1,
-  "generated.team/src/bootstrap/providers/index.ts": 1,
-  "generated.integrations/src/bootstrap/createApp.ts": 1,
-  "generated.integrations/src/bootstrap/providers/index.ts": 1,
   "generated.integrations/src/cli/initialAdmin.ts": 1,
   "generated.integrations/src/db/migrate.ts": 1,
 };
@@ -198,12 +194,12 @@ describe("request-path RLS bypass fence", () => {
       ]);
     }
     // An allowed composition file cannot hide an added HTTP bypass either.
-    const composition = await readFile(join(generated.rls, "src/bootstrap/createApp.ts"), "utf8");
+    const composition = await readFile(join(repoRoot, "src/bootstrap/application.ts"), "utf8");
     expect(unboundedPolicies(composition)).toHaveLength(1);
     const injectedComposition = `${composition}\nconst unauthorizedHttp = ports => ports.policy.run(ports.database,{kind:"bypass"},handler);`;
     expect(
       unexpected({
-        "generated.rls/src/bootstrap/createApp.ts": unboundedPolicies(injectedComposition).length,
+        "src/bootstrap/application.ts": unboundedPolicies(injectedComposition).length,
       }),
     ).toHaveLength(1);
     expect(
@@ -266,23 +262,25 @@ describe("request-path RLS bypass fence", () => {
   test("generated seed bypass is development-only and owns its application", async () => {
     const seed = await readFile(join(generated.rls, "src/db/migrate.ts"), "utf8");
     expect(unboundedPolicies(seed)).toHaveLength(1);
-    expect(seed).toContain('if (isProductionEnv()) throw new Error("Demo seeding is disabled');
+    expect(seed).toContain(
+      'if (isProductionEnv(environment)) throw new Error("Demo seeding is disabled',
+    );
     expect(seed).toContain('policy.run(database, {kind:"bypass"}, writeSeed)');
     expect(seed).toContain('policy:"starter-demo-seed"');
     expect(seed).toMatch(/finally\s*\{\s*await application.stop\(\)/);
   });
 
   test("worker audit composition owns bypass, while webhook jobs use their established queue database", async () => {
-    const bootstrap = await readFile(join(generated.rls, "src/bootstrap/createApp.ts"), "utf8");
+    const bootstrap = await readFile(join(repoRoot, "src/bootstrap/application.ts"), "utf8");
     const providers = await readFile(
-      join(generated.rls, "src/bootstrap/providers/index.ts"),
+      join(repoRoot, "src/bootstrap/application/services.ts"),
       "utf8",
     );
     expect(unboundedPolicies(providers)).toHaveLength(1);
-    expect(providers).toContain('policy:"audit.export"');
-    expect(providers).toContain('policy.run(database,{kind:"bypass"},work)');
-    expect(bootstrap).toContain(
-      'createOwnedReadOnlyObservation(handle.application,"main",dbOptions,{postgresPolicy:"bypass"})',
+    expect(providers).toMatch(/policy:\s*"audit.export"/);
+    expect(providers).toMatch(/policy\.run\(database,\s*\{\s*kind:\s*"bypass"\s*\},\s*work\)/);
+    expect(bootstrap).toMatch(
+      /createOwnedReadOnlyObservation\(\s*handle\.application,\s*"main",\s*dbOptions,\s*\{\s*postgresPolicy:\s*"bypass"\s*\},?\s*\)/,
     );
     const job = await readFile(
       join(integrations, "src/jobs/dispatchOutboundWebhookJob.ts"),

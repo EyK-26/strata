@@ -1,8 +1,11 @@
 type EventListener = (payload: unknown) => void | Promise<void>;
 
-class EventBus {
-  constructor() {}
+/** Capability for publishing application events; listener ownership stays with composition. */
+interface EventDispatcher {
+  dispatch(event: string, payload: unknown): Promise<void>;
+}
 
+class EventBus implements EventDispatcher {
   private readonly transactionalListeners = new Map<string, Set<EventListener>>();
 
   listenTransactional(event: string, listener: EventListener): () => void {
@@ -60,5 +63,5 @@ class EventBus {
   }
 }
 
-export type { EventListener };
+export type { EventDispatcher, EventListener };
 export { EventBus };

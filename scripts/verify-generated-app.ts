@@ -417,6 +417,13 @@ export function commitContract(database: DatabaseSession, transaction: Transacti
         "-e",
         `
       await import("./src/default-subpath-exports.contract.ts");
+      const bootstrap = await import("@getstrata/bootstrap");
+      const composition = await import("@getstrata/bootstrap/application");
+      const tokens = await import("@getstrata/core/contracts/serviceTokens");
+      for (const key of ["defineApp", "APPLICATION_QUEUE", "APPLICATION_BILLING", "APPLICATION_WEBHOOKS"]) {
+        if (bootstrap[key] !== composition[key]) throw new Error("Application import identity differs: " + key);
+      }
+      if (composition.APPLICATION_QUEUE !== tokens.CORE_QUEUE_TOKEN) throw new Error("Queue consumer token differs");
       const core = await import("@getstrata/core");
       const models = await import("@getstrata/core/database/model");
       const database = await import("@getstrata/core/database");

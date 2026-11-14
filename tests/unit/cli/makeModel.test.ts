@@ -137,8 +137,6 @@ test("make:model help explains separate migrations without creating files", () =
     expect(existsSync(join(root, "src/models"))).toBe(false);
   }));
 
-test("fresh generated CLI registries expose the model command", () => {
-  expect(renderCliRegisterTs()).toContain(
-    '"make:model": async () => (await import("@getstrata/cli/scaffold")).makeModelCommand',
-  );
+test("generated registries leave built-in scaffold registration to the package", () => {
+  expect(renderCliRegisterTs()).not.toContain('"make:model"');
 });

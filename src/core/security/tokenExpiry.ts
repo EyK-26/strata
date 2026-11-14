@@ -1,17 +1,12 @@
+import { resolveEnv } from "../config/envSchema";
+
 function resolveDefaultTokenExpiryDays(value?: string): number | null {
-  const raw = value?.trim();
-
-  if (!raw) {
-    return null;
-  }
-
-  const parsed = Number.parseInt(raw, 10);
-
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    return null;
-  }
-
-  return parsed;
+  return (
+    resolveEnv(
+      { API_TOKEN_DEFAULT_EXPIRY_DAYS: { integer: true, minimum: 1 } },
+      { API_TOKEN_DEFAULT_EXPIRY_DAYS: value },
+    ).API_TOKEN_DEFAULT_EXPIRY_DAYS ?? null
+  );
 }
 
 export { resolveDefaultTokenExpiryDays };

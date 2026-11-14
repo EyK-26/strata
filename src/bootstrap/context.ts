@@ -108,6 +108,7 @@ export function createApplicationContext(
   container.set(CORE_HTTP_CLEANUP_TOKEN, (callback: () => void | Promise<void>) =>
     context.onCleanup(callback),
   );
+  let selectedProviders: readonly ServiceProvider[] = [];
   application = createApplication({
     ...options.definition,
     providers: [
@@ -123,9 +124,11 @@ export function createApplicationContext(
             flush: () => phase("flush"),
             close: () => phase("close"),
           });
-          const selected = [...configured, ...(options.providersFromScope?.(scope) ?? [])];
-          await runProviderPhase(selected, "register", context);
-          await runProviderPhase(selected, "boot", context);
+          selectedProviders = [...configured, ...(options.providersFromScope?.(scope) ?? [])];
+          await runProviderPhase(selectedProviders, "register", context);
+        },
+        boot: async () => {
+          await runProviderPhase(selectedProviders, "boot", context);
           assertAppDependenciesComplete(dependencies);
         },
       },

@@ -77,7 +77,7 @@ for (const [frontend, auth] of [
       ).not.toThrow();
     const read = (path: string) => readFileSync(join(targetDir, path), "utf8");
     expect(read("src/bootstrap/createApp.ts")).toContain(
-      "container.set(WORK_TRACKER_OUTBOX,publisher!)",
+      "outbox: { listeners, token: WORK_TRACKER_OUTBOX }",
     );
     expect(read("src/models/register.ts")).toContain("...workTrackerRepositories");
     expect(read("src/outbox/registry.ts")).toContain("[workTrackerListener]");

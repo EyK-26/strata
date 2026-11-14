@@ -265,7 +265,6 @@ describe("bump workspace install contract", () => {
       );
       await write("README.md", "Published as **1.0.0**");
       for (const file of [
-        "packages/strata-starter/templates/package.json",
         "packages/strata-starter/src/renderProjectMetadata.ts",
         "tests/unit/cli/starterGenerate.test.ts",
         "tests/unit/cli/starterTemplate.test.ts",
@@ -282,7 +281,6 @@ describe("bump workspace install contract", () => {
       // Generated package pins have their own source owner; the official bump must
       // update that owner as well as every existing template/assertion pin.
       for (const file of [
-        "packages/strata-starter/templates/package.json",
         "packages/strata-starter/src/renderProjectMetadata.ts",
         "tests/unit/cli/starterGenerate.test.ts",
         "tests/unit/cli/starterTemplate.test.ts",

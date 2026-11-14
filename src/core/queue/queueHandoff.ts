@@ -2,7 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { copyApplicationConfig } from "../config/configSnapshot";
 import type { ApplicationConfig, ExecutionActor } from "../contracts/application";
 import { normalizeExecutionEnvelope } from "../runtime/executionContext";
-import type { Job, Queue } from "./index";
+import type { Job, QueueDispatcher } from "./index";
 import type { JobRegistry } from "./jobRegistry";
 import type { QueueJobEnvelope } from "./jobRunner";
 
@@ -125,11 +125,11 @@ function createQueueHandoff(options: {
 }
 /** Capture identity data only; no request scope, signal, database session or resolver survives dispatch. */
 function createIdentityQueue(
-  queue: Queue,
+  queue: QueueDispatcher,
   registry: JobRegistry,
   handoff: QueueHandoff,
   identity: QueueIdentity,
-): Pick<Queue, "dispatch"> {
+): QueueDispatcher {
   const captured = snapshotIdentity(identity);
   return Object.freeze({
     async dispatch<TPayload extends object>(job: Job<TPayload>, payload: TPayload): Promise<void> {

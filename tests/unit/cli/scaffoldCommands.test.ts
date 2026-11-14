@@ -113,14 +113,12 @@ export const repositoryDefinitions = [NoteRepository];
 export const modelDefinitions = [Note];
 export const repositoryDefinitions = [NoteRepository];
 `);
-      const repository = await Bun.file(
-        join(workspace, "src/modules/invoice/repository.ts"),
-      ).text();
-      expect(repository).toContain("defineRepository({");
+      const repository = await Bun.file(join(workspace, "src/modules/invoice/model.ts")).text();
+      expect(repository).toContain("createModel({");
       expect(repository).toContain("invoiceRepository");
       expect(repository).not.toContain("registerModelClass");
       expect(output.logs).toContain(
-        "Register the generated repository definition in application database bindings.",
+        "Register the generated model and its repository in src/models/register.ts.",
       );
     });
   });
@@ -144,7 +142,7 @@ export const repositoryDefinitions = [NoteRepository];
     const { makeModuleCommand } = await import("../../../src/cli/commands/makeModule");
 
     await expect(makeModuleCommand("!!!")).rejects.toThrow(
-      "make:module requires a valid module name.",
+      "make:module requires a valid relative name",
     );
   });
 });
@@ -166,9 +164,9 @@ describe("makeMigrationCommand", () => {
       expect(files).toHaveLength(1);
       expect(files[0]).toMatch(/_add_widgets_table\.ts$/);
       const source = await Bun.file(join(migrationsRoot, files[0] ?? "")).text();
-      expect(source).toContain('from "@getstrata/core/database/migrations/types"');
-      expect(source).toContain('from "@getstrata/core/database/schema"');
-      expect(source).toContain("Schema.run(db, currentSqlDialect().driver");
+      expect(source).toContain('from "@getstrata/core/database/migrations"');
+      expect(source).toContain("defineMigration({");
+      expect(source).toContain("up(schema, db)");
       expect(source).not.toContain("SELECT 1");
       expect(output.logs[0]).toMatch(/^Created migration: /);
     });
@@ -184,7 +182,7 @@ describe("makeMigrationCommand", () => {
     const { makeMigrationCommand } = await import("../../../src/cli/commands/makeMigration");
 
     await expect(makeMigrationCommand("!!!")).rejects.toThrow(
-      "make:migration requires a valid migration name.",
+      "make:migration requires a valid relative name",
     );
   });
 });
@@ -204,16 +202,16 @@ describe("makeFactoryCommand", () => {
         output.restore();
       }
 
-      const factoryPath = join(workspace, "src", "modules", "widget", "factory.ts");
+      const factoryPath = join(workspace, "src", "db", "factories", "WidgetFactory.ts");
       expect(await Bun.file(factoryPath).exists()).toBe(true);
       const factorySource = await Bun.file(factoryPath).text();
       expect(factorySource).toContain('from "@getstrata/core/database/factory"');
-      expect(factorySource).toContain("definition: () => WidgetRecord;");
-      expect(factorySource).toContain("persist?: FactoryPersist<WidgetRecord>;");
+      expect(factorySource).toContain("definition: () => WidgetRecord");
+      expect(factorySource).toContain("persist?: FactoryPersist<WidgetRecord>");
       expect(factorySource).toContain(
-        "function createWidgetFactory(dependencies: WidgetFactoryDependencies)",
+        "function createWidgetFactory(definition: () => WidgetRecord, persist?: FactoryPersist<WidgetRecord>)",
       );
-      expect(factorySource).toContain("Factory.from(WidgetFactory, dependencies)");
+      expect(factorySource).toContain("createFactory({ definition, persist })");
       expect(factorySource).not.toContain("extends Factory");
       expect(factorySource).not.toContain("as WidgetRecord");
       await expect(makeFactoryCommand("widget")).rejects.toThrow(

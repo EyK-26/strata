@@ -227,7 +227,7 @@ function renderNoteCreatedWebhookListener(): string {
 import { service } from "@getstrata/core/contracts/services";
 import { createServiceToken } from "@getstrata/core/contracts/token";
 import { repositoryEffects, type AfterCommitRepositoryListener } from "@getstrata/core/database/definitions";
-import { STARTER_QUEUE_TOKEN, STARTER_WEBHOOK_OPTIONS_TOKEN } from "../bootstrap/providers/index.ts";
+import { APPLICATION_QUEUE as STARTER_QUEUE_TOKEN, APPLICATION_WEBHOOKS as STARTER_WEBHOOK_OPTIONS_TOKEN } from "@getstrata/bootstrap/application";
 import { NoteRepository, type NoteRecord } from "../models/Note.ts";
 import DispatchOutboundWebhookJob from "../jobs/dispatchOutboundWebhookJob.ts";
 
@@ -315,7 +315,7 @@ function renderBillingModule(plan: StarterFeaturePlan): string {
 import { jsonResponse } from "@getstrata/core/http/response";
 import { verifyStripeWebhookSignature } from "@getstrata/core/security/stripeWebhook";
 import { applyStripeWebhook } from "../../billing/applyStripeWebhook.ts";
-import { STARTER_BILLING_OPTIONS_TOKEN } from "../../bootstrap/providers/index.ts";
+import { APPLICATION_BILLING as STARTER_BILLING_OPTIONS_TOKEN } from "@getstrata/bootstrap/application";
 
 const billingModule: AppModule = {
   name: "billing",

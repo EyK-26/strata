@@ -1,16 +1,25 @@
 import { expect, test } from "bun:test";
+import { renderPackageJson } from "../../packages/strata-starter/src/renderProjectMetadata";
 
 const manifests = [
   "package.json",
   ...["core", "bootstrap", "cli", "starter"].map((name) => `packages/strata-${name}/package.json`),
   "packages/create-strata/package.json",
-  "packages/strata-starter/templates/package.json",
   "templates/scaffold/spa-react/frontend/package.json",
 ];
 
 test("all active package requirements reject Bun 1.4.3 and allow 1.4.4 plus future 1.4 patches", async () => {
-  for (const path of manifests) {
-    const manifest = await Bun.file(new URL(`../../${path}`, import.meta.url)).json();
+  const inputs = await Promise.all(
+    manifests.map(async (path) => ({
+      path,
+      manifest: await Bun.file(new URL(`../../${path}`, import.meta.url)).json(),
+    })),
+  );
+  inputs.push({
+    path: "generated package.json",
+    manifest: JSON.parse(renderPackageJson("runtime-policy")),
+  });
+  for (const { path, manifest } of inputs) {
     expect(Bun.semver.satisfies("1.4.3", manifest.engines.bun), path).toBe(false);
     expect(Bun.semver.satisfies("1.4.4", manifest.engines.bun), path).toBe(true);
     expect(Bun.semver.satisfies("1.4.999", manifest.engines.bun), path).toBe(true);

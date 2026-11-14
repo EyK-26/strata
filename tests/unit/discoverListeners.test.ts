@@ -55,3 +55,28 @@ describe("discoverListeners", () => {
     expect(Object.isFrozen(listeners[0])).toBe(true);
   });
 });
+
+test("event helper subscribes only during application lifetime and releases on stop", async () => {
+  const { defineEventListener } = await import("../../src/bootstrap/discoverListeners");
+  const { EventBus } = await import("@getstrata/core/events");
+  const { APPLICATION_EVENT_BUS_TOKEN } = await import("../../src/bootstrap/providers/events");
+  const { valueService } = await import("@getstrata/core/contracts/services");
+  const { createApplication } = await import("@getstrata/core/runtime/application");
+  const bus = new EventBus();
+  const seen: unknown[] = [];
+  const declarations = defineEventListener("order.paid", (payload) => {
+    seen.push(payload);
+  });
+  const app = createApplication({
+    providers: [],
+    services: [valueService(APPLICATION_EVENT_BUS_TOKEN, bus), ...declarations.services],
+  });
+  await bus.emit("order.paid", 1);
+  expect(seen).toEqual([]);
+  await app.start();
+  await bus.emit("order.paid", 2);
+  expect(seen).toEqual([2]);
+  await app.stop();
+  await bus.emit("order.paid", 3);
+  expect(seen).toEqual([2]);
+});

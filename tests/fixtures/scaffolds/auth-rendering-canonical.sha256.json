@@ -5,7 +5,7 @@
     "hashes": {
       "module": null,
       "directory": null,
-      "provider": "e1a4dd2f8820d47e667152d4264e594117a8d0cccbc789c5922c318107e3ec8a",
+      "provider": "8f76926fc6e288b6783475f7f1a5ad51c40ea2fd03f62e52b39e820e25cba6b2",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -25,7 +25,7 @@
     "hashes": {
       "module": null,
       "directory": null,
-      "provider": "e1a4dd2f8820d47e667152d4264e594117a8d0cccbc789c5922c318107e3ec8a",
+      "provider": "8f76926fc6e288b6783475f7f1a5ad51c40ea2fd03f62e52b39e820e25cba6b2",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -34,9 +34,9 @@
     "name": "api-cookie-bare",
     "args": ["--frontend=api", "--auth=cookie", "--database=sqlite", "--tenancy=none"],
     "hashes": {
-      "module": "c2cd46207a20fc91c23a655c6d2211b65795927b63928fe202c77fe3737eeb0a",
+      "module": "eda1844ffd4e50dc0b78b9d15071dcbbc874b63eba1c2b2dfdba1f244e3050df",
       "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "1c865d5ba35de26b2a2aa09ff168f8cb299d118dd1131cd73a8e3295b637d0d1",
+      "provider": "e130a3d2d3ad6c0ccaacd850678d08564364658c5c5360e15872a2374da6fc38",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -54,9 +54,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "158374362d7d9f24484499d85ce4e49481e0e0759127a0249b45625517bb9036",
+      "module": "6bebb8454c7563b4f93fa2552a8eb05966bbaa6b8d1580ea9b2b258612c9ff79",
       "directory": "fbe64793ec790a71472cefc24567916a25968274c2b15e43592b3d90476a700d",
-      "provider": "05cb68f3cf9c85d61a5d8ae9a5207fe4408842f6f86d3ddcc0df442ff2b25c7b",
+      "provider": "ab68112a04ffe674dfc950fc51062949bfff2485bbb80f8c59feca20cf70ddd6",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -65,9 +65,9 @@
     "name": "api-cookie-mfa",
     "args": ["--frontend=api", "--auth=cookie", "--database=sqlite", "--tenancy=none", "--mfa"],
     "hashes": {
-      "module": "dfd5221bf013f67fe2210616071e141d7696b66947cf5459b312e19b5879acb2",
+      "module": "90898a1d5a745b26b2de07ef19f15c866a63665c974fca2dda7de5b79b5cf64a",
       "directory": "fbe64793ec790a71472cefc24567916a25968274c2b15e43592b3d90476a700d",
-      "provider": "05cb68f3cf9c85d61a5d8ae9a5207fe4408842f6f86d3ddcc0df442ff2b25c7b",
+      "provider": "ab68112a04ffe674dfc950fc51062949bfff2485bbb80f8c59feca20cf70ddd6",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -82,9 +82,9 @@
       "--email-verification"
     ],
     "hashes": {
-      "module": "379407856c7deba3f1b67fc3dd48ed1d148387bc44729027f52a0d600e9ed394",
+      "module": "34e6406d6522fccd720af20936992e900dded683ab7e7e84cfc0623f37726c45",
       "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "1c865d5ba35de26b2a2aa09ff168f8cb299d118dd1131cd73a8e3295b637d0d1",
+      "provider": "e130a3d2d3ad6c0ccaacd850678d08564364658c5c5360e15872a2374da6fc38",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -99,9 +99,9 @@
       "--oauth-github"
     ],
     "hashes": {
-      "module": "b72a0c23bf512b8beea84a0a28267177a382f5b2d5982df23391983690757292",
+      "module": "3d89df43b8e7ad0b66fff935f292e4fe8b5a3f796c97acb2bd06ef4431c5e8b0",
       "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "1c865d5ba35de26b2a2aa09ff168f8cb299d118dd1131cd73a8e3295b637d0d1",
+      "provider": "e130a3d2d3ad6c0ccaacd850678d08564364658c5c5360e15872a2374da6fc38",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -110,9 +110,9 @@
     "name": "api-cookie-oidc",
     "args": ["--frontend=api", "--auth=cookie", "--database=sqlite", "--tenancy=none", "--oidc"],
     "hashes": {
-      "module": "515a7d873b35df1c73bbae6506c1bed1ac5cf67ab4cd135d3b85b1b643e206ea",
+      "module": "0b659c190c4372e8cd57dccc4d0fe9ba366d06bd28df3ebbea8b006005214126",
       "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "1c865d5ba35de26b2a2aa09ff168f8cb299d118dd1131cd73a8e3295b637d0d1",
+      "provider": "e130a3d2d3ad6c0ccaacd850678d08564364658c5c5360e15872a2374da6fc38",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -121,9 +121,9 @@
     "name": "api-token-bare",
     "args": ["--frontend=api", "--auth=token", "--database=sqlite", "--tenancy=none"],
     "hashes": {
-      "module": "9063d51989de056ee2d854a78a05bd7b257620a15693be4a10206e92a37cab86",
+      "module": "5cd9ce28558c994b8ed1ee6b00ccaf7300e3a2af18f08c732a6a37121c65aeaa",
       "directory": "43058e802646f15bf768c70b6601b14a02728e816f0a1d2179a9d6b1451ed264",
-      "provider": "5453e94983e4a0e967d62ca1520419a48c661daa57076dddae7a248ba6d4ae45",
+      "provider": "76dc9eb09f38646612ea5e04f28086f7d92bc36812b3c99f5d855b865018e64c",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -141,9 +141,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "20594c328e685561871872f25df5c9f155bd8e6bb9499cc72029e8d94c8402e8",
+      "module": "d4d28c72920af500f6e8f774a899ea3a1ea6eb3a0c279abe59150ac1572e5534",
       "directory": "43058e802646f15bf768c70b6601b14a02728e816f0a1d2179a9d6b1451ed264",
-      "provider": "5453e94983e4a0e967d62ca1520419a48c661daa57076dddae7a248ba6d4ae45",
+      "provider": "76dc9eb09f38646612ea5e04f28086f7d92bc36812b3c99f5d855b865018e64c",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -152,9 +152,9 @@
     "name": "api-jwt-bare",
     "args": ["--frontend=api", "--auth=jwt", "--database=sqlite", "--tenancy=none"],
     "hashes": {
-      "module": "5d653eb6b1aa6d7555226bfda7a9a017b1d4455668c8bd5ca8430f40b9fde07c",
+      "module": "895b01cac2d84063af50a18b535da4e2e042691d19ea6fbb936853b3dc5023e1",
       "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "d29ff2930a36ea466ea46f2fe4cc74121695eaf30787f1806bd2fa2eec79042d",
+      "provider": "be9f9dc341fcea71e8d7f296ef811bb4e9bfe30061f41f4bb13d7a38de99330c",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -172,9 +172,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "3d452c713ca09552bf36e89c1fb0bf15da4f7b283d85adeb90264c6906544567",
+      "module": "e820c2b52de6041525e3e6b6c8cf751a332f69beb7abc9ad7438103bbd14811f",
       "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "d29ff2930a36ea466ea46f2fe4cc74121695eaf30787f1806bd2fa2eec79042d",
+      "provider": "be9f9dc341fcea71e8d7f296ef811bb4e9bfe30061f41f4bb13d7a38de99330c",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -183,9 +183,9 @@
     "name": "api-cookie-token-bare",
     "args": ["--frontend=api", "--auth=cookie-token", "--database=sqlite", "--tenancy=none"],
     "hashes": {
-      "module": "84c875f3798dfff8d6fdaa3cb75a38352d292f0662ed6037b60491f0feac7a96",
+      "module": "4e822ff42a9f86f290b9fc81b8c066a4ef00981788cadb0d8febbb74dc2791cc",
       "directory": "43058e802646f15bf768c70b6601b14a02728e816f0a1d2179a9d6b1451ed264",
-      "provider": "3fba1a47020c14788e860cfac5c82cf7f66fa689f76262f8f5970fe1331a6eb1",
+      "provider": "da304b14ff55c7e19a9584724d2d7f972a687d9519f057613744148a0ef8a192",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -203,9 +203,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "1e54638f27f1017fb0cd1c6b579e489c43ed58ebf55895396d848e965dbe9528",
+      "module": "4b0b56a30f5444b95f8a0926cd2a81b114a963bbcd4a8f9e6dd43e9998af83dd",
       "directory": "f1ef9be5d6e93d404a013b6c8c84a32d7736807d453fa0f5107505a27e61285b",
-      "provider": "325796617edc6b857c793dc272ce58587e0efeb01d1d3682c2d80d73561ad905",
+      "provider": "6a1074bae97a371d7ea79303f9ea14f7364b683a267f035c260408bbd764cc5b",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -214,9 +214,9 @@
     "name": "api-cookie-token-jwt-bare",
     "args": ["--frontend=api", "--auth=cookie-token-jwt", "--database=sqlite", "--tenancy=none"],
     "hashes": {
-      "module": "8045e8b08c1183fde2eb07fec12f05e23761848f1158f6feb8f8654e792abe4a",
+      "module": "dd601176f8ca1e16b2bd022edea50003ad439389f121403bdba5dfd3ecf7579a",
       "directory": "43058e802646f15bf768c70b6601b14a02728e816f0a1d2179a9d6b1451ed264",
-      "provider": "d7e9850c8a4b5d4839fbdda9a5b6f706c73edbf6f260ec52a8b1c929af1c961b",
+      "provider": "ae850f7b77cce863941539d0c2f3a52168ca34918e18e82b2b9c6118e0323a96",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -234,9 +234,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "4aed09557d9bc261242e92f0763b3fdab45602ece46fb6551913063fc5d39e34",
+      "module": "155ed6b7128bcb355f29c2d587ee6efbe18e6c037930b99d4284d0ff722eba6c",
       "directory": "f1ef9be5d6e93d404a013b6c8c84a32d7736807d453fa0f5107505a27e61285b",
-      "provider": "dc8330b182c5bf6b04f5002e49bdd8a322436ee0033e8f80eea7cf01b8f75d38",
+      "provider": "42f1afa99e8e2b80449aef2e470a8296c6dad7d978ce26b0d97c4c32950372ab",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -247,7 +247,7 @@
     "hashes": {
       "module": null,
       "directory": null,
-      "provider": "6f0fc435bfc411fcb3c3ad0a41b57863c46d800909b11a946dbc69e2266ec382",
+      "provider": "9a16497a8893ca975772628d3bd6e4515e4bafdcba268b43195cf16c43d37a86",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -267,7 +267,7 @@
     "hashes": {
       "module": null,
       "directory": null,
-      "provider": "6f0fc435bfc411fcb3c3ad0a41b57863c46d800909b11a946dbc69e2266ec382",
+      "provider": "9a16497a8893ca975772628d3bd6e4515e4bafdcba268b43195cf16c43d37a86",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -276,9 +276,9 @@
     "name": "server-htmx-cookie-bare",
     "args": ["--frontend=server-htmx", "--auth=cookie", "--database=mysql", "--tenancy=column"],
     "hashes": {
-      "module": "facd139847e2eea450cf1f631bbd51985c52df8882fc33547e8e54e3c90c6349",
+      "module": "0610db77007013290fb9498f67b6c18365fcc0aeda142a4fc736a21c22a0a89a",
       "directory": "da45c1790826de5cb7e202c8308afe6086d9be75ba723a8bbf0d6521aec6cf44",
-      "provider": "8783b68b98fe1b1aa81706985d0c30116cc93fff2fd9e68382adc8d5a45eb484",
+      "provider": "1a1317f6b189e406f918cdd21f255644a993ae68b77ecd2496d8f780d5e18642",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -296,9 +296,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "62627d85eb0b02ffcf1727c8e04429b4e1d0bb7dea557d97b54b81b679d92a90",
+      "module": "ccd7ffc70f04fa7dd35ae28eda6e9c70dcfb4a88f4aa9285b1b46951e303733d",
       "directory": "e53386022a0c9957e9071eac6d73b62467f20483f4c5fe9519ad561e267ddebf",
-      "provider": "693d634f774bf68576d4cb34d672d8d2fa2d32e8e4cc5d1a616e4762ff4b7670",
+      "provider": "ddfaa7840f5de66d6663d2af86d0756414a99dcc313220a1cda3a4a55e1f4226",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -313,9 +313,9 @@
       "--mfa"
     ],
     "hashes": {
-      "module": "62b5f70801e8a053fd7d8dd86af3155ccec0fa96f4fcaad1ede89fbe39f61699",
+      "module": "98a2ab1aee53bda0ce37fc2384f2d37f6703e7916a07c49c8d94715a3b74a8dd",
       "directory": "e53386022a0c9957e9071eac6d73b62467f20483f4c5fe9519ad561e267ddebf",
-      "provider": "693d634f774bf68576d4cb34d672d8d2fa2d32e8e4cc5d1a616e4762ff4b7670",
+      "provider": "ddfaa7840f5de66d6663d2af86d0756414a99dcc313220a1cda3a4a55e1f4226",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -330,9 +330,9 @@
       "--email-verification"
     ],
     "hashes": {
-      "module": "2978b24c412fc3a0545af8c19f73faa4485977b14fb616f22a75d3c1d60ed71d",
+      "module": "c889b519f76e79ffd6ac3185ba816d2729bd658e2e5574c29b2d303f32e5209b",
       "directory": "da45c1790826de5cb7e202c8308afe6086d9be75ba723a8bbf0d6521aec6cf44",
-      "provider": "8783b68b98fe1b1aa81706985d0c30116cc93fff2fd9e68382adc8d5a45eb484",
+      "provider": "1a1317f6b189e406f918cdd21f255644a993ae68b77ecd2496d8f780d5e18642",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -347,9 +347,9 @@
       "--oauth-github"
     ],
     "hashes": {
-      "module": "54edce2dd1c5fff3cff68fbfeac488849df6e10b60d4e599841489143b39f855",
+      "module": "da3c5f4188a8c89cec2726327508e0bab52588059523a54c95c80dc020a63e19",
       "directory": "da45c1790826de5cb7e202c8308afe6086d9be75ba723a8bbf0d6521aec6cf44",
-      "provider": "8783b68b98fe1b1aa81706985d0c30116cc93fff2fd9e68382adc8d5a45eb484",
+      "provider": "1a1317f6b189e406f918cdd21f255644a993ae68b77ecd2496d8f780d5e18642",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -364,9 +364,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "d909062423dc0d4d0c779142365b66118c47682e46e4564baaa3730c3182bfae",
+      "module": "ab1f60c6fe38a340b2a68b734011c0930538a684401aa0273aa42385457ef1de",
       "directory": "da45c1790826de5cb7e202c8308afe6086d9be75ba723a8bbf0d6521aec6cf44",
-      "provider": "8783b68b98fe1b1aa81706985d0c30116cc93fff2fd9e68382adc8d5a45eb484",
+      "provider": "1a1317f6b189e406f918cdd21f255644a993ae68b77ecd2496d8f780d5e18642",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -375,9 +375,9 @@
     "name": "server-htmx-token-bare",
     "args": ["--frontend=server-htmx", "--auth=token", "--database=mysql", "--tenancy=column"],
     "hashes": {
-      "module": "f9951204baad92d0c3f72505e650be4c3d0d316e1ada32115df063eec8b17c3c",
+      "module": "c5a7b64d2c0ff757183a8b0332b5e45fbc2cbc35212600f8814490ddfe62d2db",
       "directory": "584821ba04efd48bff2d2389c6b9129d4e18d3b6bda23ce70276c224d09fcd29",
-      "provider": "55317bbde4306831a38c6624bbe097cd8e4d99a6d0ae362983c8a8655d8057bb",
+      "provider": "bff3817a31925e942ebd0967f0636dfc70a5364a858c4cdeee4c969ab4d8604d",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -395,9 +395,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "f303fffe623ca293b69fcdd7b5cf9eabf8e7410a2f92c20f891ec688ec7d2354",
+      "module": "b7900c554c6f6f8414a39804766b790369d43e7a24458afdc9f002387fd64096",
       "directory": "584821ba04efd48bff2d2389c6b9129d4e18d3b6bda23ce70276c224d09fcd29",
-      "provider": "55317bbde4306831a38c6624bbe097cd8e4d99a6d0ae362983c8a8655d8057bb",
+      "provider": "bff3817a31925e942ebd0967f0636dfc70a5364a858c4cdeee4c969ab4d8604d",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -406,9 +406,9 @@
     "name": "server-htmx-jwt-bare",
     "args": ["--frontend=server-htmx", "--auth=jwt", "--database=mysql", "--tenancy=column"],
     "hashes": {
-      "module": "88f89409710713391fc8f099583312d49939dfaeebea6c1730872c79bd6c5df0",
+      "module": "2d4ecfcf0871dc08ef5f5686bb269b430e6e6118e3d3d0ab5e66a161f21f0a98",
       "directory": "da45c1790826de5cb7e202c8308afe6086d9be75ba723a8bbf0d6521aec6cf44",
-      "provider": "d16b4def85a61f532d373d648f6643ec6c5d15e253852ce1072b317589fe33c5",
+      "provider": "ef0fe56b57ff6de6839b85c64485d4feb137a0227ee6bf8bf0f2060b742b3346",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -426,9 +426,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "28f18b930d33ce984b27be9318f0c217d9b86a1a85626f7a7321221a5ab9fffb",
+      "module": "3e6d2dd3ad9299979124896696c248d850300c08169531e6de84616200645344",
       "directory": "da45c1790826de5cb7e202c8308afe6086d9be75ba723a8bbf0d6521aec6cf44",
-      "provider": "d16b4def85a61f532d373d648f6643ec6c5d15e253852ce1072b317589fe33c5",
+      "provider": "ef0fe56b57ff6de6839b85c64485d4feb137a0227ee6bf8bf0f2060b742b3346",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -442,9 +442,9 @@
       "--tenancy=column"
     ],
     "hashes": {
-      "module": "d66311dbdcb13a0438ca073dea82e4c3f232f4f475ca1769b220421ac7d0f3a2",
+      "module": "ecdf7f13f2a45c169264827cb7c7fcae5c7456f98ad2b0c9093970b6a9e01f88",
       "directory": "584821ba04efd48bff2d2389c6b9129d4e18d3b6bda23ce70276c224d09fcd29",
-      "provider": "2e2fa16c72fe844c737286583cdcdaf704e07c5e4437772485454ec2b8d2f6ab",
+      "provider": "b2813f80100b9d6172f29b46f0918a8663e813a791135d14055ee9561ae50609",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -462,9 +462,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "7219c38742e272e8c5e4d0ad8a30fad309539678a7dca48bdb821d4da12abb3c",
+      "module": "0f3d0b429c6388c1b807c9015c82f797d34edcde8ea186cfe6e00fe695abd9b0",
       "directory": "066dc2d6eba5dbd762310f764ddbafc61d45298828ad8073c832f0e21b1dace3",
-      "provider": "44acdf4f18d0ea44b9e02826a219790d827575be67b9e6c89c63a656bce3a512",
+      "provider": "f7544dbd702656f1fc3aa821ca95d509d37e1524a9f748f04dc05a65dd9e4123",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -478,9 +478,9 @@
       "--tenancy=column"
     ],
     "hashes": {
-      "module": "fe4fb22d442c22b7cb4b467df7746b10a6a7fa9dfd4874bca7277128b484b59d",
+      "module": "fecab0a2a453e098112d20b82401c6ac320444a49d67f0e76b7c97eab8bdc0ce",
       "directory": "584821ba04efd48bff2d2389c6b9129d4e18d3b6bda23ce70276c224d09fcd29",
-      "provider": "dc036b9ca058dabe30622a1e151adb95b2626901a0d868cd47d3250010f4ec0e",
+      "provider": "8012d905c03f1c602b694326dcabb1658b687f59ae287504a2c714eecc04079f",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -498,9 +498,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "13300e96b8ed218136ed27d8e93a5ba5ab70121080cf6bc62b61311d80c595f3",
+      "module": "1514d6f83746e899290274d71d3415079a076c38a123451b7bfa8cf0ecc8ba1d",
       "directory": "066dc2d6eba5dbd762310f764ddbafc61d45298828ad8073c832f0e21b1dace3",
-      "provider": "a00e74eea203a5ab15620b53aefba2202b57659bba24b8e1565c2c38f74efb8d",
+      "provider": "e371381ad2715deaed2af06144b5e929f43bbad30272eb745e674f3405918547",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -511,7 +511,7 @@
     "hashes": {
       "module": null,
       "directory": null,
-      "provider": "6f0fc435bfc411fcb3c3ad0a41b57863c46d800909b11a946dbc69e2266ec382",
+      "provider": "9a16497a8893ca975772628d3bd6e4515e4bafdcba268b43195cf16c43d37a86",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -531,7 +531,7 @@
     "hashes": {
       "module": null,
       "directory": null,
-      "provider": "6f0fc435bfc411fcb3c3ad0a41b57863c46d800909b11a946dbc69e2266ec382",
+      "provider": "9a16497a8893ca975772628d3bd6e4515e4bafdcba268b43195cf16c43d37a86",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -540,9 +540,9 @@
     "name": "spa-react-cookie-bare",
     "args": ["--frontend=spa-react", "--auth=cookie", "--database=postgres", "--tenancy=rls"],
     "hashes": {
-      "module": "40d1cf724387f5a624bb1fbbe12168dc61bbfc69c8a600a4a105c5317383ce6d",
+      "module": "70ac819152a4d81b447a597dc9b6378c7484e7442b222d9f03b25b0846040e1a",
       "directory": "eb6a486be8bf70f59a3b94a764c3a73f783a95242a42ebd6ff1f25621665a2f0",
-      "provider": "43f23e591b16de70513a0fc157902de1829eaa335d8085c5152ca5766179e26c",
+      "provider": "6f5a1457ffe3cc0b2289eacecc1337733aa03167c26c09e5ae6d77bdc36545cf",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -560,9 +560,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "479e97c00ba9c94a7bc1202f011bf3a756f026882d83af43a33bba36d90f3705",
+      "module": "5a7b221098f6827fdf7c7c659f790982a854082d3bd84133d05b401a12553cf1",
       "directory": "290833485da4fed9515a60704c38007a19a22d4e563450de55fd54a890e6c07c",
-      "provider": "c4c06ef10c15b3ca64394a82ef2576d5ca56f36335d938bbb4b8d69596830f40",
+      "provider": "d754cefca6fe856eb38567d103eee7487518f425f65732d5fb88a5268668c436",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -577,9 +577,9 @@
       "--mfa"
     ],
     "hashes": {
-      "module": "86d53f0658d51cae3996f9a79e00882132bb7e8696e37089968a72613d4ff3de",
+      "module": "851cacd8c44ab694b0d540110179f8f4afbe9f416fefe6e6b590510c1d5b9acf",
       "directory": "290833485da4fed9515a60704c38007a19a22d4e563450de55fd54a890e6c07c",
-      "provider": "c4c06ef10c15b3ca64394a82ef2576d5ca56f36335d938bbb4b8d69596830f40",
+      "provider": "d754cefca6fe856eb38567d103eee7487518f425f65732d5fb88a5268668c436",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -594,9 +594,9 @@
       "--email-verification"
     ],
     "hashes": {
-      "module": "a973f66b4c20f68df697cd5c56b959527580cb1ff6b9b6ea440490be73f5c1f5",
+      "module": "1bf87a3009a47175881bd8fd6e7edffc983d10f3400a43d73fe8458d85cce453",
       "directory": "eb6a486be8bf70f59a3b94a764c3a73f783a95242a42ebd6ff1f25621665a2f0",
-      "provider": "43f23e591b16de70513a0fc157902de1829eaa335d8085c5152ca5766179e26c",
+      "provider": "6f5a1457ffe3cc0b2289eacecc1337733aa03167c26c09e5ae6d77bdc36545cf",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -611,9 +611,9 @@
       "--oauth-github"
     ],
     "hashes": {
-      "module": "31aec58473665c850c4758ffb77b7c3b3d73ca9f2f33eb33c08e41f528e03354",
+      "module": "c5ec826e219f625db417cfce698acebdb9fea77724b07393c98034357710b4ab",
       "directory": "eb6a486be8bf70f59a3b94a764c3a73f783a95242a42ebd6ff1f25621665a2f0",
-      "provider": "43f23e591b16de70513a0fc157902de1829eaa335d8085c5152ca5766179e26c",
+      "provider": "6f5a1457ffe3cc0b2289eacecc1337733aa03167c26c09e5ae6d77bdc36545cf",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -628,9 +628,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "558118a0dc8a51f42cd90228075b277fbf7be1cf63c62fe8ac39e94f54b1e6bb",
+      "module": "c2ca55e2d45027fbfc11f5e24379089f7082d7c5d0ba99a7fb7f7df1ae29fb89",
       "directory": "eb6a486be8bf70f59a3b94a764c3a73f783a95242a42ebd6ff1f25621665a2f0",
-      "provider": "43f23e591b16de70513a0fc157902de1829eaa335d8085c5152ca5766179e26c",
+      "provider": "6f5a1457ffe3cc0b2289eacecc1337733aa03167c26c09e5ae6d77bdc36545cf",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -639,9 +639,9 @@
     "name": "spa-react-token-bare",
     "args": ["--frontend=spa-react", "--auth=token", "--database=postgres", "--tenancy=rls"],
     "hashes": {
-      "module": "f9951204baad92d0c3f72505e650be4c3d0d316e1ada32115df063eec8b17c3c",
+      "module": "c5a7b64d2c0ff757183a8b0332b5e45fbc2cbc35212600f8814490ddfe62d2db",
       "directory": "1b4ad088f80b12da2e2ef5b6f892ad93b204375f4f03c67f445a142e02380c55",
-      "provider": "55317bbde4306831a38c6624bbe097cd8e4d99a6d0ae362983c8a8655d8057bb",
+      "provider": "bff3817a31925e942ebd0967f0636dfc70a5364a858c4cdeee4c969ab4d8604d",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -659,9 +659,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "f303fffe623ca293b69fcdd7b5cf9eabf8e7410a2f92c20f891ec688ec7d2354",
+      "module": "b7900c554c6f6f8414a39804766b790369d43e7a24458afdc9f002387fd64096",
       "directory": "1b4ad088f80b12da2e2ef5b6f892ad93b204375f4f03c67f445a142e02380c55",
-      "provider": "55317bbde4306831a38c6624bbe097cd8e4d99a6d0ae362983c8a8655d8057bb",
+      "provider": "bff3817a31925e942ebd0967f0636dfc70a5364a858c4cdeee4c969ab4d8604d",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -670,9 +670,9 @@
     "name": "spa-react-jwt-bare",
     "args": ["--frontend=spa-react", "--auth=jwt", "--database=postgres", "--tenancy=rls"],
     "hashes": {
-      "module": "88f89409710713391fc8f099583312d49939dfaeebea6c1730872c79bd6c5df0",
+      "module": "2d4ecfcf0871dc08ef5f5686bb269b430e6e6118e3d3d0ab5e66a161f21f0a98",
       "directory": "eb6a486be8bf70f59a3b94a764c3a73f783a95242a42ebd6ff1f25621665a2f0",
-      "provider": "d16b4def85a61f532d373d648f6643ec6c5d15e253852ce1072b317589fe33c5",
+      "provider": "ef0fe56b57ff6de6839b85c64485d4feb137a0227ee6bf8bf0f2060b742b3346",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -690,9 +690,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "28f18b930d33ce984b27be9318f0c217d9b86a1a85626f7a7321221a5ab9fffb",
+      "module": "3e6d2dd3ad9299979124896696c248d850300c08169531e6de84616200645344",
       "directory": "eb6a486be8bf70f59a3b94a764c3a73f783a95242a42ebd6ff1f25621665a2f0",
-      "provider": "d16b4def85a61f532d373d648f6643ec6c5d15e253852ce1072b317589fe33c5",
+      "provider": "ef0fe56b57ff6de6839b85c64485d4feb137a0227ee6bf8bf0f2060b742b3346",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -701,9 +701,9 @@
     "name": "spa-react-cookie-token-bare",
     "args": ["--frontend=spa-react", "--auth=cookie-token", "--database=postgres", "--tenancy=rls"],
     "hashes": {
-      "module": "e5300bc18d970082b4eb1c5fbc478a4ffe04574549402d6f7b7df2ddcd438f63",
+      "module": "4687ac63ed2c9cbf43f777ff43f57ad2fc21c7149d7166a9519d9b0b64f4e6ec",
       "directory": "1b4ad088f80b12da2e2ef5b6f892ad93b204375f4f03c67f445a142e02380c55",
-      "provider": "3e5d8bdec418fd4c662c909cf6737fb8771b63675608bbb9599a6561f3d244c6",
+      "provider": "7c593ba88a8ff96727545415db802cdd1e12a134c02d6f394803f61a5e17cd43",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -721,9 +721,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "9801278a5bea54007887b92f0f9e3aba2243eb29003b47d0c92def41f2cb3c3a",
+      "module": "7630718cbe83660700bff16b2132135c9b4463dfca0663f4dc6ea68d1004268e",
       "directory": "ed41507921f413b06897aff15dbe08e389cc8c71efde8ded53df921bce41948c",
-      "provider": "90e42aa307b85e89c527d28185af1fe175f08daa4d334ed1492a6ea2f0003ce4",
+      "provider": "43dc11424da101b35cc2292ef0e8a9d16e364b53ec6f66ed2f3db03289806b90",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -737,9 +737,9 @@
       "--tenancy=rls"
     ],
     "hashes": {
-      "module": "738a34ac80806eb97067bb02c22df592180b990e2537bd12875924e9c00a1689",
+      "module": "8c8dafc7e9b7cd8dcc64e420eb0eaac9eeed9703f566a479122ed1eb60f3b97d",
       "directory": "1b4ad088f80b12da2e2ef5b6f892ad93b204375f4f03c67f445a142e02380c55",
-      "provider": "49c351cf38de0180540da83b98213f5ae6de332362c90d43272bf48193ccf64c",
+      "provider": "2e2cd7142c66b10adbbcd4c96a70c35d6a84e9af101defc2238b39e0137b7f8a",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -757,9 +757,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "2bb08ff46c0e148a945c83dfbe6085278d349b79369b72c50628c218a9ea2cf1",
+      "module": "5282b58d189bc1cfbd74daa362369baaf2d8400fb2e037ce084ec96c81476c3d",
       "directory": "ed41507921f413b06897aff15dbe08e389cc8c71efde8ded53df921bce41948c",
-      "provider": "4dcc8118d97ae52964e8b6cf6c9e28287105f3eb1f3d7591a9afb3869ab3fc20",
+      "provider": "c31f4d2097cf3fe603f97eb158fc69e521dc8045ea03c472093b2fa59dc92b33",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -770,7 +770,7 @@
     "hashes": {
       "module": null,
       "directory": null,
-      "provider": "e1a4dd2f8820d47e667152d4264e594117a8d0cccbc789c5922c318107e3ec8a",
+      "provider": "8f76926fc6e288b6783475f7f1a5ad51c40ea2fd03f62e52b39e820e25cba6b2",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -790,7 +790,7 @@
     "hashes": {
       "module": null,
       "directory": null,
-      "provider": "e1a4dd2f8820d47e667152d4264e594117a8d0cccbc789c5922c318107e3ec8a",
+      "provider": "8f76926fc6e288b6783475f7f1a5ad51c40ea2fd03f62e52b39e820e25cba6b2",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -799,9 +799,9 @@
     "name": "hybrid-cookie-bare",
     "args": ["--frontend=hybrid", "--auth=cookie", "--database=sqlite", "--tenancy=none"],
     "hashes": {
-      "module": "c2cd46207a20fc91c23a655c6d2211b65795927b63928fe202c77fe3737eeb0a",
+      "module": "eda1844ffd4e50dc0b78b9d15071dcbbc874b63eba1c2b2dfdba1f244e3050df",
       "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "1c865d5ba35de26b2a2aa09ff168f8cb299d118dd1131cd73a8e3295b637d0d1",
+      "provider": "e130a3d2d3ad6c0ccaacd850678d08564364658c5c5360e15872a2374da6fc38",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -819,9 +819,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "77b3f9eeed19591af9c445c8c38564c9a6b352ac49b77c67d28a8827449ac9a1",
+      "module": "cadda1aea208743de956624932efc37918003d0078d9912f0367634f731975d9",
       "directory": "fbe64793ec790a71472cefc24567916a25968274c2b15e43592b3d90476a700d",
-      "provider": "05cb68f3cf9c85d61a5d8ae9a5207fe4408842f6f86d3ddcc0df442ff2b25c7b",
+      "provider": "ab68112a04ffe674dfc950fc51062949bfff2485bbb80f8c59feca20cf70ddd6",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -830,9 +830,9 @@
     "name": "hybrid-cookie-mfa",
     "args": ["--frontend=hybrid", "--auth=cookie", "--database=sqlite", "--tenancy=none", "--mfa"],
     "hashes": {
-      "module": "2974c40acb541d2b16ab40563b7f64f581d1ddcb4a5434aaa50bbb9f93fe2924",
+      "module": "e4b802d31a97803b6c575da52b5c75bf30742f67b39a43a635f44dddcc8596d8",
       "directory": "fbe64793ec790a71472cefc24567916a25968274c2b15e43592b3d90476a700d",
-      "provider": "05cb68f3cf9c85d61a5d8ae9a5207fe4408842f6f86d3ddcc0df442ff2b25c7b",
+      "provider": "ab68112a04ffe674dfc950fc51062949bfff2485bbb80f8c59feca20cf70ddd6",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -847,9 +847,9 @@
       "--email-verification"
     ],
     "hashes": {
-      "module": "379407856c7deba3f1b67fc3dd48ed1d148387bc44729027f52a0d600e9ed394",
+      "module": "34e6406d6522fccd720af20936992e900dded683ab7e7e84cfc0623f37726c45",
       "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "1c865d5ba35de26b2a2aa09ff168f8cb299d118dd1131cd73a8e3295b637d0d1",
+      "provider": "e130a3d2d3ad6c0ccaacd850678d08564364658c5c5360e15872a2374da6fc38",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -864,9 +864,9 @@
       "--oauth-github"
     ],
     "hashes": {
-      "module": "b72a0c23bf512b8beea84a0a28267177a382f5b2d5982df23391983690757292",
+      "module": "3d89df43b8e7ad0b66fff935f292e4fe8b5a3f796c97acb2bd06ef4431c5e8b0",
       "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "1c865d5ba35de26b2a2aa09ff168f8cb299d118dd1131cd73a8e3295b637d0d1",
+      "provider": "e130a3d2d3ad6c0ccaacd850678d08564364658c5c5360e15872a2374da6fc38",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -875,9 +875,9 @@
     "name": "hybrid-cookie-oidc",
     "args": ["--frontend=hybrid", "--auth=cookie", "--database=sqlite", "--tenancy=none", "--oidc"],
     "hashes": {
-      "module": "515a7d873b35df1c73bbae6506c1bed1ac5cf67ab4cd135d3b85b1b643e206ea",
+      "module": "0b659c190c4372e8cd57dccc4d0fe9ba366d06bd28df3ebbea8b006005214126",
       "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "1c865d5ba35de26b2a2aa09ff168f8cb299d118dd1131cd73a8e3295b637d0d1",
+      "provider": "e130a3d2d3ad6c0ccaacd850678d08564364658c5c5360e15872a2374da6fc38",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -886,9 +886,9 @@
     "name": "hybrid-token-bare",
     "args": ["--frontend=hybrid", "--auth=token", "--database=sqlite", "--tenancy=none"],
     "hashes": {
-      "module": "9063d51989de056ee2d854a78a05bd7b257620a15693be4a10206e92a37cab86",
+      "module": "5cd9ce28558c994b8ed1ee6b00ccaf7300e3a2af18f08c732a6a37121c65aeaa",
       "directory": "43058e802646f15bf768c70b6601b14a02728e816f0a1d2179a9d6b1451ed264",
-      "provider": "5453e94983e4a0e967d62ca1520419a48c661daa57076dddae7a248ba6d4ae45",
+      "provider": "76dc9eb09f38646612ea5e04f28086f7d92bc36812b3c99f5d855b865018e64c",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -906,9 +906,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "20594c328e685561871872f25df5c9f155bd8e6bb9499cc72029e8d94c8402e8",
+      "module": "d4d28c72920af500f6e8f774a899ea3a1ea6eb3a0c279abe59150ac1572e5534",
       "directory": "43058e802646f15bf768c70b6601b14a02728e816f0a1d2179a9d6b1451ed264",
-      "provider": "5453e94983e4a0e967d62ca1520419a48c661daa57076dddae7a248ba6d4ae45",
+      "provider": "76dc9eb09f38646612ea5e04f28086f7d92bc36812b3c99f5d855b865018e64c",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -917,9 +917,9 @@
     "name": "hybrid-jwt-bare",
     "args": ["--frontend=hybrid", "--auth=jwt", "--database=sqlite", "--tenancy=none"],
     "hashes": {
-      "module": "5d653eb6b1aa6d7555226bfda7a9a017b1d4455668c8bd5ca8430f40b9fde07c",
+      "module": "895b01cac2d84063af50a18b535da4e2e042691d19ea6fbb936853b3dc5023e1",
       "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "d29ff2930a36ea466ea46f2fe4cc74121695eaf30787f1806bd2fa2eec79042d",
+      "provider": "be9f9dc341fcea71e8d7f296ef811bb4e9bfe30061f41f4bb13d7a38de99330c",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -937,9 +937,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "3d452c713ca09552bf36e89c1fb0bf15da4f7b283d85adeb90264c6906544567",
+      "module": "e820c2b52de6041525e3e6b6c8cf751a332f69beb7abc9ad7438103bbd14811f",
       "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "d29ff2930a36ea466ea46f2fe4cc74121695eaf30787f1806bd2fa2eec79042d",
+      "provider": "be9f9dc341fcea71e8d7f296ef811bb4e9bfe30061f41f4bb13d7a38de99330c",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -948,9 +948,9 @@
     "name": "hybrid-cookie-token-bare",
     "args": ["--frontend=hybrid", "--auth=cookie-token", "--database=sqlite", "--tenancy=none"],
     "hashes": {
-      "module": "84c875f3798dfff8d6fdaa3cb75a38352d292f0662ed6037b60491f0feac7a96",
+      "module": "4e822ff42a9f86f290b9fc81b8c066a4ef00981788cadb0d8febbb74dc2791cc",
       "directory": "43058e802646f15bf768c70b6601b14a02728e816f0a1d2179a9d6b1451ed264",
-      "provider": "3fba1a47020c14788e860cfac5c82cf7f66fa689f76262f8f5970fe1331a6eb1",
+      "provider": "da304b14ff55c7e19a9584724d2d7f972a687d9519f057613744148a0ef8a192",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -968,9 +968,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "c63935eca914b487f9e14dde080c6cffd4552896f29729eb516a49b409d52571",
+      "module": "85c0fa4a815e003693ab71795b218bdc6755f50d3d270f74542088811712af73",
       "directory": "f1ef9be5d6e93d404a013b6c8c84a32d7736807d453fa0f5107505a27e61285b",
-      "provider": "325796617edc6b857c793dc272ce58587e0efeb01d1d3682c2d80d73561ad905",
+      "provider": "6a1074bae97a371d7ea79303f9ea14f7364b683a267f035c260408bbd764cc5b",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -979,9 +979,9 @@
     "name": "hybrid-cookie-token-jwt-bare",
     "args": ["--frontend=hybrid", "--auth=cookie-token-jwt", "--database=sqlite", "--tenancy=none"],
     "hashes": {
-      "module": "8045e8b08c1183fde2eb07fec12f05e23761848f1158f6feb8f8654e792abe4a",
+      "module": "dd601176f8ca1e16b2bd022edea50003ad439389f121403bdba5dfd3ecf7579a",
       "directory": "43058e802646f15bf768c70b6601b14a02728e816f0a1d2179a9d6b1451ed264",
-      "provider": "d7e9850c8a4b5d4839fbdda9a5b6f706c73edbf6f260ec52a8b1c929af1c961b",
+      "provider": "ae850f7b77cce863941539d0c2f3a52168ca34918e18e82b2b9c6118e0323a96",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }
@@ -999,9 +999,9 @@
       "--oidc"
     ],
     "hashes": {
-      "module": "0478a8faea0d55b168e979d5ebc582a574845af11638fb40735812b451394340",
+      "module": "51fa36209dee45a60602a2d32af02daf933a94d927597c0fcda7c260f5474d4e",
       "directory": "f1ef9be5d6e93d404a013b6c8c84a32d7736807d453fa0f5107505a27e61285b",
-      "provider": "dc8330b182c5bf6b04f5002e49bdd8a322436ee0033e8f80eea7cf01b8f75d38",
+      "provider": "42f1afa99e8e2b80449aef2e470a8296c6dad7d978ce26b0d97c4c32950372ab",
       "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
       "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
     }

@@ -20,7 +20,6 @@ try {
   await writeFile(
     join(fixture.app, "mail-initialization.ts"),
     `import {strict as assert} from "node:assert";
-await import("./src/bootstrap/preload.ts");
 assert.equal(process.env.MAIL_DRIVER,"smtp");assert.equal(process.env.MAIL_HOST,undefined);
 const {Mailer,createMailDriver}=await import("@getstrata/core/mail/mailer");
 const {createApp}=await import("./src/bootstrap/createApp.ts");assert.equal(typeof createApp,"function");

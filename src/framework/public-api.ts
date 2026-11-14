@@ -7,7 +7,12 @@ export type { CacheReader, CacheWriter } from "../types/services";
  */
 
 export { AuthenticationRequiredError } from "@getstrata/core/auth/authOutcome";
-export type { PolicyAction, PolicyDecision } from "@getstrata/core/auth/policy";
+export type {
+  PolicyAction,
+  PolicyAuthorizer,
+  PolicyDecision,
+  PolicyRegistry,
+} from "@getstrata/core/auth/policy";
 export { Policy, PolicyDeniedError, PolicyGate } from "@getstrata/core/auth/policy";
 export { CORE_CACHE_TOKEN } from "@getstrata/core/cache/tokens";
 export type {
@@ -227,7 +232,6 @@ export {
   InMemorySamlAssertionReplayStore,
   readSamlEnvOptions,
   SamlServiceProvider,
-  setNodeSamlLoaderForTests,
 } from "../core/auth/saml/samlServiceProvider.ts";
 export { createScimAuthMiddleware } from "../core/auth/scimAuthMiddleware.ts";
 export { createTokenAbilityChecker } from "../core/auth/tokenAbilityChecker.ts";
@@ -305,7 +309,6 @@ export {
   createMysqlConnection,
   createMysqlConnectionFromPool,
   createMysqlPool,
-  resetMysqlLoaderForTests,
 } from "../core/database/mysqlConnection.ts";
 export {
   buildAdvancedWhereClause,
@@ -416,7 +419,7 @@ export type {
 } from "../core/database/types.ts";
 export type { WhereNode } from "../core/database/whereBuilder.ts";
 export { WhereBuilder } from "../core/database/whereBuilder.ts";
-export type { EventListener } from "../core/events/eventBusClass";
+export type { EventDispatcher, EventListener } from "../core/events/eventBusClass";
 export { EventBus } from "../core/events/eventBusClass";
 export { modelEventName } from "../core/events/index.ts";
 export type {
@@ -513,7 +516,6 @@ export {
 export {
   createLoginThrottleMiddleware,
   createMemoryLoginThrottleMiddleware,
-  resetMemoryLoginThrottleForTests,
   resolveLoginEmail,
   resolveLoginIdentity,
 } from "../core/http/loginThrottleMiddleware.ts";
@@ -523,10 +525,7 @@ export type {
   MemoryThrottleStats,
   MemoryThrottleStorageOptions,
 } from "../core/http/memoryThrottleMiddleware.ts";
-export {
-  createMemoryThrottleMiddleware,
-  resetMemoryThrottleForTests,
-} from "../core/http/memoryThrottleMiddleware.ts";
+export { createMemoryThrottleMiddleware } from "../core/http/memoryThrottleMiddleware.ts";
 export { createMetricsMiddleware } from "../core/http/metricsMiddleware.ts";
 export type { Middleware, RouteHandler } from "../core/http/middleware.ts";
 export {
@@ -680,7 +679,7 @@ export {
   createFailedJobMetricsCollector,
   renderFailedJobMetrics,
 } from "../core/queue/failedJobMetrics.ts";
-export type { Queue, QueuePriority } from "../core/queue/index.ts";
+export type { Queue, QueueDispatcher, QueuePriority } from "../core/queue/index.ts";
 export { AsyncQueue, createQueue, Job, SyncQueue } from "../core/queue/index.ts";
 export { JobRegistry, QUEUE_JOB_REGISTRY_TOKEN } from "../core/queue/jobRegistry.ts";
 export {
@@ -737,9 +736,7 @@ export {
   isBlockedHostname,
   isBlockedIpAddress,
   pinUrlToAddress,
-  resetDnsLookupForTests,
   resolveSafeOutboundTarget,
-  setDnsLookupForTests,
 } from "../core/security/safeUrl.ts";
 export type { SecurityEventDetails } from "../core/security/securityEvents.ts";
 export { logSecurityEvent } from "../core/security/securityEvents.ts";

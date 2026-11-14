@@ -25,12 +25,16 @@ describe("resolveDefaultTokenExpiryDays", () => {
     expect(resolveDefaultTokenExpiryDays(process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS)).toBeNull();
   });
 
-  test("returns null for invalid integers", () => {
+  test("rejects invalid integers", () => {
     process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS = "0";
-    expect(resolveDefaultTokenExpiryDays(process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS)).toBeNull();
+    expect(() =>
+      resolveDefaultTokenExpiryDays(process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS),
+    ).toThrow();
 
     process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS = "abc";
-    expect(resolveDefaultTokenExpiryDays(process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS)).toBeNull();
+    expect(() =>
+      resolveDefaultTokenExpiryDays(process.env.API_TOKEN_DEFAULT_EXPIRY_DAYS),
+    ).toThrow();
   });
 
   test("returns positive integer day counts", () => {

@@ -370,9 +370,6 @@ test("two actual composed applications retain their own gate, selected tenant an
       }
     };
     container.set(CORE_POLICY_GATE_TOKEN, {
-      register() {
-        throw new Error("Policy registration is not part of this fixture.");
-      },
       allows: async () => {
         throw new Error("Use the route model authorization port.");
       },

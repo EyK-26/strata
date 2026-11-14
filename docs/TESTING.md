@@ -157,7 +157,7 @@ commands, model declarations, bootstrap/providers and CLI adapters. Generation a
 tests import those artifact owners directly; the unused `renderRuntime.ts`
 compatibility facade has been removed. The eight-profile canonical path/hash checks
 and generated compiler/installed runtime checks still apply. The RLS source fence scans every new
-artifact file, permits the same single migrate/seed bypass, and independently asserts
+artifact file, permits explicitly owned migration/seed bypass policy, and independently asserts
 that bootstrap/request handlers contain no unbounded bypass. Moving a renderer does
 not authorize changing generated SQL, privilege separation or runtime behavior.
 

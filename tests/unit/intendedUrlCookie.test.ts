@@ -216,9 +216,9 @@ describe("intendedUrlCookie", () => {
     process.env.INTENDED_URL_TTL_SECONDS = "nope";
     process.env.APP_KEY_PREFIX = "acme";
     expect(intendedUrlCookieName(process.env)).toBe("acme_intended");
-    expect(intendedUrlTtlSeconds(process.env)).toBe(DEFAULT_INTENDED_URL_TTL_SECONDS);
+    expect(() => intendedUrlTtlSeconds(process.env)).toThrow();
 
     process.env.INTENDED_URL_TTL_SECONDS = "0";
-    expect(intendedUrlTtlSeconds(process.env)).toBe(DEFAULT_INTENDED_URL_TTL_SECONDS);
+    expect(() => intendedUrlTtlSeconds(process.env)).toThrow();
   });
 });

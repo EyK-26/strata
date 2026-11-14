@@ -1,3 +1,5 @@
+import { resolveEnv } from "../config/envSchema";
+
 const DEFAULT_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const ALLOWED_UPLOAD_MIME_TYPES = new Set([
   "application/pdf",
@@ -23,19 +25,10 @@ const DEFAULT_UPLOAD_POLICY: UploadPolicy = Object.freeze({
 });
 
 function resolveMaxUploadBytes(value?: string): number {
-  const raw = value?.trim();
-
-  if (!raw) {
-    return DEFAULT_MAX_UPLOAD_BYTES;
-  }
-
-  const parsed = Number.parseInt(raw, 10);
-
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    return DEFAULT_MAX_UPLOAD_BYTES;
-  }
-
-  return parsed;
+  return resolveEnv(
+    { MAX_UPLOAD_BYTES: { integer: true, minimum: 1, default: String(DEFAULT_MAX_UPLOAD_BYTES) } },
+    { MAX_UPLOAD_BYTES: value },
+  ).MAX_UPLOAD_BYTES;
 }
 
 function normalizeMimeType(mimeType: string): string {

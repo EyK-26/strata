@@ -110,8 +110,6 @@ test("make:view refuses unknown options and documents its limited scope", () =>
     expect(existsSync(join(root, "resources"))).toBe(false);
   }));
 
-test("fresh generated CLI registries expose the view command", () => {
-  expect(renderCliRegisterTs()).toContain(
-    '"make:view": async () => (await import("@getstrata/cli/scaffold")).makeViewCommand',
-  );
+test("generated registries delegate built-in view command registration to the package", () => {
+  expect(renderCliRegisterTs()).not.toContain('"make:view"');
 });

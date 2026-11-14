@@ -1,8 +1,8 @@
 import { access } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import { renderModuleScaffold } from "./renderModule";
+import { scaffoldArguments, writeScaffoldFile } from "./scaffoldFile";
 import {
-  ensureDirectory,
   moduleDirectory,
   toCamelCase,
   toKebabCase,
@@ -11,8 +11,10 @@ import {
 } from "./utils";
 
 async function makeModuleCommand(...args: string[]): Promise<void> {
+  const parsed = scaffoldArguments("make:module", args, ["--with-web"]);
+  if (!parsed) return;
   const withWeb = args.includes("--with-web");
-  const name = args.find((arg) => !arg.startsWith("--"));
+  const [name] = parsed;
 
   if (!name) {
     throw new Error("make:module requires a name.");
@@ -26,7 +28,7 @@ async function makeModuleCommand(...args: string[]): Promise<void> {
     throw new Error("make:module requires a valid module name.");
   }
 
-  const directory = moduleDirectory(moduleSlug);
+  const directory = await moduleDirectory(moduleSlug);
 
   try {
     await access(directory);
@@ -40,8 +42,6 @@ async function makeModuleCommand(...args: string[]): Promise<void> {
     }
   }
 
-  await ensureDirectory(directory);
-
   const { files, webFiles, viewFiles, pluralSlug } = renderModuleScaffold({
     moduleSlug,
     moduleName,
@@ -50,7 +50,11 @@ async function makeModuleCommand(...args: string[]): Promise<void> {
   });
 
   for (const [fileName, content] of files) {
-    await Bun.write(join(directory, fileName), content);
+    await writeScaffoldFile(
+      relative(process.cwd(), join(directory, fileName)).split(sep),
+      content,
+      "Module file",
+    );
   }
 
   let createdViewsDirectory: string | undefined;
@@ -58,12 +62,19 @@ async function makeModuleCommand(...args: string[]): Promise<void> {
   if (withWeb) {
     const viewsDirectory = webViewsDirectory(pluralSlug);
     createdViewsDirectory = viewsDirectory;
-    await ensureDirectory(viewsDirectory);
     for (const [fileName, content] of viewFiles) {
-      await Bun.write(join(viewsDirectory, fileName), content);
+      await writeScaffoldFile(
+        relative(process.cwd(), join(viewsDirectory, fileName)).split(sep),
+        content,
+        "Module view",
+      );
     }
     for (const [fileName, content] of webFiles) {
-      await Bun.write(join(directory, fileName), content);
+      await writeScaffoldFile(
+        relative(process.cwd(), join(directory, fileName)).split(sep),
+        content,
+        "Module file",
+      );
     }
   }
 
@@ -78,7 +89,7 @@ async function makeModuleCommand(...args: string[]): Promise<void> {
   console.log(`Module will be auto-discovered from the app modules directory (${moduleSlug}/)`);
   console.log(`Next: strata make:migration create_${moduleSlug} && strata migrate`);
 
-  console.log("Register the generated repository definition in application database bindings.");
+  console.log("Register the generated model and its repository in src/models/register.ts.");
 }
 
 export { makeModuleCommand };

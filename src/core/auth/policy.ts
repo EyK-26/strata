@@ -105,5 +105,9 @@ class PolicyGate<Policies extends { [K in keyof Policies]: Policy } = Record<str
   }
 }
 
-export type { PolicyAction, PolicyDecision };
+/** Consumer decisions and composition registration are separate capabilities. */
+type PolicyAuthorizer = Pick<PolicyGate, "allows" | "authorize">;
+type PolicyRegistry = Pick<PolicyGate, "register">;
+
+export type { PolicyAction, PolicyAuthorizer, PolicyDecision, PolicyRegistry };
 export { Policy, PolicyDeniedError, PolicyGate };

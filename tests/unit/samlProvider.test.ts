@@ -5,8 +5,8 @@ import {
   InMemorySamlAssertionReplayStore,
   readSamlEnvOptions,
   SamlServiceProvider,
-  setNodeSamlLoaderForTests,
 } from "@getstrata/core/auth/saml/samlServiceProvider";
+import { setNodeSamlLoaderForTests } from "@getstrata/core/testing";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 import { createSignedSamlResponse } from "../helpers/samlFixture";
 

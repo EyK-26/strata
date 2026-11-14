@@ -38,64 +38,12 @@ ${
 }
 `
 }
-type StarterPasswordLoginResult =
-  | { ok: false; error: "invalid_credentials" }
-  | (PasswordLoginResult & { user: StarterAuthUserRecord });
-
-async function authenticatePasswordUser(ports: BusinessRequestPorts, services: StarterAuthServices,
-  user: StarterAuthUserRecord | null,
-  password: string,
-  mfaCode: string | undefined,
-): Promise<StarterPasswordLoginResult> {
-  if (!user?.password || !(await verifyPassword(password, user.password))) {
-    return { ok: false, error: "invalid_credentials" };
-  }
-  const result = completePasswordLogin(user, { mfaCode }, services.mfaSecrets);
-  if (!result.ok) return { ...result, user };
-  await persistAuthRecovery(ports, user.id, user.mfa_recovery_codes, result.consumedRecoveryHash);
-  return { ...result, user };
+function authenticatePasswordUser(ports: BusinessRequestPorts, services: StarterAuthServices, user: StarterAuthUserRecord | null, password: string, mfaCode: string | undefined) {
+  return authenticatePasswordAccount(user, password, mfaCode, services.mfaSecrets,
+    (account, hash) => persistAuthRecovery(ports, account.id, account.mfa_recovery_codes, hash));
 }
-
-function parseLoginCredentials(payload: unknown) {
-  const body = validateObject(payload, {
-    email: [required(), stringRule(), emailRule()],
-    password: [required(), stringRule()],
-    mfa_code: [stringRule()],
-  });
-  return {
-    email: String(body.email).toLowerCase(),
-    password: String(body.password ?? ""),
-    mfa_code: typeof body.mfa_code === "string" ? body.mfa_code : undefined,
-  };
-}
-
-function parseRegisterCredentials(payload: unknown) {
-  const body = validateObject(payload, {
-    name: [required(), stringRule()],
-    email: [required(), stringRule(), emailRule()],
-    password: [required(), stringRule(), minLength(8)],
-  });
-  return {
-    name: String(body.name ?? ""),
-    email: String(body.email).toLowerCase(),
-    password: String(body.password ?? ""),
-  };
-}
-
-function parseForgotPasswordEmail(payload: unknown) {
-  const body = validateObject(payload, {
-    email: [required(), stringRule(), emailRule()],
-  });
-  return String(body.email).toLowerCase();
-}
-
-async function runWithLoginUser<T>(ports: BusinessRequestPorts, email: string, operation: (record: StarterAuthUserRecord | null, ports: BusinessRequestPorts) => Promise<T>): Promise<T> {
-  const candidate = await createStarterAuthDirectory(ports).findByEmail(email);
-  if (!candidate) return operation(null, ports);
-  return runWithLockedAccount(ports, candidate.id, async (record, ports) => {
-    // Recheck identity after locking: provisioning may have changed the email.
-    return operation(record?.email === email.trim().toLowerCase() ? record : null, ports);
-  });
+function runWithLoginUser<T>(ports: BusinessRequestPorts, email: string, operation: (record: StarterAuthUserRecord | null, child: BusinessRequestPorts) => Promise<T>): Promise<T> {
+  return withLoginAccount(ports, email, createStarterAuthDirectory, runWithLockedAccount, operation);
 }
 
 async function runAuthWrite<T>(ports: BusinessRequestPorts, identifier: string | number, callback: (ports: BusinessRequestPorts) => Promise<T>): Promise<T> {
@@ -103,18 +51,13 @@ async function runAuthWrite<T>(ports: BusinessRequestPorts, identifier: string |
 }
 
 async function prepareSignedAuthMail(ports: BusinessRequestPorts, services: StarterAuthServices, to: string, subject: string, path: string, purpose: string, userId: number, extra: Record<string, string> = {}) {
-  const issued = generateOneTimeToken();
-  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-  await runAuthWrite(ports, userId, async (ports) => {
-    await ports.database.model(AuthOneTimeToken).create({
-      purpose,
-      user_id: userId,
-      token_hash: issued.hash,
-      expires_at: authTimestamp(ports, expiresAt),
-    });
+  return prepareAccountMail(ports, { to, subject, path, purpose, userId, extra }, {
+    issue: generateOneTimeToken,
+    store: (ports, token) => runAuthWrite(ports, token.userId, async (ports) => {
+      await ports.database.model(AuthOneTimeToken).create({ purpose: token.purpose, user_id: token.userId, token_hash: token.hash, expires_at: authTimestamp(ports, token.expiresAt) });
+    }),
+    sign: (path, ttl, parameters) => absoluteTemporarySignedUrl(path, ttl, parameters, services.config.appUrl, services.config.signatureSecret),
   });
-  const link = absoluteTemporarySignedUrl(path, 3600, { ...extra, token: issued.plain }, services.config.appUrl, services.config.signatureSecret);
-  return { to, subject, body: \`\${subject}\\n\\n\${link}\\n\` };
 }
 
 async function issueSignedAuthMail(ports: BusinessRequestPorts, services: StarterAuthServices, to: string, subject: string, path: string, purpose: string, userId: number, extra: Record<string, string> = {}) {
@@ -124,20 +67,18 @@ async function issueSignedAuthMail(ports: BusinessRequestPorts, services: Starte
 
 async function createRegistration(ports: BusinessRequestPorts, services: StarterAuthServices, credentials: { name: string; email: string; password: string }${verify ? ", verificationPath: string" : ""}) {
   const { email } = credentials;
-  try {
-    return await runAuthWrite(ports, email, (ports) => runAuthTransaction(ports, async (ports) => {
+  return registerAccount(ports, email, {
+    write: runAuthWrite, transaction: runAuthTransaction,
+    create: async (ports) => {
       ${verify ? "const created = " : ""}await ports.database.model(User).create({
         ...credentials,
         is_admin: false,${tenantCreateField}
       });
       ${verify ? `return prepareSignedAuthMail(ports, services, email, "Verify your email", verificationPath, AUTH_ONE_TIME_PURPOSES.emailVerify, Number(created.get("id")), { id: String(created.get("id")) });` : ""}
-    }));
-  } catch (error) {
-    // The failed transaction/savepoint is already rolled back before readback.
-    // Only an actual account race is neutral; unrelated persistence failures propagate.
-    if (!isUniqueConstraintError(error) || !(await createStarterAuthDirectory(ports).findByEmail(email))) throw error;
-    return undefined;
-  }
+    },
+    isUniqueViolation: isUniqueConstraintError,
+    accountExists: async (ports, email) => Boolean(await createStarterAuthDirectory(ports).findByEmail(email)),
+  });
 }
 
 async function consumeSignedAuthToken(ports: BusinessRequestPorts, request: Request, purpose: string): Promise<number | null> {
@@ -158,15 +99,13 @@ ${
   verify
     ? `
 async function completeSignedEmailVerification(ports: BusinessRequestPorts, request: Request): Promise<boolean> {
-  return await runAuthTransaction(ports, async (ports) => {
-    const userId = await consumeSignedAuthToken(ports, request, AUTH_ONE_TIME_PURPOSES.emailVerify);
-    if (!userId) return false;
-    await runAuthWrite(ports, userId, async (ports) => {
+  return completeAccountToken(ports, request, AUTH_ONE_TIME_PURPOSES.emailVerify, {
+    transaction: runAuthTransaction, consume: consumeSignedAuthToken,
+    update: (ports, userId) => runAuthWrite(ports, userId, async (ports) => {
       const user = await ports.database.model(User).find(userId);
       if (!user) throw new Error("Verification account no longer exists.");
       await user.update({ email_verified_at: authTimestamp(ports) });
-    });
-    return true;
+    }),
   });
 }
 `
@@ -175,16 +114,14 @@ async function completeSignedEmailVerification(ports: BusinessRequestPorts, requ
 
 async function completeSignedPasswordReset(ports: BusinessRequestPorts, request: Request, password: unknown): Promise<boolean> {
   if (typeof password !== "string" || password.length < 8) return false;
-  return await runAuthTransaction(ports, async (ports) => {
-    const userId = await consumeSignedAuthToken(ports, request, AUTH_ONE_TIME_PURPOSES.passwordReset);
-    if (!userId) return false;
-    await runAuthWrite(ports, userId, async (ports) => {
+  return completeAccountToken(ports, request, AUTH_ONE_TIME_PURPOSES.passwordReset, {
+    transaction: runAuthTransaction, consume: consumeSignedAuthToken,
+    update: (ports, userId) => runAuthWrite(ports, userId, async (ports) => {
       const user = await ports.database.model(User).where({ id: userId })${plan.decisions.rowLocks ? ".lockForUpdate()" : ""}.first();
       if (!user) throw new Error("Reset account no longer exists.");
       await user.update({ password: await hashPassword(password) });
       await revokeStoredUserSessions(ports.database, userId, { incrementAuthVersion: true });
-    });
-    return true;
+    }),
   });
 }
 

@@ -353,58 +353,19 @@ describe("create-strata generate", () => {
     expect(noteModel).toContain("const NoteRepository = Note.repository");
     expect(noteModel).not.toContain("class NoteRepository");
     const bootstrap = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
-    expect(bootstrap).toContain("createApplicationContext");
-    expect(bootstrap).not.toContain("AppConfigStore");
-    expect(bootstrap).not.toContain("as unknown as ConfigStore");
-    expect(bootstrap).not.toContain("dependencies as AppDependencies");
-    expect(bootstrap).not.toContain("appContext as never");
-    const preload = await readFile(join(app, "src/bootstrap/preload.ts"), "utf8");
-    expect(bootstrap).toContain(
-      'import { repositoryDefinitions, modelDefinitions } from "../models/register.ts";',
-    );
-    expect(preload).not.toContain("configureModulesDirectory");
-    expect(existsSync(join(app, "src/modules/billing/index.ts"))).toBe(false);
-    expect(existsSync(join(app, "src/jobs/dispatchOutboundWebhookJob.ts"))).toBe(false);
-
-    const authProvider = await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8");
-    expect(bootstrap).toContain('allowDevHeaders:!production&&env.AUTH_DEV_HEADERS==="true"');
-    expect(authProvider).toContain("new GuestGuard(snapshot)");
+    expect(bootstrap).toContain('from "@getstrata/bootstrap/application"');
+    expect(bootstrap).toContain("defineApp({");
+    expect(bootstrap).toContain("models: modelDefinitions");
+    expect(bootstrap).toContain("repositories: repositoryDefinitions");
+    expect(existsSync(join(app, "src/bootstrap/preload.ts"))).toBe(false);
+    expect(existsSync(join(app, "src/bootstrap/providers/index.ts"))).toBe(false);
+    const { default: appConfig } = await import(join(app, "src/config/app.ts"));
+    expect(appConfig.frontend).toBe("api");
+    expect(appConfig.tenancy).toBe("none");
+    expect(appConfig.metrics).toBe(false);
+    const authProvider = await readFile(join(app, "src/bootstrap/auth.ts"), "utf8");
+    expect(authProvider).toContain("new AuthManager(new GuestGuard(snapshot))");
     expect(authProvider).not.toContain('AUTH_DEV_HEADERS === "false"');
-    const providers = await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8");
-    expect(providers).toContain("policyProvider");
-    expect(bootstrap).toContain("await discoverListeners(");
-    expect(bootstrap).toContain(
-      "createModelCacheInvalidationEffects(repositoryDefinitions,modules,",
-    );
-    expect(bootstrap).toContain(
-      "repositoryEffects:[...catalog.flatMap(declaration=>declaration.repositoryEffects)",
-    );
-    expect(existsSync(join(app, "src/bootstrap/providers/policy.ts"))).toBe(true);
-
-    expect(providers).toContain('import { createTracingProvider } from "@getstrata/bootstrap"');
-    expect(providers).toContain("  createTracingProvider({ env }),");
-
-    const queueProvider = providers;
-    expect(queueProvider).toContain("registerDefaultJobs");
-    expect(queueProvider).toContain("discoverJobs");
-
-    const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
-    expect(createApp).not.toContain("createMetricsRoutes");
-    expect(createApp).toContain("isProductionEnv(env)");
-    expect(createApp).toContain(
-      'ensureModulesLoaded({modulesDir:join(import.meta.dir,"../modules")})',
-    );
-    expect(createApp).not.toContain("discoverModules()");
-    expect(createApp).toContain("...modules.flatMap(module=>module.providers??[])");
-    expect(createApp.indexOf("await ensureModulesLoaded({modulesDir:")).toBeLessThan(
-      createApp.indexOf("const handle=createApplicationContext("),
-    );
-    expect(createApp).toContain("providersFromScope:scope=>");
-    expect(createApp).not.toContain("runProviderPhase");
-    expect(queueProvider).toContain("async register({container})");
-    expect(queueProvider.indexOf("discoverJobs(registry)")).toBeGreaterThan(
-      queueProvider.indexOf("async register({container})"),
-    );
     expect(readme).not.toContain("GET /metrics");
 
     const database = await readFile(join(app, "src/bootstrap/database.ts"), "utf8");
@@ -416,7 +377,7 @@ describe("create-strata generate", () => {
       scripts: Record<string, string>;
     };
     expect(pkg.dependencies["@getstrata/core"]).toBe("^3.0.5");
-    expect(pkg.dependencies.eta).toBe("^4.6.0");
+    expect(pkg.dependencies.eta).toBeUndefined();
     expect(pkg.dependencies.mysql2).toBeUndefined();
     expect(pkg.scripts.dev).toBe("strata dev");
     expect(pkg.scripts["queue:work"]).toBe("strata queue:work");
@@ -448,14 +409,10 @@ describe("create-strata generate", () => {
     expect(schema).toContain("CREATE TABLE IF NOT EXISTS notes");
     expect(schema).toContain("CREATE TABLE IF NOT EXISTS failed_job");
 
-    const site = await readFile(join(app, "src/modules/site/index.ts"), "utf8");
-    expect(site).not.toContain("/health");
+    expect(existsSync(join(app, "src/modules/site/index.ts"))).toBe(false);
     const healthBootstrap = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(healthBootstrap).toContain('database.model(Note).query().limit(1).select("id").get()');
     expect(healthBootstrap).not.toContain("runWithMigrationBypass");
-    expect(site).not.toContain('notes.query().value("id")');
-    expect(site).not.toContain("runWithMigrationBypass");
-    expect(site).not.toContain("SELECT 1 FROM notes LIMIT 1");
 
     const api = await readFile(join(app, "docs/API.md"), "utf8");
     expect(api).toContain('.pluck("body", "id")');
@@ -553,8 +510,8 @@ describe("create-strata generate", () => {
     expect(init).toContain("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public");
     expect(init).toContain("already-existing volume");
     expect(existsSync(join(app, "db/ensure-postgres-app-role.sql"))).toBe(true);
-    const preload = await readFile(join(app, "src/bootstrap/preload.ts"), "utf8");
-    expect(preload).toContain(
+    const config = await readFile(join(app, "src/config/app.ts"), "utf8");
+    expect(config).toContain(
       "postgresql://strata_app:dev-strata-app-change-me@localhost:5432/ent_app",
     );
 
@@ -566,7 +523,7 @@ describe("create-strata generate", () => {
     expect(existsSync(join(app, "src/modules/careers"))).toBe(false);
     expect(existsSync(join(app, "resources/views/organizations"))).toBe(false);
 
-    const auth = await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8");
+    const auth = await readFile(join(app, "src/bootstrap/auth.ts"), "utf8");
     expect(auth).toContain("createCookieSessionAuthManager");
     expect(auth).toContain("createMetadataAuthManager");
     expect(auth).toContain('"jwt"');
@@ -713,8 +670,8 @@ describe("create-strata generate", () => {
     expect(schema).toContain("auth_saml_assertions");
     const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
     const seedFn = migrate.slice(migrate.indexOf("export async function seed"));
-    expect(seedFn.indexOf("const connection = databaseOptions()")).toBeGreaterThan(-1);
-    expect(seedFn.indexOf("const connection = databaseOptions()")).toBeLessThan(
+    expect(seedFn.indexOf("const connection = databaseOptions(environment)")).toBeGreaterThan(-1);
+    expect(seedFn.indexOf("const connection = databaseOptions(environment)")).toBeLessThan(
       seedFn.indexOf('policy.run(database, {kind:"bypass"}, writeSeed)'),
     );
     const authModule = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
@@ -732,17 +689,17 @@ describe("create-strata generate", () => {
     expect(authModule).not.toContain("FROM users");
     expect(authModule).not.toContain("INTO users");
     expect(authModule).not.toContain("INTO api_tokens");
-    expect(await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8")).toContain(
+    expect(await readFile(join(app, "src/bootstrap/auth.ts"), "utf8")).toContain(
       "createMetadataAuthManager(directory, { ...snapshot, mfaSecrets, mechanisms:",
     );
     expect(existsSync(join(app, "src/bootstrap/ensureDatabase.ts"))).toBe(true);
     const ensure = await readFile(join(app, "src/bootstrap/ensureDatabase.ts"), "utf8");
     // The database name must come from DATABASE_URL, never a hardcoded rename.
-    expect(ensure).toContain("resolveAppDatabaseUrl");
+    expect(ensure).toContain("resolveDatabaseOptions(environment");
     expect(ensure).not.toContain("acme_test");
     expect(ensure).not.toMatch(/url\.pathname\s*=/);
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
-    expect(createApp).toContain("createDatabaseReadinessBindings");
+    expect(createApp).toContain("health: async database =>");
     const env = await readFile(join(app, ".env.example"), "utf8");
     expect(env).toContain("/acme");
     expect(env).toMatch(
@@ -758,8 +715,8 @@ describe("create-strata generate", () => {
     expect(existsSync(join(app, "docker/postgres-init/01-strata-app-role.sql"))).toBe(false);
     const fresh = await readFile(join(app, "src/db/fresh.ts"), "utf8");
     expect(fresh).toContain("freshDatabase");
-    expect(fresh).toContain("{ destructive: true }");
-    expect(fresh).toContain("if (isProductionEnv())");
+    expect(fresh).toContain("{ destructive: true, environment }");
+    expect(fresh).toContain("if (isProductionEnv(environment))");
     expect(fresh).toContain("withMigrationDatabase");
     expect(fresh).toContain('from "@getstrata/core/database/migrations"');
     expect(fresh).not.toContain("@getstrata/core/database/migrations/runner");
@@ -880,8 +837,8 @@ describe("create-strata generate", () => {
     expect(auth).toContain("JSON.stringify([])");
     expect(auth).toContain("parseJsonBody(request, parseRegisterCredentials)");
     expect(auth).toContain("validateObject");
-    expect(auth).toContain("emailRule()");
-    expect(auth).toContain("minLength(8)");
+    expect(auth).toContain("parseLoginCredentials");
+    expect(auth).toContain("parseRegisterCredentials");
     expect(auth).toContain("kernel.wrapWebPasswordConfirm(");
     expect(auth).toMatch(/"\/reset-password":[\s\S]*?wrapWeb\(kernel\.wrapSigned\(/);
     expect(auth).toMatch(/"\/api\/v1\/auth\/reset-password":[\s\S]*?wrapSigned\(/);
@@ -892,14 +849,10 @@ describe("create-strata generate", () => {
     expect(auth).not.toContain("INTO api_tokens");
     expect(auth).not.toContain("INTO auth_one_time_tokens");
 
-    const providers = await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8");
-    expect(providers).toContain("policyProvider");
-    expect(providers).toContain("createStarterAuthProvider(auth)");
-    const policy = await readFile(join(app, "src/bootstrap/providers/policy.ts"), "utf8");
-    expect(policy).toContain("CORE_POLICY_GATE_TOKEN");
-    expect(policy).toContain("new PolicyGate()");
-    expect(policy).toContain("@getstrata/core/auth/policy");
-    expect(policy).toContain("@getstrata/bootstrap/config");
+    const composition = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
+    expect(composition).toContain(
+      "auth: { create: createStarterAuthServices, token: STARTER_AUTH_SERVICES }",
+    );
 
     const directory = await readFile(join(app, "src/bootstrap/authDirectory.ts"), "utf8");
     expect(directory).toContain("database.model(User).where({ email }).first()");
@@ -940,12 +893,9 @@ describe("create-strata generate", () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["metrics-app", "--metrics", "--yes"]);
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
-    expect(createApp).toContain("createMetricsRoutes");
-    expect(createApp).toContain("runtimeMetrics?:Omit<MetricsRuntimeOptions");
-    expect(createApp).toContain("createMetricsRuntime({...runtime");
-    expect(createApp).toContain('onCleanup(()=>metrics!.close(),"drain")');
-    expect(createApp).toContain("createOwnedReadOnlyObservation(handle.application");
-    expect(createApp).toContain('await handle.application.stop({reason:"STARTUP_FAILED"})');
+    expect(createApp).toContain("defineApp({");
+    const config = await readFile(join(app, "src/config/app.ts"), "utf8");
+    expect(config).toContain('"metrics": true');
     const env = await readFile(join(app, ".env.example"), "utf8");
     expect(env).toContain("METRICS_TOKEN=dev-metrics-token-change-me");
     const readme = await readFile(join(app, "README.md"), "utf8");
@@ -1292,25 +1242,27 @@ describe("create-strata CLI", () => {
     await writeFile(
       join(probeDir, "index.ts"),
       `import { createServiceToken } from "@getstrata/core/contracts/token";
-import { CORE_POLICY_GATE_TOKEN } from "@getstrata/bootstrap/config";
+import { CORE_POLICY_REGISTRY_TOKEN } from "@getstrata/bootstrap/config";
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import type { ServiceProvider } from "@getstrata/core/contracts/di";
 
 export const PROBE_REGISTER_TOKEN = createServiceToken<string>("probe.module.register.token");
-export const PROBE_CLOSED_TOKEN = createServiceToken<boolean>("probe.closed");
-export const STARTER_BOOT_OBSERVED_TOKEN = createServiceToken<boolean>("fixture.starter-boot-observed");
+let closed=false;
+export const isProbeClosed=()=>closed;
+export const events:string[]=[];
 export const PROBE_BOOT_TOKEN = createServiceToken<string>("probe.module.boot.token");
 
 const probeProvider: ServiceProvider = {
   name: "probe.provider",
   async register({ container, onCleanup }) {
     await new Promise((resolve) => setTimeout(resolve, 20));
-    onCleanup(() => { container.set(PROBE_CLOSED_TOKEN, true); });
+    onCleanup(() => { closed=true; });
+    events.push("register");
     container.singleton(PROBE_REGISTER_TOKEN, () => "module-provider-register");
   },
   async boot({ container }) {
     await new Promise((resolve) => setTimeout(resolve, 5));
-    const gate = container.resolve(CORE_POLICY_GATE_TOKEN);
+    const gate = container.resolve(CORE_POLICY_REGISTRY_TOKEN);
     gate.register("probe", { view: () => true });
     container.singleton(PROBE_BOOT_TOKEN, () => "module-provider-boot");
   },
@@ -1325,18 +1277,18 @@ export default probeModule;
 `,
     );
 
-    const providerIndex = join(app, "src/bootstrap/providers/index.ts");
-    const providerSource = await readFile(providerIndex, "utf8");
+    const compositionPath = join(app, "src/bootstrap/createApp.ts");
+    const composition = await readFile(compositionPath, "utf8");
     await writeFile(
-      providerIndex,
-      'import { PROBE_REGISTER_TOKEN, STARTER_BOOT_OBSERVED_TOKEN } from "../../modules/probe";\n' +
-        providerSource.replace(
-          "    createStarterAuthProvider(auth),",
-          `    {name:"fixture.starter-boot-order",boot({container}) {
-      if(container.resolve(PROBE_REGISTER_TOKEN)!=="module-provider-register") throw new Error("starter boot ran before module registration");
-      container.set(STARTER_BOOT_OBSERVED_TOKEN,true);
-    }},
-    createStarterAuthProvider(auth),`,
+      compositionPath,
+      'import { events } from "../modules/probe/index.ts";\n' +
+        composition.replace(
+          "  ...config,",
+          `  ...config,
+  providers:[{name:"fixture.starter-boot-order",setup(){},boot(){
+    if(!events.includes("register"))throw new Error("starter boot ran before module registration");
+    events.push("starter-boot");
+  }}],`,
         ),
     );
 
@@ -1355,19 +1307,16 @@ export default probeModule;
 
     try {
       const { bootstrapApp } = await import(`${join(app, "src/bootstrap/createApp.ts")}`);
-      const {
-        PROBE_BOOT_TOKEN,
-        PROBE_REGISTER_TOKEN,
-        PROBE_CLOSED_TOKEN,
-        STARTER_BOOT_OBSERVED_TOKEN,
-      } = await import(`${join(probeDir, "index.ts")}`);
+      const { PROBE_BOOT_TOKEN, PROBE_REGISTER_TOKEN, isProbeClosed, events } = await import(
+        `${join(probeDir, "index.ts")}`
+      );
 
       // Compare identities within the installed consumer, not against the source checkout.
       const { ConfigStore } = await import(
         createRequire(join(app, "package.json")).resolve("@getstrata/bootstrap/contracts")
       );
       const { context } = await bootstrapApp({ migrate: false });
-      expect(context.container.resolve(STARTER_BOOT_OBSERVED_TOKEN)).toBe(true);
+      expect(events).toContain("starter-boot");
       expect(context.container.resolve(PROBE_REGISTER_TOKEN)).toBe("module-provider-register");
       expect(context.container.resolve(PROBE_BOOT_TOKEN)).toBe("module-provider-boot");
       expect(context.config).toBeInstanceOf(ConfigStore);
@@ -1377,7 +1326,7 @@ export default probeModule;
         'Config key "generator.missing" is not defined.',
       );
       await context.dispose();
-      expect(context.container.resolve(PROBE_CLOSED_TOKEN)).toBe(true);
+      expect(isProbeClosed()).toBe(true);
     } finally {
       process.chdir(repoRoot);
     }
@@ -1526,22 +1475,15 @@ export default probeModule;
         "--frontend=server-htmx",
         "--database=sqlite",
         `--auth=${auth}`,
-        "--oidc",
+        ...(auth === "headers" ? [] : ["--oidc"]),
         "--yes",
       ]);
       expect(existsSync(join(app, "src/lib/view.ts"))).toBe(false);
-      const provider = await readFile(join(app, "src/bootstrap/providers/view.ts"), "utf8");
-      expect(provider).toContain("createViewProvider");
-      expect(provider).toContain('userKey: "currentUser"');
-      expect(provider).toContain("await establishedAuthReader.user(request)");
-      expect(provider).toContain(
-        'name: user.name ?? "", email: user.email ?? "", role: user.role ?? "member"',
-      );
-      expect(provider).not.toContain("resolveAuthUserDirectory");
-      expect(provider).not.toContain("EtaViewEngine");
-      expect(await readFile(join(app, "src/bootstrap/providers/index.ts"), "utf8")).toContain(
-        "createStarterViewProvider(env)",
-      );
+      const composition = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
+      expect(composition).toContain("defineApp({");
+      const config = await readFile(join(app, "src/config/app.ts"), "utf8");
+      expect(config).toContain('"views": true');
+      expect(existsSync(join(app, "src/bootstrap/providers/view.ts"))).toBe(false);
       const site = await readFile(join(app, "src/modules/site/index.ts"), "utf8");
       expect(site).toContain("resolve(CORE_VIEW_RENDERER_TOKEN)");
       expect(site).toContain("views.renderHtmx(");
@@ -1557,7 +1499,7 @@ export default probeModule;
         expect(authModule).not.toContain('views.render("auth/');
         expect(authModule).toContain("status: 429");
         expect(authModule).not.toContain("renderHtmx");
-        expect(provider).toContain('env.FEATURE_OAUTH === "true"');
+        expect(authModule).toContain("authServices.config.oauth");
       }
     }
   });
@@ -2738,9 +2680,7 @@ export default probeModule;
         const welcome = await fetch(`${origin}/`, { headers: { cookie: sessionCookies } });
         expect(welcome.status).toBe(200);
         expect(await welcome.text()).toContain("demo@example.com");
-        const { STARTER_AUTH_SERVICES } = await import(
-          join(app, "src/bootstrap/providers/auth.ts")
-        );
+        const { STARTER_AUTH_SERVICES } = await import(join(app, "src/bootstrap/auth.ts"));
         const resolvedUser = await boot.invoke(
           { kind: "command", actor: { kind: "system", policy: "generated-cookie-reader-test" } },
           (ports: ExecutionPersistence) =>

@@ -28,14 +28,14 @@ The framework test fixture schema still uses the table name `api_token`. Generat
 Each guard receives its declared capability options: `DatabaseTokenGuard` receives
 its token resolver, `JwtGuard` receives its account directory and signing secret,
 and `BasicAuthGuard` receives account lookup, credential verification and recovery
-persistence. Generated `src/bootstrap/providers/auth.ts` composes those dependencies;
+persistence. Generated `src/bootstrap/auth.ts` composes those dependencies;
 passing a container in place of those options is no longer supported.
 
-Generated applications do this in the generated `src/bootstrap/providers/auth.ts`. `JwtGuard` requires explicit `{ directory, secret }` options so it can reject tokens whose `iat` is before `session_valid_after`. Missing required capabilities reject at construction. Role and ability resolution belongs to that application.
+Generated applications do this in the generated `src/bootstrap/auth.ts`. `JwtGuard` requires explicit `{ directory, secret }` options so it can reject tokens whose `iat` is before `session_valid_after`. Missing required capabilities reject at construction. Role and ability resolution belongs to that application.
 
 Every generated auth provider also registers the ability checker, including cookie-only, JWT-only and development-header apps. `make:module` uses `kernel.wrapAbility` for its API writes independently of the credential selection. The existing checker reads the authenticated identity's abilities; registering it does not enable opaque-token authentication, require an API-token table, or grant new permissions. Applications still choose their own grants and resource policies.
 
-Existing generated apps must adopt the corrected registration in `src/bootstrap/providers/auth.ts`; updating packages does not rewrite application source:
+Existing generated apps must adopt the corrected registration in `src/bootstrap/auth.ts`; updating packages does not rewrite application source:
 
 ```typescript
 import { createTokenAbilityChecker } from "@getstrata/core/auth/tokenAbilityChecker";

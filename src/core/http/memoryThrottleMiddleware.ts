@@ -1,3 +1,4 @@
+import { testState } from "#strata-test-state";
 import {
   BoundedThrottleStore,
   type MemoryThrottleStats,
@@ -21,18 +22,17 @@ interface MemoryThrottleOptions extends MemoryThrottleStorageOptions, ThrottleId
 }
 
 type DisposableMemoryThrottle = Middleware & { dispose(): void; stats(): MemoryThrottleStats };
-let resetGeneration = 0;
 
 function createMemoryThrottleMiddleware(options: MemoryThrottleOptions): DisposableMemoryThrottle {
   options = Object.freeze({ ...options });
   const store = new BoundedThrottleStore(options.decaySeconds * 1000, options);
   if (!Number.isSafeInteger(options.maxAttempts) || options.maxAttempts < 0)
     throw new Error("Invalid memory throttle limit.");
-  let generation = resetGeneration;
+  let generation = testState.throttleGeneration;
   const middleware: Middleware = async (request, next) => {
-    if (generation !== resetGeneration) {
+    if (generation !== testState.throttleGeneration) {
       store.clear();
-      generation = resetGeneration;
+      generation = testState.throttleGeneration;
     }
     let maxAttempts: number;
     try {
@@ -59,15 +59,10 @@ function createMemoryThrottleMiddleware(options: MemoryThrottleOptions): Disposa
 
 import { resolveThrottleIdentity } from "./throttleMiddleware";
 
-/** Lazy generation reset avoids retaining middleware instances in a global test registry. */
-function resetMemoryThrottleForTests(): void {
-  resetGeneration++;
-}
-
 export type {
   DisposableMemoryThrottle,
   MemoryThrottleOptions,
   MemoryThrottleStats,
   MemoryThrottleStorageOptions,
 };
-export { createMemoryThrottleMiddleware, resetMemoryThrottleForTests };
+export { createMemoryThrottleMiddleware };

@@ -119,15 +119,14 @@ describe("MySQL portability", () => {
     const app = generateFromArgs(root, ["myapp2", "--database=mysql", "--yes"]);
     const ensure = await readFile(join(app, "src/bootstrap/ensureDatabase.ts"), "utf8");
 
-    expect(ensure).toContain("CREATE DATABASE IF NOT EXISTS");
-    expect(ensure).toContain('from "mysql2/promise"');
-    expect(ensure).toContain("connection.end()");
-    expect(ensure).toContain("safeDatabaseName");
+    expect(ensure).toContain("ensureDatabase({ driver: connection.driver");
+    expect(ensure).toContain('from "@getstrata/bootstrap/databaseCommands"');
+    expect(ensure).not.toContain("CREATE DATABASE");
 
     const pkg = JSON.parse(await readFile(join(app, "package.json"), "utf8")) as {
       dependencies: Record<string, string>;
     };
-    expect(pkg.dependencies.eta).toBe("^4.6.0");
+    expect(pkg.dependencies.eta).toBeUndefined();
     expect(pkg.dependencies.mysql2).toBe("^3.24.3");
   });
 
@@ -142,30 +141,21 @@ describe("MySQL portability", () => {
       "--yes",
     ]);
     const mysqlAuth = await readFile(join(mysqlApp, "src/modules/auth/index.ts"), "utf8");
-    expect(mysqlAuth).toContain("expires_at: authTimestamp(ports, expiresAt)");
-    expect(mysqlAuth).toContain("email_verified_at: authTimestamp(ports)");
-    expect(mysqlAuth).toContain("return ports.database.dialect.timestampValue(value)");
-
-    const pgApp = generateFromArgs(root, [
-      "pgtime",
-      "--frontend=server-htmx",
-      "--database=postgres",
-      "--auth=cookie",
-      "--email-verification",
-      "--yes",
-    ]);
-    const pgAuth = await readFile(join(pgApp, "src/modules/auth/index.ts"), "utf8");
-    expect(pgAuth).toContain("expires_at: authTimestamp(ports, expiresAt)");
-    expect(pgAuth).toContain("email_verified_at: authTimestamp(ports)");
-    expect(pgAuth).not.toContain('.slice(0, 19).replace("T", " ")');
+    expect(mysqlAuth).toContain("prepareAccountMail(ports");
+    expect(mysqlAuth).toContain("registerAccount(ports");
+    expect(mysqlAuth).not.toContain('.slice(0, 19).replace("T", " ")');
+    const { dialectFor } = await import("../../../src/core/database/dialect");
+    const value = new Date("2026-01-02T03:04:05.000Z");
+    expect(dialectFor("mysql").timestampValue(value)).toBe("2026-01-02 03:04:05");
+    expect(dialectFor("pgsql").timestampValue(value)).toBe("2026-01-02T03:04:05.000Z");
   });
 
   test("migrate and fresh use a finally-owned migration connection", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["myclose", "--database=mysql", "--yes"]);
     const runtime = await readFile(join(app, "src/db/migrationRuntime.ts"), "utf8");
-    expect(runtime).toContain("export async function withMigrationDatabase<T>");
-    expect(runtime).toMatch(/finally\s*\{\s*await connection\.close\?\.\(\)/);
+    expect(runtime).toContain("export function withMigrationDatabase<T>");
+    expect(runtime).toContain("runMigrationDatabase(databaseOptions(environment), operation");
     for (const file of ["migrate", "fresh"]) {
       const source = await readFile(join(app, `src/db/${file}.ts`), "utf8");
       expect(source).toContain("await withMigrationDatabase(async (db)");
@@ -192,7 +182,7 @@ describe("database name resolution", () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["ovr", "--database=postgres", "--yes"]);
     const ensure = await readFile(join(app, "src/bootstrap/ensureDatabase.ts"), "utf8");
-    expect(ensure).toContain("APP_DATABASE_URL");
+    expect(ensure).toContain("resolveDatabaseOptions(environment");
     expect(ensure).toContain("DATABASE_URL");
 
     // The override is discoverable from the app itself, not only from source.
@@ -374,9 +364,10 @@ describe("generated login defaults", () => {
         `--auth=${auth}`,
         "--yes",
       ]);
-      const home = await readFile(join(app, "views/home.eta"), "utf8");
-      const publicPages = [home];
-      if (auth.includes("cookie")) {
+      const publicPages: string[] = [];
+      if (existsSync(join(app, "views/home.eta")))
+        publicPages.push(await readFile(join(app, "views/home.eta"), "utf8"));
+      if (existsSync(join(app, "views/auth/login.eta"))) {
         publicPages.push(await readFile(join(app, "views/auth/login.eta"), "utf8"));
       }
       if (frontend !== "server-htmx") {
@@ -536,8 +527,9 @@ describe("production defaults", () => {
     const app = generateFromArgs(root, ["prod", "--yes"]);
     const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
 
-    expect(createApp).toContain("const production=isProductionEnv(env)");
-    expect(createApp).toContain("const runMigrate=options.migrate??!production");
+    expect(createApp).toContain("defineApp({");
+    expect(createApp).toContain("  migrate,");
+    expect(createApp).not.toContain("await migrate()");
   });
 
   test("HTML apps explain the FEATURE_PUBLIC_READS default they ship", async () => {
@@ -725,10 +717,10 @@ test("header apps register the complete published AuthManager and GuestGuard", a
     "--auth=headers",
     "--yes",
   ]);
-  const source = await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8");
+  const source = await readFile(join(app, "src/bootstrap/auth.ts"), "utf8");
   expect(source).toContain("new AuthManager(new GuestGuard(snapshot))");
-  expect(source).toContain("container.set(CORE_AUTH_TOKEN, establishedAuthReader)");
-  expect(source).toContain("const env = Object.freeze({...options.environment})");
+  expect(source).toContain("authenticate: request => auth.authenticate(request)");
+  expect(source).toContain("const env = Object.freeze({...options.environment});");
   expect(source).not.toContain("class StarterAuthManager");
   expect(existsSync(join(app, "src/modules/auth/index.ts"))).toBe(false);
 });
