@@ -99,11 +99,11 @@ function starterPackageRoot(): string {
 
 function resolveTemplateRoot(root = starterPackageRoot()): string {
   const fromDist = join(root, "templates");
-  if (existsSync(join(fromDist, "src"))) {
+  if (existsSync(join(fromDist, "tsconfig.json"))) {
     return fromDist;
   }
   const nested = join(root, "dist/templates");
-  if (existsSync(join(nested, "src"))) {
+  if (existsSync(join(nested, "tsconfig.json"))) {
     return nested;
   }
   return fromDist;
