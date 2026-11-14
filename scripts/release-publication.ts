@@ -39,6 +39,8 @@ async function main() {
   const readiness = checkReleaseReadiness({ packages, tag: process.env.RELEASE_TAG ?? "" });
   if (readiness.errors.length) throw new Error(readiness.errors.join("\n"));
 
+  // Dry-runs validate package contents with npm pack: npm publish --dry-run
+  // still rejects already-published versions and requires registry state.
   // All package lookups must succeed before the first publish. Registry failure
   // is not proof that a version is missing. Dry-run never needs registry state.
   const existing = dryRun
@@ -58,22 +60,23 @@ async function main() {
       continue;
     }
     const child = Bun.spawn(
-      [
-        "npm",
-        "publish",
-        "--workspace",
-        pkg.name,
-        "--access",
-        "public",
-        "--tag",
-        "latest",
-        "--provenance",
-        ...(dryRun ? ["--dry-run", "--ignore-scripts"] : []),
-      ],
+      dryRun
+        ? ["npm", "pack", "--workspace", pkg.name, "--dry-run", "--ignore-scripts"]
+        : [
+            "npm",
+            "publish",
+            "--workspace",
+            pkg.name,
+            "--access",
+            "public",
+            "--tag",
+            "latest",
+            "--provenance",
+          ],
       { stdout: "inherit", stderr: "inherit" },
     );
     if ((await child.exited) !== 0)
-      throw new Error(`npm publish failed: ${pkg.name}@${pkg.version}`);
+      throw new Error(`npm ${dryRun ? "pack" : "publish"} failed: ${pkg.name}@${pkg.version}`);
     // npm may acknowledge the upload before public registry metadata catches up.
     // Do not turn propagation delay into a failure or retry an accepted upload.
     console.log(
