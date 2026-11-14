@@ -14,7 +14,11 @@ const options = {
   pollMs: 20,
 } satisfies RedisCacheOptions;
 
-function fixture(ttlMs = 10_000, capacity = 10, coordination: RedisCacheOptions = options) {
+function fixture(
+  ttlMs: number | null = 10_000,
+  capacity = 10,
+  coordination: RedisCacheOptions = options,
+) {
   const prefix = `cache-coordination-${crypto.randomUUID()}`;
   const namespace = `${prefix}:cache:v3:`;
   const stores: [RedisCacheStore, RedisCacheStore, RedisCacheStore] = [
@@ -230,7 +234,7 @@ describeRedis("bounded shared Redis cache coordination", () => {
   });
 
   test("metadata pressure fences pending owners and retains bounded cardinality", async () => {
-    const f = fixture(0);
+    const f = fixture(null);
     let start!: () => void;
     let release!: () => void;
     const ready = new Promise<void>((resolve) => {
@@ -391,10 +395,10 @@ describeRedis("bounded shared Redis cache coordination", () => {
   });
 
   test("metadata expires independently of permanent data and missing tags retain no entries", async () => {
-    const f = fixture(0);
+    const f = fixture(null);
     const store = new RedisCacheStore(
       redisUrl,
-      0,
+      null,
       10,
       {
         ...options,
@@ -554,7 +558,7 @@ describeRedis("bounded shared Redis cache coordination", () => {
             called = true;
             return 1;
           },
-          -1,
+          NaN,
         ),
       ).rejects.toThrow("ttlMs");
       expect(called).toBe(false);

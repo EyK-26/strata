@@ -1,5 +1,6 @@
 import { RedisClient } from "bun";
 import { copyApplicationConfig } from "../config/configSnapshot";
+import { resolveCacheTtl } from "./expiration";
 import { CACHE_SCRIPT } from "./redisCacheScript.ts";
 import type { CacheStore } from "./store";
 
@@ -21,12 +22,11 @@ function validateCacheNamespace(namespace: string): void {
 }
 
 function normalizeRedisCacheOptions(
-  ttlMs: number,
+  ttlMs: number | null,
   maxEntries: number,
   options: Readonly<RedisCacheOptions> = {},
 ): Readonly<Required<RedisCacheOptions>> {
-  if (!Number.isSafeInteger(ttlMs) || ttlMs < 0)
-    throw new RangeError("ttlMs must be a non-negative safe integer.");
+  resolveCacheTtl(ttlMs, ttlMs);
   if (!Number.isInteger(maxEntries) || maxEntries < 1 || maxEntries > 10_000)
     throw new RangeError("maxEntries must be between 1 and 10000.");
   const copied = copyApplicationConfig(options) as RedisCacheOptions;
@@ -75,7 +75,7 @@ class RedisCacheStore implements CacheStore {
 
   constructor(
     private readonly redisUrl: string,
-    private readonly ttlMs: number,
+    private readonly ttlMs: number | null,
     private readonly maxEntries: number,
     options: RedisCacheOptions = {},
     namespace = DEFAULT_CACHE_NAMESPACE,
@@ -110,14 +110,19 @@ class RedisCacheStore implements CacheStore {
     return result.kind === "value" ? (JSON.parse(result.payload ?? "null") as T) : undefined;
   }
 
-  async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
-    await this.execute("set", key, { payload: this.serialize(value), ttlMs: ttlMs ?? this.ttlMs });
+  async set<T>(key: string, value: T, ttlMs?: number | null, tags: string[] = []): Promise<void> {
+    const resolved = resolveCacheTtl(ttlMs, this.ttlMs);
+    await this.execute("set", key, {
+      payload: resolved !== null && resolved <= 0 ? "null" : this.serialize(value),
+      ttlMs: resolved,
+      tags,
+    });
   }
 
   async getOrSet<T>(
     key: string,
     loader: (signal?: AbortSignal) => Promise<T>,
-    ttlMs?: number,
+    ttlMs?: number | null,
   ): Promise<T> {
     return this.getOrSetTagged(key, loader, [], ttlMs);
   }
@@ -126,12 +131,16 @@ class RedisCacheStore implements CacheStore {
     key: string,
     loader: (signal?: AbortSignal) => Promise<T>,
     tags: string[],
-    ttlMs?: number,
+    ttlMs?: number | null,
   ): Promise<T> {
     const owner = crypto.randomUUID();
     const end = performance.now() + this.options.waitTimeoutMs;
     while (!this.closed) {
-      const claim = await this.execute("claim", key, { owner, tags, ttlMs: ttlMs ?? this.ttlMs });
+      const claim = await this.execute("claim", key, {
+        owner,
+        tags,
+        ttlMs: resolveCacheTtl(ttlMs, this.ttlMs),
+      });
       if (claim.kind === "value") return JSON.parse(claim.payload ?? "null") as T;
       if (claim.kind === "owner") return this.fill(key, owner, loader, ttlMs);
       if (performance.now() >= end) throw new Error("Redis cache fill wait deadline exceeded.");
@@ -163,7 +172,7 @@ class RedisCacheStore implements CacheStore {
     key: string,
     owner: string,
     loader: (signal?: AbortSignal) => Promise<T>,
-    ttlMs?: number,
+    ttlMs?: number | null,
   ): Promise<T> {
     if (this.fills.size >= this.maxEntries) {
       await this.execute("release", key, { owner });
@@ -209,10 +218,11 @@ class RedisCacheStore implements CacheStore {
       controller.signal.throwIfAborted();
       done = true;
       clearInterval(renew);
+      const resolved = resolveCacheTtl(ttlMs, this.ttlMs);
       await this.execute("publish", key, {
         owner,
-        payload: this.serialize(value),
-        ttlMs: ttlMs ?? this.ttlMs,
+        payload: resolved !== null && resolved <= 0 ? "null" : this.serialize(value),
+        ttlMs: resolved,
       });
       return value;
     } finally {
@@ -251,9 +261,7 @@ class RedisCacheStore implements CacheStore {
     for (let i = 0; i < key.length; i++) if (key[i] === "?") prefixes.push(key.slice(0, i));
     if (prefixes.length > 33)
       throw new RangeError("Redis cache identities support at most 32 query separators.");
-    const ttlMs = extra.ttlMs ?? this.ttlMs;
-    if (typeof ttlMs !== "number" || !Number.isSafeInteger(ttlMs) || ttlMs < 0)
-      throw new RangeError("ttlMs must be a non-negative safe integer.");
+    const ttlMs = resolveCacheTtl(extra.ttlMs, this.ttlMs);
     if (!this.client) this.client = this.createClient();
     const client = this.client;
     const retire = (reason: unknown) => {
@@ -286,6 +294,7 @@ class RedisCacheStore implements CacheStore {
             tags,
             prefixes,
             ttlMs,
+            forever: ttlMs === null,
           }),
         ]),
         timeout,

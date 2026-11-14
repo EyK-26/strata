@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+Align array and Redis expiration semantics: positive safe-integer millisecond TTLs expire; zero/negative TTLs remove entries and fence pending fills; omitted TTLs use the configured default. Add `put` and `forever` to repositories, tagged caches and execution-scoped caches. Explicit low-level `null` means forever. Redis callers using TTL zero for persistence must switch to `forever` (or a null configured default). Invalid numeric TTLs reject before effects.
+
+Reject control characters that can turn internal redirects into external destinations and preserve repeated query parameters. Prevent malformed intended-URL and flash cookies from throwing by using the shared cookie reader, including Bun's native cookie-map path. Fence old memory-cache fills after explicit writes, enforce capacity for empty keys, and reject invalid per-call TTLs before mutation or loader execution.
+
 Fix SQLite row detection using native prepared-statement column metadata. Leading comments no longer discard SELECT, CTE, PRAGMA or EXPLAIN results; VALUES and compact RETURNING forms also return their rows. Non-returning mutations still execute once and return an empty result.
 
 ## 3.0.4

@@ -1,13 +1,13 @@
+import { resolveCacheTtl } from "./expiration";
+
 type CacheEntry<T> = {
   value: T;
   expiresAt: number;
   lastAccessedAt: number;
 };
 
-function validateSimpleCacheOptions(ttlMs: number, maxEntries: number): void {
-  if (!Number.isFinite(ttlMs) || ttlMs < 0) {
-    throw new RangeError("ttlMs must be a non-negative number.");
-  }
+function validateSimpleCacheOptions(ttlMs: number | null, maxEntries: number): void {
+  resolveCacheTtl(ttlMs, ttlMs);
   if (!Number.isInteger(maxEntries) || maxEntries < 1) {
     throw new RangeError("maxEntries must be a positive integer.");
   }
@@ -20,7 +20,7 @@ class SimpleCache {
   private readonly keyTags = new Map<string, Set<string>>();
 
   constructor(
-    private readonly ttlMs: number = 3_600_000,
+    private readonly ttlMs: number | null = 3_600_000,
     private readonly maxEntries: number = 100,
   ) {
     validateSimpleCacheOptions(ttlMs, maxEntries);
@@ -30,20 +30,28 @@ class SimpleCache {
     return this.getFreshEntry<T>(key)?.value;
   }
 
-  set<T>(key: string, value: T, ttlMs?: number): void {
+  set<T>(key: string, value: T, ttlMs?: number | null, tags: string[] = []): void {
     const now = Date.now();
-    const resolvedTtlMs = ttlMs ?? this.ttlMs;
+    const resolvedTtlMs = resolveCacheTtl(ttlMs, this.ttlMs);
+    if (resolvedTtlMs !== null && resolvedTtlMs <= 0) {
+      this.invalidate(key);
+      return;
+    }
+
+    // A later explicit write owns the key; an older loader may only return to its caller.
+    this.inflight.delete(key);
 
     this.cache.set(key, {
       value,
-      expiresAt: now + resolvedTtlMs,
+      expiresAt: resolvedTtlMs === null ? Infinity : now + resolvedTtlMs,
       lastAccessedAt: now,
     });
 
+    this.attachTags(key, tags);
     this.evictOverflow();
   }
 
-  async getOrSet<T>(key: string, loader: () => Promise<T>, ttlMs?: number): Promise<T> {
+  async getOrSet<T>(key: string, loader: () => Promise<T>, ttlMs?: number | null): Promise<T> {
     return this.getOrSetTagged(key, loader, [], ttlMs);
   }
 
@@ -51,8 +59,9 @@ class SimpleCache {
     key: string,
     loader: () => Promise<T>,
     tags: string[],
-    ttlMs?: number,
+    ttlMs?: number | null,
   ): Promise<T> {
+    resolveCacheTtl(ttlMs, this.ttlMs);
     this.pruneExpired();
 
     const cachedEntry = this.getFreshEntry<T>(key);
@@ -237,7 +246,7 @@ class SimpleCache {
         }
       }
 
-      if (!oldestKey) {
+      if (oldestKey === undefined) {
         return;
       }
 

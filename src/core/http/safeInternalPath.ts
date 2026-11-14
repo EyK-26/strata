@@ -3,6 +3,11 @@ const NESTED_REDIRECT_KEYS = new Set(["redirect", "next", "return", "returnTo", 
 function looksLikeExternalTarget(value: string): boolean {
   const trimmed = value.trim();
 
+  // WHATWG URL parsing strips these characters, turning /<tab>/host into //host.
+  if (/[\t\r\n]/.test(trimmed)) {
+    return true;
+  }
+
   if (!trimmed.startsWith("/") || trimmed.startsWith("//") || trimmed.includes("\\")) {
     return true;
   }
@@ -34,7 +39,7 @@ function sanitizeNestedQuery(search: string): string {
   for (const [key, value] of params.entries()) {
     if (NESTED_REDIRECT_KEYS.has(key)) {
       const sanitized = sanitizeInternalPath(value, "/");
-      next.set(key, sanitized);
+      next.append(key, sanitized);
       continue;
     }
 
@@ -42,7 +47,7 @@ function sanitizeNestedQuery(search: string): string {
       continue;
     }
 
-    next.set(key, value);
+    next.append(key, value);
   }
 
   const serialized = next.toString();

@@ -13,7 +13,7 @@ type CacheDriver = "array" | "redis";
 
 interface CreateCacheStoreOptions {
   driver: CacheDriver;
-  ttlMs: number;
+  ttlMs: number | null;
   maxEntries: number;
   redisUrl?: string;
   redis?: Readonly<RedisCacheOptions>;
