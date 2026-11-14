@@ -1,5 +1,16 @@
 # create-strata changelog
 
+## 3.0.6
+
+- Generate small application declarations backed by packaged bootstrap/auth/database workflows instead of copied framework infrastructure. Keep model/repository registration and domain account mapping explicit.
+- Use concise model/provider/migration/listener APIs and typed consumer dependencies. Remove duplicate executable templates and assets/views for unselected frontends; store generator metadata in `.strata/generator.json`.
+- Fix model/factory/module generation journeys, configured module paths, relative SQLite/storage locations and strict typed startup configuration. Preserve valid short JWT lifetimes.
+- Bind generated GitHub and SAML sign-in callbacks to their initiating browser before provider exchange/assertion consumption, and clear temporary state cookies on callback outcomes. Preserve OIDC PKCE and SAML assertion/replay validation.
+- Emit a dedicated `SameSite=None; Secure` SAML state cookie and document the HTTPS requirement. Include the core password-confirmation and shutdown fixes in generated 3.0.6 applications.
+- Update generated dependency pins, maintained guides and expected scaffold output. The `create-strata` launcher shares this release and generator.
+
+**Upgrade:** Regeneration is not automatic. Existing applications must apply the current generated auth-route changes as well as upgrade their packages. SAML browser login requires HTTPS; existing password confirmations need one fresh confirmation, while normal sessions remain valid. Review the changed application/module/factory layouts and testing entrypoints in [the release notes](../../docs/releases/3.0.6.md).
+
 ## 3.0.5
 
 - Fixed SQLite queries returning no rows when SQL begins with comments, including VALUES, PRAGMA, EXPLAIN, and compact RETURNING statements.

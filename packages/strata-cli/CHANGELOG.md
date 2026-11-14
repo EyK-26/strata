@@ -1,5 +1,16 @@
 # @getstrata/cli changelog
 
+## 3.0.6
+
+- Package built-in application commands and load application adapters lazily, so custom CLI apps do not require bootstrap dependencies unless configured.
+- Simplify module scaffolds to models, controllers, requests and policies without forwarding service/repository/provider layers. Honor the configured modules directory.
+- Generate factories in `src/db/factories`, resolve existing standalone or module record types, support nested model names and reject missing models before writing files.
+- Validate scaffold names/paths before filesystem changes and keep per-command help free of file-writing side effects. Generate migrations through `defineMigration`.
+- Share captured configuration across migration, seeding and reset commands, including the production reset guard.
+- Align CLI peer dependencies and generated application pins with core/bootstrap 3.0.6.
+
+**Upgrade:** Review generated module/factory layouts and adopt the packaged application command configuration. Applications using removed test helpers should use the dedicated testing entrypoints. See [the release notes](../../docs/releases/3.0.6.md) and [application authoring changes](../../docs/architecture/application-dx-convergence.md).
+
 ## 3.0.5
 
 - Fixed SQLite queries returning no rows when SQL begins with comments, including VALUES, PRAGMA, EXPLAIN, and compact RETURNING statements.

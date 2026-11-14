@@ -1,5 +1,16 @@
 # @getstrata/bootstrap changelog
 
+## 3.0.6
+
+- Add packaged `defineApp` and `serveApplication` composition, shared account workflows, database provisioning/migration helpers and concise model/event listener declarations.
+- Validate and freeze configuration before provisioning or migration. Carry the same snapshot through auth, workers, migrations and seeding; resolve relative storage/SQLite paths from the application root.
+- Run canonical provider setup and boot in the correct phases, retain application-owned resource cleanup, and reject missing worker configuration before schema side effects.
+- Keep composition tokens identical across the package root and application entrypoint. Fix separately bundled event listeners using a different token from application event bindings.
+- Narrow consumer queue/event/policy capabilities and expose bootstrap test controls only through `@getstrata/bootstrap/testing`.
+- Integrate core shutdown and authentication fixes, including browser-bound OAuth/SAML state, purpose-bound password confirmation and compatible positive JWT lifetimes.
+
+**Upgrade:** Existing applications should adopt the small `defineApp` declaration and current generated composition instead of copying framework lifecycle code. Model/repository registration and account mapping remain explicit. Update removed test-control imports. Package upgrades do not rewrite existing auth modules: apply the current GitHub/SAML route changes, use HTTPS for SAML, and expect one fresh password confirmation. See [the release notes](../../docs/releases/3.0.6.md).
+
 ## 3.0.5
 
 - Fixed SQLite queries returning no rows when SQL begins with comments, including VALUES, PRAGMA, EXPLAIN, and compact RETURNING statements.
