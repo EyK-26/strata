@@ -14,6 +14,14 @@ class CacheRepository {
     return this.store.get<T>(key);
   }
 
+  async put<T>(key: string, value: T, ttlMs?: number): Promise<void> {
+    await this.store.set(key, value, ttlMs);
+  }
+
+  async forever<T>(key: string, value: T): Promise<void> {
+    await this.store.set(key, value, null);
+  }
+
   async remember<T>(
     key: string,
     callback: (signal?: AbortSignal) => Promise<T>,
@@ -68,6 +76,9 @@ function createGuardedCache(backend: CacheRepository, operations: ExecutionOpera
   const forget: CacheLike["forget"] = (key) => operations.operation(() => backend.forget(key));
   const flush: CacheLike["flush"] = () => operations.operation(() => backend.flush());
   return Object.freeze({
+    put: <T>(key: string, value: T, ttlMs?: number) =>
+      operations.operation(() => backend.put(key, value, ttlMs)),
+    forever: <T>(key: string, value: T) => operations.operation(() => backend.forever(key, value)),
     get: <T>(key: string) => operations.operation(() => backend.get<T>(key)),
     remember,
     forget,
@@ -76,6 +87,10 @@ function createGuardedCache(backend: CacheRepository, operations: ExecutionOpera
       operations.assertActive();
       const tags = [...names];
       return Object.freeze({
+        put: <T>(key: string, value: T, ttlMs?: number) =>
+          operations.operation(() => backend.tags(...tags).put(key, value, ttlMs)),
+        forever: <T>(key: string, value: T) =>
+          operations.operation(() => backend.tags(...tags).forever(key, value)),
         remember: <T>(key: string, loader: (signal?: AbortSignal) => Promise<T>, ttlMs?: number) =>
           operations.operation(() =>
             backend

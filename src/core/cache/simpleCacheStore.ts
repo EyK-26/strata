@@ -8,11 +8,11 @@ class SimpleCacheStore implements CacheStore {
     return Promise.resolve(this.cache.get<T>(key));
   }
 
-  async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
-    this.cache.set(key, value, ttlMs);
+  async set<T>(key: string, value: T, ttlMs?: number | null, tags: string[] = []): Promise<void> {
+    this.cache.set(key, value, ttlMs, tags);
   }
 
-  getOrSet<T>(key: string, loader: () => Promise<T>, ttlMs?: number): Promise<T> {
+  getOrSet<T>(key: string, loader: () => Promise<T>, ttlMs?: number | null): Promise<T> {
     return this.cache.getOrSet(key, loader, ttlMs);
   }
 
@@ -20,7 +20,7 @@ class SimpleCacheStore implements CacheStore {
     key: string,
     loader: () => Promise<T>,
     tags: string[],
-    ttlMs?: number,
+    ttlMs?: number | null,
   ): Promise<T> {
     return this.cache.getOrSetTagged(key, loader, tags, ttlMs);
   }

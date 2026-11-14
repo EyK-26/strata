@@ -51,10 +51,14 @@ function createMockDatabaseConnection(
 function createMockCache(overrides: Partial<CacheLike> = {}): CacheLike {
   return {
     get: async () => undefined,
+    put: async () => undefined,
+    forever: async () => undefined,
     remember: async (_key, callback) => callback(),
     forget: async () => true,
     flush: async () => undefined,
     tags: () => ({
+      put: async () => undefined,
+      forever: async () => undefined,
       remember: async (_key, callback) => callback(),
       flush: async () => 0,
     }),

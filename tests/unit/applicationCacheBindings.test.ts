@@ -91,7 +91,7 @@ test("canonical cache binding declarations validate one immutable snapshot befor
   }
   for (const invalid of [
     { ...options(), driver: "unknown" },
-    { ...options(), ttlMs: -1 },
+    { ...options(), ttlMs: 1.5 },
     { ...options(), maxEntries: 0 },
     { ...options(), namespace: "" },
     { ...options(), namespace: undefined },
@@ -149,6 +149,10 @@ test("guarded cache owns every async method once while hits and aliases do not e
   assert.equal("store" in cache, false);
   const calls: Array<[string, () => Promise<unknown>]> = [
     ["get", () => cache.get("key")],
+    ["put", () => cache.put("key", 12, 1000)],
+    ["forever", () => cache.forever("key", 13)],
+    ["tagged put", () => cache.tags("tag").put("key", 12, 1000)],
+    ["tagged forever", () => cache.tags("tag").forever("key", 13)],
     ["remember hit", () => cache.remember("key", async () => "unexpected")],
     ["getOrSet hit", () => cache.getOrSet("key", async () => "unexpected")],
     ["size", () => cache.size()],
@@ -189,11 +193,21 @@ test("guarded cache owns every async method once while hits and aliases do not e
   await backend.close();
 });
 
-for (const method of ["get", "clear"] as const) {
+for (const method of ["get", "clear", "put", "forever", "tagged put", "tagged forever"] as const) {
   test(`unawaited cache ${method} holds execution and backend until actual I/O settles`, async () => {
     const entered = deferred();
     const release = deferred();
     class GatedStore extends ObservedStore {
+      override set<T>(
+        key: string,
+        value: T,
+        ttlMs?: number | null,
+        tags: string[] = [],
+      ): Promise<void> {
+        if (method === "get" || method === "clear") return super.set(key, value, ttlMs, tags);
+        entered.resolve();
+        return release.promise.then(() => super.set(key, value, ttlMs, tags));
+      }
       override get<T>(key: string): Promise<T | undefined> {
         if (method !== "get") return super.get<T>(key);
         entered.resolve();
@@ -229,6 +243,10 @@ for (const method of ["get", "clear"] as const) {
     const run = app.run((scope) => {
       const cache = scope.resolve(CORE_CACHE_TOKEN);
       if (method === "get") void cache.get("key");
+      else if (method === "put") void cache.put("key", 1, 1000);
+      else if (method === "forever") void cache.forever("key", 1);
+      else if (method === "tagged put") void cache.tags("tag").put("key", 1, 1000);
+      else if (method === "tagged forever") void cache.tags("tag").forever("key", 1);
       else void cache.clear();
       return 7;
     });

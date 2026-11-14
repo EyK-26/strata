@@ -100,7 +100,7 @@ for (const driver of ["array", "redis"] as const) {
       });
     });
 
-    for (const ttl of [NaN, Infinity, -1]) {
+    for (const ttl of [NaN, Infinity, -Infinity, 0.5, Number.MAX_SAFE_INTEGER + 1]) {
       test(`invalid TTL ${ttl} rejects before mutation or loader invocation`, async () => {
         await usingStore(async (cache) => {
           await cache.set("item", 1);

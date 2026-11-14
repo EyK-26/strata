@@ -1,4 +1,6 @@
 interface CacheLike {
+  put<T>(key: string, value: T, ttlMs?: number): Promise<void>;
+  forever<T>(key: string, value: T): Promise<void>;
   get<T>(key: string): Promise<T | undefined>;
   remember<T>(
     key: string,
@@ -8,6 +10,8 @@ interface CacheLike {
   forget(key: string): Promise<boolean>;
   flush(): Promise<void>;
   tags(...names: string[]): {
+    put<T>(key: string, value: T, ttlMs?: number): Promise<void>;
+    forever<T>(key: string, value: T): Promise<void>;
     remember<T>(
       key: string,
       callback: (signal?: AbortSignal) => Promise<T>,

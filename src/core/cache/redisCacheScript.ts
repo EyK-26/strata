@@ -73,9 +73,10 @@ local function read(key, tags)
   return entry.payload
 end
 local function write(key, payload, tags)
+  if not r.forever and r.ttlMs <= 0 then removeEntry(key); return end
   local entry = {payload=payload, tags=tags}
   redis.call('HSET', KEYS[1], 'e:' .. key, cjson.encode(entry))
-  redis.call('ZADD', KEYS[2], r.ttlMs == 0 and '+inf' or now + r.ttlMs, key)
+  redis.call('ZADD', KEYS[2], r.forever and '+inf' or now + r.ttlMs, key)
   touch(key)
   local overflow = redis.call('ZCARD', KEYS[3]) - r.capacity
   if overflow > 0 then
@@ -125,7 +126,7 @@ elseif r.op == 'get' then
   return response(payload and {kind='value', payload=payload} or {kind='missing'})
 elseif r.op == 'set' then
   local old = redis.call('HGET', KEYS[1], 'e:' .. r.key)
-  local tags = old and cjson.decode(old).tags or {}
+  local tags = addTags(old and cjson.decode(old).tags or {}, r.tags)
   write(r.key, r.payload, tags)
   removeMeta(leaseField)
   return response({written=true})

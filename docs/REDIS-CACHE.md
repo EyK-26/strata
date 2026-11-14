@@ -26,13 +26,46 @@ await cache.tags("catalog").remember("catalog?category=12", async (signal) => {
 
 Existing no-argument loaders remain compatible. The array driver retains its existing process-local semantics and may omit the signal. Prefix invalidation continues to match the exact key and `prefix?…`; it is not arbitrary textual prefix matching. Tag flush returns the number of published entries removed, excluding pending fills.
 
+## Expiration contract (array and Redis)
+
+The repository and execution-scoped cache expose Laravel-style `put`, `forever`,
+`remember`, `forget`, `flush` and `tags`. Durations remain explicit milliseconds.
+
+```ts
+await cache.put("stock:42", 12, 30_000);
+await cache.forever("settings:currency", "EUR");
+await cache.tags("catalog").put("product:42", product, 30_000);
+await cache.tags("settings").forever("settings:tax", taxSettings);
+await cache.put("stock:42", 0, 0); // forget the existing entry
+```
+
+- A positive safe integer TTL expires after that many milliseconds.
+- Zero or negative safe integer TTLs remove the existing entry and fence older
+  pending fills. They do not store a replacement.
+- `forever` stores without expiration; capacity eviction, `forget`, tag flush and
+  cache flush still apply. It does not mean durable storage.
+- Omitted TTL uses the configured default. Low-level store/configuration `null`
+  explicitly means forever; application code should use the named method.
+- NaN, Infinity, fractional and unsafe integer TTLs reject before mutation or
+  loader execution, including when the key is already cached.
+- `remember` returns an existing value regardless of a valid nonpositive TTL.
+  On a miss it returns the callback result without retaining it for such TTLs.
+- Tagged writes bind their tags atomically with publication, and all scoped
+  methods participate in execution ownership and reject stale scopes.
+
+Migration: replace Redis writes that used TTL `0` for persistence with `forever`.
+Replace a default `ttlMs: 0` intended to mean forever with `ttlMs: null`.
+Existing cached entries retain their original expiration until replaced or
+invalidated. Custom `CacheStore` implementations must honor nullable TTLs and
+atomically bind the optional tags argument to `set`.
+
 ## Consistency and bounds
 
 One static Lua script atomically coordinates five explicitly supplied Redis keys in one hash slot. Entries, expiry and shared LRU order have at most `maxEntries` members; tags are embedded in entries instead of separate reverse-index sets. No application operation uses Redis `KEYS` or `SCAN`. Lua scans are limited to the configured entry and metadata cardinalities, but still block Redis during execution. Choose limits and measure operation latency with representative data; this is not a throughput qualification or Redis Cluster qualification.
 
 A miss acquires a unique, renewable lease with a finite deadline. Tag and query-prefix generations are captured at acquisition. Exact invalidation, prefix invalidation, tag invalidation, clear and direct writes prevent older owners from publishing. Every renewal, release and publication checks ownership. A killed owner is recovered after lease expiry. An old caller may receive its loaded value after invalidation, but that value cannot repopulate shared storage. A waiter requesting an additional tag starts a new generation of the fill rather than inheriting work that predates that tag's invalidation.
 
-Redis eviction of an individual index/container conservatively discards orphaned entries or coordination state instead of serving values without their expiry bookkeeping. Metadata has a shared cardinality limit and indexed expiry. Operations prune expired entries and metadata. Idle finite-TTL entry containers expire at their last entry's deadline; idle metadata containers expire independently. With mixed TTLs, expired fields are pruned on the next operation or when the last live entry expires, and cardinality remains bounded. `ttlMs: 0` preserves Redis's nonexpiring-entry behavior. Missing-key tag attachment does not retain reverse indexes. Metadata pressure conservatively discards coordination state, fencing pending fills and permitting replay; published entries remain usable.
+Redis eviction of an individual index/container conservatively discards orphaned entries or coordination state instead of serving values without their expiry bookkeeping. Metadata has a shared cardinality limit and indexed expiry. Operations prune expired entries and metadata. Idle finite-TTL entry containers expire at their last entry's deadline; idle metadata containers expire independently. With mixed TTLs, expired fields are pruned on the next operation or when the last live entry expires, and cardinality remains bounded. Nonexpiring entries use an explicit forever marker. Missing-key tag attachment does not retain reverse indexes. Metadata pressure conservatively discards coordination state, fencing pending fills and permitting replay; published entries remain usable.
 
 All replicas sharing `APP_KEY_PREFIX` must use the same capacity and coordination options. The namespace is captured when the store is constructed. Supported bounds:
 
