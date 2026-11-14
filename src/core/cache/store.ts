@@ -8,8 +8,8 @@ interface CacheStore {
     loader: (signal?: AbortSignal) => Promise<T>,
     ttlMs?: number | null,
   ): Promise<T>;
-  /** Shared stores can bind tags before starting a fill. */
-  getOrSetTagged?<T>(
+  /** Bind tags before loading; publication and invalidation must share ownership. */
+  getOrSetTagged<T>(
     key: string,
     loader: (signal?: AbortSignal) => Promise<T>,
     tags: string[],

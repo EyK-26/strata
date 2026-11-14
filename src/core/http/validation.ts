@@ -33,9 +33,9 @@ function parseOptionalPositiveIntQueryParam(
     return undefined;
   }
 
-  const parsed = Number.parseInt(value, 10);
+  const parsed = Number(value);
 
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  if (!/^[0-9]+$/.test(value.trim()) || !Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new BadRequestError(`Invalid query parameter "${name}". Expected a positive integer.`);
   }
 
@@ -195,9 +195,9 @@ function readOptionalPositiveInt(
 }
 
 function parsePositiveIntParam(value: string, name: string = "id"): number {
-  const parsed = Number.parseInt(value, 10);
+  const parsed = Number(value);
 
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  if (!/^[0-9]+$/.test(value.trim()) || !Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new BadRequestError(`Invalid ${name}. Expected a positive integer.`);
   }
 

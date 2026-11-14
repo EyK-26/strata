@@ -1,43 +1,21 @@
-import { ForbiddenError, ValidationError } from "@getstrata/core/errors/http";
-import { requestPrefersJson } from "./contentNegotiation";
+import { FormRequest } from "./formRequest";
 import { type FormBodyOptions, parseFormBody } from "./parseFormBody";
 import { parseJsonBody } from "./validation";
 
-abstract class WebFormRequest<TOutput> {
+abstract class WebFormRequest<TOutput> extends FormRequest<TOutput> {
   readonly #preserveRepeated: boolean;
 
   constructor(options: FormBodyOptions = {}) {
+    super();
     this.#preserveRepeated = options.preserveRepeated === true;
   }
 
-  authorize(_request: Request): boolean | Promise<boolean> {
-    return true;
-  }
-
-  protected abstract parse(payload: unknown): TOutput;
-
-  validatePayload(payload: unknown): TOutput {
-    return this.parse(payload);
-  }
-
-  async validate(request: Request): Promise<TOutput> {
-    if (!(await this.authorize(request))) {
-      throw new ForbiddenError();
-    }
-
-    const payload = requestPrefersJson(request)
-      ? await parseJsonBody(request, (body) => body)
-      : await parseFormBody(request, { preserveRepeated: this.#preserveRepeated });
-
-    try {
-      return this.validatePayload(payload);
-    } catch (error) {
-      if (error instanceof ValidationError) {
-        throw error;
-      }
-
-      throw error;
-    }
+  protected override readPayload(request: Request): Promise<unknown> {
+    // Accept negotiates the response, never the encoding of the request body.
+    const mediaType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+    return mediaType === "application/json" || mediaType?.match(/^application\/[^/]+\+json$/)
+      ? parseJsonBody(request, (body) => body)
+      : parseFormBody(request, { preserveRepeated: this.#preserveRepeated });
   }
 }
 
