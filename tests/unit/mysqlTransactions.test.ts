@@ -101,7 +101,7 @@ describe("MySQL connection-pinned async transactions", () => {
 });
 
 test("MySQL shutdown joins an admitted transaction and refuses retained connection reuse", async () => {
-  const { connection, pool } = fixture();
+  const { connection, pool, reserved } = fixture();
   let release: () => void = () => {};
   let enter: () => void = () => {};
   const blocked = new Promise<void>((resolve) => {
@@ -113,7 +113,8 @@ test("MySQL shutdown joins an admitted transaction and refuses retained connecti
   const transaction = connection.begin(async (tx) => {
     enter();
     await blocked;
-    return tx.unsafe("SELECT 1");
+    expect(await connection.unsafe("SELECT 1")).toEqual([{ source: "reserved" }]);
+    expect(await tx.unsafe("SELECT 2")).toEqual([{ source: "reserved" }]);
   });
   await entered;
   const closing = connection.close();
@@ -125,6 +126,10 @@ test("MySQL shutdown joins an admitted transaction and refuses retained connecti
   await transaction;
   await closing;
   await connection.close();
+  expect(pool.execute).not.toHaveBeenCalled();
+  expect(reserved.commit).toHaveBeenCalledTimes(1);
+  expect(reserved.rollback).not.toHaveBeenCalled();
+  expect(reserved.release).toHaveBeenCalledTimes(1);
   expect(pool.end).toHaveBeenCalledTimes(1);
 });
 
