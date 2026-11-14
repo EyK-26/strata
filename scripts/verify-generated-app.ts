@@ -422,12 +422,13 @@ export function commitContract(database: DatabaseSession, transaction: Transacti
       const database = await import("@getstrata/core/database");
       if (core.Model !== models.Model || database.Model !== models.Model) throw new Error("Model import identity differs");
       if (core.defineModel !== models.defineModel || database.defineModel !== models.defineModel) throw new Error("Model definition factories differ");
+      if (core.createModel !== models.createModel || database.createModel !== models.createModel) throw new Error("Model convenience factories differ");
       const { createApplication } = await import("@getstrata/core/runtime/application");
       const { createDatabaseBindings } = await import("@getstrata/core/database/bindings");
       const { DATABASE_SESSION_TOKEN } = await import("@getstrata/core/database/tokens");
-      const { Note, NoteEntity, NoteRepository } = await import("./src/models/Note.ts");
+      const { Note, NoteRepository } = await import("./src/models/Note.ts");
       const { modelDefinitions, repositoryDefinitions } = await import("./src/models/register.ts");
-      if (!(NoteEntity.prototype instanceof core.Model)) throw new Error("Generated entity constructor identity differs");
+      if (Note.repository !== NoteRepository) throw new Error("Generated model repository definition identity differs");
       // The neutral definitions bind in a real owned SQLite app; emitted native drivers are typechecked above.
       const application = createApplication({providers:[],services:createDatabaseBindings({
         default:"main",connections:{main:{driver:"sqlite",filename:":memory:"}},models:modelDefinitions,repositories:repositoryDefinitions,
@@ -441,7 +442,7 @@ export function commitContract(database: DatabaseSession, transaction: Transacti
           if (rows[0]?.value !== 1) throw new Error("Owned SQLite startup query failed");
           const bound=selected.model(Note);
           const entity=bound.newRecord({body:"startup proof"});
-          if (bound.definition !== Note || !(entity instanceof NoteEntity) || !(entity instanceof core.Model)) throw new Error("Generated model binding/constructor identity differs");
+          if (bound.definition !== Note || Object.getPrototypeOf(entity) !== core.Model.prototype || !(entity instanceof core.Model)) throw new Error("Generated model binding/constructor identity differs");
           if (bound.repository() !== selected.repository(NoteRepository) || bound.repository().getTable().name !== "notes") throw new Error("Missing selected default model repository");
         });
       } catch (error) {
