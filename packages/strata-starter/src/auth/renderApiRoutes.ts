@@ -309,9 +309,9 @@ ${renderMfaChallengeRoutes()}
             if (!authServices.config.samlEnabled) {
               return new Response("Not found", { status: 404 });
             }
-            const issued = createOAuthState(authServices.config.oauth);
+            const issued = createSamlStateCookie(authServices.config.oauth);
             const url = await authServices.saml(_ports).authorizationUrl(issued.state);
-            return new Response(null, { status: 302, headers: { location: url } });
+            return new Response(null, { status: 302, headers: { location: url, "set-cookie": issued.cookie } });
           }),
         },
         "/auth/saml/acs": {
@@ -322,16 +322,22 @@ ${renderMfaChallengeRoutes()}
             const form = await request.formData();
             const samlResponse = String(form.get("SAMLResponse") ?? "");
             const relayState = String(form.get("RelayState") ?? "");
-            if (!verifyOAuthState(request, relayState, authServices.config.oauth)) {
-              return privateJsonResponse({ error: "Invalid SAML state." }, { status: 403 });
+            if (!verifySamlState(request, relayState, authServices.config.oauth)) {
+              const denied = privateJsonResponse({ error: "Invalid SAML state." }, { status: 403 });
+              denied.headers.append("set-cookie", clearSamlStateCookie());
+              return denied;
             }
             const profile = await authServices.saml(_ports)
               .consumePost(samlResponse, relayState)
               .catch(() => null);
             if (!profile) {
-              return privateJsonResponse({ error: "Invalid SAML response." }, { status: 400 });
+              const failed = privateJsonResponse({ error: "Invalid SAML response." }, { status: 400 });
+              failed.headers.append("set-cookie", clearSamlStateCookie());
+              return failed;
             }
-            return completeBrowserSsoLogin(_ports, authServices, profile, "SAML");
+            const login = await completeBrowserSsoLogin(_ports, authServices, profile, "SAML");
+            login.headers.append("set-cookie", clearSamlStateCookie());
+            return login;
           })),
         },`
     : "";
@@ -349,9 +355,9 @@ ${renderMfaChallengeRoutes()}
               return new Response("Not found", { status: 404 });
             }
             const redirectUri = authServices.config.github.redirectUri;
-            const issued = createOAuthState(authServices.config.oauth);
+            const issued = createOAuthStateCookie(authServices.config.oauth);
             const url = new GitHubOAuthProvider({ clientId, clientSecret, redirectUri, production: authServices.config.github.production, userAgent: authServices.config.github.userAgent }).getAuthorizationUrl(issued.state);
-            return new Response(null, { status: 302, headers: { location: url } });
+            return new Response(null, { status: 302, headers: { location: url, "set-cookie": issued.cookie } });
           }),
         },
         "/auth/github/callback": {
@@ -368,16 +374,22 @@ ${renderMfaChallengeRoutes()}
             const code = url.searchParams.get("code");
             const state = url.searchParams.get("state");
             if (!code || !verifyOAuthState(request, state, authServices.config.oauth)) {
-              return privateJsonResponse({ error: "Invalid GitHub OAuth state." }, { status: 403 });
+              const denied = privateJsonResponse({ error: "Invalid GitHub OAuth state." }, { status: 403 });
+              denied.headers.append("set-cookie", clearOAuthStateCookie(authServices.config.oauth));
+              return denied;
             }
             const redirectUri = authServices.config.github.redirectUri;
             const profile = await new GitHubOAuthProvider({ clientId, clientSecret, redirectUri, production: authServices.config.github.production, userAgent: authServices.config.github.userAgent })
               .exchangeCode(code)
               .catch(() => null);
             if (!profile) {
-              return privateJsonResponse({ error: "Invalid GitHub OAuth response." }, { status: 400 });
+              const failed = privateJsonResponse({ error: "Invalid GitHub OAuth response." }, { status: 400 });
+              failed.headers.append("set-cookie", clearOAuthStateCookie(authServices.config.oauth));
+              return failed;
             }
-            return completeBrowserSsoLogin(_ports, authServices, profile, "GitHub");
+            const login = await completeBrowserSsoLogin(_ports, authServices, profile, "GitHub");
+            login.headers.append("set-cookie", clearOAuthStateCookie(authServices.config.oauth));
+            return login;
           })),
         },`
     : "";
@@ -422,7 +434,7 @@ ${renderMfaChallengeRoutes()}
             const code = url.searchParams.get("code");
             const state = url.searchParams.get("state");
             const pkce = readOidcPkceCookie(request, state, authServices.config.oauth);
-            if (!code || !verifyOAuthState(request, state, authServices.config.oauth) || !pkce) {
+            if (!code || !verifySignedOAuthStateValue(state ?? "", authServices.config.oauth) || !pkce) {
               const denied = privateJsonResponse({ error: "Invalid OIDC state." }, { status: 403 });
               denied.headers.append("set-cookie", clearOidcPkceCookie(authServices.config.oauth));
               return denied;

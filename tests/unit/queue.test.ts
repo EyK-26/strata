@@ -68,48 +68,125 @@ test("async queue close drains scheduled work and child jobs, then rejects dispa
   await expect(queue.dispatch(child, { message: "late" })).rejects.toThrow("closed");
 });
 
-test("production async queue drains actual resilient job execution", async () => {
+test("sync queue registers admitted work before a job can initiate shutdown", async () => {
   const { ResilientQueue } = await import("@getstrata/core/queue/resilientQueue");
   const { JobRegistry } = await import("@getstrata/core/queue/jobRegistry");
-  const jobRegistry = new JobRegistry();
+  const registry = new JobRegistry();
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
+  let entered!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  let closed = false;
   let finished = false;
-  class Pending extends Job {
+  let closing: Promise<void> | undefined;
+  class InitiateShutdown extends Job {
     async handle() {
+      closing = queue.close().then(() => {
+        closed = true;
+      });
+      entered();
       await gate;
       finished = true;
     }
   }
-  const name = `test.drain.${crypto.randomUUID()}`;
-  jobRegistry.register(name, () => new Pending());
+  registry.register("shutdown.probe", () => new InitiateShutdown());
   const queue = new ResilientQueue(
     {
-      runAttempt: (
-        _envelope: unknown,
-        context: import("@getstrata/core/queue").JobContext,
-        work: (context: import("@getstrata/core/queue").JobContext) => Promise<void>,
-      ) => work(context),
+      runAttempt: (_envelope, context, work) => work(context),
       recordFailure: async () => {
-        throw new Error("unexpected failure");
+        throw new Error("Unexpected failure");
       },
-    } as never,
-    jobRegistry,
-    true,
+    },
+    registry,
+    false,
   );
-  const job = jobRegistry.create(name);
-  if (!job) throw new Error("Missing registered job");
-  jobRegistry.track(name, job);
-  await queue.dispatch(job, {});
-  let closed = false;
-  const closing = queue.close().then(() => {
-    closed = true;
-  });
-  await Bun.sleep(10);
-  expect(closed).toBe(false);
-  release();
-  await closing;
+  const dispatched = queue.dispatch(registry.track("shutdown.probe", new InitiateShutdown()), {});
+  try {
+    await ready;
+    await Bun.sleep(1);
+    expect(closed).toBe(false);
+  } finally {
+    release();
+    await dispatched;
+    await closing;
+  }
   expect(finished).toBe(true);
+  expect(closed).toBe(true);
 });
+
+for (const asyncDispatch of [true, false]) {
+  for (const fail of [true, false]) {
+    test(`production ${asyncDispatch ? "async" : "sync"} queue drains ${fail ? "failed" : "successful"} jobs`, async () => {
+      const { ResilientQueue } = await import("@getstrata/core/queue/resilientQueue");
+      const { JobRegistry } = await import("@getstrata/core/queue/jobRegistry");
+      const jobRegistry = new JobRegistry();
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let finished = false;
+      let failures = 0;
+      const failure = new Error("job failure sentinel");
+      class Pending extends Job {
+        override readonly maxAttempts = 1;
+        async handle() {
+          await gate;
+          finished = true;
+          if (fail) throw failure;
+        }
+      }
+      const name = `test.drain.${crypto.randomUUID()}`;
+      jobRegistry.register(name, () => new Pending());
+      const queue = new ResilientQueue(
+        {
+          runAttempt: (
+            _envelope: unknown,
+            context: import("@getstrata/core/queue").JobContext,
+            work: (context: import("@getstrata/core/queue").JobContext) => Promise<void>,
+          ) => work(context),
+          recordFailure: async (input) => {
+            failures++;
+            return {
+              id: failures,
+              job_name: input.jobName,
+              job_id: input.jobId,
+              payload: input.payload,
+              exception: input.exception,
+              failed_at: new Date(),
+            };
+          },
+        },
+        jobRegistry,
+        asyncDispatch,
+      );
+      const job = jobRegistry.create(name);
+      if (!job) throw new Error("Missing registered job");
+      jobRegistry.track(name, job);
+      const dispatched = queue.dispatch(job, {});
+      const outcome = dispatched.then(
+        () => null,
+        (error) => error,
+      );
+      if (asyncDispatch) await dispatched;
+      let closed = false;
+      const closing = queue.close().then(() => {
+        closed = true;
+      });
+      try {
+        await Bun.sleep(10);
+        expect(closed).toBe(false);
+      } finally {
+        release();
+        await Promise.all([outcome, closing]);
+      }
+      expect(finished).toBe(true);
+      expect(failures).toBe(fail ? 1 : 0);
+      expect(await outcome).toBe(fail && !asyncDispatch ? failure : null);
+      await expect(queue.dispatch(job, {})).rejects.toThrow("closed");
+    });
+  }
+}

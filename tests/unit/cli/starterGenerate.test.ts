@@ -680,7 +680,7 @@ describe("create-strata generate", () => {
     expect(authModule).toMatch(/"\/api\/auth\/token":[\s\S]*?wrapLogin\(/);
     expect(authModule).toContain("withAuthIdentifier");
     expect(authModule).toContain("runAuthWrite");
-    expect(authModule).toContain("createOAuthState(authServices.config.oauth)");
+    expect(authModule).toContain("createSamlStateCookie(authServices.config.oauth)");
     expect(authModule).not.toContain("createOAuthStateCookie");
     expect(authModule).toContain("JSON.stringify([])");
     expect(authModule).toContain("abilities: []");

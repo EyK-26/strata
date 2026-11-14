@@ -1,8 +1,10 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { readRequestCookie } from "../http/cookies";
 import { isProductionEnv } from "../runtime/appEnv";
 import { requireConfiguredSecret } from "../runtime/appKeyPrefix";
 
 const OAUTH_STATE_COOKIE = "oauth_state";
+const SAML_STATE_COOKIE = "saml_state";
 const OIDC_PKCE_COOKIE = "oidc_pkce";
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
@@ -30,6 +32,7 @@ function signOAuthState(state: string, issuedAt: number, options?: OAuthStateOpt
   return `${payload}.${signature}`;
 }
 
+/** Validate the signature and lifetime only; browser binding must be supplied separately. */
 function verifySignedOAuthStateValue(value: string, options?: OAuthStateOptions): boolean {
   const parts = value.split(".");
 
@@ -80,16 +83,56 @@ function createOAuthStateCookie(options?: OAuthStateOptions): { state: string; c
   };
 }
 
+/** Require signed state to match the initiating browser's OAuth state cookie. */
 function verifyOAuthState(
-  _request: Request,
+  request: Request,
   returnedState: string | null,
+  options?: OAuthStateOptions,
+): boolean {
+  return verifyBrowserState(request, returnedState, OAUTH_STATE_COOKIE, options);
+}
+
+function verifyBrowserState(
+  request: Request,
+  returnedState: string | null,
+  cookieName: string,
   options?: OAuthStateOptions,
 ): boolean {
   if (!returnedState || returnedState.trim().length === 0) {
     return false;
   }
 
-  return verifySignedOAuthStateValue(returnedState.trim(), options);
+  const state = returnedState.trim();
+  const cookie = readRequestCookie(request, cookieName);
+  if (!cookie) return false;
+  const expected = Buffer.from(cookie);
+  const actual = Buffer.from(state);
+  return (
+    expected.length === actual.length &&
+    timingSafeEqual(expected, actual) &&
+    verifySignedOAuthStateValue(state, options)
+  );
+}
+
+/** Cross-site IdP POSTs require SameSite=None; browsers require Secure and HTTPS. */
+function createSamlStateCookie(options?: OAuthStateOptions): { state: string; cookie: string } {
+  const { state } = createOAuthState(options);
+  return {
+    state,
+    cookie: `${SAML_STATE_COOKIE}=${encodeURIComponent(state)}; Path=/; HttpOnly; SameSite=None; Max-Age=600; Secure`,
+  };
+}
+
+function verifySamlState(
+  request: Request,
+  returnedState: string | null,
+  options?: OAuthStateOptions,
+): boolean {
+  return verifyBrowserState(request, returnedState, SAML_STATE_COOKIE, options);
+}
+
+function clearSamlStateCookie(): string {
+  return `${SAML_STATE_COOKIE}=; Path=/; HttpOnly; SameSite=None; Max-Age=0; Secure`;
 }
 
 function clearOAuthStateCookie(options?: OAuthStateOptions): string {
@@ -208,12 +251,16 @@ export type { OAuthStateOptions, OidcPkceSeal };
 export {
   clearOAuthStateCookie,
   clearOidcPkceCookie,
+  clearSamlStateCookie,
   createOAuthState,
   createOAuthStateCookie,
+  createSamlStateCookie,
   OAUTH_STATE_COOKIE,
   OIDC_PKCE_COOKIE,
   readOidcPkceCookie,
+  SAML_STATE_COOKIE,
   sealOidcPkceCookie,
   verifyOAuthState,
+  verifySamlState,
   verifySignedOAuthStateValue,
 };

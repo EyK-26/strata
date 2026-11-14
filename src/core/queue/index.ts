@@ -71,6 +71,19 @@ class AsyncQueue implements Queue {
     if (this.closed) throw new Error("Async queue is closed.");
   }
 
+  /** Join admitted work without consuming the dispatch caller's failure. */
+  protected track(running: Promise<void>): Promise<void> {
+    const settled = running.then(
+      () => {},
+      () => {},
+    );
+    this.active.add(settled);
+    void settled.then(() => {
+      this.active.delete(settled);
+    });
+    return running;
+  }
+
   protected enqueue(task: () => Promise<void>, onError: (error: unknown) => void): void {
     this.assertOpen();
     const running = new Promise<void>((resolve) => {
@@ -78,10 +91,7 @@ class AsyncQueue implements Queue {
         void Promise.resolve().then(task).catch(onError).finally(resolve);
       }, 0);
     });
-    this.active.add(running);
-    void running.then(() => {
-      this.active.delete(running);
-    });
+    this.track(running);
   }
 
   async dispatch<TPayload extends object>(

@@ -117,6 +117,7 @@ function createMysqlPin(connection: MysqlPoolConnection): RawPin {
 async function createRawMysqlPool(options: MysqlDatabaseOptions): Promise<RawPool> {
   const pool = await createMysqlPool(options.url, options.max);
   let closed = false;
+  let closing: Promise<void> | undefined;
   let retainedCleanup: { error: unknown } | undefined;
   const acquire = async () => {
     if (closed) throw new Error("MySQL pool is closed.");
@@ -202,10 +203,14 @@ async function createRawMysqlPool(options: MysqlDatabaseOptions): Promise<RawPoo
         return { ok: false, error, disposition: "unknown", cleanupErrors: [acknowledgement.error] };
       }
     },
-    async close() {
-      if (retainedCleanup) throw retainedCleanup.error;
-      await pool.end();
+    close() {
+      if (closing) return closing;
       closed = true;
+      closing = Promise.resolve().then(async () => {
+        if (retainedCleanup) throw retainedCleanup.error;
+        await pool.end();
+      });
+      return closing;
     },
   });
 }

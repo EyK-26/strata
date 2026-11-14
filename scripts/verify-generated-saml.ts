@@ -143,6 +143,7 @@ try {
       { kind: "command", actor: { kind: "system", policy: "fixture.saml-sql-readback" } },
       work,
     );
+  const browserCookies = new Map<string, string>();
   async function relay() {
     const start = await fetch(`${origin}/auth/saml`, {
       redirect: "manual",
@@ -158,6 +159,11 @@ try {
     assert.ok(xml.includes(destination));
     const state = target.searchParams.get("RelayState");
     assert.ok(state);
+    const setCookie = start.headers.get("set-cookie") ?? "";
+    assert.ok(setCookie.includes("HttpOnly"));
+    assert.ok(setCookie.includes("SameSite=None"));
+    assert.ok(setCookie.includes("Secure"));
+    browserCookies.set(state, mergeCookies(start));
     return state;
   }
   const assertion = (options: Parameters<typeof createSignedSamlResponse>[0] = {}) =>
@@ -169,16 +175,22 @@ try {
       privateKey: material.privateKey,
       ...options,
     });
-  const post = (responseB64: string, state: string) =>
+  const post = (
+    responseB64: string,
+    state: string,
+    browserCookie = browserCookies.get(state) ?? "",
+  ) =>
     fetch(destination, {
       method: "POST",
       redirect: "manual",
       signal: AbortSignal.timeout(10000),
-      // IdP-shaped cross-site form POST deliberately has no app cookies/CSRF token.
+      // Simulate the dedicated Secure SameSite=None cookie sent by a browser over HTTPS.
+      // This loopback protocol fixture does not send an application session or CSRF token.
       headers: {
         origin: "https://idp.example.test",
         accept: "text/html",
         "content-type": "application/x-www-form-urlencoded",
+        cookie: browserCookie,
       },
       body: new URLSearchParams({ SAMLResponse: responseB64, RelayState: state }),
     });
@@ -193,6 +205,13 @@ try {
   const assertionId = `q01_${crypto.randomUUID().replaceAll("-", "")}`;
   const signed = await assertion({ email: "DEMO@EXAMPLE.COM", assertionId });
   const state = await relay();
+  await denied(await post(signed.responseB64, state, ""), 403, "Invalid SAML state.");
+  const otherBrowserState = await relay();
+  await denied(
+    await post(signed.responseB64, state, browserCookies.get(otherBrowserState)),
+    403,
+    "Invalid SAML state.",
+  );
   const login = await post(signed.responseB64, state);
   assert.equal(login.status, 302, await login.text());
   assert.equal(login.headers.get("location"), "/");

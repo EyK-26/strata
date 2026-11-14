@@ -34,6 +34,7 @@ function mysqlFixture(
     releaseError?: unknown;
     omitCheckout?: boolean;
     gatedDestroy?: boolean;
+    end?: () => Promise<void>;
   } = {},
 ) {
   const pending = [...exchanges];
@@ -77,6 +78,7 @@ function mysqlFixture(
     execute: connection.execute,
     async end() {
       calls.push("pool.end");
+      await options.end?.();
     },
     on(event: string, listener: (value: unknown) => void) {
       assert.equal(event, "connection");
@@ -135,6 +137,49 @@ const utc = (): Exchange[] => [
     rows: [{ strata_session_timezone: "+00:00" }],
   },
 ];
+
+test("raw MySQL close immediately stops admission and shares its native cleanup acknowledgement", async () => {
+  for (const failure of [null, Object.freeze({ end: "opaque cleanup failure" })]) {
+    const finish = gate();
+    const fixture = mysqlFixture([], {
+      end: async () => {
+        await finish.promise;
+        if (failure) throw failure;
+      },
+    });
+    fixture.install();
+    const pool = await createRawMysqlPool({
+      driver: "mysql",
+      url: "mysql://fixture.invalid/owned",
+    });
+    const closing = Promise.resolve(pool.close());
+    void closing.catch(() => {});
+    try {
+      const acquired = await pool.checkout();
+      assert.equal(acquired.ok, false);
+      assert.equal(acquired.disposition, "not-acquired");
+      assert.match(String(acquired.error), /pool is closed/);
+      await assert.rejects(
+        pool.execute({ text: "SELECT forbidden", params: [] }),
+        /pool is closed/,
+      );
+      assert.strictEqual(pool.close(), closing);
+      finish.resolve();
+      if (failure) await assert.rejects(closing, (error) => error === failure);
+      else await closing;
+      assert.strictEqual(pool.close(), closing);
+      const afterClose = await pool.checkout();
+      assert.equal(afterClose.ok, false);
+      assert.match(String(afterClose.error), /pool is closed/);
+      assert.deepEqual(fixture.calls, ["physical:SET time_zone = '+00:00'", "pool.end"]);
+      fixture.done();
+    } finally {
+      finish.resolve();
+      await Promise.allSettled([closing]);
+      resetMysqlLoaderForTests();
+    }
+  }
+});
 
 test("raw MySQL factory confirms UTC on each acquired connection before SQL or pin publication", async () => {
   const fixture = mysqlFixture([

@@ -186,6 +186,18 @@ async function main(): Promise<void> {
       (github.headers.get("location") ?? "").includes("github.com/login/oauth/authorize"),
       "github location missing authorize URL",
     );
+    const githubState = new URL(github.headers.get("location") ?? "").searchParams.get("state");
+    assert(githubState, "GitHub redirect missing state");
+    assert(
+      github.headers.getSetCookie().some((cookie) => cookie.startsWith("oauth_state=")),
+      "GitHub redirect missing browser state cookie",
+    );
+    const unboundGithub = await fetch(
+      `${origin}/auth/github/callback?${new URLSearchParams({ code: "attacker-code", state: githubState })}`,
+      { redirect: "manual" },
+    );
+    assert(unboundGithub.status === 403, "GitHub callback accepted another browser's state");
+    await unboundGithub.text();
 
     const oidc = await fetch(`${origin}/auth/oidc`, { redirect: "manual" });
     assert(oidc.status === 302, `oidc redirect status ${oidc.status}`);
