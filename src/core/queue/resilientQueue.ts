@@ -67,7 +67,11 @@ class ResilientQueue extends AsyncQueue {
       return;
     }
 
-    await runQueueJob(envelope, this.failedJobs, this.registry, { retryPolicy: this.retryPolicy });
+    await this.track(
+      Promise.resolve().then(() =>
+        runQueueJob(envelope, this.failedJobs, this.registry, { retryPolicy: this.retryPolicy }),
+      ),
+    );
   }
 }
 

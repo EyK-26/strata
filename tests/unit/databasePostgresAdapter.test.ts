@@ -26,6 +26,7 @@ function scriptedPostgres(
     reserveFailure?: { error: unknown };
     release?: () => Promise<void>;
     close?: () => Promise<void>;
+    poolClose?: () => Promise<void>;
   } = {},
 ) {
   const pending = [...exchanges];
@@ -61,6 +62,7 @@ function scriptedPostgres(
     },
     async close() {
       calls.push("pool.close");
+      await options.poolClose?.();
     },
   };
   return {
@@ -70,6 +72,43 @@ function scriptedPostgres(
     done: () => assert.deepEqual(pending, []),
   };
 }
+
+test("PostgreSQL close immediately stops admission and shares its native cleanup acknowledgement", async () => {
+  for (const failure of [null, Object.freeze({ close: "opaque cleanup failure" })]) {
+    const finish = gate();
+    const fixture = scriptedPostgres([], {
+      poolClose: async () => {
+        await finish.promise;
+        if (failure) throw failure;
+      },
+    });
+    const closing = Promise.resolve(fixture.pool.close());
+    void closing.catch(() => {});
+    try {
+      const acquired = await fixture.pool.checkout();
+      assert.equal(acquired.ok, false);
+      assert.equal(acquired.disposition, "not-acquired");
+      assert.match(String(acquired.error), /pool is closed/);
+      await assert.rejects(
+        fixture.pool.execute({ text: "SELECT forbidden", params: [] }),
+        /pool is closed/,
+      );
+      assert.strictEqual(fixture.pool.close(), closing);
+      finish.resolve();
+      if (failure) await assert.rejects(closing, (error) => error === failure);
+      else await closing;
+      assert.strictEqual(fixture.pool.close(), closing);
+      const afterClose = await fixture.pool.checkout();
+      assert.equal(afterClose.ok, false);
+      assert.match(String(afterClose.error), /pool is closed/);
+      assert.deepEqual(fixture.calls, ["pool.close"]);
+      fixture.done();
+    } finally {
+      finish.resolve();
+      await Promise.allSettled([closing]);
+    }
+  }
+});
 
 test("PostgreSQL native boundary requires an actual BEGIN command acknowledgement", async () => {
   for (const command of [undefined, "COMMIT"]) {

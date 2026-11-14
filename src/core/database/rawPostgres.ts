@@ -83,6 +83,7 @@ function postgresPin(connection: PostgresNativeReserved): RawPin {
 }
 function createRawPostgresPoolFromNative(pool: PostgresNativePool): RawPool {
   let closed = false;
+  let closing: Promise<void> | undefined;
   return Object.freeze({
     dialect: dialectFor("pgsql"),
     capabilities: Object.freeze({
@@ -117,9 +118,11 @@ function createRawPostgresPoolFromNative(pool: PostgresNativePool): RawPool {
         return { ok: false, error, disposition: "not-acquired" };
       }
     },
-    async close() {
-      await pool.close();
+    close() {
+      if (closing) return closing;
       closed = true;
+      closing = Promise.resolve().then(() => pool.close());
+      return closing;
     },
   });
 }

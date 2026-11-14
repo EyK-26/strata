@@ -68,10 +68,19 @@ export function renderAuthImports({
     if (mfa) {
       imports.push(`import { sanitizeInternalPath } from "@getstrata/core/http/safeInternalPath";`);
     }
+    const oauthImports = ["createSamlStateCookie", "verifySamlState", "clearSamlStateCookie"];
+    if (github)
+      oauthImports.push("createOAuthStateCookie", "clearOAuthStateCookie", "verifyOAuthState");
+    if (oidc)
+      oauthImports.push(
+        "createOAuthState",
+        "verifySignedOAuthStateValue",
+        "clearOidcPkceCookie",
+        "readOidcPkceCookie",
+        "sealOidcPkceCookie",
+      );
     imports.push(
-      oidc
-        ? `import { clearOidcPkceCookie, createOAuthState, readOidcPkceCookie, sealOidcPkceCookie, verifyOAuthState } from "@getstrata/core/security/oauthState";`
-        : `import { createOAuthState, verifyOAuthState } from "@getstrata/core/security/oauthState";`,
+      `import { ${oauthImports.join(", ")} } from "@getstrata/core/security/oauthState";`,
     );
   }
   if (plan.decisions.users) {

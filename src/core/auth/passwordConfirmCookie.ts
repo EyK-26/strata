@@ -61,7 +61,9 @@ function signPasswordConfirm(
       ? `${userId}.${confirmedAt}`
       : `v2.${userId}.${confirmedAt}.${authVersion}`;
   const signature = createHmac("sha256", secret ?? missingPasswordConfirmSecret())
-    .update(payload)
+    // Session cookies can use the same key and legacy userId.timestamp payload.
+    // Bind the proof to confirmation so a session cannot satisfy this challenge.
+    .update(`password-confirm:${payload}`)
     .digest("hex");
 
   return `${payload}.${signature}`;

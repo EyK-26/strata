@@ -5,35 +5,66 @@ import {
   clearOidcPkceCookie,
   createOAuthState,
   createOAuthStateCookie,
+  createSamlStateCookie,
   OIDC_PKCE_COOKIE,
   readOidcPkceCookie,
   sealOidcPkceCookie,
   verifyOAuthState,
+  verifySamlState,
+  verifySignedOAuthStateValue,
 } from "@getstrata/core/security/oauthState";
 
 describe("oauth state", () => {
-  test("verifies HMAC RelayState without a cookie", () => {
+  test("signature-only verification does not establish browser binding", () => {
     const { state } = createOAuthState();
-    const request = new Request("http://example.test/auth/saml/acs");
+    expect(verifySignedOAuthStateValue(state)).toBe(true);
+    expect(verifySignedOAuthStateValue("wrong-state")).toBe(false);
+  });
 
-    expect(verifyOAuthState(request, state)).toBe(true);
-    expect(verifyOAuthState(request, "wrong-state")).toBe(false);
+  test("SAML cross-site state cookies require HTTPS even in development and expire", () => {
+    const options = { secret: "saml-state-cookie-regression-secret", production: false };
+    const issued = createSamlStateCookie(options);
+    expect(issued.cookie).toContain("SameSite=None; Max-Age=600; Secure");
+    const request = new Request("https://example.test/auth/saml/acs", {
+      headers: { cookie: issued.cookie.split(";")[0] ?? "" },
+    });
+    expect(verifySamlState(request, issued.state, options)).toBe(true);
+    expect(verifyOAuthState(request, issued.state, options)).toBe(false);
+    const originalNow = Date.now;
+    Date.now = () => originalNow() + 11 * 60 * 1000;
+    try {
+      expect(verifySamlState(request, issued.state, options)).toBe(false);
+    } finally {
+      Date.now = originalNow;
+    }
   });
 
   test("rejects missing, empty, malformed, and expired oauth state", () => {
-    const { state } = createOAuthStateCookie();
-    const request = new Request("http://example.test/auth/callback");
+    const { state, cookie } = createOAuthStateCookie();
+    const request = new Request("http://example.test/auth/callback", {
+      headers: { cookie: cookie.split(";")[0] ?? "" },
+    });
 
     expect(verifyOAuthState(request, null)).toBe(false);
     expect(verifyOAuthState(request, "   ")).toBe(false);
-    expect(verifyOAuthState(request, "abc.def.ghi")).toBe(false);
-    expect(verifyOAuthState(request, "abc.notanumber.ffff")).toBe(false);
     expect(clearOAuthStateCookie()).toContain("Max-Age=0");
 
     const [nonce, issuedAtRaw, signature] = state.split(".");
-    expect(verifyOAuthState(request, `.${issuedAtRaw}.${signature}`)).toBe(false);
-    expect(verifyOAuthState(request, `${nonce}.${issuedAtRaw}`)).toBe(false);
-    expect(verifyOAuthState(request, `${nonce}.${issuedAtRaw}.${signature}x`)).toBe(false);
+    for (const invalid of [
+      "abc.def.ghi",
+      "abc.notanumber.ffff",
+      `.${issuedAtRaw}.${signature}`,
+      `${nonce}.${issuedAtRaw}`,
+      `${nonce}.${issuedAtRaw}.${signature}x`,
+      `${nonce}.${issuedAtRaw}.${"0".repeat(64)}`,
+    ]) {
+      const matched = new Request(request.url, {
+        headers: { cookie: `oauth_state=${encodeURIComponent(invalid)}` },
+      });
+      // Matching browser state must still pass signature/shape validation.
+      expect(verifyOAuthState(matched, invalid)).toBe(false);
+      expect(verifySignedOAuthStateValue(invalid)).toBe(false);
+    }
 
     const originalNow = Date.now;
     Date.now = () => originalNow() + 11 * 60 * 1000;
