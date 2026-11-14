@@ -1,6 +1,8 @@
 # create-strata changelog
 
-## Unreleased
+## 3.0.8
+
+Synchronize the Strata packages for the published starter template-discovery fix. Both generator entrypoints now locate their bundled templates after the source-template cleanup, and CI verifies generation from installed tarballs. See docs/releases/3.0.8.md.
 
 - Fix template discovery in both published generator CLIs after the removal of copied `src` templates. Detect the retained `tsconfig.json` template so installed packages find `dist/templates` correctly.
 - Require both generator tarballs to install and generate API and hybrid applications outside the repository during CI and release validation.
