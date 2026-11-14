@@ -25,23 +25,23 @@ function renderCreateAppTs(plan: StarterFeaturePlan): string {
   return `import { defineApp, type BootstrappedApp, type BootstrapOptions } from "@getstrata/bootstrap/application";
 import { resolve } from "node:path";
 import config from "../config/app.ts";
+import paths from "../../strata.config.ts";
 import { databaseOptions } from "./database.ts";
 import { createStarterAuthServices, STARTER_AUTH_SERVICES } from "./auth.ts";
 import { modelDefinitions, repositoryDefinitions } from "../models/register.ts";
 import { Note } from "../models/Note.ts";
 import { migrate } from "../db/migrate.ts";
 import { listeners } from "../outbox/registry.ts";
-import { buildRoutes } from "../routes.ts";
 ${plan.decisions.ensureDatabase ? 'import { ensureAppDatabase } from "./ensureDatabase.ts";\n' : ""}${plan.decisions.workTracker ? 'import { WORK_TRACKER_OUTBOX } from "../domain/workTracker.ts";\n' : ""}
 const { bootstrapApp, createApp, createAppServer } = defineApp({
   ...config,
   root: resolve(import.meta.dir, "../.."),
+  modulesDirectory: paths.modulesDirectory,
   database: databaseOptions,
   auth: { create: createStarterAuthServices, token: STARTER_AUTH_SERVICES },
   models: modelDefinitions,
   repositories: repositoryDefinitions,
   migrate,${plan.decisions.ensureDatabase ? "\n  ensureDatabase: ensureAppDatabase," : ""}
-  routes: buildRoutes,
   outbox: { listeners${plan.decisions.workTracker ? ", token: WORK_TRACKER_OUTBOX" : ""} },
   health: async database => { await database.model(Note).query().limit(1).select("id").get(); return true; },
 });
@@ -70,23 +70,6 @@ function renderStrataConfigTs(): string {
 `;
 }
 
-function renderRoutesTs(): string {
-  return `import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
-import { buildWebModuleRoutes } from "@getstrata/bootstrap/buildWebModuleRoutes";
-import { composeRouteMaps } from "@getstrata/bootstrap/routePlan";
-import { isViewsEnabled } from "@getstrata/core/runtime/frontendMode";
-import type { AppDependencies, AppModule, AppRouteMap } from "@getstrata/bootstrap/contracts";
-
-export function buildRoutes(dependencies: AppDependencies, modules: readonly AppModule[]): AppRouteMap {
-  const api = buildModuleRoutes(dependencies, { modules });
-  return composeRouteMaps(
-    ...(isViewsEnabled() ? [buildWebModuleRoutes(dependencies, { modules })] : []),
-    api,
-  );
-}
-`;
-}
-
 function renderOutboxRegistryTs(plan: StarterFeaturePlan): string {
   const workTracker = plan.decisions.workTracker;
   return `import type { DurableListener } from "@getstrata/core/events/outbox";
@@ -111,7 +94,6 @@ export {
   renderConfigTs,
   renderCreateAppTs,
   renderOutboxRegistryTs,
-  renderRoutesTs,
   renderScheduleTs,
   renderServerTs,
   renderStrataConfigTs,

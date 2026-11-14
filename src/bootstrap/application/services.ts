@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { CORE_CACHE_TOKEN, CORE_QUEUE_TOKEN } from "@getstrata/bootstrap/config";
 import { discoverJobs } from "@getstrata/bootstrap/discoverJobs";
 import { createEventBindings, createEventsProvider } from "@getstrata/bootstrap/providers/events";
@@ -27,7 +27,9 @@ import {
   type QueueServices,
 } from "@getstrata/core/queue/createAppQueue";
 import { JobRegistry, QUEUE_JOB_REGISTRY_TOKEN } from "@getstrata/core/queue/jobRegistry";
+import { resolveQueueConfig, resolveQueueRuntimeConfig } from "@getstrata/core/queue/queueConfig";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
+import { isViewsMode, parseFrontendMode } from "@getstrata/core/runtime/frontendMode";
 import {
   createStorageDriver,
   resolveStorageConfig,
@@ -68,21 +70,32 @@ export const APPLICATION_WEBHOOKS =
 export function createApplicationServices(
   env: Readonly<Record<string, string | undefined>>,
   invoke: import("@getstrata/core/contracts/persistence").PersistenceInvocation,
+  root: string,
 ): readonly ServiceDeclaration[] {
-  const storageConfig = resolveStorageConfig(env);
+  env = Object.freeze({ ...env });
+  const retryPolicy = resolveQueueConfig(env);
+  const runtime = resolveQueueRuntimeConfig(env);
+  const storagePath = env.STORAGE_PATH ?? "storage";
+  const storageConfig = resolveStorageConfig({
+    ...env,
+    STORAGE_PATH: storagePath.trim() ? resolve(root, storagePath) : storagePath,
+  });
   const cacheOptions = snapshotCacheStoreOptions({
     driver: (env.CACHE_DRIVER ?? "array") as "array" | "redis",
     ttlMs: 3600000,
     maxEntries: 100,
     redisUrl: env.REDIS_URL,
-    namespace: (env.APP_KEY_PREFIX?.trim() || "strata") + ":cache:v3:",
+    namespace: `${env.APP_KEY_PREFIX?.trim() || "strata"}:cache:v3:`,
   });
-  const driver = (env.QUEUE_DRIVER ?? "sync") as "sync" | "async" | "redis";
-  if (!["sync", "async", "redis"].includes(driver))
-    throw new TypeError("Unsupported queue driver.");
+  const driver = retryPolicy.driver;
   return Object.freeze([
     ...createEventBindings(),
     valueService(QUEUE_JOB_REGISTRY_TOKEN, new JobRegistry()),
+    service(CORE_QUEUE_TOKEN, {
+      lifetime: "application",
+      dependencies: [APPLICATION_QUEUE] as const,
+      create: (queue) => Object.freeze({ dispatch: queue.dispatch.bind(queue) }),
+    }),
     service(APPLICATION_STORAGE, {
       lifetime: "application",
       dependencies: [] as const,
@@ -122,7 +135,7 @@ export function createApplicationServices(
         allowPrivate: !isProductionEnv(env) && env.WEBHOOK_ALLOW_PRIVATE === "true",
         signatureHeader:
           env.WEBHOOK_SIGNATURE_HEADER?.trim() ||
-          "x-" + (env.APP_KEY_PREFIX?.trim() || "strata") + "-signature",
+          `x-${env.APP_KEY_PREFIX?.trim() || "strata"}-signature`,
       }),
     ),
     resourceService(APPLICATION_CACHE, {
@@ -141,7 +154,7 @@ export function createApplicationServices(
         name: "starter.queue",
         open: () => ({
           ok: true,
-          value: createAppQueue(driver, env.REDIS_URL, services, registry),
+          value: createAppQueue(driver, env.REDIS_URL, services, registry, retryPolicy, runtime),
         }),
         drain: (queue) => (driver === "async" ? queue.close?.() : undefined),
         close: (queue) => (driver !== "async" ? queue.close?.() : undefined),
@@ -160,8 +173,10 @@ export function createApplicationProviders<A extends ApplicationAuthServices>(
   billing: Readonly<{ enabled: boolean; stripeSecret: string }>,
   storage: StorageManager,
   registry: JobRegistry,
+  appConfig: ReturnType<typeof loadApplicationConfig> = loadApplicationConfig(env),
 ): readonly ServiceProvider[] {
-  const appConfig = loadApplicationConfig(env);
+  env = Object.freeze({ ...env });
+  const dispatchQueue = Object.freeze({ dispatch: queue.dispatch.bind(queue) });
   return Object.freeze([
     createConfigProvider(appConfig, env),
     {
@@ -187,7 +202,7 @@ export function createApplicationProviders<A extends ApplicationAuthServices>(
     {
       name: "starter.queue",
       async register({ container }) {
-        container.set(CORE_QUEUE_TOKEN, queue);
+        container.set(CORE_QUEUE_TOKEN, dispatchQueue);
         container.set(FAILED_JOB_SERVICE_TOKEN, queueServices);
         container.set(QUEUE_JOB_REGISTRY_TOKEN, registry);
         registerDefaultJobs(registry);
@@ -204,7 +219,9 @@ export function createApplicationProviders<A extends ApplicationAuthServices>(
     },
     createViewProvider({
       env,
-      enabled: definition.views ?? ["server-htmx", "hybrid"].includes(definition.frontend),
+      enabled:
+        definition.views === true ||
+        isViewsMode(parseFrontendMode(env.FRONTEND_MODE ?? definition.frontend)),
       directory: join(definition.root, "views"),
       data: {
         userKey: "currentUser",
@@ -232,10 +249,12 @@ export function createApplicationProviders<A extends ApplicationAuthServices>(
   ]);
 }
 
-function createConfigProvider(
+export function createConfigProvider(
   appConfig: ReturnType<typeof loadApplicationConfig>,
   env: Readonly<Record<string, string | undefined>>,
 ): ServiceProvider {
+  env = Object.freeze({ ...env });
+  appConfig = Object.freeze({ ...appConfig });
   return {
     name: "application.config",
     register({ container, config }) {

@@ -6,7 +6,7 @@ import {
   hasFreshPasswordConfirmation,
 } from "@getstrata/core/auth/passwordConfirmCookie";
 import { createSessionCookie, readSession } from "@getstrata/core/auth/sessionCookie";
-import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/security/safeUrl";
+import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/testing";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 test("JWT signing rejects absent or whitespace owner secrets even when an ambient secret exists", () => {

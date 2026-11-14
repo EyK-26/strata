@@ -1,4 +1,4 @@
-import { resetMemoryLoginThrottleForTests, testState } from "#strata-test-state";
+import { testState } from "#strata-test-state";
 import {
   BoundedThrottleStore,
   type MemoryThrottleStorageOptions,
@@ -137,7 +137,6 @@ export type { LoginThrottleOptions };
 export {
   createLoginThrottleMiddleware,
   createMemoryLoginThrottleMiddleware,
-  resetMemoryLoginThrottleForTests,
   resolveLoginEmail,
   resolveLoginIdentity,
 };

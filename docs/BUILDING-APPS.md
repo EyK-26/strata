@@ -41,9 +41,9 @@ Set `FRONTEND_MODE`. Allowed values live in `@getstrata/core/runtime/frontendMod
 
 ## Cookie HTML apps
 
-Generated `src/bootstrap/providers/auth.ts` constructs cookie authentication from the current execution's explicit database session and scoped policy. `createCookieSessionAuthManager` requires `{ selected, policy, secret, production, rls }`; optional `cookieName`, `loadSessionUser` and `mapUser` customize the application schema and identity. Keep that manager within the execution that supplied its session and policy rather than retaining a request-bound manager as an application singleton.
+Generated `src/bootstrap/auth.ts` constructs cookie authentication from the current execution's explicit database session and scoped policy. `createCookieSessionAuthManager` requires `{ selected, policy, secret, production, rls }`; optional `cookieName`, `loadSessionUser` and `mapUser` customize the application schema and identity. Keep that manager within the execution that supplied its session and policy rather than retaining a request-bound manager as an application singleton.
 
-Set `cookieName` to `"myapp_session"` in the generated auth configuration to rename the cookie. Supply `loadSessionUser` when the default session/user query does not match your schema; its arguments are the selected session, scoped policy, RLS flag and session ID. Preserve live account status and auth-version metadata when mapping users. Generated cookie apps map `is_admin` in `src/bootstrap/providers/auth.ts`.
+Set `cookieName` to `"myapp_session"` in the generated auth configuration to rename the cookie. Supply `loadSessionUser` when the default session/user query does not match your schema; its arguments are the selected session, scoped policy, RLS flag and session ID. Preserve live account status and auth-version metadata when mapping users. Generated cookie apps map `is_admin` in `src/bootstrap/auth.ts`.
 
 Use `signIn` / `signOut` (or the redirect helpers). Do not mint cookies in controllers.
 
@@ -53,9 +53,9 @@ Cookie apps from `create-strata` include restyleable welcome, login, register, a
 
 ## Adding API tokens, JWT, or Basic
 
-Compose guards with explicit capabilities in `src/bootstrap/providers/auth.ts`. `DatabaseTokenGuard` takes an `AuthBearerResolver`; `JwtGuard` takes `{ directory, secret }`. `BasicAuthGuard` takes account lookup, an MFA secret codec, recovery-code persistence and email lookup or credential verification. Register the resulting guards with `auth.registerGuard(name, guard)`. A service container is not a guard constructor argument.
+Compose guards with explicit capabilities in `src/bootstrap/auth.ts`. `DatabaseTokenGuard` takes an `AuthBearerResolver`; `JwtGuard` takes `{ directory, secret }`. `BasicAuthGuard` takes account lookup, an MFA secret codec, recovery-code persistence and email lookup or credential verification. Register the resulting guards with `auth.registerGuard(name, guard)`. A service container is not a guard constructor argument.
 
-Use the generated auth service composition and `src/bootstrap/authDirectory.ts` to select those capabilities from the owning execution. See [AUTH.md](./AUTH.md).
+Use the generated auth service composition and `src/bootstrap/auth.ts` to select those capabilities from the owning execution. See [AUTH.md](./AUTH.md).
 
 ## HTTP kernel
 
@@ -69,7 +69,9 @@ Start with the generated application definition and the `defineApp` factory from
 and `createAppServer`; keep the generated entrypoints small and put application
 choices in the definition. `src/config/app.ts` holds the selected frontend, tenancy,
 views, extras and environment-default snapshot; it does not mutate `process.env`.
-Native Bun request and server options remain available.
+Native Bun request and server options remain available. Module routes are assembled
+by default; `defineApp.routes` is an optional callback for custom route composition.
+A separate `src/routes.ts` file is unnecessary.
 
 A simple module needs a model, controller, request and policy. Controllers can use
 models selected from their owned execution (`database.model(definition)`) directly.
@@ -80,10 +82,11 @@ supported for applications that need them.
 
 Jobs and listener declarations are discovered before startup completes. The
 application owns its registry, services, database, cache and queue resources.
-Module providers can add capabilities through `register` and `boot`; register
-bindings before consuming them. Custom resources register cleanup immediately
-through `context.onCleanup(() => resource.close())`, optionally using `"drain"` or
-`"flush"`. Cleanup awaits handlers in reverse acquisition order.
+For application services and startup work, use `defineProvider` with declarative
+services and `setup` / `boot` hooks in the application definition's `providers`.
+Owned resources use `resourceService` or `scope.acquire`; cleanup stays with the
+application lifecycle. See [authoring providers](application-providers.md).
+Module `register` / `boot` providers remain an advanced bootstrap adapter surface.
 
 Keep the returned application handle. Stop it with
 `await app.application.stop({ reason: "MANUAL" })` and inspect `result.successful`.
@@ -194,7 +197,8 @@ rewrite their local adapters.
 
 Use `src/cli/register.ts` (`commands` or `registerCommands()`) for application
 commands. Scaffold commands resolve paths from the app working directory
-(`src/modules`, `src/db/migrations`, `src/jobs`, `views/`). `openapi:*` uses the
+(`src/db/migrations`, `src/jobs`, `views/`). `modulesDirectory` selects the same
+module root for application discovery, scaffolding and OpenAPI. `openapi:*` uses the
 application's routes; scheduled commands boot before running the configured
 schedule and close their application afterward.
 
@@ -206,7 +210,10 @@ The starter wizard covers MFA, email verification, SCIM, metrics, plus optional 
 
 Configure layout data (`currentUser`, `csrfToken`, `flash`) and error templates (`errors/not-found.eta`, `errors/forbidden.eta`, `errors/error.eta`). Production 5xx must not leak stacks.
 
-For per-app HTML rendering, register `createViewProvider` from
+Generated HTML applications enable packaged views through application configuration.
+Controllers resolve the typed `CORE_VIEW_RENDERER_TOKEN` from their owned execution.
+
+For advanced custom view composition, register `createViewProvider` from
 `@getstrata/bootstrap/providers/view` in your provider list, then inject the
 typed `CORE_VIEW_RENDERER_TOKEN` from `@getstrata/core/view` into controllers:
 

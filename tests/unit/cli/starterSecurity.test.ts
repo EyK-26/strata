@@ -144,7 +144,7 @@ describe("starter security flows", () => {
     expect(await readFile(join(app, "src/modules/auth/index.ts"), "utf8")).toContain(
       "authServices.config.registrationEnabled",
     );
-    expect(await readFile(join(app, "src/bootstrap/providers/auth.ts"), "utf8")).toContain(
+    expect(await readFile(join(app, "src/bootstrap/auth.ts"), "utf8")).toContain(
       "createAuthRuntimeConfig(options,",
     );
     expect(await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8")).toContain(

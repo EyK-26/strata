@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { GitHubOAuthProvider, MockOAuthProvider } from "@getstrata/core/auth/oauth/providers";
-import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/security/safeUrl";
+import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/testing";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 const originalFetch = globalThis.fetch;

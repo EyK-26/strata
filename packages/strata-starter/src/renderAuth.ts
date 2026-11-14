@@ -183,22 +183,17 @@ function renderAuthProvider(plan: StarterFeaturePlan): string {
   const cookie = plan.decisions.cookie;
   const mechanisms = plan.decisions.authMechanisms;
   return `import { createAuthRuntimeConfig } from "@getstrata/bootstrap/auth/runtimeConfig";
-import { CORE_AUTH_TOKEN } from "@getstrata/bootstrap/config";
-import type { ServiceProvider } from "@getstrata/bootstrap/contracts";
 import type { MetadataFactory } from "@getstrata/bootstrap/persistenceContracts";
 ${users ? 'import { createMetadataAuthManager, type MetadataAuthOptions } from "@getstrata/bootstrap/providers/auth";' : 'import type { MetadataAuthOptions } from "@getstrata/bootstrap/providers/auth";'}
-${cookie ? 'import { createCookieSessionAuthManager, type CookieSessionAuthManager } from "@getstrata/bootstrap/web/session";\n' : ""}import { establishedAuthReader } from "@getstrata/core/auth/authReader";
-${users ? 'import { persistConsumedRecoveryHash } from "@getstrata/core/auth/passwordLogin";\n' : 'import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";\n'}import { createTokenAbilityChecker } from "@getstrata/core/auth/tokenAbilityChecker";
-import { csrfTokenOptionsFromEnvironment } from "@getstrata/core/http/csrfToken";
+${cookie ? 'import { createCookieSessionAuthManager, type CookieSessionAuthManager } from "@getstrata/bootstrap/web/session";\n' : ""}${users ? 'import { persistConsumedRecoveryHash } from "@getstrata/core/auth/passwordLogin";\n' : 'import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";\n'}import { csrfTokenOptionsFromEnvironment } from "@getstrata/core/http/csrfToken";
 import { intendedUrlCookieOptionsFromEnvironment } from "@getstrata/core/auth/intendedUrlCookie";
 import { flashSessionOptionsFromEnvironment } from "@getstrata/core/http/flashSession";
 ${users ? 'import { createFieldEncryptionCodec } from "@getstrata/core/crypto/fieldEncryption";\nimport { createMfaSecretCodec } from "@getstrata/core/crypto/mfaSecret";\n' : ""}
 ${cookie ? 'import { createSamlServiceProvider, createSqlSamlAssertionReplayStore, type SamlServiceProvider } from "@getstrata/core/auth/saml/samlServiceProvider";\n' : ""}${users ? 'import { Mailer, createMailDriver } from "@getstrata/core/mail/mailer";\n' : ""}
 import { type PasswordConfirmWriteOptions } from "@getstrata/core/auth/passwordConfirmCookie";
-${plan.decisions.pendingMfa ? 'import { createPendingMfaHelpers } from "../pendingMfa.ts";\n' : ""}import { CORE_ABILITY_CHECKER_TOKEN } from "@getstrata/core/contracts/serviceTokens";
-import { createServiceToken } from "@getstrata/core/contracts/token";
+${plan.decisions.pendingMfa ? 'import { createPendingMfaHelpers } from "./pendingMfa.ts";\n' : ""}import { createServiceToken } from "@getstrata/core/contracts/token";
 import type { ExecutionPersistence } from "@getstrata/core/contracts/persistence";
-${plan.decisions.tenantTable ? 'import { resolveTenant } from "@getstrata/core/tenant/resolveTenant";\n' : ""}${users ? 'import { createStarterAuthDirectory, withAuthIdentifier, type StarterAuthPersistence } from "../authDirectory.ts";\n' : ""}${plan.decisions.tenantUsers ? 'import { User } from "../../models/User.ts";\n' : ""}
+${plan.decisions.tenantTable ? 'import { resolveTenant } from "@getstrata/core/tenant/resolveTenant";\n' : ""}${users ? 'import { createStarterAuthDirectory, withAuthIdentifier, type StarterAuthPersistence } from "./authDirectory.ts";\n' : ""}${plan.decisions.tenantUsers ? 'import { User } from "../models/User.ts";\n' : ""}
 export type StarterAuthServicesOptions = Omit<MetadataAuthOptions, "mechanisms" | "sessionGuard" | "mfaSecrets"> & { readonly environment:Readonly<Record<string,string|undefined>>; readonly sessionSecret?: string; readonly signatureSecret?:string; readonly oauthStateSecret?:string; readonly passwordConfirmation?:PasswordConfirmWriteOptions };
 export type StarterAuthRuntime = ReturnType<typeof createAuthRuntimeConfig>;
 export interface StarterAuthServices {
@@ -243,16 +238,6 @@ export function createStarterAuthServices(options: StarterAuthServicesOptions): 
     };
   };
   return Object.freeze({ config, metadata, csrf:csrfTokenOptionsFromEnvironment(env), intendedUrl:intendedUrlCookieOptionsFromEnvironment(env),flash:flashSessionOptionsFromEnvironment(env)${users ? ",fieldEncryption,mfaSecrets" : ""}${users ? ", mail: new Mailer(createMailDriver(env))" : ""}${cookie ? ', saml: (ports:StarterAuthPersistence) => { if(!config.saml) throw new Error("SAML is not configured.");return createSamlServiceProvider({...config.saml,replayStore:createSqlSamlAssertionReplayStore(ports.database)}); }' : ""}${plan.decisions.pendingMfa ? ", pendingMfa: createPendingMfaHelpers({secret:snapshot.sessionSecret!,production:snapshot.production})" : ""}${users ? ", directory: createStarterAuthDirectory" : ""}${cookie ? ", session" : ""} });
-}
-export function createStarterAuthProvider(services: StarterAuthServices): ServiceProvider {
-  return {
-    name: "starter.auth",
-    register({ container }) {
-      container.set(STARTER_AUTH_SERVICES, services);
-      container.set(CORE_AUTH_TOKEN, establishedAuthReader);
-      container.set(CORE_ABILITY_CHECKER_TOKEN, createTokenAbilityChecker());
-    },
-  };
 }
 `;
 }

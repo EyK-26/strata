@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { runWithAuthUser } from "@getstrata/core/auth/authContext";
-import {
-  createMemoryThrottleMiddleware,
-  resetMemoryThrottleForTests,
-} from "@getstrata/core/http/memoryThrottleMiddleware";
+import { createMemoryThrottleMiddleware } from "@getstrata/core/http/memoryThrottleMiddleware";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { runWithTenant } from "@getstrata/core/tenant/tenantContext";
+import { resetMemoryThrottleForTests } from "@getstrata/core/testing";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 describe("createMemoryThrottleMiddleware", () => {

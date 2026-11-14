@@ -52,7 +52,6 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
     "createMysqlConnection",
     "createMysqlConnectionFromPool",
     "createMysqlPool",
-    "resetMysqlLoaderForTests",
   ],
   "http/loginThrottleMiddleware": [
     "createLoginThrottleMiddleware",
@@ -64,8 +63,6 @@ const REQUIRED_SHARED_RUNTIME_EXPORTS: Record<string, readonly string[]> = {
   "security/safeUrl": [
     "pinUrlToAddress",
     "resolveSafeOutboundTarget",
-    "setDnsLookupForTests",
-    "resetDnsLookupForTests",
     "assertSafeOutboundUrl",
     "assertSafeOutboundUrlResolved",
     "isBlockedHostname",
@@ -186,6 +183,28 @@ for (const subpath of CORE_SHARED_SUBPATHS) {
         `Shared subpath @getstrata/core/${subpath} missing runtime export "${exportName}"`,
       );
     }
+  }
+}
+
+// Test controls are available only through the explicit testing surface.
+const testing = await import(join(ENTRIES_DIR, "testing.js"));
+for (const name of [
+  "setNodeSamlLoaderForTests",
+  "resetMysqlLoaderForTests",
+  "resetMemoryThrottleForTests",
+  "resetMemoryLoginThrottleForTests",
+  "resetDnsLookupForTests",
+  "setDnsLookupForTests",
+]) {
+  assert.equal(typeof testing[name], "function", `${name} must remain available to test fixtures`);
+}
+for (const [subpath, entry] of Object.entries(manifest.exports)) {
+  if (subpath === "./testing" || !entry || typeof entry !== "object") continue;
+  const target = Reflect.get(entry, "import");
+  if (typeof target !== "string") continue;
+  const normal = await import(join(ROOT, "packages/strata-core", target));
+  for (const name of Object.keys(normal)) {
+    assert(!name.endsWith("ForTests"), `Production export ${subpath} exposes test control ${name}`);
   }
 }
 

@@ -12,20 +12,19 @@ import type { DatabaseSession, TransactionSession } from "@getstrata/core/databa
 import { defineTable } from "@getstrata/core/database/table";
 import { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
 import { createApplication } from "@getstrata/core/runtime/application";
-import { createWidgetFactory, WidgetFactory } from "../modules/widget/factory.ts";
+import { createWidgetFactory } from "../db/factories/WidgetFactory.ts";
 import type { WidgetRecord } from "../modules/widget/types.ts";
 
 assert.equal(RootFactory, Factory);
 assert.equal(defineRootFactory, defineFactory);
 const complete = (): WidgetRecord => ({ id: 0, name: "complete", parent_id: null });
-assert.deepEqual(RootFactory.from(WidgetFactory, { definition: complete }).make(), complete());
 const rootDefinition = defineRootFactory({ construct: () => ({ definition: complete }) });
 assert.deepEqual(Factory.from(rootDefinition).make(), complete());
-const pure = createWidgetFactory({ definition: complete });
+const pure = createWidgetFactory(complete);
 assert.deepEqual(pure.make(), complete());
 await assert.rejects(
   () => pure.create(),
-  /WidgetFactory persistence must be supplied to use create/,
+  /Factory\.persist\(\) must be supplied to use create/,
 );
 
 // These are compiled by the generated app's actual check, never invoked.
@@ -35,12 +34,9 @@ export function generatedFactoryTypeContracts() {
   // @ts-expect-error the shipped helper requires a complete definition callback
   createWidgetFactory({});
   // @ts-expect-error generated definition returns every required field
-  createWidgetFactory({ definition: () => ({ id: 0 }) });
-  createWidgetFactory({
-    definition: complete,
-    // @ts-expect-error persistence returns complete records
-    persist: async () => ({ id: 1 }),
-  });
+  createWidgetFactory(() => ({ id: 0 }));
+  // @ts-expect-error persistence returns complete records
+  createWidgetFactory(complete, async () => ({ id: 1 }));
   // @ts-expect-error afterMaking is synchronous
   pure.afterMaking(async (record) => {
     record.name = "async";
@@ -71,10 +67,7 @@ const model = defineModel({
 const selected = (session: DatabaseSession | TransactionSession) => {
   const bound = session.model(model);
   // Actual emitted helper is used for every selected parent/child write.
-  return createWidgetFactory({
-    definition: complete,
-    persist: async (values) => (await bound.create(values)).toObject(),
-  });
+  return createWidgetFactory(complete, async (values) => (await bound.create(values)).toObject());
 };
 const directory = await mkdtemp(join(process.cwd(), ".factory-proof-"));
 const application = (name: string) =>

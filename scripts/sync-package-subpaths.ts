@@ -228,6 +228,10 @@ const CORE_SUBPATHS = [
 ] as const;
 
 const BOOTSTRAP_SUBPATHS = [
+  "application",
+  "auth/accountWorkflows",
+  "auth/runtimeConfig",
+  "databaseCommands",
   "testing",
   "buildModuleRoutes",
   "buildWebModuleRoutes",
@@ -358,6 +362,10 @@ async function writeEntryFiles(
       continue;
     }
 
+    if (srcLayer === "bootstrap" && subpath === "application") {
+      await rm(join(entriesDir, "application.ts"), { force: true });
+      continue;
+    }
     const entryPath = join(entriesDir, `${subpath}.ts`);
     await mkdir(dirname(entryPath), { recursive: true });
 
@@ -434,7 +442,7 @@ async function updatePackageJson(
     `bun build index.ts --outdir dist --target bun --external bun${telemetryExternals} --external eta --external mysql2${optionalPeerExternals}${standaloneExternal}${privateExternal}`;
   packageJson.scripts["build:shims"] = packageDir.includes("strata-core")
     ? "bun ../../scripts/write-core-shared-shims.ts"
-    : "true";
+    : "bun ../../scripts/write-bootstrap-shared-shims.ts";
   const coreExternal = packageDir.includes("strata-core")
     ? ` ${coreSubpathExternalFlags(CORE_SUBPATHS)}`
     : "";
@@ -469,7 +477,7 @@ async function updatePackageJson(
       },
     };
     packageJson.scripts["build:internal"] =
-      `bun build internal/testingState.ts internal/mysqlNative.ts internal/ormInternal.ts internal/ormRuntime.ts --outdir dist/internal --target bun${coreExternal}${privateExternal}`;
+      `bun build internal/testingState.ts internal/mysqlNative.ts internal/ormInternal.ts internal/ormRuntime.ts --outdir dist/internal --target bun --external mysql2${coreExternal}${privateExternal}`;
     packageJson.scripts["build:verify-standalone"] =
       "bun ../../scripts/verify-core-standalone-subpaths.ts";
   } else {

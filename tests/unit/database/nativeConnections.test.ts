@@ -2,12 +2,9 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  createMysqlConnectionFromPool,
-  resetMysqlLoaderForTests,
-} from "@getstrata/core/database/mysqlConnection";
-
+import { createMysqlConnectionFromPool } from "@getstrata/core/database/mysqlConnection";
 import { createSqliteConnection } from "@getstrata/core/database/sqliteConnection";
+import { resetMysqlLoaderForTests } from "@getstrata/core/testing";
 
 type MysqlCorePool = {
   config: { connectionConfig: { timezone?: string } };
@@ -169,9 +166,11 @@ describe("MySQL connection adapter", () => {
       },
     }));
     const { createMysqlConnection } = await import("@getstrata/core/database/mysqlConnection");
-    const connection = createMysqlConnection("mysql://hiroapp:hiroapp@127.0.0.1:1/unused");
-    await connection.close();
+    const unopened = createMysqlConnection("mysql://hiroapp:hiroapp@127.0.0.1:1/unused");
+    await unopened.close();
+    await expect(unopened.unsafe("SELECT 1")).rejects.toThrow("closed");
     expect(ended).toBe(0);
+    const connection = createMysqlConnection("mysql://hiroapp:hiroapp@127.0.0.1:1/unused");
 
     expect(await connection.unsafe("SELECT 1")).toEqual([{ id: 1 }]);
     expect(await connection.unsafe("SELECT 1")).toEqual([{ id: 1 }]);
@@ -209,11 +208,11 @@ describe("MySQL connection adapter", () => {
     await connection.close();
     expect(ended).toBe(1);
 
-    // A query after close opens a fresh pool instead of reusing the ended one.
-    expect(await connection.unsafe("SELECT 4")).toEqual([{ ok: 1 }]);
-    expect(created).toBe(2);
+    await expect(connection.unsafe("SELECT 4")).rejects.toThrow("closed");
+    await expect(connection.begin(async () => {})).rejects.toThrow("closed");
+    expect(created).toBe(1);
     await connection.close();
-    expect(ended).toBe(2);
+    expect(ended).toBe(1);
   });
 
   test("a failed pool load is retried on the next query", async () => {
@@ -239,7 +238,6 @@ describe("MySQL connection adapter", () => {
     const connection = createMysqlConnection("mysql://hiroapp:hiroapp@127.0.0.1:1/unused");
 
     await expect(connection.unsafe("SELECT 1")).rejects.toThrow(/Install mysql2/);
-    await connection.close();
     expect(await connection.unsafe("SELECT 1")).toEqual([{ ok: 1 }]);
     expect(attempts).toBe(2);
     await connection.close();
@@ -298,4 +296,56 @@ describe("MySQL connection adapter", () => {
       "mysql2/promise did not export createPool.",
     );
   });
+});
+
+test("URL-backed MySQL close joins an admitted pool load without reopening it", async () => {
+  let release: () => void = () => {};
+  let entered: () => void = () => {};
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const loading = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  let created = 0;
+  let ended = 0;
+  resetMysqlLoaderForTests(async () => {
+    entered();
+    await pending;
+    return {
+      createPool() {
+        created++;
+        return {
+          async execute() {
+            return [[{ ok: 1 }]];
+          },
+          async end() {
+            ended++;
+          },
+          on() {},
+        };
+      },
+    };
+  });
+  const { createMysqlConnection } = await import("@getstrata/core/database/mysqlConnection");
+  const connection = createMysqlConnection("mysql://fixture@127.0.0.1:1/unused");
+  try {
+    const query = connection.unsafe("SELECT 1");
+    await loading;
+    const closing = connection.close();
+    expect(ended).toBe(0);
+    await expect(connection.unsafe("SELECT 2")).rejects.toThrow("closed");
+    release();
+    expect(await query).toEqual([{ ok: 1 }]);
+    await closing;
+    expect(created).toBe(1);
+    expect(ended).toBe(1);
+    await expect(connection.unsafe("SELECT 3")).rejects.toThrow("closed");
+    await connection.close();
+    expect(ended).toBe(1);
+  } finally {
+    release();
+    await connection.close();
+    resetMysqlLoaderForTests();
+  }
 });

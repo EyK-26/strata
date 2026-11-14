@@ -82,7 +82,11 @@ Migrations and resets do not seed by default. Use `bun run db:seed:demo` explici
 
 User-auth starters also generate explicit `auth:provision-admin` and the separate `0004_initial_admin_provisioning` file migration. This production bootstrap command reads a private password from standard input, refuses existing accounts/admins, and commits a one-time claim with the new account. It does not seed, migrate, approve email or enroll MFA. See [initial-admin provisioning](INITIAL-ADMIN.md).
 
-Generated HTML apps register `createViewProvider` in `src/bootstrap/providers/view.ts` and resolve `CORE_VIEW_RENDERER_TOKEN` in their route factories. There is no generated `src/lib/view.ts` helper. The provider owns the view directory and request-scoped CSRF, flash, CSP nonce and `currentUser` data; presentation fields and navigation remain app-owned. The default user projection contains `id`, `email` and `role`; use the provider's `data.loadUser` option for additional display fields.
+Generated HTML apps enable views through their application configuration. Packaged
+composition supplies the view directory, request-scoped CSRF, flash, CSP nonce and
+`currentUser` data. Controllers select `CORE_VIEW_RENDERER_TOKEN` from their owned
+execution. Templates, navigation and presentation fields remain app-owned; custom
+view-provider composition is an advanced adapter option.
 
 The welcome route explicitly uses `views.renderHtmx`: an ordinary link returns the layout, a targeted HTMX request returns the page body, and boosted/history restoration requests retain the layout. Its refresh link targets `#page-content` and still works without JavaScript. Auth controllers explicitly select the `auth` view namespace, then use `views.render` with relative template names and always retain their full-page responses, including validation and throttling errors. Existing apps can migrate their rendering helper to this provider and token without changing their auth handshakes; see [view rendering and HTMX](BUILDING-APPS.md#views-and-errors).
 
@@ -105,24 +109,18 @@ scheduler commands through the installed package. Configure the generated
 application and schedule entrypoints in `strata.config.ts`; keep product commands
 in `src/cli/register.ts`. Workers boot this application's owned services.
 
-`make:*` resolves paths from **`process.cwd()`** (`src/modules`, `src/db/migrations`, `src/jobs`, `src/listeners`). `make:job` emits `static jobName` so `queue.dispatch(new FooJob(), payload)` works after `await discoverJobs()` on boot. `make:module` emits explicit repository/model definitions for the application registry. `openapi:*` boots `createApp()` routes. `schedule:run` boots the app, then loads `src/bootstrap/schedule.ts`.
+`make:*` resolves paths from the application root; `modulesDirectory` is shared with application discovery and OpenAPI (`src/modules` by default). Other defaults include `src/db/migrations`, `src/jobs` and `src/listeners`. `make:job` emits `static jobName` so `queue.dispatch(new FooJob(), payload)` works after `await discoverJobs()` on boot. `make:module` emits explicit repository/model definitions for the application registry. `openapi:*` boots `createApp()` routes. `schedule:run` boots the app, then loads `src/bootstrap/schedule.ts`.
 
 `make:model <Name|Group/Name>` emits a typed table, repository and model definition. Add these to the application registry; migration generation stays separate. Use `--table=name`, `--primary-key=id` and `--key-type=number|string`. Domain columns and writable fields remain explicit. See [declarative model binding](DATABASE.md#declarative-model-binding).
 
-Existing app-owned CLI registries require deliberate adoption after upgrading the CLI package:
-
-```ts
-"make:model": async () => (await import("@getstrata/cli/scaffold")).makeModelCommand,
-"make:view": async () => (await import("@getstrata/cli/scaffold")).makeViewCommand,
-```
-
-Or merge the exported `scaffoldCommands` map into the app registry, retaining any app-specific overrides. Fresh starters include the entry. No generator overwrites an existing file or silently adds schema changes.
+The installed CLI owns scaffold commands. Keep application-specific commands in
+`src/cli/register.ts`; a copied older registry can adopt these built-ins when
+upgrading. No generator overwrites existing files or silently adds schema changes.
 
 `make:view reports/summary` creates an escaped-output Eta HTML template at `views/reports/summary.eta` when the app has `views/`; otherwise it uses `resources/views/`, matching the existing module/view conventions. Nested names, an optional `.eta` suffix, partials such as `partials/_card`, and numeric error pages such as `errors/404` are supported. Render it through the app's existing `ViewRenderer` using `reports/summary`. The command does not create routes/controllers, enable a view provider, change its configured directory or layout, or install Eta in API-only apps.
 
 View names normalize to kebab case (preserving a partial's leading underscore). Unsafe names, symlinked output paths and existing templates are refused; there is no force option. A custom nonconventional provider directory remains an explicit application choice rather than something the generator reads from private configuration.
 
-Apps scaffolded with `create-strata@1.1.0` should merge current `src/bootstrap/providers/index.ts` and `createApp.ts` from a 1.1.x starter (module `providers` boot + `await discoverListeners()` / `await discoverJobs()`). See the package changelog rather than re-running the wizard over a filled app.
 
 `APP_ENV=production` (or `NODE_ENV=production`) calls `assertProductionSecrets()` on boot. Generated `.env.example` sets `FEATURE_PUBLIC_READS=false`. `wrapWebPublicRead` then requires a login. Public catalogs may opt in per route with `{ allowAnonymous: true }` or set the default policy flag to `true`. Generated apps approve only their configured `APP_URL` hostname for anonymous tenant selection; multi-tenant applications replace that binding. Production rejects the separate `TENANT_DEV_HEADERS=true` flag. See [BUILDING-APPS.md](./BUILDING-APPS.md).
 
@@ -153,7 +151,10 @@ User-backed scaffolds add `0006_account_state.ts`, persisted status/epoch fields
 
 Generated applications now use the framework `createAppContext([...starterProviders, ...moduleProviders])` lifecycle. Await every registration before booting any provider. Existing `bootstrapApp()` / `createApp()` callers already await; direct `createAppContext()`, `createAppDependencies()` and `runProviderPhase()` callers must adopt the new promise return types. `appContext` no longer boots lazily through getters.
 
-Merge the current generated `createApp.ts`, provider cleanup, HTTP entrypoint and queue/schedule command shapes into existing applications. Providers register owned resources through `onCleanup`; the completed context exposes an idempotent `dispose()`. Stop admission/work before disposal, then close the app's database. Startup rejects unavailable databases and failed hooks before HTTP/worker admission. See [BUILDING-APPS.md](./BUILDING-APPS.md#module-providers-and-infra-defaults) for ordering and compatibility boundaries. No migrations, automatic seeds or new feature flags are introduced.
+The application lifecycle owns admission, drain, flush and resource closure.
+Stop it through `application.stop()` and inspect the result; startup failure uses
+the same owner for cleanup. Custom resources join that lifecycle when acquired.
+See [application startup](BUILDING-APPS.md#application-startup-and-modules).
 
 ### Discovery migration
 
@@ -175,17 +176,23 @@ Apps generated with the metrics extra accept explicit `bootstrapApp({ runtimeMet
 
 Generated `src/db/fresh.ts` uses the explicit `{ destructive: true }` development-reset contract and rejects production/staging before provisioning. Protected application migrations may use the optional typed `guardMigrationRollback` helper to keep app-owned history predicates/refusal messages without repeating reset checks, or inspect the optional `down` context's `operation === "fresh"` to distinguish this intentional reset from rollback; ordinary rollback remains guarded. Reset does not clear Redis/storage and does not automatically seed. See [reset contracts](BUILDING-APPS.md#explicit-development-resets-and-protected-rollback-history).
 
-SCIM's generated Users adapter intentionally supports a limited profile contract. Unsupported PATCH operations/status changes return explicit SCIM errors; successful profile mutation is not account deactivation. Mutations are transactional through immediate observers. See [the supported mutation contract](INTEGRATIONS.md#minimal-generated-scim-mutation-contract) before connecting a provisioning provider.
+SCIM's generated Users adapter intentionally supports a limited profile contract. Unsupported PATCH operations return explicit SCIM errors; supported `active` changes use the account suspension/reactivation protocol. Mutations are transactional through immediate observers. See [the supported mutation contract](INTEGRATIONS.md#minimal-generated-scim-mutation-contract) before connecting a provisioning provider.
 
 
 ### One-shot command ownership
 
-Generated OpenAPI and failed-job command wrappers retain their booted application and dispose it, then close its SQL connection after each command. Provider disposal runs registered drain/flush/close phases. The CLI OpenAPI factories accept an optional second cleanup callback; `createQueueFailedCommands(boot, close)` accepts the same explicit ownership callback. Supplied cleanup runs on success, bootstrap/work/output failure and validation/drift rejection, before a failure exit. Unsupplied cleanup does not close borrowed application infrastructure. Command and cleanup failures are both retained when they occur together.
+Package-owned OpenAPI and failed-job commands retain their booted application and
+stop its lifecycle owner after success or failure. That owner closes its database;
+commands do not add a second disposal or SQL-close chain. Advanced adapters can
+supply an explicit cleanup callback for infrastructure they own. Command and
+cleanup failures are both reported. Do not use `process.exit` to conceal leaked
+resources.
 
-Existing applications must adopt the generated `src/cli/openapi.ts` and `src/cli/queueFailed.ts` wrappers; installing a package does not replace application files. Keep custom business command behavior and the same API-only OpenAPI contract. Do not use process.exit to conceal a leaked pool. Generated MySQL acceptance executes these one-shot commands with restricted runtime credentials and checks process termination, including missing failed-job replay and OpenAPI drift.
-
-`createAppServer(routes, port, lifecycle?, native?)` forwards typed Bun server controls. Existing calls retain their defaults. `HOST` optionally selects the generated CLI TCP listen address, while `APP_URL` continues to select public URLs and trusted tenancy authority. Set an explicit literal loopback address for owned test listeners and use their `server.url`; do not guess an IPv4 endpoint from the numeric port of a wildcard/default listener. See [native listener configuration and address ownership](NATIVE-HTTP.md#generated-listener-options-and-owned-test-addresses).
-
+`createAppServer(options)` accepts the generated application's bootstrap options,
+including native Bun listener controls. `HOST` selects the CLI listen address;
+`APP_URL` selects public URLs and trusted tenancy authority. Tests should select a
+literal loopback address and use the returned server's actual URL. See
+[native listener configuration](NATIVE-HTTP.md#generated-listener-options-and-owned-test-addresses).
 
 ### Explicit cache privacy for authentication responses
 

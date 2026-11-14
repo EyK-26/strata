@@ -118,7 +118,7 @@ export const repositoryDefinitions = [NoteRepository];
       expect(repository).toContain("invoiceRepository");
       expect(repository).not.toContain("registerModelClass");
       expect(output.logs).toContain(
-        "Register the generated repository definition in application database bindings.",
+        "Register the generated model and its repository in src/models/register.ts.",
       );
     });
   });
@@ -202,7 +202,7 @@ describe("makeFactoryCommand", () => {
         output.restore();
       }
 
-      const factoryPath = join(workspace, "src", "modules", "widget", "factory.ts");
+      const factoryPath = join(workspace, "src", "db", "factories", "WidgetFactory.ts");
       expect(await Bun.file(factoryPath).exists()).toBe(true);
       const factorySource = await Bun.file(factoryPath).text();
       expect(factorySource).toContain('from "@getstrata/core/database/factory"');

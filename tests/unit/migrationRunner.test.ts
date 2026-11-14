@@ -590,3 +590,32 @@ describe("migration preflight", () => {
     });
   });
 });
+
+test("destructive reset follows its captured environment and retains the production guard", async () => {
+  const previousApp = process.env.APP_ENV,
+    previousNode = process.env.NODE_ENV;
+  try {
+    const environment = Object.freeze({ APP_ENV: "local", NODE_ENV: "test" });
+    process.env.APP_ENV = "production";
+    process.env.NODE_ENV = "production";
+    await runWithSqlDialect("sqlite", async () => {
+      const { db, tables } = createMemoryDb();
+      await migrateDatabase(db, migrations);
+      await freshDatabase(db, migrations, { destructive: true, environment });
+      expect(tables.has("widgets")).toBe(true);
+      process.env.APP_ENV = "local";
+      process.env.NODE_ENV = "test";
+      for (const APP_ENV of ["production", "staging"]) {
+        await expect(
+          freshDatabase(db, migrations, { destructive: true, environment: { APP_ENV } }),
+        ).rejects.toThrow("only available in development/test");
+        expect(tables.has("widgets")).toBe(true);
+      }
+    });
+  } finally {
+    if (previousApp === undefined) delete process.env.APP_ENV;
+    else process.env.APP_ENV = previousApp;
+    if (previousNode === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNode;
+  }
+});

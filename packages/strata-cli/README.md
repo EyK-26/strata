@@ -72,6 +72,12 @@ Existing apps with copied command registries should adopt the package-owned comm
 
 `make:view reports/summary[.eta]` creates an Eta HTML template under an existing `views/`, or `resources/views/` otherwise. It supports nested names, leading-underscore partials and numeric error pages, and refuses unsafe paths, symlinks and overwrites. It does not create routes/controllers, enable views or change the app's layout/directory configuration. Register `makeViewCommand` from the same scaffold subpath in existing apps; package-owned scaffold commands include it.
 
+Migration entry callbacks (`migrate`, `seed`, `fresh`) may accept an optional
+frozen environment snapshot. The CLI supplies it per invocation; zero-argument
+callbacks remain supported. Application bootstrap and CLI migrations use their
+selected snapshot rather than mutating process defaults. `modulesDirectory` is
+shared by module discovery, scaffolding and OpenAPI.
+
 A migrate entry may export `close()`. The CLI calls it after `migrate()` and `fresh()` so pooled drivers such as `mysql2` release the event loop instead of hanging the command.
 
 ## Creating a new app

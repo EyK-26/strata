@@ -33,14 +33,13 @@ export function createAuthRuntimeConfig(
   const env = Object.freeze({ ...options.environment });
   const numeric = resolveEnv(
     {
-      ...(features.token
-        ? { API_TOKEN_DEFAULT_EXPIRY_DAYS: { integer: true as const, minimum: 1 } }
-        : {}),
-      ...(features.jwt
-        ? { JWT_TTL_SECONDS: { integer: true as const, minimum: 60, default: "3600" } }
-        : {}),
+      API_TOKEN_DEFAULT_EXPIRY_DAYS: { integer: true, minimum: 1 },
+      JWT_TTL_SECONDS: { integer: true, minimum: 60, default: "3600" },
     },
-    env,
+    {
+      API_TOKEN_DEFAULT_EXPIRY_DAYS: features.token ? env.API_TOKEN_DEFAULT_EXPIRY_DAYS : undefined,
+      JWT_TTL_SECONDS: features.jwt ? env.JWT_TTL_SECONDS : undefined,
+    },
   );
   if (features.jwt && !options.jwtSecret.trim())
     throw new TypeError("An explicit JWT secret is required.");

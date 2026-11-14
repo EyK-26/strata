@@ -1,5 +1,5 @@
 import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import { runWithSqlDialect } from "@getstrata/core/database/dialect";
 import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
 import type { DatabaseConnectionOptions } from "@getstrata/core/database/session";
@@ -15,7 +15,7 @@ type Driver = DatabaseConnectionOptions["driver"];
 /** Resolve a configuration snapshot without opening a connection or mutating the environment. */
 export function resolveDatabaseOptions(
   environment: Environment,
-  defaults: { driver: Driver; defaultUrl?: string },
+  defaults: { driver: Driver; defaultUrl?: string; root?: string },
 ): DatabaseConnectionOptions {
   const production = isProductionEnv(environment);
   const url =
@@ -31,7 +31,11 @@ export function resolveDatabaseOptions(
         : value.startsWith("sqlite:")
           ? value.slice(7).replace(/^\/\//, "") || "./storage/app.sqlite"
           : value;
-    return Object.freeze({ driver: "sqlite", filename });
+    return Object.freeze({
+      driver: "sqlite",
+      filename:
+        filename === ":memory:" ? filename : resolve(defaults.root ?? process.cwd(), filename),
+    });
   }
   return defaults.driver === "pgsql"
     ? Object.freeze({ driver: "pgsql", url, max: 5 })

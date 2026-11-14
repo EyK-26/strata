@@ -36,13 +36,12 @@ import {
   renderConfigTs,
   renderCreateAppTs,
   renderOutboxRegistryTs,
-  renderRoutesTs,
   renderScheduleTs,
   renderServerTs,
   renderStrataConfigTs,
 } from "./renderBootstrap.ts";
 import { renderCliRegisterTs } from "./renderCli.ts";
-import { renderDatabaseTs, renderEnsureDatabaseTs, renderSidecarsTs } from "./renderDatabase.ts";
+import { renderDatabaseTs, renderEnsureDatabaseTs } from "./renderDatabase.ts";
 import { renderDockerCompose, renderDockerfile, renderDockerignore } from "./renderDocker.ts";
 import {
   renderApiDocs,
@@ -232,7 +231,6 @@ export const TENANCY_ENABLED = ${decisions.tenantTable};
     removeIfExists(join(targetDir, "docker/postgres-init"));
   }
 
-  writeText(join(src, "routes.ts"), renderRoutesTs());
   writeText(join(src, "config/app.ts"), renderConfigTs(plan, projectName));
   writeText(join(src, "bootstrap/server.ts"), renderServerTs());
   writeText(join(targetDir, "strata.config.ts"), renderStrataConfigTs());
@@ -304,11 +302,6 @@ export const TENANCY_ENABLED = ${decisions.tenantTable};
     writeText(join(src, "bootstrap/authDirectory.ts"), directory);
   }
 
-  const sidecars = renderSidecarsTs(plan);
-  if (sidecars) {
-    writeText(join(src, "bootstrap/sidecars.ts"), sidecars);
-  }
-
   const authModule = renderAuthModule(plan);
   if (authModule) {
     writeText(join(src, "modules/auth/index.ts"), authModule);
@@ -366,7 +359,8 @@ export const TENANCY_ENABLED = ${decisions.tenantTable};
         copyFileSync(versionSidecar, join(targetDir, "public/assets/htmx.min.js.version"));
       }
     }
-    writeText(join(targetDir, "views/home.eta"), renderHomeView(projectName, plan));
+    if (decisions.serverViews)
+      writeText(join(targetDir, "views/home.eta"), renderHomeView(projectName, plan));
     writeText(join(targetDir, "views/layouts/app.eta"), renderLayout(plan, projectName));
   }
   if (decisions.htmlAuth) {

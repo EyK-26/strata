@@ -89,7 +89,7 @@ async function makeModuleCommand(...args: string[]): Promise<void> {
   console.log(`Module will be auto-discovered from the app modules directory (${moduleSlug}/)`);
   console.log(`Next: strata make:migration create_${moduleSlug} && strata migrate`);
 
-  console.log("Register the generated repository definition in application database bindings.");
+  console.log("Register the generated model and its repository in src/models/register.ts.");
 }
 
 export { makeModuleCommand };

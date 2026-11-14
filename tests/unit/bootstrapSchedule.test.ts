@@ -4,7 +4,7 @@ import { type AuditExportSql, createAuditExporter } from "@getstrata/core/audit/
 import { createDatabaseBindings } from "@getstrata/core/database/bindings";
 import { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
 import { createApplication } from "@getstrata/core/runtime/application";
-import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/security/safeUrl";
+import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/testing";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 // These tests exercise callbacks directly, not scheduler admission/ownership.

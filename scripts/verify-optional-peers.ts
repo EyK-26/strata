@@ -10,6 +10,7 @@ const errors: string[] = [];
 const packageJson = JSON.parse(
   await readFile(join(ROOT, "packages/strata-core/package.json"), "utf8"),
 ) as {
+  imports?: Record<string, string | { default: string }>;
   dependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   peerDependenciesMeta?: Record<string, { optional?: boolean }>;
@@ -44,10 +45,17 @@ const mysqlEntry = await readFile(
 );
 const mysqlIsSharedShim = /export \* from ["'][./]*index\.js["']/.test(mysqlEntry);
 if (mysqlIsSharedShim) {
-  if (!indexJs.includes('import("mysql2/promise")')) {
-    errors.push(
-      "shared mysqlConnection shim re-exports the barrel, which must lazy-import mysql2/promise",
-    );
+  const nativeImport = packageJson.imports?.["#strata-mysql-native"];
+  const nativePath = typeof nativeImport === "string" ? nativeImport : nativeImport?.default;
+  const nativeJs = nativePath
+    ? await readFile(join(ROOT, "packages/strata-core", nativePath), "utf8")
+    : indexJs;
+  if (nativePath && !indexJs.includes('"#strata-mysql-native"'))
+    errors.push("Core must use its canonical private MySQL adapter");
+  if (/from\s+["']mysql2/.test(nativeJs))
+    errors.push("Private MySQL adapter has a static mysql2 import");
+  if (!nativeJs.includes('import("mysql2/promise")')) {
+    errors.push("Canonical MySQL adapter must lazy-import mysql2/promise");
   }
 } else {
   if (!mysqlEntry.includes('import("mysql2/promise")')) {

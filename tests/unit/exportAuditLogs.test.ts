@@ -5,7 +5,7 @@ import {
   exportPendingAuditLogs,
   resolveAuditExportConfig,
 } from "@getstrata/core/audit/exportAuditLogs";
-import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/security/safeUrl";
+import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/testing";
 import { SQL } from "bun";
 import { createPersistenceInvocation } from "../../src/bootstrap/persistenceInvocation";
 import { createNativePersistenceApplication } from "../helpers/nativePersistenceApplication";

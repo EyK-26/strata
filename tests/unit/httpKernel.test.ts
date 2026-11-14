@@ -28,10 +28,10 @@ import {
   csrfTokenOptionsFromEnvironment,
   resolveCsrfTokenForRequest,
 } from "@getstrata/core/http/csrfToken";
-import { resetMemoryLoginThrottleForTests } from "@getstrata/core/http/loginThrottleMiddleware";
 import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
 import { temporarySignedUrl } from "@getstrata/core/http/signedUrl";
 import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
+import { resetMemoryLoginThrottleForTests } from "@getstrata/core/testing";
 import { createTracingRuntime } from "@getstrata/core/tracing/tracingMiddleware";
 import { InMemorySpanExporter } from "@opentelemetry/sdk-trace-base";
 import {
@@ -737,4 +737,33 @@ describe("HttpKernel", () => {
     const guestResponse = await handler(new Request("http://example.test/projects/1"));
     expect(guestResponse.status).toBe(401);
   });
+});
+
+test("web error boundaries default to production redaction without HTTP persistence options", async () => {
+  const config = new ConfigStore();
+  config.set("http.features", { viewsEnabled: true });
+  const dependencies = createKernelDependencies(config);
+  dependencies.container = new ServiceContainer();
+  dependencies.container.set(CORE_CONFIG_TOKEN, config);
+  const { CORE_WEB_ERROR_VIEW_TOKEN } = await import("@getstrata/core/view/tokens");
+  dependencies.container.set(
+    CORE_WEB_ERROR_VIEW_TOKEN,
+    async (input) => `<html>fixture error view: ${input.message}</html>`,
+  );
+  const kernel = createHttpKernel(dependencies);
+  const { withMiddleware } = await import("@getstrata/core/http/routeMiddleware");
+  const handler = withMiddleware(...kernel.globalMiddleware("web"))(async () => {
+    throw new Error("private backend credential");
+  });
+  try {
+    const response = await handler(
+      new Request("https://fixture.example/", { headers: { accept: "text/html" } }),
+    );
+    expect(response.status).toBe(500);
+    const body = await response.text();
+    expect(body).toContain("fixture error view");
+    expect(body).not.toContain("private backend credential");
+  } finally {
+    kernel.dispose();
+  }
 });

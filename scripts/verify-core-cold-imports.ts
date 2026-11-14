@@ -75,15 +75,10 @@ for (const name of ['setNodeSamlLoaderForTests','resetMysqlLoaderForTests','rese
  assert.equal(name in root, false, name+' belongs only to the testing surface');
  assert.equal(typeof testing[name], 'function', name+' must be available to tests');
 }
-for (const [subpath,names] of [
- ['database/mysqlConnection',['resetMysqlLoaderForTests']],
- ['http/loginThrottleMiddleware',['resetMemoryLoginThrottleForTests']],
- ['http/memoryThrottleMiddleware',['resetMemoryThrottleForTests']],
- ['security/safeUrl',['resetDnsLookupForTests','setDnsLookupForTests']],
- ['auth/saml/samlServiceProvider',['setNodeSamlLoaderForTests']],
-]) {
- const advanced=await import('@getstrata/core/'+subpath);
- for(const name of names)assert.strictEqual(testing[name],advanced[name],name+' must share canonical test state');
+for (const subpath of ${JSON.stringify(Object.keys(JSON.parse(manifest).exports).filter((name) => name !== "./testing"))}) {
+ const specifier = subpath === '.' ? '@getstrata/core' : '@getstrata/core/'+subpath.slice(2);
+ const normal=await import(specifier);
+ for(const name of Object.keys(normal))assert.equal(name.endsWith('ForTests'),false,specifier+' must not expose '+name);
 }
 const throttle=root.createMemoryThrottleMiddleware({maxAttempts:1,decaySeconds:60});
 const throttleRequest=new Request('https://example.test/');

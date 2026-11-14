@@ -705,3 +705,25 @@ describe("neutral failure boundary", () => {
     expect(issues.some((issue) => issue.rule === "dependency")).toBe(true);
   });
 });
+
+describe("extracted private database module boundaries", () => {
+  test.each([
+    ["src/core/database/rawMysql.ts", 'import {createMysqlPool} from "#strata-mysql-native";'],
+    ["src/core/database/modelQuery.ts", 'import {eagerLoadOnModels} from "./modelRelationLoader";'],
+    [
+      "src/core/database/modelRelationLoader.ts",
+      'import type BaseRepository from "./baseRepository"; import type {AnyRelationQuery} from "./relationQuery";',
+    ],
+  ])("accepts only the declared extraction edges in %s", (file, source) => {
+    expect(inspectModule(file, source)).toEqual([]);
+  });
+  test.each([
+    ["src/core/runtime/application.ts", 'import {createMysqlPool} from "#strata-mysql-native";'],
+    ["src/core/database/modelQuery.ts", 'import {load} from "./unapprovedRelationLoader";'],
+    ["src/core/database/modelRelationLoader.ts", 'import BaseRepository from "./baseRepository";'],
+    ["src/core/database/modelRelationLoader.ts", 'import {ModelQuery} from "./modelQuery";'],
+    ["src/core/database/rawMysql.ts", 'import {testState} from "#strata-test-state";'],
+  ])("rejects undeclared value access and unrelated private aliases in %s", (file, source) => {
+    expect(inspectModule(file, source).some((issue) => issue.rule === "dependency")).toBe(true);
+  });
+});

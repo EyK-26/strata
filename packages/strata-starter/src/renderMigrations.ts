@@ -10,7 +10,7 @@ function ensureImport(plan: StarterFeaturePlan): string {
 
 function ensureCall(plan: StarterFeaturePlan, provision = true): string {
   return plan.decisions.ensureDatabase
-    ? `  await ensureAppDatabase({ provision: ${provision} });\n`
+    ? `  await ensureAppDatabase({ provision: ${provision}, environment });\n`
     : "";
 }
 
@@ -194,14 +194,14 @@ function renderMigrationRuntimeTs(_plan: StarterFeaturePlan): string {
 import { loadMigrationsFromDirectory } from "@getstrata/core/database/migrations";
 import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
 import { withMigrationDatabase as runMigrationDatabase } from "@getstrata/bootstrap/databaseCommands";
-import { databaseOptions } from "../bootstrap/database.ts";
+import { databaseOptions, databaseEnvironment } from "../bootstrap/database.ts";
 
 export function loadStarterMigrations() {
   return loadMigrationsFromDirectory(join(import.meta.dir, "migrations"));
 }
 
-export function withMigrationDatabase<T>(operation: (db: MigrationDatabase) => Promise<T>, controls: { grantRuntimePrivileges?: boolean } = {}): Promise<T> {
-  const environment = Object.freeze({ ...process.env });
+export function withMigrationDatabase<T>(operation: (db: MigrationDatabase) => Promise<T>, controls: { grantRuntimePrivileges?: boolean; environment?: Readonly<Record<string, string | undefined>> } = {}): Promise<T> {
+  const environment = databaseEnvironment(controls.environment ?? process.env);
   return runMigrationDatabase(databaseOptions(environment), operation, { ...controls, environment });
 }
 `;
@@ -240,14 +240,15 @@ import type { DatabaseSession, TransactionSession } from "@getstrata/core/databa
 import { createPersistenceInvocation } from "@getstrata/bootstrap/persistenceInvocation";
 import { migrateDatabase } from "@getstrata/core/database/migrations";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
-import { databaseOptions } from "../bootstrap/database.ts";
+import { databaseOptions, databaseEnvironment } from "../bootstrap/database.ts";
 import { Note, NoteRepository } from "../models/Note.ts";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 /** An explicit development-only command owns its own canonical Application. */
-export async function seed() {
-  if (isProductionEnv()) throw new Error("Demo seeding is disabled in production and staging.");
-${ensureCall(plan)}  const connection = databaseOptions();
+export async function seed(input: Readonly<Record<string, string | undefined>> = process.env) {
+  const environment = databaseEnvironment(input);
+  if (isProductionEnv(environment)) throw new Error("Demo seeding is disabled in production and staging.");
+${ensureCall(plan)}  const connection = databaseOptions(environment);
   const application = createApplication({providers:[],services:createDatabaseBindings({default:"main",connections:{main:connection},repositories:[NoteRepository${usersOn ? ",UserRepository" : ""}],models:[Note${usersOn ? ",User" : ""}]})});
   await application.start();
   try {
@@ -264,10 +265,11 @@ ${ensureCall(plan)}  const connection = databaseOptions();
   }
 }
 
-export async function migrate() {
+export async function migrate(input: Readonly<Record<string, string | undefined>> = process.env) {
+  const environment = databaseEnvironment(input);
 ${ensureCall(plan)}  await withMigrationDatabase(async (db) => {
     await migrateDatabase(db, await loadStarterMigrations());
-  });
+  }, { environment });
 }
 
 if (import.meta.main) {
@@ -301,12 +303,14 @@ function renderFreshTs(plan: StarterFeaturePlan): string {
   return `${ensureImport(plan)}import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { freshDatabase } from "@getstrata/core/database/migrations";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
+import { databaseEnvironment } from "../bootstrap/database.ts";
 
-export async function fresh() {
-  if (isProductionEnv()) throw new Error("migrate:fresh is only available in development/test environments.");
+export async function fresh(input: Readonly<Record<string, string | undefined>> = process.env) {
+  const environment = databaseEnvironment(input);
+  if (isProductionEnv(environment)) throw new Error("migrate:fresh is only available in development/test environments.");
 ${ensureCall(plan)}  await withMigrationDatabase(async (db) => {
-    await freshDatabase(db, await loadStarterMigrations(), { destructive: true });
-  });
+    await freshDatabase(db, await loadStarterMigrations(), { destructive: true, environment });
+  }, { environment });
 }
 
 if (import.meta.main) {
@@ -333,11 +337,13 @@ function renderStatusTs(plan: StarterFeaturePlan): string {
   const layers = plan.layers;
   return `${ensureImport(plan)}import { getMigrationStatus } from "@getstrata/core/database/migrations";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
+import { databaseEnvironment } from "../bootstrap/database.ts";
 
-export async function status() {
+export async function status(input: Readonly<Record<string, string | undefined>> = process.env) {
+  const environment = databaseEnvironment(input);
 ${ensureCall(plan, false)}  const rows = await withMigrationDatabase(async (db) => {
     return getMigrationStatus(db, await loadStarterMigrations());
-  }${layers.database === "postgres" ? ", { grantRuntimePrivileges: false }" : ""});
+  }, { environment${layers.database === "postgres" ? ", grantRuntimePrivileges: false" : ""} });
   console.log("Migrations:");
   for (const row of rows) {
     const batch = row.batch == null ? "" : \` (batch \${row.batch})\`;
@@ -355,15 +361,17 @@ if (import.meta.main) {
 function renderRollbackTs(plan: StarterFeaturePlan): string {
   return `${ensureImport(plan)}import { rollbackDatabase } from "@getstrata/core/database/migrations";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
+import { databaseEnvironment } from "../bootstrap/database.ts";
 
-export async function rollback() {
+export async function rollback(input: Readonly<Record<string, string | undefined>> = process.env) {
+  const environment = databaseEnvironment(input);
 ${ensureCall(plan, false)}  const rolledBack = await withMigrationDatabase(async (db) => {
     return rollbackDatabase(db, await loadStarterMigrations(), {
       onMigration: (name) => {
         console.log(\`rolled back \${name}\`);
       },
     });
-  });
+  }, { environment });
   if (rolledBack === 0) {
     console.log("Nothing to roll back.");
   }

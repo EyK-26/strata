@@ -1,9 +1,0 @@
-node_modules
-.env
-.env.local
-dist
-frontend/dist
-storage/*.sqlite
-storage/*.sqlite-journal
-coverage
-*.tsbuildinfo

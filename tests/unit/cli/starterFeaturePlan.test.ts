@@ -4,7 +4,6 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -23,10 +22,7 @@ import {
   renderAuthModule,
   renderAuthProvider,
 } from "../../../packages/strata-starter/src/renderAuth.ts";
-import {
-  renderCreateAppTs,
-  renderRoutesTs,
-} from "../../../packages/strata-starter/src/renderBootstrap.ts";
+import { renderCreateAppTs } from "../../../packages/strata-starter/src/renderBootstrap.ts";
 import {
   renderEnvExample,
   renderPackageJson,
@@ -95,7 +91,7 @@ describe("starter feature compilation", () => {
     const options = fixture();
     options.targetDir = join(options.targetDir, "nested", "app");
     generateProject(options);
-    expect(existsSync(join(options.targetDir, "strata.features.json"))).toBe(true);
+    expect(existsSync(join(options.targetDir, "strata.layers.json"))).toBe(true);
     expect(() => generateProject(options)).toThrow("Output path already exists");
   });
 
@@ -138,23 +134,19 @@ describe("starter feature compilation", () => {
   });
 
   test.each(["hiroapp-hobby", "hiroapp-team", "hiroapp"] as const)(
-    "renders required artifacts and records complete emitted inventory for %s",
+    "renders compiled artifacts and records selected layers for %s",
     (profile) => {
       const options = fixture();
       options.layers = exampleAppLayers(profile);
       generateProject(options);
-      const manifest = JSON.parse(
-        readFileSync(join(options.targetDir, "strata.features.json"), "utf8"),
-      );
-      for (const artifact of manifest.artifacts)
+      const plan = compileStarterFeatures(options.layers);
+      for (const artifact of plan.artifacts)
         expect(existsSync(join(options.targetDir, artifact))).toBe(true);
-      const actual = (directory: string, prefix = ""): string[] =>
-        readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-          const path = `${prefix}${entry.name}`;
-          return entry.isDirectory() ? actual(join(directory, entry.name), `${path}/`) : [path];
-        });
-      expect(manifest.emittedArtifacts).toEqual(actual(options.targetDir).sort());
-      expect(manifest.decisions.users).toBe(profile !== "hiroapp-hobby");
+      const recorded = JSON.parse(
+        readFileSync(join(options.targetDir, "strata.layers.json"), "utf8"),
+      );
+      expect(recorded.layers).toEqual(plan.layers);
+      expect(plan.decisions.users).toBe(profile !== "hiroapp-hobby");
     },
   );
 });
@@ -191,7 +183,7 @@ describe("compiled decision consumption", () => {
 
   test.each(["token", "jwt"] as const)(
     "%s API account flows receive a dedicated signed URL secret",
-    (auth) => {
+    async (auth) => {
       const layers = { ...defaultLayers(), frontend: "api" as const, auth };
       layers.extras.emailVerification = true;
       layers.extras.scim = true;
@@ -204,9 +196,26 @@ describe("compiled decision consumption", () => {
       expect(plan.decisions.dedicatedSigningSecret).toBe(true);
       expect(env).toContain("SIGNED_URL_SECRET=dev-signed-url-secret-change-me-please-32ch");
       expect(env).not.toContain("\nSESSION_SECRET=");
-      expect(renderAuthProvider(plan)).toContain(
-        'requireConfiguredSecret(["SIGNED_URL_SECRET","SESSION_SECRET","OAUTH_STATE_SECRET"]',
+      expect(renderAuthProvider(plan)).toContain("createAuthRuntimeConfig(options,");
+      const { createAuthRuntimeConfig } = await import("../../../src/bootstrap/auth/runtimeConfig");
+      const features = {
+        users: true,
+        cookie: false,
+        token: auth === "token",
+        jwt: auth === "jwt",
+        signedUrls: true,
+      };
+      const options = {
+        environment: { APP_ENV: "production", API_TOKEN_DEFAULT_EXPIRY_DAYS: "30" },
+        production: true,
+        jwtSecret: "production-jwt-secret",
+      };
+      expect(() => createAuthRuntimeConfig(options, features)).toThrow("SIGNED_URL_SECRET");
+      const configured = createAuthRuntimeConfig(
+        { ...options, signatureSecret: "configured-dedicated-signing-secret" },
+        features,
       );
+      expect(configured.signatureSecret).toBe("configured-dedicated-signing-secret");
     },
   );
 
@@ -243,39 +252,67 @@ describe("compiled decision consumption", () => {
 });
 
 test.each([false, true])(
-  "route assembly passes the resolved module list to every enabled builder (views=%s)",
-  (views) => {
-    const source = renderRoutesTs()
-      .replace(/^import .*;\n/gm, "")
-      .replace("export function", "function");
-    const javascript = new Bun.Transpiler({ loader: "ts" }).transformSync(source);
-    const modules = [{ name: "owned-api-and-browser-module" }];
-    const seen: unknown[] = [];
-    const build = new Function(
-      "buildModuleRoutes",
-      "buildWebModuleRoutes",
-      "composeRouteMaps",
-      "isViewsEnabled",
-      `${javascript}; return buildRoutes;`,
-    )(
-      (_dependencies: unknown, options: { modules: unknown }) => {
-        seen.push(options.modules);
-        return { "/api/owned": true };
-      },
-      (_dependencies: unknown, options: { modules: unknown }) => {
-        seen.push(options.modules);
-        return { "/owned": true };
-      },
-      (...maps: object[]) => Object.assign({}, ...maps),
-      () => views,
+  "packaged route assembly includes enabled module builders (views=%s)",
+  async (views) => {
+    const options = fixture();
+    options.layers.frontend = views ? "server-htmx" : "api";
+    generateProject(options);
+    const moduleDirectory = join(options.targetDir, "src/modules/owned");
+    mkdirSync(moduleDirectory, { recursive: true });
+    writeFileSync(
+      join(moduleDirectory, "index.ts"),
+      `export const seen:string[]=[];
+export default {name:"owned",routes(){seen.push("api");return {"/api/owned":{GET:()=>new Response("api")}};},webRoutes(){seen.push("web");return {"/owned":{GET:()=>new Response("web")}};}};`,
     );
-    const routes = build({}, modules);
-    expect(routes["/api/owned"]).toBe(true);
-    expect(routes["/owned"]).toBe(views ? true : undefined);
-    expect(seen).toHaveLength(views ? 2 : 1);
-    for (const observed of seen) expect(observed).toBe(modules);
-    expect(renderCreateAppTs(compileStarterFeatures(defaultLayers()))).toContain(
-      "buildRoutes(dependencies, modules)",
+    const repository = join(import.meta.dir, "../../..");
+    const config = JSON.parse(readFileSync(join(repository, "tsconfig.json"), "utf8"));
+    for (const [alias, paths] of Object.entries(config.compilerOptions.paths))
+      config.compilerOptions.paths[alias] = (paths as string[]).map((path) =>
+        join(repository, path),
+      );
+    config.compilerOptions.paths["@getstrata/core/database/migrations"] = [
+      join(repository, "src/core/database/migrations/runner.ts"),
+    ];
+    writeFileSync(join(options.targetDir, "source-tsconfig.json"), JSON.stringify(config));
+    writeFileSync(
+      join(options.targetDir, "probe.ts"),
+      `import {strict as assert} from "node:assert";
+import {createApp} from "./src/bootstrap/createApp.ts";
+import {seen} from "./src/modules/owned/index.ts";
+const app=await createApp({migrate:false});
+try { assert.ok(app.routes["/api/owned"]);assert.equal(Boolean(app.routes["/owned"]),${views});assert.deepEqual([...seen].sort(),${JSON.stringify(views ? ["api", "web"] : ["api"])}); }
+finally {await app.context.dispose();}
+console.log("owned-route-assembly-pass");`,
     );
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        "--tsconfig-override",
+        join(options.targetDir, "source-tsconfig.json"),
+        "probe.ts",
+      ],
+      {
+        cwd: options.targetDir,
+        env: {
+          ...process.env,
+          APP_ENV: "local",
+          FRONTEND_MODE: views ? "server-htmx" : "api",
+          DATABASE_URL: "sqlite::memory:",
+          APP_DATABASE_URL: "sqlite::memory:",
+          CACHE_DRIVER: "array",
+          QUEUE_DRIVER: "sync",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [exit, stdout, stderr] = await Promise.all([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ]);
+    expect({ exit, stderr }).toEqual({ exit: 0, stderr: "" });
+    expect(stdout).toContain("owned-route-assembly-pass");
+    expect(renderCreateAppTs(compileStarterFeatures(options.layers))).toContain("defineApp({");
   },
 );

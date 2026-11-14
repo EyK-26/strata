@@ -66,3 +66,7 @@ Generated apps do not include an admin dashboard, and the registry is optional.
 - [Production](https://github.com/EyK-26/strata/blob/main/docs/PRODUCTION.md)
 
 Contributing to the framework itself: [CONTRIBUTING.md](https://github.com/EyK-26/strata/blob/main/CONTRIBUTING.md).
+
+Test fixtures import loader, DNS and throttle controls from `@getstrata/core/testing`.
+These controls share the package's private runtime state and are absent from the root
+and every production subpath. Restore changed controls after each test.

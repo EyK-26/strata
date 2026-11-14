@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { createSign, generateKeyPairSync } from "node:crypto";
 import { createOidcClient, oidcAccessTokenHash } from "@getstrata/core/auth/oauth/oidcIdToken";
-import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/security/safeUrl";
+import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/testing";
 
 import { isProductionEnv } from "../../src/core/runtime/appEnv";
 

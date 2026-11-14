@@ -53,9 +53,17 @@ import { flashSessionOptionsFromEnvironment } from "@getstrata/core/http/flashSe
 import type { QueueServices } from "@getstrata/core/queue/createAppQueue";
 import { failedJobRepository } from "@getstrata/core/queue/failedJobRepository";
 import { type JobRegistry, QUEUE_JOB_REGISTRY_TOKEN } from "@getstrata/core/queue/jobRegistry";
+import { resolveQueueConfig, resolveQueueRuntimeConfig } from "@getstrata/core/queue/queueConfig";
 import { createQueueWorkerTransport } from "@getstrata/core/queue/queueWorkerTransport";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { defineProvider } from "@getstrata/core/runtime/application";
+import {
+  FRONTEND_MODES,
+  type FrontendMode,
+  isSpaMode,
+  isViewsMode,
+  validateSpaPrefix,
+} from "@getstrata/core/runtime/frontendMode";
 import { resolveScimTenantFromToken } from "@getstrata/core/security/scimTenantTokens";
 import { resolveTenant } from "@getstrata/core/tenant/resolveTenant";
 import type { WebErrorView } from "@getstrata/core/view";
@@ -72,6 +80,8 @@ import {
   createApplicationProviders,
   createApplicationServices,
 } from "./application/services";
+import { buildModuleRoutes } from "./buildModuleRoutes";
+import { buildWebModuleRoutes } from "./buildWebModuleRoutes";
 import type { AppModule } from "./contracts";
 import type { HttpPersistenceOptions } from "./persistenceContracts";
 import type { MetadataAuthOptions } from "./providers/auth";
@@ -101,7 +111,7 @@ export interface BootstrappedApp {
   context: InitializedAppContext;
   routes: AppRouteMap;
   config: ReturnType<typeof loadApplicationConfig>;
-  queue: import("@getstrata/core/queue").Queue;
+  queue: import("@getstrata/core/queue").QueueDispatcher;
   queueServices: import("@getstrata/core/queue/createAppQueue").QueueServices;
   registry: JobRegistry;
   server?: Server<unknown>;
@@ -136,11 +146,15 @@ export interface AppDefinition<A extends ApplicationAuthServices> {
   };
   readonly models: NonNullable<DatabaseDefinition["models"]>;
   readonly repositories: NonNullable<DatabaseDefinition["repositories"]>;
-  readonly migrate: () => Promise<void>;
-  readonly ensureDatabase?: (options: { provision: boolean }) => Promise<unknown>;
-  readonly routes: (
+  readonly migrate: (environment?: Readonly<Record<string, string | undefined>>) => Promise<void>;
+  readonly ensureDatabase?: (options: {
+    provision: boolean;
+    environment?: Readonly<Record<string, string | undefined>>;
+  }) => Promise<unknown>;
+  readonly routes?: (
     dependencies: import("./contracts").AppDependencies,
     modules: readonly AppModule[],
+    options: { frontend: FrontendMode },
   ) => AppRouteMap;
   readonly outbox: {
     readonly listeners: readonly DurableListener[];
@@ -163,7 +177,7 @@ export function defineApp<A extends ApplicationAuthServices>(input: AppDefinitio
   const definition = Object.freeze({
     ...input,
     root: resolve(input.root),
-    auth:Object.freeze({...input.auth}),
+    auth: Object.freeze({ ...input.auth }),
     models: Object.freeze([...input.models]),
     repositories: Object.freeze([...input.repositories]),
     outbox: Object.freeze({
@@ -177,7 +191,7 @@ export function defineApp<A extends ApplicationAuthServices>(input: AppDefinitio
   const modelDefinitions = definition.models;
   const durableListeners = definition.outbox.listeners;
   const migrate = definition.migrate;
-  const buildRoutes = definition.routes;
+  const buildRoutes = definition.routes ?? buildApplicationRoutes;
   const databaseOptions = definition.database;
   function bootstrapApp(
     options: BootstrapOptions & { mode: "outbox-worker" },
@@ -185,30 +199,34 @@ export function defineApp<A extends ApplicationAuthServices>(input: AppDefinitio
   function bootstrapApp(options?: BootstrapOptions): Promise<BootstrappedApp>;
   async function bootstrapApp(options: BootstrapOptions = {}): Promise<BootstrappedApp> {
     const defaults = { ...definition.defaults };
-    if (isProductionEnv(process.env)) {
+    const supplied = { ...process.env };
+    if (supplied.APP_DATABASE_URL || supplied.DATABASE_URL) delete defaults.MIGRATION_DATABASE_URL;
+    if (isProductionEnv(supplied)) {
       delete defaults.DATABASE_URL;
       delete defaults.MIGRATION_DATABASE_URL;
     }
-    const env = Object.freeze({ ...defaults, ...process.env });
+    const frontend = supplied.FRONTEND_MODE ?? defaults.FRONTEND_MODE ?? definition.frontend;
+    if (!FRONTEND_MODES.includes(frontend as FrontendMode))
+      throw new TypeError("Unsupported FRONTEND_MODE.");
+    if (supplied.TENANCY_DRIVER && supplied.TENANCY_DRIVER !== definition.tenancy)
+      throw new TypeError(
+        "TENANCY_DRIVER must match the application's schema tenancy configuration.",
+      );
+    const env: Readonly<Record<string, string | undefined>> = Object.freeze({
+      ...defaults,
+      ...supplied,
+      FRONTEND_MODE: frontend,
+      TENANCY_DRIVER: definition.tenancy,
+    });
+    const queueRuntime = resolveQueueRuntimeConfig(env);
+    const retryPolicy = resolveQueueConfig(env);
     const production = isProductionEnv(env);
     const runMigrate = options.migrate ?? !production;
     if (production) assertProductionSecrets(env);
-    await definition.ensureDatabase?.({ provision: !production && runMigrate });
-    // Schema commands finish and close their own separate resources before runtime starts.
-    if (runMigrate) await migrate();
     const config = loadApplicationConfig(env);
     const dbOptions = databaseOptions(env);
-    const modules = await ensureModulesLoaded({
-      modulesDir: resolve(definition.root, definition.modulesDirectory ?? "src/modules"),
-    });
-    const listenerDeclarations = await discoverListeners({
-      directory: join(definition.root, "src/listeners"),
-    });
-    const cacheEffects = createModelCacheInvalidationEffects(repositoryDefinitions, modules, {
-      cache: APPLICATION_CACHE,
-      queue: APPLICATION_QUEUE,
-    });
-    const catalog = [cacheEffects, ...listenerDeclarations];
+    const mode = options.mode ?? "command";
+    if (mode === "worker" && !env.REDIS_URL) throw new Error("queue:work requires REDIS_URL.");
     const secret = env.SESSION_SECRET?.trim() ?? "";
     const abilities = Object.freeze({
       admin: ADMIN_ABILITIES,
@@ -227,6 +245,20 @@ export function defineApp<A extends ApplicationAuthServices>(input: AppDefinitio
       abilities,
       roleAbilities: (role) => [...(role === "admin" ? abilities.admin : abilities.member)],
     });
+    await definition.ensureDatabase?.({ provision: !production && runMigrate, environment: env });
+    // Schema commands finish and close their own separate resources before runtime starts.
+    if (runMigrate) await migrate(env);
+    const modules = await ensureModulesLoaded({
+      modulesDir: resolve(definition.root, definition.modulesDirectory ?? "src/modules"),
+    });
+    const listenerDeclarations = await discoverListeners({
+      directory: join(definition.root, "src/listeners"),
+    });
+    const cacheEffects = createModelCacheInvalidationEffects(repositoryDefinitions, modules, {
+      cache: APPLICATION_CACHE,
+      queue: APPLICATION_QUEUE,
+    });
+    const catalog = [cacheEffects, ...listenerDeclarations];
     let invoke: PersistenceInvocation | undefined;
     let auditExport: (() => Promise<number>) | undefined;
     const run: PersistenceInvocation = (envelope, work) => {
@@ -243,12 +275,8 @@ export function defineApp<A extends ApplicationAuthServices>(input: AppDefinitio
       if (!readyQueueServices) throw new Error("Queue services are not assembled.");
       return readyQueueServices;
     };
-    const queueServices: QueueServices = {
+    const queueServices: Pick<QueueServices, "recordFailure" | "runAttempt"> = {
       recordFailure: (...args) => selectedQueueServices().recordFailure(...args),
-      listRecent: (...args) => selectedQueueServices().listRecent(...args),
-      retry: (...args) => selectedQueueServices().retry(...args),
-      delete: (...args) => selectedQueueServices().delete(...args),
-      flush: () => selectedQueueServices().flush(),
       runAttempt: (...args) => selectedQueueServices().runAttempt(...args),
     };
     const outbox = createSqlOutboxBindings({
@@ -258,14 +286,14 @@ export function defineApp<A extends ApplicationAuthServices>(input: AppDefinitio
       listeners: durableListeners,
     });
     let publisher: BootstrappedApp["outbox"] | undefined;
-    const mode = options.mode ?? "command";
-    if (mode === "worker" && !env.REDIS_URL) throw new Error("queue:work requires REDIS_URL.");
     const worker =
       mode === "worker"
         ? createQueueWorkerTransport({
             redisUrl: env.REDIS_URL!,
             queueServices,
             registry: selectedRegistry,
+            runtime: queueRuntime,
+            retryPolicy,
           })
         : undefined;
     const outboxWorker =
@@ -336,7 +364,7 @@ export function defineApp<A extends ApplicationAuthServices>(input: AppDefinitio
                 }),
               ).map(([path, handler]) => [path, kernel!.wrapPublicDocument(handler)]),
             ),
-            buildRoutes(dependencies, modules),
+            buildRoutes(dependencies, modules, { frontend: frontend as FrontendMode }),
             ...(definition.metrics
               ? [
                   Object.fromEntries(
@@ -351,6 +379,9 @@ export function defineApp<A extends ApplicationAuthServices>(input: AppDefinitio
               : []),
           ),
           {
+            enabled: isSpaMode(frontend as FrontendMode),
+            viewsEnabled: isViewsMode(frontend as FrontendMode),
+            prefix: validateSpaPrefix(env.SPA_PREFIX),
             distDirectory: join(definition.root, "frontend/dist"),
             wrap: (handler) => kernel!.wrapPublicDocument(handler),
           },
@@ -428,6 +459,7 @@ export function defineApp<A extends ApplicationAuthServices>(input: AppDefinitio
             scope.resolve(APPLICATION_BILLING),
             scope.resolve(APPLICATION_STORAGE),
             selectedRegistry(),
+            config,
           ),
           ...modules.flatMap((module) => module.providers ?? []),
           ...(definition.outbox.token
@@ -462,7 +494,7 @@ export function defineApp<A extends ApplicationAuthServices>(input: AppDefinitio
             services: [
               ...(options.services ?? []),
               ...outbox.services,
-              ...createApplicationServices(env, run),
+              ...createApplicationServices(env, run, definition.root),
               ...createDatabaseReadinessBindings("main", env),
               ...catalog.flatMap((declaration) => declaration.services),
               ...createDatabaseBindings({
@@ -494,8 +526,7 @@ export function defineApp<A extends ApplicationAuthServices>(input: AppDefinitio
                   async setup(
                     scope: import("@getstrata/core/contracts/application").ProviderScope,
                   ) {
-                    if (!routes || !kernel)
-                      throw new Error("Route assembly did not finish before transport setup.");
+                    // Provider boot assembles routes before any transport setup.
                     server = await scope.acquire(
                       webServerResource({
                         env,
@@ -506,7 +537,7 @@ export function defineApp<A extends ApplicationAuthServices>(input: AppDefinitio
                           ...options.server?.native,
                         },
                         cors: resolveHttpResponsePolicy(env).cors,
-                        routes,
+                        routes: routes!,
                         errorView,
                         publicDir: join(definition.root, "public"),
                         enter: (request, handler) => kernel!.run(request, handler),
@@ -580,8 +611,19 @@ export async function serveApplication(
   return app;
 }
 
+export { CORE_QUEUE_TOKEN as APPLICATION_QUEUE } from "@getstrata/core/contracts/serviceTokens";
 export {
   APPLICATION_BILLING,
-  APPLICATION_QUEUE,
   APPLICATION_WEBHOOKS,
 } from "./application/services";
+
+function buildApplicationRoutes(
+  dependencies: import("./contracts").AppDependencies,
+  modules: readonly AppModule[],
+  options: { frontend: FrontendMode },
+): AppRouteMap {
+  return composeRouteMaps(
+    ...(isViewsMode(options.frontend) ? [buildWebModuleRoutes(dependencies, { modules })] : []),
+    buildModuleRoutes(dependencies, { modules }),
+  );
+}

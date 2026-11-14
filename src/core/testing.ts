@@ -1,5 +1,5 @@
 /** Test controls share the same package-private state as every production entry.
- * Advanced module subpaths retain explicitly named hooks for compatibility.
+ * Production imports expose no test controls; this entry shares their private state.
  */
 export { resetMysqlLoaderForTests } from "#strata-mysql-native";
 export {

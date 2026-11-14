@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { BadRequestError } from "@getstrata/core/errors/http";
 import { DEFAULT_FETCH_TIMEOUT_MS, safeFetch } from "@getstrata/core/security/safeFetch";
-import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/security/safeUrl";
+import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/testing";
 
 const originalFetch = globalThis.fetch;
 

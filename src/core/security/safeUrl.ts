@@ -1,6 +1,6 @@
 import { lookup as dnsLookupImpl } from "node:dns/promises";
 import { BadRequestError } from "@getstrata/core/errors/http";
-import { resetDnsLookupForTests, setDnsLookupForTests, testState } from "#strata-test-state";
+import { testState } from "#strata-test-state";
 import { isProductionEnv } from "../runtime/appEnv";
 
 type DnsLookupResult = { address: string; family: number };
@@ -349,7 +349,5 @@ export {
   isBlockedHostname,
   isBlockedIpAddress,
   pinUrlToAddress,
-  resetDnsLookupForTests,
   resolveSafeOutboundTarget,
-  setDnsLookupForTests,
 };

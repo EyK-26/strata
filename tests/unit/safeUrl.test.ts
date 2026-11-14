@@ -4,10 +4,9 @@ import {
   assertSafeOutboundUrlResolved,
   isBlockedHostname,
   pinUrlToAddress,
-  resetDnsLookupForTests,
   resolveSafeOutboundTarget,
-  setDnsLookupForTests,
 } from "@getstrata/core/security/safeUrl";
+import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/testing";
 import { restoreEnvVar } from "../helpers/restoreEnv";
 
 afterEach(() => {

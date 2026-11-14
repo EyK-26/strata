@@ -243,10 +243,34 @@ retain the documented deferred-event boundary.
 
 Use `defineMigration({ name, up(schema, db), down(schema, db) })` for ordinary file
 migrations. Each callback receives the schema builder and explicit database handle;
-the helper executes the schema plan automatically. Use `db` for deliberate data
+the helper executes the schema plan after the callback resolves. Raw `db` calls
+run immediately, so execute data changes that need newly created schema in a
+later migration or use explicit `Schema.run` before those changes. The helper
+does not introduce a transaction or roll back earlier raw effects on failure.
+Use `db` for deliberate data
 changes or engine-specific SQL. Advanced `Schema.run` and raw migration definitions
 remain supported. Keep migration names and applied history stable when adopting
 this helper; upgrading does not rewrite deployed schemas.
+
+```ts
+import { defineMigration } from "@getstrata/core/database/migrations";
+
+export default defineMigration({
+  name: "0010_products",
+  up(schema) {
+    schema.create("products", table => {
+      table.id();
+      table.string("title");
+    });
+  },
+  down(schema) {
+    schema.drop("products");
+  },
+});
+```
+
+The migration declaration SQLite unit contract exercises this schema shape,
+forward and reverse execution, explicit raw access and failure boundaries.
 
 ### Factories
 
@@ -541,13 +565,17 @@ capability. Await `create()` before leaving the scope; saving a factory does not
 extend its session lifetime or select another owner after the scope expires.
 See [application-owned SQL sessions](DATABASE-SESSIONS.md).
 
-`bun run cli make:factory widget` emits a `WidgetFactory` definition and
-`createWidgetFactory(dependencies)` helper. Its dependencies require
-`definition: () => WidgetRecord`, returning every required domain field, and
-optionally accept `persist: FactoryPersist<WidgetRecord>`. Supply your own
-complete definition for pure `make()` calls. `create()` without persistence
-rejects explicitly. The generator does not invent model fields, retain an
-application singleton, or discover a database session.
+`bunx strata make:factory Widget` writes `src/db/factories/WidgetFactory.ts` with
+`createWidgetFactory(definition, persist?)`. Create the model first with
+`make:model` or `make:module`. The factory imports the existing model record,
+preferring `src/models/Widget.ts` over a configured module's record type. Nested
+names such as `Native/Lead` write `src/db/factories/Native/LeadFactory.ts`.
+
+Supply `definition: () => WidgetRecord` with every required domain field and,
+optionally, `persist: FactoryPersist<WidgetRecord>` from the current invocation.
+`make()` needs no persistence; `create()` without persistence rejects explicitly.
+Factories stay outside module discovery. The generator does not invent model
+fields, retain an application singleton, or discover a database session.
 
 For mutable generation state, use the stateful overload:
 

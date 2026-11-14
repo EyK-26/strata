@@ -254,9 +254,10 @@ async function freshDatabase(
     advisoryLock?: boolean;
     onMigration?: (name: string) => void;
     destructive?: boolean;
+    environment?: Readonly<Record<string, string | undefined>>;
   } = {},
 ): Promise<void> {
-  if (options.destructive && isProductionEnv()) {
+  if (options.destructive && isProductionEnv(options.environment ?? process.env)) {
     throw new Error(
       "Destructive migration reset is only available in development/test environments.",
     );
@@ -293,6 +294,7 @@ async function freshDatabase(
 }
 
 export { withMigrationLock } from "./advisoryLock.ts";
+export { defineMigration, type MigrationDeclaration } from "./declaration";
 export { guardMigrationRollback, type MigrationRollbackGuard } from "./rollbackGuard.ts";
 export {
   ensureMigrationsTable,
@@ -304,5 +306,3 @@ export {
   rollbackDatabase,
   runPendingMigrations,
 };
-
-export { defineMigration, type MigrationDeclaration } from "./declaration";

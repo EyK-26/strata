@@ -304,15 +304,13 @@ export default ${moduleName}Controller;
 import type { BusinessRequestPorts } from "@getstrata/bootstrap/contracts";
 import type { RouteRequest } from "@getstrata/core/http/route";
 import type { ${moduleName}IdParams } from "./requests";
-import type { AppDependencies, CachedJson } from "@getstrata/core/contracts/di";
+import type { CachedJson } from "@getstrata/core/contracts/di";
 ${withWeb ? 'import { apiPrefix } from "@getstrata/core/runtime/appKeyPrefix";\n' : ""}import ${moduleName}Controller from "./controller";
 
 function create${moduleName}Routes(
-  dependencies: AppDependencies,
   cachedJson: CachedJson,
   kernel: HttpKernel,
 ) {
-  void dependencies;
   const controller = (ports: BusinessRequestPorts) => new ${moduleName}Controller(ports.database, cachedJson, kernel.routeModelBindingPorts(ports.auth));
 ${withWeb ? `  const apiBase = \`\${apiPrefix()}/${pluralSlug}\`;\n` : ""}
 
@@ -360,8 +358,8 @@ const ${moduleVariable}: AppModule = {
   tableName: ${moduleIdentifier}Table.name,
   cacheTags: ["${pluralSlug}"],
   policies: { "${moduleSlug}": new ${moduleName}Policy() },
-  routes({ dependencies, cachedJson, kernel }) {
-    return create${moduleName}Routes(dependencies, cachedJson, kernel);
+  routes({ cachedJson, kernel }) {
+    return create${moduleName}Routes(cachedJson, kernel);
   },${
     withWeb
       ? `
@@ -410,26 +408,15 @@ export type { ${moduleName}Record } from "./types";
     webFiles.set(
       "webController.ts",
       `import type { BusinessRequestPorts } from "@getstrata/bootstrap/contracts";
-import type { AppDependencies } from "@getstrata/core/contracts/di";
-import { resolveService } from "@getstrata/core/contracts/di";
-import { CORE_VIEW_RENDERER_TOKEN, type NamespacedViewRenderer } from "@getstrata/core/view";
+import type { NamespacedViewRenderer } from "@getstrata/core/view";
 import { ${moduleIdentifier}Repository } from "./model";
 import { parse${moduleName}ListQuery } from "./requests";
-import { NotFoundError } from "@getstrata/core/errors/http";
 
 class ${moduleName}WebController {
-  constructor(private readonly dependencies: AppDependencies, private readonly database: BusinessRequestPorts["database"]) {}
+  constructor(private readonly views: NamespacedViewRenderer, private readonly database: BusinessRequestPorts["database"]) {}
 
   private get records() {
     return this.database.repository(${moduleIdentifier}Repository);
-  }
-
-  private find(id: number) {
-    return this.records.findByIdOrThrow(id, () => new NotFoundError("${moduleName} not found."));
-  }
-
-  private get views(): NamespacedViewRenderer {
-    return resolveService(this.dependencies, CORE_VIEW_RENDERER_TOKEN).namespace("${pluralSlug}");
   }
 
   readonly index = (async (request?: Request) => {
@@ -451,15 +438,17 @@ export default ${moduleName}WebController;
 
     webFiles.set(
       "webRoutes.ts",
-      `import type { AppDependencies } from "@getstrata/core/contracts/di";
+      `import { resolveService, type AppDependencies } from "@getstrata/core/contracts/di";
+import { CORE_VIEW_RENDERER_TOKEN } from "@getstrata/core/view";
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import type { BusinessRequestPorts } from "@getstrata/bootstrap/contracts";
 import ${moduleName}WebController from "./webController";
 
 function create${moduleName}WebRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
+  const views = resolveService(dependencies, CORE_VIEW_RENDERER_TOKEN).namespace("${pluralSlug}");
   return {
     "/${pluralSlug}": {
-      GET: kernel.wrapWebPublicRead((request: Request, ports: BusinessRequestPorts) => new ${moduleName}WebController(dependencies, ports.database).index(request)),
+      GET: kernel.wrapWebPublicRead((request: Request, ports: BusinessRequestPorts) => new ${moduleName}WebController(views, ports.database).index(request)),
     },
   };
 }

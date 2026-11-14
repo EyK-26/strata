@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { type AuditExportSql, exportPendingAuditLogs } from "@getstrata/core/audit/exportAuditLogs";
 import type { Application } from "@getstrata/core/contracts/application";
 import type { PersistenceInvocation } from "@getstrata/core/contracts/persistence";
-import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/security/safeUrl";
+import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/testing";
 
 const application: {
   bootstrapApp(options: {

@@ -99,3 +99,41 @@ describe("MySQL connection-pinned async transactions", () => {
     await connection.close();
   });
 });
+
+test("MySQL shutdown joins an admitted transaction and refuses retained connection reuse", async () => {
+  const { connection, pool } = fixture();
+  let release: () => void = () => {};
+  let enter: () => void = () => {};
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const entered = new Promise<void>((resolve) => {
+    enter = resolve;
+  });
+  const transaction = connection.begin(async (tx) => {
+    enter();
+    await blocked;
+    return tx.unsafe("SELECT 1");
+  });
+  await entered;
+  const closing = connection.close();
+  expect(connection.close()).toBe(closing);
+  expect(pool.end).not.toHaveBeenCalled();
+  await expect(connection.unsafe("SELECT 1")).rejects.toThrow("closed");
+  await expect(connection.begin(async () => {})).rejects.toThrow("closed");
+  release();
+  await transaction;
+  await closing;
+  await connection.close();
+  expect(pool.end).toHaveBeenCalledTimes(1);
+});
+
+test("MySQL rejects shutdown from its own active transaction instead of waiting on itself", async () => {
+  const { connection, pool } = fixture();
+  await connection.begin(async () => {
+    await expect(connection.close()).rejects.toThrow("inside its active transaction");
+    expect(pool.end).not.toHaveBeenCalled();
+  });
+  await connection.close();
+  expect(pool.end).toHaveBeenCalledTimes(1);
+});

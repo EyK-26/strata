@@ -1,4 +1,4 @@
-import { resetMemoryThrottleForTests, testState } from "#strata-test-state";
+import { testState } from "#strata-test-state";
 import {
   BoundedThrottleStore,
   type MemoryThrottleStats,
@@ -65,4 +65,4 @@ export type {
   MemoryThrottleStats,
   MemoryThrottleStorageOptions,
 };
-export { createMemoryThrottleMiddleware, resetMemoryThrottleForTests };
+export { createMemoryThrottleMiddleware };

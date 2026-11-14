@@ -143,7 +143,7 @@ try {
   await Bun.write(
     outboundProbe,
     `import assert from 'node:assert/strict';
-import {setDnsLookupForTests,resetDnsLookupForTests} from '@getstrata/core/security/safeUrl';
+import { setDnsLookupForTests, resetDnsLookupForTests } from "@getstrata/core/testing";
 import {safeFetch} from '@getstrata/core/security/safeFetch';
 import {GitHubOAuthProvider} from '@getstrata/core/auth/oauth/providers';
 const original=globalThis.fetch;

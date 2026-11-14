@@ -1,4 +1,4 @@
-import { setNodeSamlLoaderForTests, testState } from "#strata-test-state";
+import { testState } from "#strata-test-state";
 import { missingOptionalPeer } from "../../runtime/optionalPeer";
 import { timingSafeCompareString } from "../../security/timingSafeCompare";
 import type { OAuthProfile } from "../oauth/types";
@@ -298,5 +298,4 @@ export {
   REPLAY_RETENTION_MS,
   readSamlEnvOptions,
   SamlServiceProvider,
-  setNodeSamlLoaderForTests,
 };

@@ -124,6 +124,7 @@ for (const database of ["sqlite", "postgres", "mysql"] as const) {
     const registerPath = join(fixture.app, "src/models/register.ts");
     const registerBefore = await readFile(registerPath, "utf8");
     await run([cli, "make:model", "Native/Lead", "--table=native_records", "--key-type=string"]);
+    await run([cli, "make:factory", "Native/Lead"]);
     await run([cli, "make:model", "Counter"]);
     assert.deepEqual(await readdir(migrations), initialMigrations);
     assert.equal(await readFile(registerPath, "utf8"), registerBefore);
@@ -160,6 +161,49 @@ for (const database of ["sqlite", "postgres", "mysql"] as const) {
       editedContact = editedContact.replace(before, after);
     }
     await writeFile(contactPath, editedContact);
+    // Factories consume the edited model record; module generation also honors an app-owned path.
+    const configPath = join(fixture.app, "strata.config.ts");
+    const configBefore = await readFile(configPath, "utf8");
+    assert.equal(configBefore.split('modulesDirectory: "./src/modules"').length, 2);
+    await writeFile(
+      configPath,
+      configBefore.replace(
+        'modulesDirectory: "./src/modules"',
+        'modulesDirectory: "./src/features"',
+      ),
+    );
+    try {
+      await run([cli, "make:factory", "Contact"]);
+      const contactFactory = await readFile(
+        join(fixture.app, "src/db/factories/ContactFactory.ts"),
+        "utf8",
+      );
+      assert.match(contactFactory, /models\/Contact\.ts/);
+      await run([cli, "make:model", "Product"]);
+      await run([cli, "make:factory", "Product"]);
+      const productFactoryPath = join(fixture.app, "src/db/factories/ProductFactory.ts");
+      const productFactory = await readFile(productFactoryPath, "utf8");
+      assert.match(productFactory, /models\/Product\.ts/);
+      await run([cli, "make:module", "Product"]);
+      assert.equal(
+        await readFile(productFactoryPath, "utf8"),
+        productFactory,
+        "Module generation preserves the factory made first.",
+      );
+      assert.ok(await Bun.file(join(fixture.app, "src/features/product/model.ts")).exists());
+      const filesBeforeHelp = (await readdir(join(fixture.app, "src"), { recursive: true })).sort();
+      for (const command of ["make:factory", "make:module"]) {
+        assert.match(await run([cli, command, "Unused", "--help"]), /Usage:/);
+        assert.match(await run([cli, command, "../Escape"], 1), /valid relative name/);
+      }
+      assert.deepEqual(
+        (await readdir(join(fixture.app, "src"), { recursive: true })).sort(),
+        filesBeforeHelp,
+        "Help and invalid names create no scaffold files.",
+      );
+    } finally {
+      await writeFile(configPath, configBefore);
+    }
     assert.deepEqual(await readdir(migrations), initialMigrations);
     assert.equal(
       await readFile(registerPath, "utf8"),
@@ -217,8 +261,12 @@ import type {Application} from '@getstrata/core/contracts/application';
 import {PersistenceError} from '@getstrata/core/database/errors';
 import {bootstrapApp} from './src/bootstrap/createApp.ts';
 import {NativeLeadDefinition,NativeLeadRepository} from './src/models/Native/Lead.ts';
+import {createNativeLeadFactory} from './src/db/factories/Native/LeadFactory.ts';
 import {CounterDefinition,CounterRepository} from './src/models/Counter.ts';
 import {ContactDefinition} from './src/models/Contact.ts';
+import {createContactFactory} from './src/db/factories/ContactFactory.ts';
+import {createProductFactory} from './src/db/factories/ProductFactory.ts';
+import {ProductDefinition} from './src/features/product/model.ts';
 import {EtaViewEngine,htmlResponse} from '@getstrata/core/view';
 assert.equal(process.env.MIGRATION_DATABASE_URL??'','');
 const envelope={kind:'command' as const,actor:{kind:'system' as const,policy:'fixture.generated-models'}};
@@ -233,13 +281,17 @@ let owner:Application|undefined;const errors:unknown[]=[];
 try{
  const app=await bootstrapApp({migrate:false,mode:'command',onConstructed:application=>{owner=application;return undefined;}});
  const id=crypto.randomUUID();
+ // Both generated Product models are compiled, without requesting unregistered definitions.
+ assert.equal(ProductDefinition.name,'Product');
+ assert.equal(createProductFactory(()=>({id:23})).make().id,23);
  await app.invoke(envelope,async({database})=>{
   const leads=database.model(NativeLeadDefinition);const repository=database.repository(NativeLeadRepository);
   assert.strictEqual(leads,database.model(NativeLeadDefinition));
   assert.strictEqual(repository,database.repository(NativeLeadRepository));
   assert.strictEqual(leads.repository(),repository);
   assert.equal(repository.getTable().name,'native_records');
-  assert.equal((await leads.create({id})).toObject().id,id);
+  const leadFactory=createNativeLeadFactory(()=>({id}),async values=>(await leads.create(values)).toObject());
+  assert.equal((await leadFactory.create()).id,id);
   assert.equal((await leads.find(id))?.toObject().id,id);
  });
  // Expected native duplicate failure ends its invocation; unrelated workflow gets a new one.
@@ -257,7 +309,9 @@ try{
   assigned.fill({id:9999});assert.equal(assigned.toObject().id,generated.id);
   assert.equal(await counters.find(9999),null);
   const contacts=database.model(ContactDefinition);
-  const person=await contacts.create({id:crypto.randomUUID(),name:'Příliš žluťoučký'});
+  const contactFactory=createContactFactory(()=>({id:crypto.randomUUID(),name:'Příliš žluťoučký'}),async values=>(await contacts.create(values)).toObject());
+  const made=await contactFactory.create();
+  const person=await contacts.findOrFail(made.id);
   assert.equal((await contacts.find(person.toObject().id))?.toObject().name,'Příliš žluťoučký');
   await person.update({name:'Updated <contact>'});
   const stored=await contacts.find(person.toObject().id);assert.equal(stored?.toObject().name,'Updated <contact>');
@@ -268,7 +322,7 @@ try{
 }catch(error){errors.push(error);}
 if(owner)try{const stopped=await owner.stop({reason:'Generated model contract complete'});if(!stopped.successful)throw new Error('Generated model owner did not stop cleanly',{cause:stopped});}catch(error){errors.push(error);}
 if(errors.length===1)throw errors[0];if(errors.length>1)throw new AggregateError(errors,'Generated model contract and cleanup failed.');
-console.log(JSON.stringify({installedModel:true,explicitRegistration:true,selectedRepository:true,uuidWrite:true,modelMigrationViewWorkflow:true}));
+console.log(JSON.stringify({installedModel:true,explicitRegistration:true,selectedRepository:true,uuidWrite:true,modelFactoryModuleMigrationViewWorkflow:true}));
 `,
     );
     assert.match(await run(["model-contract.ts"]), /"explicitRegistration":true/);
@@ -287,7 +341,9 @@ console.log(JSON.stringify({installedModel:true,explicitRegistration:true,select
   }
   throwFailures(failures, "Installed model verification and cleanup failed.");
   passed.push(database);
-  console.log(`PASS installed CLI/model/UUID migration/explicit registration ${database}`);
+  console.log(
+    `PASS installed CLI/model/factory/module/UUID migration/explicit registration ${database}`,
+  );
 }
 assert.deepEqual(passed, ["sqlite", "postgres", "mysql"]);
 console.log(

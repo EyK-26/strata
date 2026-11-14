@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { registerAccount } from "@getstrata/bootstrap/auth/accountWorkflows";
 import { isUniqueConstraintError, PersistenceError } from "@getstrata/core/database/errors";
 import { ConflictError } from "@getstrata/core/errors/http";
 import { compileStarterFeatures } from "../../../packages/strata-starter/src/featurePlan.ts";
@@ -59,9 +60,7 @@ test("generated signup imports the neutral unique classifier and preserves domai
   expect(source).toContain(
     'import { isUniqueConstraintError } from "@getstrata/core/database/errors";',
   );
-  expect(source).toContain(
-    "if (!isUniqueConstraintError(error) || !(await createStarterAuthDirectory(ports).findByEmail(email))) throw error;",
-  );
+  expect(source).toContain("isUniqueViolation: isUniqueConstraintError,");
   expect(source).not.toContain("if (!(error instanceof ConflictError)");
   const profile = baselines.find(
     ({ args }) => args.includes("--mfa") && args.includes("--auth=cookie"),
@@ -104,6 +103,7 @@ async function invokeRenderedSignup(failure: unknown, accountExists: boolean) {
     },
   };
   const createRegistration = new Function(
+    "registerAccount",
     "runAuthWrite",
     "runAuthTransaction",
     "User",
@@ -111,6 +111,7 @@ async function invokeRenderedSignup(failure: unknown, accountExists: boolean) {
     "isUniqueConstraintError",
     `${javascript}\nreturn createRegistration;`,
   )(
+    registerAccount,
     (selected: object, identifier: string, work: (ports: object) => Promise<unknown>) => {
       expect(selected).toBe(ports);
       expect(identifier).toBe("account@example.test");

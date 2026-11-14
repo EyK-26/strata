@@ -10,6 +10,8 @@ import { publishRoutePlan } from "./routeMetadata";
 const SPA_DIST_DIRECTORY = join(process.cwd(), "frontend/dist");
 
 type SpaRouteOptions = {
+  enabled?: boolean;
+  viewsEnabled?: boolean;
   prefix?: string;
   distDirectory?: string;
   wrap?: (handler: RouteHandler) => RouteHandler;
@@ -78,7 +80,7 @@ function createSpaRoutes(
     [`${prefix}/*`]: handler,
   };
 
-  if (!isViewsEnabled()) {
+  if (!(options.viewsEnabled ?? isViewsEnabled())) {
     routes["/"] = async () => Response.redirect(`${prefix}/`, 302);
   }
 
@@ -91,7 +93,7 @@ function mergeSpaRoutes(
   routes: AppRouteMap,
   options?: SpaRouteOptions,
 ): AppRouteMap {
-  if (!isSpaEnabled()) {
+  if (!(options?.enabled ?? isSpaEnabled())) {
     return routes;
   }
 
