@@ -28,22 +28,49 @@ async function run(command: string[], cwd = root, timeout = 60000) {
   assert.equal(code, 0, `${command.slice(0, 4).join(" ")} failed: ${err}`);
   return out.trim();
 }
-function compose(project: { name: string; app: string }, args: string[]) {
-  return run(
-    [
-      "docker",
-      "compose",
-      "-p",
-      project.name,
-      "-f",
-      "docker-compose.yml",
-      "-f",
-      "acceptance-ports.yml",
-      ...args,
-    ],
-    project.app,
-    args.includes("up") ? 240000 : 120000,
-  );
+async function compose(project: { name: string; app: string }, args: string[]) {
+  try {
+    return await run(
+      [
+        "docker",
+        "compose",
+        "-p",
+        project.name,
+        "-f",
+        "docker-compose.yml",
+        "-f",
+        "acceptance-ports.yml",
+        ...args,
+      ],
+      project.app,
+      args.includes("up") ? 240000 : 120000,
+    );
+  } catch (error) {
+    if (!args.includes("up")) throw error;
+    let logs: string;
+    try {
+      logs = await run(
+        [
+          "docker",
+          "compose",
+          "-p",
+          project.name,
+          "-f",
+          "docker-compose.yml",
+          "-f",
+          "acceptance-ports.yml",
+          "logs",
+          "--no-color",
+          "--tail=80",
+        ],
+        project.app,
+        15000,
+      );
+    } catch {
+      logs = "Owned Compose logs could not be collected.";
+    }
+    throw new Error(`Owned Compose startup failed.\n${logs}`, { cause: error });
+  }
 }
 let cleanupPromise: Promise<void> | undefined;
 function cleanup() {

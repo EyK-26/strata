@@ -21,7 +21,7 @@ export async function installStartupProbe(app: string) {
   for (const name of ["consumer.ts", "module.ts", "state.ts", "types.ts"])
     await copyFile(join(source, name), join(target, name));
   const directory = join(app, "src/modules/owned-startup-probe");
-  await mkdir(directory);
+  await mkdir(directory, { recursive: true });
   await writeFile(
     join(directory, "index.ts"),
     'export { default } from "../../qualification/module.ts";\n',
@@ -31,14 +31,14 @@ export async function installStartupProbe(app: string) {
   // test-only instrumentation; the real generated server and lifecycle still execute.
   const entrypoint = join(app, "src/bootstrap/server.ts");
   const original = await readFile(entrypoint, "utf8");
-  if (!original.includes("await createAppServer();"))
+  if (!original.includes("await serveApplication(createAppServer);"))
     throw new Error("Startup probe expected the canonical generated server entrypoint");
   await writeFile(
     entrypoint,
     'import { captureOwner } from "../qualification/state.ts";\n' +
       original.replace(
-        "await createAppServer();",
-        "await createAppServer({ onConstructed: captureOwner });",
+        "await serveApplication(createAppServer);",
+        "await serveApplication(() => createAppServer({ onConstructed: captureOwner }));",
       ),
   );
   return target;

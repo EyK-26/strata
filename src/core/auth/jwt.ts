@@ -21,7 +21,7 @@ interface SignJwtOptions {
 export function jwtOptionsFromEnvironment(
   env: Readonly<Record<string, string | undefined>>,
 ): SignJwtOptions {
-  const ttl = resolveEnv({ JWT_TTL_SECONDS: { integer: true, minimum: 60, default: "3600" } }, env);
+  const ttl = resolveEnv({ JWT_TTL_SECONDS: { integer: true, minimum: 1, default: "3600" } }, env);
   return Object.freeze({
     secret: requireConfiguredSecret(["JWT_SECRET", "SESSION_SECRET"], "jwt-secret", env),
     ttlSeconds: ttl.JWT_TTL_SECONDS,

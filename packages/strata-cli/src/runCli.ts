@@ -1,5 +1,4 @@
 import { pathToFileURL } from "node:url";
-import { applicationCommands } from "./applicationCommands";
 import { devCommand } from "./commands/dev.ts";
 import { printHelp } from "./commands/help.ts";
 import { migrateCommand, migrateFreshCommand } from "./commands/migrate.ts";
@@ -76,7 +75,7 @@ async function executeCli(options: RunCliOptions = {}): Promise<number> {
   const appCommands = options.commands ?? (await loadAppCommands(app));
   const registry: StrataCommandMap = {
     ...builtinCommands(app),
-    ...applicationCommands(app),
+    ...(app.application ? (await import("./applicationCommands")).applicationCommands(app) : {}),
     ...scaffoldCommands,
     ...appCommands,
   };

@@ -279,7 +279,7 @@ try {
     false,
     "Header apps must remain account-free",
   );
-  await mkdir(join(fixture.app, "src/modules/guest-notes"));
+  await mkdir(join(fixture.app, "src/modules/guest-notes"), { recursive: true });
   await writeFile(
     join(fixture.app, "src/modules/guest-notes/index.ts"),
     `import type {AppModule} from '@getstrata/bootstrap/contracts';

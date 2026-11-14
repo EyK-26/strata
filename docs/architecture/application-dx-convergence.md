@@ -7,28 +7,28 @@ transaction/tenant policy, cancellation and cleanup. New findings join this ledg
 
 | Audit item | Deliverable | State |
 | --- | --- | --- |
-| Factory/model mismatch | Working model → factory workflow | Implemented; focused checks pass |
-| Invalid job identifiers | Shared scaffold validation before writes | Implemented; focused checks pass |
-| Command help writes files | Side-effect-free per-command help | Implemented; focused checks pass |
-| Configured module directory ignored | Shared resolved application paths | Implemented; focused checks pass |
-| Application bootstrap | Packaged composition; small app-owned declaration | Implemented; focused checks pass |
-| Dual provider APIs | One ordinary provider API; internal adapter boundary | Implemented; focused checks pass |
-| Module scaffolding | Model/controller/request/policy without forwarding layers | Implemented; focused checks pass |
-| Auth source scanning | Explicit identity declarations, no source inference | Implemented; focused checks pass |
-| Auth workflow duplication | Packaged stable workflows with app extension points | Implemented; focused checks pass |
-| Routes/controller dependencies | Concise typed composition over owned Bun handlers | Implemented; focused checks pass |
-| CLI wiring/errors | Built-ins and adapters packaged; helpful diagnostics | Implemented; focused checks pass |
-| Migration infrastructure | Owned packaged runner and bound schema authoring | Implemented; focused checks pass |
-| Listener/factory authoring | Concise helpers preserving delivery semantics | Implemented; focused checks pass |
-| Configuration | Validated typed snapshot and strict numeric options | Implemented; focused checks pass |
-| Consumer ports | Events/policy/queue consumer authority separated | Implemented; focused checks pass |
-| Public/test internals | Dedicated testing surface and advanced API guidance | Implemented; focused checks pass |
-| Stale executable templates | One source of truth for generated runtime | Implemented; focused checks pass |
-| Unselected frontend artifacts | Generated inventory follows selected features | Implemented; focused checks pass |
-| Generator metadata | Separate configuration from optional diagnostics | Implemented; focused checks pass |
-| Stale maintained docs | Current executable examples and workflow checks | Implemented; focused checks pass |
-| Internal responsibility splits | Targeted HTTP/ORM/adapter extraction | Implemented; focused checks pass |
-| Integration gaps | Complete CLI journeys and packaged app validation | Implemented; focused checks pass |
+| Factory/model mismatch | Working model → factory workflow | Complete |
+| Invalid job identifiers | Shared scaffold validation before writes | Complete |
+| Command help writes files | Side-effect-free per-command help | Complete |
+| Configured module directory ignored | Shared resolved application paths | Complete |
+| Application bootstrap | Packaged composition; small app-owned declaration | Complete |
+| Dual provider APIs | One ordinary provider API; internal adapter boundary | Complete |
+| Module scaffolding | Model/controller/request/policy without forwarding layers | Complete |
+| Auth source scanning | Explicit identity declarations, no source inference | Complete |
+| Auth workflow duplication | Packaged stable workflows with app extension points | Complete |
+| Routes/controller dependencies | Concise typed composition over owned Bun handlers | Complete |
+| CLI wiring/errors | Built-ins and adapters packaged; helpful diagnostics | Complete |
+| Migration infrastructure | Owned packaged runner and bound schema authoring | Complete |
+| Listener/factory authoring | Concise helpers preserving delivery semantics | Complete |
+| Configuration | Validated typed snapshot and strict numeric options | Complete |
+| Consumer ports | Events/policy/queue consumer authority separated | Complete |
+| Public/test internals | Dedicated testing surface and advanced API guidance | Complete |
+| Stale executable templates | One source of truth for generated runtime | Complete |
+| Unselected frontend artifacts | Generated inventory follows selected features | Complete |
+| Generator metadata | Separate configuration from optional diagnostics | Complete |
+| Stale maintained docs | Current executable examples and workflow checks | Complete |
+| Internal responsibility splits | Targeted HTTP/ORM/adapter extraction | Complete |
+| Integration gaps | Complete CLI journeys and packaged app validation | Complete |
 
 Completion requires behavior and evidence, not simply moving text into another file.
 Keep intentional advanced capabilities; do not introduce global model connections,
@@ -67,6 +67,11 @@ Additional defects found while implementing and challenging the changes:
 - Immediate outbox worker start/stop could attempt work after application admission closed.
   Deferred work now checks the application shutdown signal before admission; independent
   work failures remain visible.
+- Custom CLI apps loaded bootstrap command adapters even without an application entry.
+  App adapters now load lazily only when configured; real start/run/dev supervision is tested.
+- Strict JWT configuration initially rejected previously valid short lifetimes. Positive
+  integer seconds remain supported; malformed and unsafe values remain rejected, with
+  mounted-browser expiry tests.
 - The new private MySQL build initially bundled its optional driver. Build externals and
   package verification now enforce lazy loading at the canonical private adapter boundary.
 - Version-bump tooling still read the deleted template manifest. The renderer is now the
@@ -86,5 +91,25 @@ Additional defects found while implementing and challenging the changes:
   51 to 31 files, 833 to 305 source TypeScript lines, and 520 to 101 bootstrap lines. The largest
   profile changes from 97 to 83 files and 760 to 298 bootstrap lines.
 
-Integrated verification is recorded in the PR; focused checks alone are not a substitute
-for the final package, regression, coverage and browser gates.
+Final local validation:
+
+- 4,060 unit/integration tests pass; two existing unsupported MySQL/RLS cases skip.
+- Coverage gate passes: 221 enforced files; the existing 258-file exemption baseline is unchanged.
+- All 209 existing E2E cases are verified across the full run and affected reruns. The full
+  run exposed stale acceptance fixtures, the CLI/JWT regressions above, and environment
+  constraints; all 40 initial failures passed their affected reruns. Additional browser
+  and configuration regression cases passed as well.
+- All three installed SQL driver workflows and ten generated profiles on three TypeScript
+  versions pass. Public export/type/identity, cold-import, optional-peer and architecture
+  checks pass, along with lint and root TypeScript checks.
+- Docker proofs pass for PostgreSQL Adminer, explicit migration/production RLS runtime,
+  readiness on all three databases, and hybrid `/team/portal` native/Docker routing.
+
+Container validation used ordinary readable fixture permissions (`umask 0022`), the cloud
+proxy's existing trusted CA via the existing BuildKit secret, writable Docker client/cache
+paths, and the installed browser. TLS verification remained enabled. Only unused build cache
+was pruned to recover disk space; no images, volumes or containers belonging to other work
+were removed. One PostgreSQL SMTP contention rerun encountered a transient send deadline;
+the isolated retry passed without changing source or assertions.
+
+No release, version bump or merge is part of this PR. CI/release follow-up remains separate.

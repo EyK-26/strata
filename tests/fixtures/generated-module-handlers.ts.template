@@ -1,14 +1,13 @@
 /** Compiled inside a real generated app against its installed public packages. */
 import type { BusinessRequestPorts } from "@getstrata/bootstrap/contracts";
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
-import type { AppDependencies, CachedJson } from "@getstrata/core/contracts/di";
+import type { CachedJson } from "@getstrata/core/contracts/di";
 import type { RouteRequest } from "@getstrata/core/http/route";
 import type { RouteModelBindingPorts } from "@getstrata/core/http/securedRouteModelBinding";
 import TargetController from "./controller";
 import { createTargetRoutes } from "./routes";
 
 export function generatedHandlerContracts(
-  dependencies: AppDependencies,
   database: BusinessRequestPorts["database"],
   cachedJson: CachedJson,
   binding: RouteModelBindingPorts,
@@ -28,7 +27,7 @@ export function generatedHandlerContracts(
   controller.show(other);
   // @ts-expect-error A model-bound delete requires the actual id parameter.
   controller.destroy(other);
-  for (const route of Object.values(createTargetRoutes(dependencies, cachedJson, kernel))) {
+  for (const route of Object.values(createTargetRoutes(cachedJson, kernel))) {
     if ("POST" in route && route.POST) {
       const response: Response | Promise<Response> = route.POST(plain);
       void response;

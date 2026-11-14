@@ -160,3 +160,16 @@ test("explicit runtime security options are captured without sharing mutable con
   expect(config.passwordConfirmation.ttlSeconds).toBe(120);
   expect(Object.isFrozen(config.passwordConfirmation)).toBe(true);
 });
+
+test("positive short JWT lifetimes remain supported for expiry-sensitive consumers", () => {
+  for (const ttl of ["1", "2"]) {
+    const config = createAuthRuntimeConfig(
+      { environment: { JWT_TTL_SECONDS: ttl }, production: false, jwtSecret: "jwt-secret" },
+      features,
+    );
+    expect(config.jwtTtlSeconds).toBe(Number(ttl));
+    expect(
+      jwtOptionsFromEnvironment({ JWT_TTL_SECONDS: ttl, JWT_SECRET: "jwt-secret" }).ttlSeconds,
+    ).toBe(Number(ttl));
+  }
+});

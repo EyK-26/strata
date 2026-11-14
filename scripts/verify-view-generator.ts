@@ -47,11 +47,28 @@ async function run(args: string[], expected = 0) {
 }
 try {
   const cli = join(fixture.app, "node_modules/.bin/strata");
-  const before = await Promise.all(
-    ["src/routes.ts", "src/cli/register.ts"].map(
-      async (path) => [path, await readFile(join(fixture.app, path), "utf8")] as const,
-    ),
-  );
+  async function routeSources(): Promise<readonly (readonly [string, string])[]> {
+    const paths = [
+      "src/bootstrap/createApp.ts",
+      "src/config/app.ts",
+      "strata.config.ts",
+      "src/cli/register.ts",
+    ];
+    async function modules(directory: string): Promise<void> {
+      for (const entry of await readdir(join(fixture.app, directory), { withFileTypes: true })) {
+        const path = `${directory}/${entry.name}`;
+        if (entry.isDirectory()) await modules(path);
+        else paths.push(path);
+      }
+    }
+    await modules("src/modules");
+    return Promise.all(
+      paths
+        .sort()
+        .map(async (path) => [path, await readFile(join(fixture.app, path), "utf8")] as const),
+    );
+  }
+  const before = await routeSources();
   const migrations = await readdir(join(fixture.app, "src/db/migrations"));
   assert.match(await run([cli, "help"]), /make:view/);
   await run([cli, "make:view", "reports/Summary"]);
@@ -63,8 +80,11 @@ try {
   assert.match(await run([cli, "make:view", "../escape"], 1), /relative name/);
   assert.match(await run([cli, "make:view", "safe", "--force"], 1), /option/);
   assert.equal(await readFile(template, "utf8"), source);
-  for (const [path, bytes] of before)
-    assert.equal(await readFile(join(fixture.app, path), "utf8"), bytes);
+  assert.deepEqual(
+    await routeSources(),
+    before,
+    "make:view must preserve composition, command registration and every module source",
+  );
   assert.deepEqual(await readdir(join(fixture.app, "src/db/migrations")), migrations);
   await writeFile(
     join(fixture.app, "view-contract.ts"),

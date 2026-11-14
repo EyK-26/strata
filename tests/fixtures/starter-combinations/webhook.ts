@@ -8,9 +8,10 @@ import type { DatabaseSession } from "@getstrata/core/database/session";
 import { defineTable } from "@getstrata/core/database/table";
 import { RedisClient } from "bun";
 
-const { STARTER_WEBHOOK_OPTIONS_TOKEN, STARTER_QUEUE_TOKEN } = await import(
-  resolve("src/bootstrap/providers/index.ts")
-);
+const {
+  APPLICATION_WEBHOOKS: STARTER_WEBHOOK_OPTIONS_TOKEN,
+  APPLICATION_QUEUE: STARTER_QUEUE_TOKEN,
+} = await import("@getstrata/bootstrap/application");
 const { bootstrapApp } = await import(resolve("src/bootstrap/createApp.ts"));
 const { Note } = await import(resolve("src/models/Note.ts"));
 const { default: Dispatch } = await import(resolve("src/jobs/dispatchOutboundWebhookJob.ts"));

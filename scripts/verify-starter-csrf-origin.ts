@@ -135,7 +135,7 @@ try {
     join(module, "index.ts"),
     `import type { AppModule } from '@getstrata/bootstrap/contracts';
 import {resolveCsrfTokenForRequest} from '@getstrata/core/http/csrfToken';
-import {STARTER_AUTH_SERVICES} from '../../bootstrap/providers/auth.ts';
+import {STARTER_AUTH_SERVICES} from '../../bootstrap/auth.ts';
 const app: AppModule={name:'proxy-form',webRoutes({kernel,dependencies}){
  const csrf=dependencies.container.resolve(STARTER_AUTH_SERVICES).csrf;
  const form=kernel.wrapWeb(async (request: Request & {params?:{id?:string}})=>{
