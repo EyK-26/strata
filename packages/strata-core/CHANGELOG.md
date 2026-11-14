@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## Unreleased
+
+Fix SQLite row detection using native prepared-statement column metadata. Leading comments no longer discard SELECT, CTE, PRAGMA or EXPLAIN results; VALUES and compact RETURNING forms also return their rows. Non-returning mutations still execute once and return an empty result.
+
 ## 3.0.4
 
 Restore workspace-based npm publication and remove custom archive packing/recovery. Skip confirmed existing versions, stop on registry lookup failures, and accept successful npm uploads without requiring immediate registry visibility. Retain release quality gates, pinned npm, provenance and publication dry-runs. The v3.0.3 attempt published only @getstrata/core before its visibility check failed.

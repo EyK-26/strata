@@ -101,15 +101,12 @@ test("workspace publication preflights all versions and accepts delayed registry
               : names;
       expect(invocations).toEqual(
         expectedNames.map((name) => [
-          "publish",
+          ...(scenario === "dry-run" ? ["pack"] : ["publish"]),
           "--workspace",
           name,
-          "--access",
-          "public",
-          "--tag",
-          "latest",
-          "--provenance",
-          ...(scenario === "dry-run" ? ["--dry-run", "--ignore-scripts"] : []),
+          ...(scenario === "dry-run"
+            ? ["--dry-run", "--ignore-scripts"]
+            : ["--access", "public", "--tag", "latest", "--provenance"]),
         ]),
       );
       if (scenario === "pending")
