@@ -19,7 +19,7 @@ strata help
 
 `strata start` does not migrate when `APP_ENV=production`. Run `strata migrate` as an explicit deploy step.
 
-App commands from `src/cli/register.ts` merge with this list. Generated apps add `queue:work`, failed-job commands, `make:*`, `openapi:*`, and `schedule:run`. User-auth starters also add explicit `auth:provision-admin`; its `initialAdmin` subpath reads bounded password input from a pipe and redacts provisioning errors. The app owns its transactional one-time claim and user schema. See [initial-admin provisioning](https://github.com/EyK-26/strata/blob/main/docs/INITIAL-ADMIN.md) before adoption.
+Package-owned commands also provide `queue:work`, failed-job operations, `make:*`, `openapi:*` and `schedule:run`. Custom commands from `src/cli/register.ts` merge with the command set; user-auth starters add explicit `auth:provision-admin`.
 
 ## Running it
 
@@ -48,18 +48,29 @@ From the current working directory, `strata` loads `strata.config.ts` if present
 | `server` | `src/bootstrap/server.ts` |
 | `modulesDirectory` | `src/modules` |
 | `commands` | `src/cli/register.ts` |
+| `application` | Generated application entrypoint |
+| `schedule` | `src/bootstrap/schedule.ts` |
 | `migrate` | `src/db/migrate.ts` |
 | `fresh` | `src/db/fresh.ts` |
 
-`src/cli/register.ts` can export `commands` or `registerCommands()` to add your own commands. Generated apps ship `queue:work`, which boots the app (`bootstrapApp` / `createApp`) rather than the monorepo provider stack, plus `make:*`, failed-job commands, `openapi:*`, and `schedule:run`. User-auth starters also add explicit `auth:provision-admin`; its `initialAdmin` subpath reads bounded password input from a pipe and redacts provisioning errors. The app owns its transactional one-time claim and user schema. See [initial-admin provisioning](https://github.com/EyK-26/strata/blob/main/docs/INITIAL-ADMIN.md) before adoption.
+Configure `application` and `schedule` in `strata.config.ts` to select the
+application entrypoint and schedule. Package-owned commands supply `queue:work`,
+failed-job operations, `make:*`, `openapi:*` and `schedule:run`; commands that need
+runtime services boot the selected application and close their owner afterward.
+`src/cli/register.ts` exports `commands` or `registerCommands()` for custom commands.
+User-auth starters also provide explicit `auth:provision-admin`; its `initialAdmin`
+subpath reads bounded password input from a pipe and redacts provisioning errors.
+See [initial-admin provisioning](https://github.com/EyK-26/strata/blob/main/docs/INITIAL-ADMIN.md).
 
-Helpers live on package subpaths: `@getstrata/cli/queueWorker`, `@getstrata/cli/queueFailed`, `@getstrata/cli/scaffold`, `@getstrata/cli/openapi`, and `@getstrata/cli/schedule`. `queue:work` takes `{ boot, close }` and does not call `assertProductionSecrets()` (that belongs in app boot). Scaffold commands resolve paths from the app working directory (`src/modules`, `src/db/migrations`, `src/jobs`, `views/` or `resources/views`). See [docs/BUILDING-APPS.md](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md#extending-the-cli).
+Advanced command adapters remain available on `@getstrata/cli/queueWorker`,
+`queueFailed`, `scaffold`, `openapi` and `schedule`. Scaffold paths resolve from the
+app working directory. Prefer the package-owned commands for ordinary apps.
 
-`make:model <Name|Group/Name>` generates an id-only declarative model under `src/models`; its repository comes from `defineModel(table)` and normal startup discovery. Use `--table=existing_table`, `--primary-key=id`, and `--key-type=number|string` for explicit metadata. UUID keys use `string`. Add domain fields to the record, table columns and allowlist before writing them. Migration generation is always separate: `make:migration <name>`. No route or custom repository is generated, and existing files/symlinked parents are refused.
+`make:model <Name|Group/Name>` generates an id-only declarative model under `src/models`; its repository comes from `createModel` and normal startup discovery. Use `--table=existing_table`, `--primary-key=id`, and `--key-type=number|string` for explicit metadata. UUID keys use `string`. Add domain fields to the record, table columns and allowlist before writing them. Migration generation is always separate: `make:migration <name>`. No route or custom repository is generated, and existing files/symlinked parents are refused.
 
-Existing apps must register `makeModelCommand` from `@getstrata/cli/scaffold` (or merge its `scaffoldCommands` map). A dependency upgrade does not rewrite the app-owned command registry. Use `make:model --help` for options.
+Existing apps with copied command registries should adopt the package-owned commands or register `makeModelCommand` from `@getstrata/cli/scaffold` (or merge its `scaffoldCommands` map). A dependency upgrade does not rewrite those files. Use `make:model --help` for options.
 
-`make:view reports/summary[.eta]` creates an Eta HTML template under an existing `views/`, or `resources/views/` otherwise. It supports nested names, leading-underscore partials and numeric error pages, and refuses unsafe paths, symlinks and overwrites. It does not create routes/controllers, enable views or change the app's layout/directory configuration. Register `makeViewCommand` from the same scaffold subpath in existing apps; fresh generated registries include it.
+`make:view reports/summary[.eta]` creates an Eta HTML template under an existing `views/`, or `resources/views/` otherwise. It supports nested names, leading-underscore partials and numeric error pages, and refuses unsafe paths, symlinks and overwrites. It does not create routes/controllers, enable views or change the app's layout/directory configuration. Register `makeViewCommand` from the same scaffold subpath in existing apps; package-owned scaffold commands include it.
 
 A migrate entry may export `close()`. The CLI calls it after `migrate()` and `fresh()` so pooled drivers such as `mysql2` release the event loop instead of hanging the command.
 

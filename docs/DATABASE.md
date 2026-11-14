@@ -207,12 +207,13 @@ Models with declared record fields infer column names and value types for `creat
 Repository and model definitions retain their record and key types, including non-`id` keys. Select them through `database.repository(definition)` or `database.model(definition)`; upsert conflict/update columns, inputs and results retain those declared types. Static global `Model.repository()` registration is retired.
 
 ```ts
-await Product.create({ title: "Notebook", price: 12 });
-const rows = await Product.where({ price: { gte: 10 } })
+const products = database.model(productModel);
+await products.create({ title: "Notebook", price: 12 });
+const rows = await products.where({ price: { gte: 10 } })
   .orderBy({ title: "asc" })
   .select("title", "price")
   .get(); // Array<Pick<ProductRecord, "title" | "price">>
-const first = await Product.query().select("title").first(); // selected row or null
+const first = await products.query().select("title").first(); // selected row or null
 ```
 
 Call `select` after building the model query. Its `get`/`first` methods return plain selected records with hydration casts, without model methods, appended fields, eager relations or retrieved observers. They are SQL projections, not model serialization: `$hidden` does not remove explicitly selected columns. Only declared table columns are supported; empty or unknown column lists fail at execution. `first` does not change the query's limit for later `get` calls. Model global scopes, transaction connections and database RLS still apply. `BaseRepository.query().project(["title", "price"])` provides the corresponding typed driver-row projection without model casts.
@@ -237,6 +238,22 @@ asynchronous casts and hashing before SQL. A thrown serialization hook prevents
 that write. Dirty-only saves retain intended edits after rollback; a post-commit
 listener failure does not undo the committed row. Raw native transaction users must
 retain the documented deferred-event boundary.
+
+### Application migrations
+
+Use `defineMigration({ name, up(schema, db), down(schema, db) })` for ordinary file
+migrations. Each callback receives the schema builder and explicit database handle;
+the helper executes the schema plan automatically. Use `db` for deliberate data
+changes or engine-specific SQL. Advanced `Schema.run` and raw migration definitions
+remain supported. Keep migration names and applied history stable when adopting
+this helper; upgrading does not rewrite deployed schemas.
+
+### Factories
+
+Use `createFactory` from `@getstrata/core/database/factory` for reusable model
+fixtures. Factories select the model from the supplied owned session; keep seeds
+and test data in the same explicit transaction and policy as other model writes.
+They do not register a global model or connection.
 
 ### Declarative model binding
 

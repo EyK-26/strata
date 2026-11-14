@@ -14,15 +14,18 @@ bunx create-strata my-app
 bun add @getstrata/bootstrap @getstrata/core
 ```
 
-## HttpKernel and providers
+## Application startup
 
-```typescript
-import { coreProviders, createAppContext, createHttpKernel } from "@getstrata/bootstrap";
-```
+Generated apps use `defineApp` from `@getstrata/bootstrap/application` with a small
+application definition. The package supplies `bootstrapApp`, `createApp` and
+`createAppServer`; application choices belong in that definition. The application
+owns startup validation, discovery, providers, native Bun HTTP and resource cleanup.
+Keep the returned owner and stop it through its application lifecycle handle.
 
-`createAppContext()` does not call `assertProductionSecrets`. Call that yourself when `isProductionEnv()` is true (`APP_ENV` or `NODE_ENV` production, `APP_ENV=staging`, or an unrecognized `APP_ENV`); it is feature-gated, so an HTML app with API tokens off is not asked for token secrets. It rejects empty secrets, short `SESSION_SECRET` values, wildcard `CORS_ALLOWED_ORIGINS`, `AUTH_DEV_HEADERS` other than `false`, `FEATURE_PUBLIC_READS=true`, and any secret still holding a generated `change-me` placeholder.
-
-Build routes with `buildWebModuleRoutes` and `buildModuleRoutes`.
+Advanced integrations can still compose `createHttpKernel`, module route builders
+and explicit providers. Low-level application contexts require an application
+definition and selected connection; they are not ownerless startup shortcuts.
+Test seams belong on `@getstrata/bootstrap/testing`.
 
 ## Web utilities
 
@@ -48,7 +51,7 @@ HTML apps should bind `createCookieSessionAuthManager` from `@getstrata/bootstra
 
 ## Queue
 
-`registerDefaultJobs()` registers `cache.invalidate-tags` and `audit.export` only. Outbound model webhooks are not a core job. Put a class with `static jobName` in `src/jobs/` (generated `--webhooks` uses `webhook.dispatch`) and call `await discoverJobs()` on boot. `queue:work` already does that. There is no `registerWebhookJobs()` export.
+`registerDefaultJobs()` registers `cache.invalidate-tags` and `audit.export` only. Outbound model webhooks are not a core job. Put a class with `static jobName` in `src/jobs/` (generated `--webhooks` uses `webhook.dispatch`) and discover it into the owned job registry on boot. `queue:work` already does that. There is no `registerWebhookJobs()` export.
 
 ## Not a starter API
 

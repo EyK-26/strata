@@ -4,11 +4,11 @@ Strata ships hooks for SCIM, billing webhooks, SIEM export, and SSO. Core routes
 
 `create-strata` extras (`--scim`, `--mfa`, `--oauth-github`, `--oidc`, `--billing`, `--webhooks`) are **off by default**. Cookie apps with those extras on also ship MFA pages, email verification, a SCIM `/Users` adapter, GitHub cookie login, OIDC cookie login, a Stripe webhook stub, or outbound `webhook.dispatch`. Copy patterns from [AUTH.md](./AUTH.md) and [BUILDING-APPS.md](./BUILDING-APPS.md). Generated `.env.example` always includes commented `FEATURE_OAUTH` / `GITHUB_*` / `OIDC_*` / `FEATURE_BILLING` / `STRIPE_WEBHOOK_SECRET` / `WEBHOOK_ALLOW_PRIVATE` blocks.
 
-There is no `registerWebhookJobs()` API. Put a job class with `static jobName` in `src/jobs/` and call `await discoverJobs()` (generated queue providers and `queue:work` already do). `--webhooks` writes `DispatchOutboundWebhookJob` as `webhook.dispatch`.
+There is no `registerWebhookJobs()` API. Put a job class with `static jobName` in `src/jobs/` and discover it into the application-owned job registry (generated queue providers and `queue:work` already do). `--webhooks` writes `DispatchOutboundWebhookJob` as `webhook.dispatch`.
 
 Production checklist: [PRODUCTION.md](./PRODUCTION.md)
 
-Validate env: `APP_ENV=production bun run cli secrets:check`
+Validate env: `APP_ENV=production bunx strata secrets:check`
 
 ## SCIM 2.0 (`FEATURE_SCIM=true`)
 
@@ -24,7 +24,12 @@ The current generated schema persists account status. Boolean `active` is suppor
 
 Set `STRIPE_WEBHOOK_SECRET`. Signature verification lives in core (`verifyStripeWebhookSignature`). `--billing` scaffolds `POST /billing/webhooks/stripe`, `GET /api/v1/billing/subscription`, tables `subscription` / `stripe_webhook_event` (plus `tenant.stripe_customer_id` when tenancy is on), and `src/billing/applyStripeWebhook.ts`. After a valid signature the route calls `applyStripeWebhook`. The generated function returns without writing. Put plan and `tenant.plan` updates in that function, not in core. Put `tenant_id` (or equivalent) in Stripe metadata so you can map the event after verification.
 
-Inbound Stripe POSTs have **no tenant ALS**. CSRF is skipped for `/billing/webhooks/`. Idempotency inserts into `stripe_webhook_event` and other billing tables must run inside `runWithMigrationBypass()` when `TENANCY_DRIVER=rls`, or the write sees an empty tenant and RLS returns no rows. Do not copy that unbounded helper onto user-facing routes; those use `runWithMigrationBypassForIdentifier` or the request tenant.
+Inbound Stripe POSTs start outside the shopper's tenant execution. Verify the
+signature, resolve the event's tenant through a trusted application mapping, then
+apply idempotency and billing writes through that tenant's owned session and
+scoped policy. Platform-wide work needs an explicitly authorized bypass policy;
+a missing tenant must not silently elevate access. CSRF is skipped for
+`/billing/webhooks/` because the signature supplies the webhook admission proof.
 
 The Stripe Node SDK stays in your app, not `@getstrata/core`.
 
@@ -32,7 +37,7 @@ Generated billing migrations also reverse their owned `tenant.stripe_customer_id
 
 ## Outbound webhooks
 
-`--webhooks` creates `webhooks` / `webhook_deliveries`, a `notes.created` listener, and `src/jobs/dispatchOutboundWebhookJob.ts` (`static jobName = "webhook.dispatch"`). The listener puts the event name on the job payload (`event`), so another table can dispatch the same job without copying it. The job signs the JSON body with `signWebhookBody()` / `webhookSignatureHeader()` and POSTs through `safeFetch`. The delivery insert uses the app dialect (`$1` on Postgres, `?` on sqlite and MySQL) and runs inside `runWithMigrationBypass()` because the worker has no tenant ALS. Do not copy that helper onto user-facing routes.
+`--webhooks` creates `webhooks` / `webhook_deliveries`, a `notes.created` listener, and `src/jobs/dispatchOutboundWebhookJob.ts` (`static jobName = "webhook.dispatch"`). The listener puts the event name on the job payload (`event`), so another table can dispatch the same job without copying it. The job signs the JSON body with `signWebhookBody()` / `webhookSignatureHeader()` and POSTs through `safeFetch`. The delivery insert uses the app dialect (`$1` on Postgres, `?` on SQLite and MySQL) and the worker's explicit owned session and scoped policy. A trusted tenant envelope selects tenant access; platform delivery needs an explicitly authorized bypass capability.
 
 `notes.created` (and other `BaseRepository` model events) is commit-aware. `create()` inside an owned transaction under explicit tenant policy does not run listeners until that transaction commits. If the callback throws, queued events are dropped, so a rolled-back order cannot enqueue `webhook.dispatch`. Nested transactions keep that guarantee until the outermost commit. Listeners then run with the tenant that was active at the write. `eventBus.dispatch` for non-model events is still immediate. Model observers (`creating` / `created`) still run inside the transaction.
 
@@ -62,12 +67,16 @@ Outbound URL helpers resolve DNS, reject blocked answers, and fetch the resolved
 
 ## System handlers without tenant ALS
 
-Stripe webhooks, migration/seed, and similar workers are not inside a request `currentTenant()`. On `TENANCY_DRIVER=rls` that means `SELECT`/`INSERT` against tenant-scoped tables returns empty unless you:
+Stripe webhooks, migration/seed and workers must establish an owned execution
+and select its database session explicitly. Use its `ScopedPolicy` for tenant,
+identifier-limited or authorized platform bypass access. The selected policy and
+the database's installed RLS rules determine visible rows; no ambient helper
+selects a default connection. See [tenancy](TENANCY.md).
 
-1. `runWithMigrationBypass(async () => { ... })` for idempotency tables and other writes that have no user/tenant pin, or
-2. `runWithMigrationBypassForIdentifier(id, ...)` when the table has an `app.bypass_identifier` policy (auth directory, sessions, tokens).
-
-Smoke tests that POST a Stripe fixture and then `GET /api/v1/billing/subscription` without a tenant context will look "empty" even when the row exists. Wrap the apply path in bypass, then read under a real request tenant.
+Resolve tenant identity from trusted application data before billing writes, then
+read under the same tenant in HTTP acceptance. An unscoped read cannot establish
+that a tenant-scoped write failed. Migration credentials and DDL authority remain
+separate from runtime row policy.
 
 ## Design rule
 
@@ -115,7 +124,7 @@ Retirement aborts active local fills, and replies from retired connections canno
 
 `await outbox.getDelivery(eventId, listenerName)` returns a plain readonly `{ status, attempts, maxAttempts }` snapshot, or `null` for missing or inaccessible deliveries. Status is `pending`, `processing`, `failed` or `completed`; counters are safe integers. Lookup uses the compound delivery primary key, two bound identifiers and one bounded read. It exposes no payload, tenant identity, owner token or provider error message, and does not change attempts, scheduling or ownership. Valid retired listener names can be inspected without being in the current listener registry.
 
-The call uses the active connection and caller's existing tenant/RLS scope. It never elevates permissions; an authorized platform operator must explicitly establish migration bypass. On engines without RLS, applications remain responsible for establishing authorized access. Do not expose this operator API as an unguarded public endpoint. Identifier syntax/length and corrupt metadata reject instead of returning a misleading state.
+The call uses the supplied owned session and caller's explicit tenant/RLS policy. It never elevates permissions; an authorized platform operator must explicitly establish a bypass policy. On engines without RLS, applications remain responsible for establishing authorized access. Do not expose this operator API as an unguarded public endpoint. Identifier syntax/length and corrupt metadata reject instead of returning a misleading state.
 
 Observation is advisory and can become stale immediately. Use the official atomic `replay` operation for failed deliveries; do not implement retry by updating internal tables. A completed listener handoff is distinct from completion of any downstream queue job. Read/decision concurrency is not a lock or an exactly-once guarantee.
 

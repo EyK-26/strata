@@ -14,7 +14,8 @@ Apps, and anything they import, should use subpaths:
 
 ```typescript
 import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
-import { bindDatabaseConnection } from "@getstrata/core/database/bindConnection";
+import { createModel } from "@getstrata/core/database/model";
+import { defineTable } from "@getstrata/core/database/table";
 import { BaseRepository } from "@getstrata/core/database/baseRepository";
 import { FormRequest } from "@getstrata/core/http/formRequest";
 import { Policy } from "@getstrata/core/auth/policy";
@@ -23,17 +24,20 @@ import { ValidationError } from "@getstrata/core/errors/http";
 import type { Migration } from "@getstrata/core/database/migrations/types";
 ```
 
-The root `@getstrata/core` import resolves, but nothing stops you from ending up with two copies of process-wide state: the database pool, the dialect override, async-local auth and tenant context, and the `HttpError` base class used with `instanceof`. Some subpaths re-export the main bundle for exactly that reason. Prefer subpaths everywhere and the problem does not arise.
+Prefer focused subpaths for application imports and keep test seams on
+`@getstrata/core/testing`.
 
 ## Database
 
-Set `DATABASE_URL` before the first query; the connection is created lazily.
+The application owns its connection and execution sessions. Configure its selected
+engine at startup, then use `database.model(definition)` or
+`database.repository(definition)` from the current execution. Transactions select
+models and repositories from their supplied transaction session. Global default
+pools, named-connection registries and `bindBunSql` are retired.
 
-```typescript
-process.env.DATABASE_URL ??= "postgresql://postgres:postgres@localhost:5432/myapp";
-```
-
-The engine is your choice, and an app should have one primary engine. Postgres apps use Bun's built-in `Bun.sql` through `createBunSqlPool()`, then `registerDefaultDatabasePool()` and `bindDatabaseConnection()`; `bindBunSql()` registers both. SQLite and MySQL register through `database/sqliteConnection` and `database/mysqlConnection`, or `registerNamedConnection` from `database/namedConnections`.
+Use `createModel` and `defineTable` for ordinary models. Custom repository,
+connection and adapter APIs remain available for advanced integrations; see the
+[database guide](https://github.com/EyK-26/strata/blob/main/docs/DATABASE.md).
 
 `orderBy` takes `{ column, direction }` objects or column shorthand such as `{ published_at: "desc" }`. `{ ilike }` uses the value as-is, so pass `%term%` yourself.
 
@@ -49,7 +53,7 @@ Full-text `tsMatch` is PostgreSQL only.
 
 - `AdminResourceRegistry`, `formatAdminValue`: read-only resource browsers
 - `createFailedJobService`, `FailedJobService.delete()`: failed job persistence and cleanup
-- `runQueueJob`, `jobRegistry`: dispatch retried jobs from admin UIs
+- `runQueueJob` with an application-owned job registry: dispatch retried jobs from admin UIs
 
 Generated apps do not include an admin dashboard, and the registry is optional.
 

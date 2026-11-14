@@ -38,9 +38,9 @@ Pick one database engine. Docker Compose is optional (`--docker`, `--no-docker`,
 
 ## What you get
 
-A Bun and TypeScript app on `@getstrata/core` and `@getstrata/bootstrap` that boots, migrates, and passes `bun run check`. Cookie apps include a restyleable welcome page, `/login`, `/register`, and password reset. Token apps include `POST /api/v1/auth/login` plus register and reset. Tenancy is `none`, `column` (any engine), or `rls` (Postgres only; other engines fall back to `column`). Choices are recorded in `strata.layers.json`.
+A Bun and TypeScript app on `@getstrata/core` and `@getstrata/bootstrap` that boots, migrates, and passes `bun run check`. Cookie apps include a restyleable welcome page, `/login`, `/register`, and password reset. Token apps include `POST /api/v1/auth/login` plus register and reset. Tenancy is `none`, `column` (any engine), or `rls` (Postgres only; other engines fall back to `column`). Choices are recorded as provenance in `strata.layers.json`; detailed generator metadata lives in `.strata/generator.json`. Application configuration lives in `src/config/app.ts` and the application definition.
 
-The `strata` binary installs into the app rather than globally, so use the generated `bun run` scripts. Generated apps ship `src/cli/register.ts` with `queue:work` (`bun run queue:work`, requires `REDIS_URL`), `make:*`, `openapi:*`, and `schedule:run`. `queue:work` boots that app rather than the framework-repo worker.
+The `strata` binary installs into the app. Use generated `bun run` scripts or `bunx strata`. Package-owned commands provide workers, failed-job operations, scaffolding, OpenAPI and scheduling through the application and schedule entrypoints in `strata.config.ts`. `src/cli/register.ts` adds custom application commands.
 
 Discover registered commands with `bunx strata help`. `dev` and `start` run HTTP only. Run `queue:work` separately for Redis jobs, and `outbox:work` separately for published durable events (after migrations and listener registration). Synchronous queues and apps without durable events do not need these workers. Worker startup messages indicate polling, not dependency health; idle polling is normal. HTTP and workers use the same application configuration.
 
