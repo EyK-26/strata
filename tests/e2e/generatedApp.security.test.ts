@@ -1114,7 +1114,7 @@ describe("Generated application security", () => {
     expect((await fetch(`${origin}/assets/../../package.json`)).status).toBe(404);
   });
 
-  test("IdP-shaped ACS POST without app cookies rejects unsigned, wrong audience, and wrong issuer", async () => {
+  test("IdP-shaped ACS POST requires browser state and validates assertions before login or MFA", async () => {
     const address = await reserveAddress();
     const origin = address.origin;
     const fixture = await createSignedSamlResponse({
@@ -1139,6 +1139,19 @@ describe("Generated application security", () => {
           const relayState =
             new URL(start.headers.get("location") ?? "").searchParams.get("RelayState") ?? "";
           expect(relayState.length).toBeGreaterThan(0);
+          const stateCookie = start.headers
+            .getSetCookie()
+            .find((item) => item.startsWith("saml_state="));
+          expect(stateCookie).toBeDefined();
+          expect(stateCookie).toContain("SameSite=None");
+          expect(stateCookie).toContain("Secure");
+          expect(stateCookie).toContain("HttpOnly");
+          // Loopback HTTP does not model browser TLS cookie delivery. Send only
+          // the transient SAML cookie; no session or ordinary CSRF cookie is needed.
+          const stateHeaders = {
+            ...idpShapedHeaders(),
+            cookie: stateCookie?.split(";")[0] ?? "",
+          };
 
           const unsigned = await createSignedSamlResponse({
             audience: "https://hiroapp.test/saml/metadata",
@@ -1147,13 +1160,14 @@ describe("Generated application security", () => {
           });
           const unsignedRes = await fetch(`${origin}/auth/saml/acs`, {
             method: "POST",
-            headers: idpShapedHeaders(),
+            headers: stateHeaders,
             body: new URLSearchParams({
               SAMLResponse: unsigned.responseB64,
               RelayState: relayState,
             }),
           });
-          expect(unsignedRes.status).toBeGreaterThanOrEqual(400);
+          expect(unsignedRes.status).toBe(400);
+          expect(await unsignedRes.json()).toEqual({ error: "Invalid SAML response." });
 
           const wrongAud = await createSignedSamlResponse({
             audience: "https://other.test/metadata",
@@ -1163,13 +1177,14 @@ describe("Generated application security", () => {
           });
           const wrong = await fetch(`${origin}/auth/saml/acs`, {
             method: "POST",
-            headers: idpShapedHeaders(),
+            headers: stateHeaders,
             body: new URLSearchParams({
               SAMLResponse: wrongAud.responseB64,
               RelayState: relayState,
             }),
           });
-          expect(wrong.status).toBeGreaterThanOrEqual(400);
+          expect(wrong.status).toBe(400);
+          expect(await wrong.json()).toEqual({ error: "Invalid SAML response." });
 
           const evilIssuer = await createSignedSamlResponse({
             audience: "https://hiroapp.test/saml/metadata",
@@ -1180,13 +1195,14 @@ describe("Generated application security", () => {
           });
           const evil = await fetch(`${origin}/auth/saml/acs`, {
             method: "POST",
-            headers: idpShapedHeaders(),
+            headers: stateHeaders,
             body: new URLSearchParams({
               SAMLResponse: evilIssuer.responseB64,
               RelayState: relayState,
             }),
           });
-          expect(evil.status).toBeGreaterThanOrEqual(400);
+          expect(evil.status).toBe(400);
+          expect(await evil.json()).toEqual({ error: "Invalid SAML response." });
 
           const cookielessFixture = await createSignedSamlResponse({
             audience: "https://hiroapp.test/saml/metadata",
@@ -1207,8 +1223,30 @@ describe("Generated application security", () => {
             }),
             redirect: "manual",
           });
-          expect(cookieless.status).toBe(302);
-          expect(cookieless.headers.get("location")).toBe("/");
+          expect(cookieless.status).toBe(403);
+          expect(await cookieless.json()).toEqual({ error: "Invalid SAML state." });
+          expect(cookieHeader(cookieless)).not.toContain("strata_session=");
+
+          const postValidAssertion = (cookie: string) =>
+            fetch(`${origin}/auth/saml/acs`, {
+              method: "POST",
+              headers: { ...idpShapedHeaders(), cookie },
+              body: new URLSearchParams({
+                SAMLResponse: cookielessFixture.responseB64,
+                RelayState: cookielessRelay,
+              }),
+              redirect: "manual",
+            });
+          const wrongBrowser = await postValidAssertion(stateHeaders.cookie);
+          expect(wrongBrowser.status).toBe(403);
+          expect(await wrongBrowser.json()).toEqual({ error: "Invalid SAML state." });
+          expect(cookieHeader(wrongBrowser)).not.toContain("strata_session=");
+
+          const bound = await postValidAssertion(cookieHeader(cookielessStart));
+          expect(bound.status).toBe(302);
+          expect(bound.headers.get("location")).toBe("/");
+          expect(cookieHeader(bound)).toContain("strata_session=");
+          expect(cookieHeader(bound)).not.toContain("saml_state=");
 
           const secret = generateTotpSecret();
           await sql.unsafe(
@@ -1227,7 +1265,7 @@ describe("Generated application security", () => {
           });
           const mfaAcs = await fetch(`${origin}/auth/saml/acs`, {
             method: "POST",
-            headers: idpShapedHeaders(),
+            headers: { ...idpShapedHeaders(), cookie: cookieHeader(mfaStart) },
             body: new URLSearchParams({
               SAMLResponse: mfaFixture.responseB64,
               RelayState: mfaRelay,
