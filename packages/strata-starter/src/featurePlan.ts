@@ -246,6 +246,7 @@ export function compileStarterFeatures(
     browserTransport: cookie ? ("cookie" as const) : (layers.auth as "token" | "jwt" | "headers"),
   });
   const artifacts = [
+    "AGENTS.md",
     "package.json",
     "src/bootstrap/createApp.ts",
     "src/routes/api.ts",

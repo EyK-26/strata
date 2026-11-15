@@ -3,7 +3,6 @@
 Laravel-inspired application structure and developer experience, built for
 TypeScript and Bun. Strata combines named models, controllers, requests, policies,
 migrations and jobs with Bun's native HTTP, SQL, file, image and build capabilities.
-It is not a PHP compatibility layer or an implementation of every Laravel feature.
 
 ## Create an application
 
@@ -96,11 +95,17 @@ The five packages use one coordinated version. See their changelogs for the next
 release and [npm](https://www.npmjs.com/package/@getstrata/core) for published versions.
 Installing an update does not rewrite an existing application's generated files.
 
-## Contributing and AI agents
+## AI-assisted application development
 
-Read [AGENTS.md](AGENTS.md) for the repository map, architectural rules, focused
-validation commands and release workflow. This checkout develops the framework;
-create a separate generated app when building a product.
+Every new application includes its own `AGENTS.md`, tailored to the selected stack.
+It guides coding agents through models, controllers, requests, policies, migrations,
+authorization and the application's available commands. Keep it current as the app
+changes. It describes building your product using Strata's installed public APIs.
+
+## Contributing
+
+This checkout develops the framework. Use its package scripts and CI configuration
+for validation; create a separate generated app when building a product.
 
 ```sh
 bun install
@@ -110,8 +115,6 @@ bun run validate:host
 ```
 
 The test suite exercises real PostgreSQL, MySQL and SQLite behavior and generated
-applications installed from candidate packages. Passing tests do not establish
-production capacity or compatibility with every external provider. PostgreSQL RLS
-is distinct from application-enforced tenant filtering on other engines.
+applications installed from candidate packages.
 
 MIT licensed.

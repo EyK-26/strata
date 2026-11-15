@@ -14,6 +14,7 @@ import { compileStarterFeatures, type StarterFeaturePlan } from "./featurePlan.t
 import type { ParsedFlags } from "./parseArgs.ts";
 import { parseCreateStrataArgs, usage } from "./parseArgs.ts";
 import { resolveStarterPlan } from "./prompt.ts";
+import { renderAgentInstructions } from "./renderAgentInstructions.ts";
 import {
   renderAuthDirectory,
   renderAuthProvider,
@@ -188,6 +189,7 @@ export const TENANCY_ENABLED = ${decisions.tenantTable};
   }
 
   writeText(join(targetDir, ".bun-version"), "1.4.4\n");
+  writeText(join(targetDir, "AGENTS.md"), renderAgentInstructions(projectName, plan));
   writeText(join(targetDir, ".env.example"), renderEnvExample(projectName, plan));
   writeText(join(targetDir, ".gitignore"), renderGitignore());
   writeText(join(targetDir, "package.json"), renderPackageJson(projectName, { ...options, plan }));

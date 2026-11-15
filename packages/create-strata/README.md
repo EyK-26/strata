@@ -43,3 +43,5 @@ The generator installs the application-local `strata` CLI. Run the generated `bu
 `create-strata` and [`@getstrata/starter`](https://www.npmjs.com/package/@getstrata/starter) provide the same generator.
 
 See the [project README](https://github.com/EyK-26/strata/blob/main/README.md), [starter guide](https://github.com/EyK-26/strata/blob/main/docs/STARTER.md), [authentication guide](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md), and [integration guide](https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md).
+
+Generated apps include an `AGENTS.md` tailored to their selected stack, with application feature workflows and validation guidance for AI coding agents.

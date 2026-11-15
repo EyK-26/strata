@@ -2,7 +2,7 @@
 
 ## 3.1.0
 
-- Simplify public documentation and add one AGENTS.md for framework contributors and coding agents.
+- Simplify public documentation and consumer guides.
 - Add bounded streaming multipart uploads and a single-use `UploadedFile` with explicit storage, cancellation and partial-write cleanup. The buffered helper uses the same bounded parser; both paths validate supported binary signatures and UTF-8 text. Multipart helpers now reject extra files and malformed framing; see docs/MEDIA.md for adoption details.
 - Add native Bun image transforms with typed size/fit/format/quality options, input-format verification and decode/output limits. Preserve the existing resize helper's output selection and enlargement behavior.
 - Add class-based model authoring with one typed field declaration, inferred record types, instance relationship methods and application-owned default repositories. Preserve low-level definition APIs and explicit session/transaction selection.

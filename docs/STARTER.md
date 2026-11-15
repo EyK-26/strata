@@ -64,6 +64,15 @@ PostgreSQL applications use a restricted runtime role. Migrations/provisioning u
 separate administrative credentials. See [PostgreSQL provisioning](POSTGRES-PROVISIONING.md)
 and [production configuration](PRODUCTION.md).
 
+## AI coding agents
+
+Every generated application includes `AGENTS.md` with its selected frontend,
+database, auth, tenancy and service choices. It explains where product features
+belong, how to use public model/controller APIs, preserve access controls and run
+the app's actual commands. React and worker guidance appears only where applicable.
+The generated README links to it. Update the guide as your application evolves;
+installed versions and current code remain authoritative.
+
 ## Find application code
 
 ```text
