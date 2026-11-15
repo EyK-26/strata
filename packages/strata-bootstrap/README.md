@@ -5,7 +5,7 @@ Application startup, HTTP route composition, service configuration, and resource
 The generator configures this package for you:
 
 ```bash
-bunx create-strata@latest my-app
+bunx create-strata my-app
 ```
 
 For an existing application:

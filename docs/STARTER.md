@@ -1,15 +1,15 @@
 # Starter
 
-`bunx create-strata@latest my-app` creates an application with the selected layers. Use
+`bunx create-strata my-app` creates an application with the selected layers. Use
 arrow keys and Enter in the wizard; Space toggles compatible extras. For automated
 or repeatable generation, pass `--yes` and explicit options.
 
-`@latest` requests the current npm release instead of pinning a specific version.
+If Bun reuses an older cached generator, try `bunx create-strata@latest my-app` from outside an existing project. The explicit tag is optional for normal use.
 
 ## Quick start
 
 ```sh
-bunx create-strata@latest my-app --frontend server-htmx --database sqlite --auth cookie --no-docker --yes
+bunx create-strata my-app --frontend server-htmx --database sqlite --auth cookie --no-docker --yes
 cd my-app
 cp .env.example .env
 bun install
@@ -42,7 +42,7 @@ Extras: `--mfa`, `--email-verification`, `--scim`, `--metrics`, `--oauth-github`
 one. Compatibility depends on the selected auth/frontend layers. Header auth has
 no persisted account or password flow. MFA and browser OAuth handshakes need a
 cookie stack; SCIM and email verification need persisted users. Consult
-`bunx create-strata@latest --help` and [integrations](INTEGRATIONS.md).
+`bunx create-strata --help` and [integrations](INTEGRATIONS.md).
 
 Generated configuration and dependencies match the selection. Adding a different
 layer later may require application code and migrations as well as environment

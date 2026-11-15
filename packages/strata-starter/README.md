@@ -5,19 +5,19 @@ The application generator for [Strata](https://github.com/EyK-26/strata/blob/mai
 Use the short package name:
 
 ```bash
-bunx create-strata@latest my-app
+bunx create-strata my-app
 ```
 
 This scoped package provides the same generator and also works directly:
 
 ```bash
-bunx @getstrata/starter@latest my-app
+bunx @getstrata/starter my-app
 ```
 
 The wizard selects a frontend, database, authentication, tenancy, cache, queue, mail, and optional integrations. For unattended generation:
 
 ```bash
-bunx @getstrata/starter@latest my-app --yes --frontend=server-htmx --database=sqlite --auth=cookie --no-docker
+bunx @getstrata/starter my-app --yes --frontend=server-htmx --database=sqlite --auth=cookie --no-docker
 ```
 
 Use `--help` for supported flags. A target can be a project name or directory path. Existing output paths are refused, including with `--force`.

@@ -26,6 +26,6 @@ Scaffolding creates model classes in `src/models`, controllers in `src/http/cont
 
 `strata.config.ts` selects application, server, schedule, migration, and custom-command entry points. Custom commands come from `src/cli/register.ts`. `queue:work` and `outbox:work` run separately from HTTP. In production, apply migrations explicitly before starting the application.
 
-To create a whole application, use `bunx create-strata@latest my-app`.
+To create a whole application, use `bunx create-strata my-app`.
 
 See the [project README](https://github.com/EyK-26/strata/blob/main/README.md), [starter guide](https://github.com/EyK-26/strata/blob/main/docs/STARTER.md), [queue guide](https://github.com/EyK-26/strata/blob/main/docs/QUEUES.md), [initial-admin provisioning](https://github.com/EyK-26/strata/blob/main/docs/INITIAL-ADMIN.md), and [production guide](https://github.com/EyK-26/strata/blob/main/docs/PRODUCTION.md).

@@ -2,7 +2,7 @@
 
 ## 3.1.2
 
-- Describe application startup, routing, middleware and service configuration in npm metadata. Update generator examples and align the core peer dependency with 3.1.2.
+- Describe application startup, routing, middleware and service configuration in npm metadata. Align the core peer dependency with 3.1.2.
 
 ## 3.1.1
 

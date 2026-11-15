@@ -5,7 +5,7 @@ Database models, HTTP utilities, authentication, queues, mail, storage, and secu
 Start an application with the generator:
 
 ```bash
-bunx create-strata@latest my-app
+bunx create-strata my-app
 ```
 
 To add the runtime library to an existing project:

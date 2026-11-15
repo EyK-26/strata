@@ -2,7 +2,7 @@
 
 ## 3.1.2
 
-- Align both generator package descriptions with Laravel-inspired Bun and TypeScript development. Use `@latest` consistently in quick starts, CLI help and scaffolded documentation. Clarify that `bun install` installs the generated application CLI dependency.
+- Align both generator package descriptions with Laravel-inspired Bun and TypeScript development. Keep simple generator commands in quick starts and document optional cache troubleshooting. Clarify that `bun install` installs the generated application CLI dependency.
 - Generate application dependencies targeting the coordinated 3.1.2 release; application runtime behavior is unchanged.
 
 ## 3.1.1

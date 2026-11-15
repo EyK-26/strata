@@ -12,7 +12,7 @@ images pin the tested runtime in [.bun-version](.bun-version).
 This local HTML starter uses SQLite and needs no database container:
 
 ```sh
-bunx create-strata@latest my-app --frontend server-htmx --database sqlite --auth cookie --no-docker --yes
+bunx create-strata my-app --frontend server-htmx --database sqlite --auth cookie --no-docker --yes
 cd my-app
 cp .env.example .env
 bun install
@@ -24,7 +24,7 @@ Read the generated README for your selected configuration. Demo data is opt-in v
 `bun run db:seed:demo` and is restricted to development/test environments. Replace
 development secrets before deployment.
 
-Run `bunx create-strata@latest my-app` for the interactive wizard. Choose an API, HTMX,
+Run `bunx create-strata my-app` for the interactive wizard. Choose an API, HTMX,
 React SPA or hybrid frontend; PostgreSQL, MySQL or SQLite; authentication, tenancy,
 cache, queue, mail and optional integrations. Docker infrastructure is optional.
 See [starter options](docs/STARTER.md).

@@ -2,7 +2,7 @@
 
 ## 3.1.2
 
-- Describe application servers, scaffolding, migrations, workers and scheduling in npm metadata. Update generator guidance to request `create-strata@latest` and align peer dependencies with 3.1.2.
+- Describe application servers, scaffolding, migrations, workers and scheduling in npm metadata. Align peer dependencies with 3.1.2.
 
 ## 3.1.1
 

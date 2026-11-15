@@ -209,13 +209,13 @@ function renderReadmeIntro(
   if (options.dogfood) {
     return `# ${projectName}
 
-This generated app is an internal acceptance fixture (migrate, seed, boot, OpenAPI, smoke). It is not a product. Framework CI generates disposable fixtures; product dogfood lives in the separate strata-shop repository. Start a product app with \`bunx create-strata@latest\`.
+This generated app is an internal acceptance fixture (migrate, seed, boot, OpenAPI, smoke). It is not a product. Framework CI generates disposable fixtures; product dogfood lives in the separate strata-shop repository. Start a product app with \`bunx create-strata\`.
 `;
   }
   if (options.inRepoExample) {
     return `# ${projectName}
 
-This is a generated sibling layer map. It is not a product and it is not CI dogfood. Framework CI generates disposable acceptance fixtures; product dogfood lives in the separate strata-shop repository. Start a product app with \`bunx create-strata@latest\`.
+This is a generated sibling layer map. It is not a product and it is not CI dogfood. Framework CI generates disposable acceptance fixtures; product dogfood lives in the separate strata-shop repository. Start a product app with \`bunx create-strata\`.
 `;
   }
   return `# ${projectName}
