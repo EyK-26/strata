@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 3.1.4
+
+- Synchronize package versions and dependency pins at 3.1.4 for the corrected starter release validation. No additional runtime changes in this package.
+
 ## 3.1.3
 
 - Accept class models directly in `defineModelListener` while preserving explicit repository listeners and after-commit behavior.
