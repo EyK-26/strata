@@ -63,6 +63,12 @@ try {
     assert.ok(existsSync(join(app, "src/bootstrap/createApp.ts")), "Application must be generated");
     const generated = JSON.parse(await readFile(join(app, "package.json"), "utf8"));
     assert.equal(generated.dependencies["@getstrata/core"], `^${manifest.version}`);
+    const agents = await readFile(join(app, "AGENTS.md"), "utf8");
+    assert.ok(agents.includes(`frontend=${frontend}; database=sqlite; auth=cookie-token;`));
+    assert.ok(agents.includes("src/models/register.ts"));
+    assert.ok(agents.includes("database.model(Product)"));
+    assert.ok(!agents.includes("validate:host"));
+    assert.equal(agents.includes("bun run frontend:build"), frontend === "hybrid");
     if (frontend === "hybrid") {
       assert.ok((await readFile(join(app, "public/assets/htmx.min.js"))).length > 1000);
       assert.ok(existsSync(join(app, "views/auth/login.eta")), "Auth views must be generated");

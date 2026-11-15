@@ -3,7 +3,7 @@
     "name": "sqlite-api-headers-local",
     "args": ["--yes"],
     "files": {
-      ".strata/generator.json": "622ca394be046bc182f8ddc02eef5458b99ab107d0f446026d5c85efc7bb77ac",
+      ".strata/generator.json": "544d027d84a4ef659905162c8771b72f59169d3df0d42ba1769d2eeeb0491219",
       "storage/.gitkeep": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
       "strata.config.ts": "0ab7a84630ac9570621398857aa2fee8fc8d7d328a0de182b3476f0b76c7d8f6",
       "src/routes/index.ts": "2297ae9170d05b48d2c8d402a15cdff37da992422dc90c5febf55486a15043df",
@@ -31,7 +31,8 @@
       "Dockerfile": "5dc63fb4fa308ed14dd6891e0bd726b54dcb2f71256ef724fa9c6cdad3f8a697",
       "strata.layers.json": "e717fc1aa535f9f80c1631bde7aaff8dcc239bb26d39df43570c31e80d6690cd",
       "docs/API.md": "0f29b3d3e38ac9f31baa97c71ae1b5d776cc835ecd903222b18d8222a3fddf0e",
-      "README.md": "325bfe33bb1202b88904ac6562b1053d5d653b207b499c6ebedacaff34f72a80",
+      "README.md": "885ee7ecf087b71095a804a4abb2b2b0e104853623559446050afb27f47594e7",
+      "AGENTS.md": "4e25f347b721bcbcea0705c705bbf0226d60fcfe5f1bb98816656997e5cefe4f",
       "package.json": "07de1b01510ad6446fc12bad025343284c3000825154d928c95dad340232567c",
       ".gitignore": "7fb61e9843a3965a249599068ad24c3879e191a0f07e4a2ef411c2987a793abd",
       ".env.example": "02fc17c7380331dde9eebca98368674f7f7cb851548c0e5289ec666b519d7133",
@@ -53,7 +54,7 @@
       "--docker"
     ],
     "files": {
-      ".strata/generator.json": "65c3986a4de8802490a3d17a983c23bf14824c0a7904c035ed2d94c5398b0393",
+      ".strata/generator.json": "da744e08091ca1826013e6a48a2391deaa76c85f4e8fb01338479bb0c86d042d",
       "storage/.gitkeep": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
       "views/auth/confirm-password.eta": "cce75e43a315ff8912c6f55edce07406a4d28d28d84ca1deca110717ec088042",
       "views/auth/mfa-setup.eta": "44423b5864932a58349a59cdba981e836688759e39ec1303c46af6db097599f1",
@@ -106,7 +107,8 @@
       ".dockerignore": "e224b320b16b8c87f955b8d19aee9fe2b8b1ef389665c5dec05a441c05741fba",
       "Dockerfile": "a01700fb793cf6f3bdeb899118dc6b17bba1c3b6afb88363f74e2350022dd933",
       "strata.layers.json": "45d257f94cd1235e25df150b4ca73dc59657131574e01bf74af71df2a464f84c",
-      "README.md": "a778eccf456ea489e5d1c89ea89eca6cc7029a7e59259ebbcb393997126ddeb2",
+      "README.md": "aef1999778182d00db63f2c65043b43f05e1c11800430145e00979d6aa59613e",
+      "AGENTS.md": "1f3c254f332d05b58e41e9c37302d1f158a8ecd906b26dfacb822e466a1e50a1",
       "package.json": "f814a23564e752daa557b3b72829483de9f8e88e5b007b92365d87c77052144a",
       ".gitignore": "7fb61e9843a3965a249599068ad24c3879e191a0f07e4a2ef411c2987a793abd",
       ".env.example": "de9475f77da83aecc1265271a0d7f729206dc65ba78a011eafe56fc05de57b32",
@@ -136,7 +138,7 @@
       "--docker"
     ],
     "files": {
-      ".strata/generator.json": "939a19c3729025be2f1b9fa43db7b17e8ecdb0a72081a26219d3e60725e8519c",
+      ".strata/generator.json": "0043314ccae4ddad6873dbeec8e1468ec8e99f1876ac1ae0e34ea0fa24726e7f",
       "storage/.gitkeep": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
       "views/auth/confirm-password.eta": "cce75e43a315ff8912c6f55edce07406a4d28d28d84ca1deca110717ec088042",
       "views/auth/mfa-setup.eta": "44423b5864932a58349a59cdba981e836688759e39ec1303c46af6db097599f1",
@@ -199,7 +201,8 @@
       ".dockerignore": "b6e0558105252ae650dcc39e05bad628688aa6f52ccf80b310e0f9a7e2699bf9",
       "Dockerfile": "b15aa23b81e9002864cbca3f63f1171368c38b1c2bb02f62f743b76205a0f4c2",
       "strata.layers.json": "c0890694c8b5ca1d4f8d41c3a7aca6c0494bba2fc3be6a7453f4efa87b69a74c",
-      "README.md": "bcc151ee2665bb13120fe387252889d14929f98863f6c19c06f49d797c62ba35",
+      "README.md": "54c973dbcf942cc99a398e029d5e8cdff2e04e5c7225348e324c29c89fd8f875",
+      "AGENTS.md": "6969b840eb63035b22697a9df276966bb0961360267e09ee6226100b31f9899f",
       "package.json": "703f09543ed50b99bd05a0a60e071ff23c982d31faddfd962a85187cf953f779",
       ".gitignore": "7fb61e9843a3965a249599068ad24c3879e191a0f07e4a2ef411c2987a793abd",
       ".env.example": "4a5f182787d7744b7133e9709a357b383c85618b4ba7f73bf73c95ac3a652d5e",
@@ -236,7 +239,7 @@
       "--no-docker"
     ],
     "files": {
-      ".strata/generator.json": "801a05ba2d73ffe1d9476ff8a2b195a5f97b7dfc5052fd617ed43cbf62cf50f0",
+      ".strata/generator.json": "56f19651e10d9c97446faddb8707a6e6a52504cb77fe2c9eeef02261c77638ba",
       "storage/.gitkeep": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
       "strata.config.ts": "0ab7a84630ac9570621398857aa2fee8fc8d7d328a0de182b3476f0b76c7d8f6",
       "src/routes/index.ts": "2297ae9170d05b48d2c8d402a15cdff37da992422dc90c5febf55486a15043df",
@@ -271,7 +274,8 @@
       ".dockerignore": "b6e0558105252ae650dcc39e05bad628688aa6f52ccf80b310e0f9a7e2699bf9",
       "Dockerfile": "ff8085a948943c4fd2d24b040be129468cecf8a9a3c11e319489e1a326466a7b",
       "strata.layers.json": "e7bd0480acff20397330cd9931a6ed896f0a4f02101d95bdd242376c76f780af",
-      "README.md": "49ad187cc367deaddcfe8983a1d6e59a5246a2413afcf6263ca8ae8f2a4bf939",
+      "README.md": "cd59fd349397a0d76d24d6e9b2c435bec7f5f17761e1a176cf5efd9ae5e00f18",
+      "AGENTS.md": "e9413c723f8d1b2935015ff376c8838e73651e57253970803615ab5ecf13055a",
       "package.json": "1d61d0e2136da8424b5556e1d4a95185d2f38a0d112e776c675d09471e99818d",
       ".gitignore": "7fb61e9843a3965a249599068ad24c3879e191a0f07e4a2ef411c2987a793abd",
       ".env.example": "75504ab4a7085a5334797c43941129bc14742cca74eb0064bf90e50257e4ceba",
@@ -311,7 +315,7 @@
       "--docker-services=mysql,adminer"
     ],
     "files": {
-      ".strata/generator.json": "1e9eb8a6b887bb6908db3820c5c06a6afaad5076f4ed82b3ba1a4e1dcc7f20d3",
+      ".strata/generator.json": "9061c6f2daffc4cb671a6ae5bcaaef44cd0a53dbe99d6ca976a52f48077c999c",
       "storage/.gitkeep": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
       "strata.config.ts": "0ab7a84630ac9570621398857aa2fee8fc8d7d328a0de182b3476f0b76c7d8f6",
       "src/routes/index.ts": "2297ae9170d05b48d2c8d402a15cdff37da992422dc90c5febf55486a15043df",
@@ -350,7 +354,8 @@
       "Dockerfile": "a01700fb793cf6f3bdeb899118dc6b17bba1c3b6afb88363f74e2350022dd933",
       "strata.layers.json": "0a58957d62be2ca3b36219ed0006a797059bf2640352a71aa2adbb5d8eb32127",
       "docs/API.md": "b37122ed0a12a3a3507efe4c7456b25ba939ea44c9f2a6f9c37728f7d654be6e",
-      "README.md": "cfeb99379ca0dc484b6323897e8bd3f9e26cbd5fc0ee95a780ac359a3a425486",
+      "README.md": "c890a09494393b3560e7228d1e590bb516e4236f7931a3bd0af49af2b1a17c16",
+      "AGENTS.md": "157ec119994c7247495b93fa88eae1c2a03d4e95d15b8c9a0dd732a593b75421",
       "package.json": "42b404f5bf0aaab6132cfdcf904c4a145bd57408ad40db76b5ee819ec26f9f6d",
       ".gitignore": "7fb61e9843a3965a249599068ad24c3879e191a0f07e4a2ef411c2987a793abd",
       ".env.example": "2285963371647f33cfa7047ecf208b63826c444922205004cb480c5a3eeff051",
@@ -371,7 +376,7 @@
       "--no-docker"
     ],
     "files": {
-      ".strata/generator.json": "fad0cb98194c9915d4e3983a4748ef24ed04e4bcb900d05203fad3311587a7bd",
+      ".strata/generator.json": "d762850cbef0e2ca15a3fd6d3a9a6ed12484b9fb6bdea448584381ab53f8dc3f",
       "storage/.gitkeep": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
       "views/auth/confirm-password.eta": "cce75e43a315ff8912c6f55edce07406a4d28d28d84ca1deca110717ec088042",
       "views/auth/mfa-setup.eta": "44423b5864932a58349a59cdba981e836688759e39ec1303c46af6db097599f1",
@@ -425,7 +430,8 @@
       "Dockerfile": "a01700fb793cf6f3bdeb899118dc6b17bba1c3b6afb88363f74e2350022dd933",
       "strata.layers.json": "cdae4d39da96d0bf5316d869a0181c2bd8c41df8c9439ffb2cff15dfcfa4a631",
       "docs/API.md": "e88b26ea8a4c198460508b550b1e7eb2cdea7be094394df01bd093eb55095831",
-      "README.md": "35e5817169915070ed392189ef62c135439dc8eb599fdbb35876c7689f126ccc",
+      "README.md": "57e63010203021721f0573493afe5976731309ae64fb1bcaec8278ddb6079a7d",
+      "AGENTS.md": "477e37c46af1bc94af761853c382ca77a145ed9d7c84956122ab6c8e8c5cf54f",
       "package.json": "f211963ae6b0e6176680c764b2f1a5c0f98fd2bf01af3de564e6e573fd1f4c71",
       ".gitignore": "7fb61e9843a3965a249599068ad24c3879e191a0f07e4a2ef411c2987a793abd",
       ".env.example": "3d6cc50a81cb2f0bf15a3c374124cc420d2b3d6eaa734832d7eec0c4a7edc367",
@@ -437,7 +443,7 @@
     "name": "postgres-htmx-cookie-local",
     "args": ["--frontend=server-htmx", "--database=postgres", "--auth=cookie", "--no-docker"],
     "files": {
-      ".strata/generator.json": "9160abfe3d30f5bb61d35b39c4bac159f401f808f89cd7f5918f9b1274efcd24",
+      ".strata/generator.json": "871babeae5076cf729cd384aa169a093da31816d9ae6db3b7f673960f74c43a5",
       "storage/.gitkeep": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
       "views/auth/reset-password.eta": "683c91eefc5aa94ca2bffac103d08e3ae9b2114121d42afe1fa4cc629e584081",
       "views/auth/forgot-password.eta": "73f1ddf7feb3f9cf77d5314aa196d78bd20d88c78c695083e124a48b0bddaf71",
@@ -485,7 +491,8 @@
       ".dockerignore": "e224b320b16b8c87f955b8d19aee9fe2b8b1ef389665c5dec05a441c05741fba",
       "Dockerfile": "a01700fb793cf6f3bdeb899118dc6b17bba1c3b6afb88363f74e2350022dd933",
       "strata.layers.json": "3ba2249dfe049411c07874c29aac402a228a1e5db0ddee81f81471670a96bf79",
-      "README.md": "7a42b59b1e28c6922e398ab922a16e341b8e912688cddc567657ad0cda57010e",
+      "README.md": "39466ab6a9df88db28f6dfc1b5b75e64e713bbb7b97a625d3b488e0663df6ebb",
+      "AGENTS.md": "b20a88dfca0bd8fe987f232004ec183e6f69355334eb4988ee4a5c687488c435",
       "package.json": "f211963ae6b0e6176680c764b2f1a5c0f98fd2bf01af3de564e6e573fd1f4c71",
       ".gitignore": "7fb61e9843a3965a249599068ad24c3879e191a0f07e4a2ef411c2987a793abd",
       ".env.example": "12298c37fc0ae9c9f66b8fe812d978ff0e1ef2a166370e86b4687df4938b5bc8",
@@ -506,7 +513,7 @@
       "--docker"
     ],
     "files": {
-      ".strata/generator.json": "6e94ba6c1e77e510ab58427c30cb734a8d50a48dae283c4185d77ecc7a3a4e26",
+      ".strata/generator.json": "efbd02287802e77a4912b6738f8acec310de96a2ca943523bd6176ac4c64de00",
       "storage/.gitkeep": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
       "views/layouts/app.eta": "209c7f2101a0fb4b45179b2d147a0cc98f635a400813b44da3f801ab912c1553",
       "views/home.eta": "ffc0140b63b6053f12116c48c17aec3970058cf6868f20f4d1a1b2d8d47f65ea",
@@ -541,7 +548,8 @@
       ".dockerignore": "b6e0558105252ae650dcc39e05bad628688aa6f52ccf80b310e0f9a7e2699bf9",
       "Dockerfile": "b15aa23b81e9002864cbca3f63f1171368c38b1c2bb02f62f743b76205a0f4c2",
       "strata.layers.json": "dd939b008651804b39968a228e7d09d550cbb058ee2e0019e175e17e12b4e4ce",
-      "README.md": "ebac85672f261deef2a12bfd032d9b907fad0ab7e95bc592e1cfe2cc54fe79fe",
+      "README.md": "7d289fdf4bb035e98205cd96e1e6d701a7fd984765726c406684af8ee4b79ff7",
+      "AGENTS.md": "f289c5dd05af64b0d3653ffa4d7d336f336b73226f37a1bc8d44924c5e7dcc3f",
       "package.json": "badf1392b47598fe205e630029cd27b62c5958875401e91062e045fc4123de57",
       ".gitignore": "7fb61e9843a3965a249599068ad24c3879e191a0f07e4a2ef411c2987a793abd",
       ".env.example": "5d460ad71e1e9555a30a4d948d55351855ae8b61ad29c7260e785eccdacd3ec6",

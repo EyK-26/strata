@@ -27,3 +27,5 @@ Generated apps contain model classes in `src/models`, named controllers in `src/
 Follow the generated README to configure the environment, start selected services, install dependencies, migrate, and run the app. Choices are recorded in `strata.layers.json`; the generated file inventory is in `.strata/generator.json`.
 
 See the [project README](https://github.com/EyK-26/strata/blob/main/README.md), [starter and layer options](https://github.com/EyK-26/strata/blob/main/docs/STARTER.md), [authentication](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md), [integrations](https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md), and [production](https://github.com/EyK-26/strata/blob/main/docs/PRODUCTION.md).
+
+Generated apps include an `AGENTS.md` tailored to their selected stack, with application feature workflows and validation guidance for AI coding agents.

@@ -254,6 +254,9 @@ function renderReadme(
         : "off (local installs)";
 
   return `${renderReadmeIntro(projectName, options)}
+AI coding agents: read [AGENTS.md](AGENTS.md) for this application's structure,
+selected stack, feature workflow and validation commands. Keep it current as the app evolves.
+
 ## Layers
 
 | Layer | Choice |

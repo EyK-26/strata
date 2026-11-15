@@ -32,6 +32,32 @@ for (const { name, args, files: expected } of baselines) {
         // own compiler, package and installed-runtime acceptance gates.
         workspaceDependencies: true,
       });
+      const agents = await readFile(join(directory, "AGENTS.md"), "utf8");
+      const manifest = JSON.parse(await readFile(join(directory, "package.json"), "utf8"));
+      expect(agents).toContain("# Building render-contract");
+      expect(agents).toContain(
+        `frontend=${layers.frontend}; database=${layers.database}; auth=${layers.auth};`,
+      );
+      expect(agents).toContain("src/models/register.ts");
+      expect(agents).toContain("transaction.model(Product)");
+      expect(agents).not.toContain("validate:host");
+      expect(agents).not.toContain("src/core/");
+      expect(agents).not.toContain("STRATA_SCHEMA");
+      for (const [, command] of agents.matchAll(/^bun run ([\w:]+)$/gm)) {
+        expect(manifest.scripts[command as string]).toBeString();
+      }
+      expect(agents.includes("bun run frontend:build")).toBe(
+        ["spa-react", "hybrid"].includes(layers.frontend),
+      );
+      expect(agents.includes("PostgreSQL RLS is selected")).toBe(layers.tenancy === "rls");
+      expect(agents.includes("Column tenancy is selected")).toBe(layers.tenancy === "column");
+      expect(agents.includes("Development header auth is selected")).toBe(
+        layers.auth === "headers",
+      );
+      expect(agents.includes("Redis queued work needs")).toBe(layers.queue === "redis");
+      expect(await readFile(join(directory, "README.md"), "utf8")).toContain(
+        "[AGENTS.md](AGENTS.md)",
+      );
       const register = await readFile(join(directory, "src/models/register.ts"), "utf8");
       expect(register).not.toContain("repositoryDefinitions");
       expect(register).toContain("export const modelDefinitions = Object.freeze([");
