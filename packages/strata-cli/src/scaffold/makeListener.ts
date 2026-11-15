@@ -1,7 +1,7 @@
 import { access } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { scaffoldArguments, writeScaffoldFile } from "./scaffoldFile";
-import { toCamelCase, toKebabCase, toPascalCase } from "./utils";
+import { moduleDirectory, toCamelCase, toKebabCase, toPascalCase } from "./utils";
 
 async function makeListenerCommand(...args: string[]): Promise<void> {
   const parsed = scaffoldArguments("make:listener", args);
@@ -30,11 +30,31 @@ async function makeListenerCommand(...args: string[]): Promise<void> {
     extra.length === 0 &&
     ["created", "updated", "deleted", "restored", "force-deleted"].includes(action ?? "");
   const modelName = toPascalCase((table ?? name).replace(/s$/, ""));
+  let modelImport = `../models/${modelName}.ts`;
+  if (modelEvent) {
+    const candidates = [
+      join(process.cwd(), "src", "models", `${modelName}.ts`),
+      join(await moduleDirectory(toKebabCase(modelName)), "models", `${modelName}.ts`),
+    ];
+    let modelPath: string | undefined;
+    for (const candidate of candidates) {
+      if (await Bun.file(candidate).exists()) {
+        modelPath = candidate;
+        break;
+      }
+    }
+    if (!modelPath)
+      throw new Error(
+        `Model ${modelName} was not found. Create it with make:model or make:module before make:listener.`,
+      );
+    modelImport = relative(directory, modelPath).split(sep).join("/");
+    if (!modelImport.startsWith(".")) modelImport = `./${modelImport}`;
+  }
   const content = modelEvent
     ? `import { defineModelListener } from "@getstrata/bootstrap/discoverListeners";
-import { ${modelName}Repository } from "../models/${modelName}.ts";
+import { ${modelName} } from "${modelImport}";
 
-export default defineModelListener(${modelName}Repository, ${JSON.stringify(action)}, async row => {
+export default defineModelListener(${modelName}, ${JSON.stringify(action)}, async row => {
   void row;
 });
 `

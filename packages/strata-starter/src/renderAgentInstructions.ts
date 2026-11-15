@@ -34,6 +34,7 @@ Selected extras: ${extras.join(", ") || "none"}.
 - src/policies/: resource access rules when needed.
 - src/models/: model classes; add new classes to src/models/register.ts.
 - src/db/migrations/: explicit schema changes, separate from model declarations.
+${decisions.users ? "- src/db/factories/UserFactory.ts: user test data with explicit credentials and invocation-owned persistence.\n" : ""}- src/db/seed.ts: explicit development-only seed entrypoint.
 - src/config/app.ts and src/bootstrap/: configuration and dependency composition.
 ${decisions.serverViews || decisions.mfaViews ? "- views/: Eta templates; use the existing view rendering and escaping helpers.\n" : ""}${decisions.frontendBuild ? `- frontend/: React UI built by Bun; preserve the configured SPA prefix (${layers.spaPrefix}).\n` : ""}
 Optional folders need not exist until their first feature is added. Larger domains

@@ -1,8 +1,12 @@
 # create-strata changelog
 
-## Unreleased
+## 3.1.3
 
-- Generate only the auth imports and controller service aliases required by the selected features. Remove unused helper declarations and mark intentionally unused route parameters. Validate unused imports, locals and parameters across generated backend/frontend files and CLI scaffolds, including PostgreSQL cookie-token apps with MFA and email verification.
+- Generate only the auth imports, helper declarations and controller service aliases required by selected features. Validate unused declarations across generated backend, frontend and CLI files.
+- Remove the historical Notes model, table, seed and React example. Keep models required by selected features, and provide a User factory for auth-enabled apps.
+- Check the recorded starter migration for readiness; health remains degraded before migration or after rollback.
+- Generate an explicit outbound webhook dispatcher with caller-selected public payloads instead of a demo-model listener.
+- Generate application dependencies targeting the coordinated 3.1.3 release. Existing generated applications are not rewritten by an upgrade.
 
 ## 3.1.2
 

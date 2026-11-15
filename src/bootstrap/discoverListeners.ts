@@ -4,7 +4,8 @@ import type { ServiceDeclaration } from "@getstrata/core/contracts/services";
 import { resourceService, service } from "@getstrata/core/contracts/services";
 import { createServiceToken } from "@getstrata/core/contracts/token";
 import type { RepositoryEffectsDeclaration } from "@getstrata/core/database/definitions";
-import { repositoryEffects } from "@getstrata/core/database/definitions";
+import { modelEffects, repositoryEffects } from "@getstrata/core/database/definitions";
+import type { AnyModelClass, ModelAttributes } from "@getstrata/core/database/model";
 import {
   type InfrastructureDiscoveryOptions,
   importInfrastructure,
@@ -70,7 +71,18 @@ export async function discoverListeners(
   return Object.freeze(result);
 }
 
+function isListenerModel(value: unknown): value is AnyModelClass {
+  return typeof value === "function";
+}
+
 /** Declare an after-commit listener; its lifetime belongs to the application graph. */
+export function defineModelListener<C extends AnyModelClass>(
+  model: C,
+  action: import("@getstrata/core/database/definitions").RepositoryAction,
+  handler: import("@getstrata/core/database/definitions").AfterCommitRepositoryListener<
+    ModelAttributes<C["prototype"]>
+  >,
+): ListenerDeclarations;
 export function defineModelListener<
   R extends object,
   K extends keyof R & string,
@@ -79,14 +91,37 @@ export function defineModelListener<
   repository: import("@getstrata/core/database/definitions").RepositoryDefinition<R, K, T>,
   action: import("@getstrata/core/database/definitions").RepositoryAction,
   handler: import("@getstrata/core/database/definitions").AfterCommitRepositoryListener<R>,
+): ListenerDeclarations;
+export function defineModelListener<
+  R extends object,
+  K extends keyof R & string,
+  T extends import("@getstrata/core/database/baseRepository").BaseRepository<R, K>,
+>(
+  repository:
+    | AnyModelClass
+    | import("@getstrata/core/database/definitions").RepositoryDefinition<R, K, T>,
+  action: import("@getstrata/core/database/definitions").RepositoryAction,
+  handler: import("@getstrata/core/database/definitions").AfterCommitRepositoryListener<R>,
 ): ListenerDeclarations {
-  const token = createServiceToken<typeof handler>(`${repository.name}.${action}.listener`);
+  const token = createServiceToken<typeof handler>(
+    `${isListenerModel(repository) ? "model" : repository.name}.${action}.listener`,
+  );
   return Object.freeze({
     services: Object.freeze([
       service(token, { lifetime: "application", dependencies: [] as const, create: () => handler }),
     ]),
     repositoryEffects: Object.freeze([
-      repositoryEffects(repository, [{ action, afterCommit: token }]),
+      isListenerModel(repository)
+        ? modelEffects(repository, [
+            {
+              action,
+              afterCommit:
+                token as unknown as import("@getstrata/core/contracts/token").ServiceToken<
+                  import("@getstrata/core/database/definitions").AfterCommitRepositoryListener<object>
+                >,
+            },
+          ])
+        : repositoryEffects(repository, [{ action, afterCommit: token }]),
     ]),
   });
 }

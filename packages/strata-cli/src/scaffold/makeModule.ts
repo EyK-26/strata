@@ -1,5 +1,6 @@
 import { access } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
+import { pathToFileURL } from "node:url";
 import { renderModuleScaffold } from "./renderModule";
 import { scaffoldArguments, writeScaffoldFile } from "./scaffoldFile";
 import {
@@ -26,6 +27,22 @@ async function makeModuleCommand(...args: string[]): Promise<void> {
 
   if (!moduleName || !moduleIdentifier || !moduleSlug) {
     throw new Error("make:module requires a valid module name.");
+  }
+
+  // Inspect the generated app's inert choices without importing its bootstrap graph.
+  const choicesPath = join(process.cwd(), "src", "config", "app.ts");
+  if (await Bun.file(choicesPath).exists()) {
+    const { default: choices } = (await import(pathToFileURL(choicesPath).href)) as {
+      default?: { views?: boolean; tenancy?: string };
+    };
+    if (withWeb && choices?.views === false)
+      throw new Error(
+        "make:module --with-web requires a configured server view renderer. This app disabled views; use make:module without --with-web or configure views first.",
+      );
+    if (choices?.tenancy === "column" || choices?.tenancy === "rls")
+      throw new Error(
+        `make:module CRUD does not implement ${choices.tenancy} tenancy. Use make:model, make:controller and make:request to implement trusted tenant scoping and schema explicitly.`,
+      );
   }
 
   const directory = await moduleDirectory(moduleSlug);
@@ -89,7 +106,9 @@ async function makeModuleCommand(...args: string[]): Promise<void> {
   console.log(`Module will be auto-discovered from the app modules directory (${moduleSlug}/)`);
   console.log(`Next: strata make:migration create_${moduleSlug} && strata migrate`);
 
-  console.log("Register the generated model class in createDatabaseBindings({ models: [...] }).");
+  console.log(
+    "Add the generated model class to src/models/register.ts modelDefinitions (passed to defineApp({ models })).",
+  );
 }
 
 export { makeModuleCommand };

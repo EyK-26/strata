@@ -48,7 +48,7 @@ const EXTRA_CHOICES = [
   { value: "oauthGithub", label: "oauth-github: GitHub cookie login at /auth/github" },
   { value: "oidc", label: "oidc: OIDC cookie login at /auth/oidc (PKCE cookie)" },
   { value: "billing", label: "billing: Stripe webhook stub + GET /api/v1/billing/subscription" },
-  { value: "webhooks", label: "webhooks: outbound notes.created job (webhook.dispatch)" },
+  { value: "webhooks", label: "webhooks: outbound event delivery (webhook.dispatch)" },
 ] as const;
 
 type ExtraKey = (typeof EXTRA_CHOICES)[number]["value"];

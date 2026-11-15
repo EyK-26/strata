@@ -1,5 +1,11 @@
 # @getstrata/cli changelog
 
+## 3.1.3
+
+- Generate class-based model listeners instead of missing repository imports; reject missing models before writing files.
+- Avoid duplicate Job suffixes, emit the required static override, and point model registration guidance at the generated app registry.
+- Reject automatic CRUD modules that would ignore selected tenancy or require disabled views before writing files.
+
 ## 3.1.2
 
 - Describe application servers, scaffolding, migrations, workers and scheduling in npm metadata. Align peer dependencies with 3.1.2.

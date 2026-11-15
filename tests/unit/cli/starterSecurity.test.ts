@@ -152,7 +152,7 @@ describe("starter security flows", () => {
     expect(await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8")).toContain(
       "session_valid_after",
     );
-    expect(await readFile(join(app, "src/models/Note.ts"), "utf8")).toContain("tenant_id");
+    expect(await readFile(join(app, "src/models/User.ts"), "utf8")).toContain("tenant_id");
   });
 
   appTest("cookie+token app rejects CSRF skip on garbage Bearer and requires MFA", async () => {
@@ -199,6 +199,33 @@ describe("starter security flows", () => {
     const origin = `http://127.0.0.1:${server.port}`;
 
     try {
+      const { createUserFactory } = await import(join(app, "src/db/factories/UserFactory.ts"));
+      const { User } = await import(join(app, "src/models/User.ts"));
+      const { verifyPassword } = await import("@getstrata/core/auth/password");
+      await boot.invoke(
+        { kind: "command", actor: { kind: "system", policy: "fixture.user-factory" } },
+        async ({ database }: ExecutionPersistence) => {
+          const factory = await createUserFactory(
+            "FactoryPassword!123",
+            1,
+            async (values: Record<string, unknown>) =>
+              (await database.model(User).create(values)).toObject(),
+          );
+          const made = factory.make({ email: "factory-made@example.test" });
+          expect(made.tenant_id).toBe(1);
+          expect(made.password).not.toBe("FactoryPassword!123");
+          expect(await verifyPassword("FactoryPassword!123", made.password)).toBe(true);
+          expect(
+            await database.model(User).query().where({ email: made.email }).first(),
+          ).toBeNull();
+          const created = await factory.create({ email: "factory-created@example.test" });
+          expect(created.tenant_id).toBe(1);
+          expect(await verifyPassword("FactoryPassword!123", created.password)).toBe(true);
+          expect(
+            await database.model(User).query().where({ email: created.email }).value("id"),
+          ).toBe(created.id);
+        },
+      );
       const loginPage = await fetch(`${origin}/login`);
       const loginHtml = await loginPage.text();
       const csrf = /name="_token" value="([^"]+)"/.exec(loginHtml)?.[1] ?? "";

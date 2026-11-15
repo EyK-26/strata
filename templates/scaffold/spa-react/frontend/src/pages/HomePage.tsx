@@ -1,7 +1,5 @@
 import { useAuth } from "../auth/AuthContext";
 import { AUTH_CONFIG } from "../auth/config";
-import { TENANCY_ENABLED } from "../config";
-import { notesModuleExample } from "../examples/notes";
 export default function HomePage() {
   const { user } = useAuth();
   return (
@@ -38,19 +36,6 @@ export default function HomePage() {
           </tbody>
         </table>
       </div>
-      <h2>Starter-only example</h2>
-      <p>
-        This app has no notes API yet. Add an explicit module under <code>src/modules/</code> to
-        expose your own application resources through the ORM.
-      </p>
-      <pre className="card">
-        <code>{notesModuleExample(TENANCY_ENABLED)}</code>
-      </pre>
-      <p className="hint">
-        Then fetch it here with <code>apiFetch("/notes")</code>. The <code>notes</code> table
-        already exists after <code>bun run db:migrate</code>. Application authorization and tenant
-        scope remain required for real business data.
-      </p>
     </section>
   );
 }

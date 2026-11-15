@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { SQL } from "bun";
 import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp";
+import { installQualificationNotes } from "../tests/helpers/qualificationNotes";
 
 const publishedVersion = process.argv.find((arg) => arg.startsWith("--published="))?.slice(12);
 const fixture = await createGeneratedSecurityApp(
@@ -104,6 +105,7 @@ async function check(name: string, operation: () => Promise<void>) {
   }
 }
 try {
+  await installQualificationNotes(fixture.app, "postgres", "rls");
   assert.equal((await migrate()).exit, 0, "Explicit fixture migration failed");
   await admin.unsafe(
     "INSERT INTO tenant(slug) VALUES ('status-fixture'); INSERT INTO notes(body,tenant_id) VALUES ('Příliš žluťoučký',1); CREATE TABLE operator_keep(id INT PRIMARY KEY,body TEXT); INSERT INTO operator_keep VALUES(1,'operator-owned')",

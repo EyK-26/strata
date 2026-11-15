@@ -4,6 +4,10 @@ import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promise
 import { join } from "node:path";
 import type { Browser, Response as BrowserResponse, Page } from "playwright";
 import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp";
+import {
+  installQualificationNotes,
+  qualificationNotesModule,
+} from "../tests/helpers/qualificationNotes";
 import { installerEnvironment } from "./installer-environment";
 
 const auth = process.argv.find((a) => a.startsWith("--auth="))?.slice(7);
@@ -470,12 +474,10 @@ export default {name:'acceptance',routes({kernel}){return {
 '/api/v1/acceptance-notes':{POST:kernel.wrapApi(async(request,ports)=>{await ports.auth.requireUser(request);const input=await parseJsonBody(request,value=>value as {body:string});const note=await ports.database.model(Note).create({body:input.body${tenancy !== "none" ? ",tenant_id:ports.established.tenant.id" : ""}});return jsonResponse(note.toObject(),{status:201});})}
 };}} satisfies AppModule;`,
   );
-  // Compile and exercise the ORM example shown to developers, rather than assuming it works.
-  const { notesModuleExample } = await import(join(fixture.app, "frontend/src/examples/notes.ts"));
+  await installQualificationNotes(fixture.app, database, tenancy);
   const { TENANCY_ENABLED } = await import(join(fixture.app, "frontend/src/config.ts"));
   assert.equal(TENANCY_ENABLED, tenancy !== "none");
-  const example = notesModuleExample(TENANCY_ENABLED);
-  assert.equal(typeof example, "string");
+  const example = qualificationNotesModule(TENANCY_ENABLED);
   await mkdir(join(fixture.app, "src/modules/notes"));
   await writeFile(join(fixture.app, "src/modules/notes/index.ts"), example);
   await command(["run", "check"]);

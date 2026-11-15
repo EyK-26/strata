@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp";
+import { installQualificationNotes } from "../tests/helpers/qualificationNotes";
 
 const database = process.argv.find((a) => a.startsWith("--database="))?.slice(11);
 const tenancy = process.argv.find((a) => a.startsWith("--tenancy="))?.slice(10);
@@ -279,6 +280,7 @@ try {
     false,
     "Header apps must remain account-free",
   );
+  await installQualificationNotes(fixture.app, database, tenancy, { seed: true });
   await mkdir(join(fixture.app, "src/modules/guest-notes"), { recursive: true });
   await writeFile(
     join(fixture.app, "src/modules/guest-notes/index.ts"),

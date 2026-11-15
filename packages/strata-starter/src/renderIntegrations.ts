@@ -223,51 +223,41 @@ export type { DispatchOutboundWebhookPayload };
 `;
 }
 
-function renderNoteCreatedWebhookListener(): string {
-  return `import type { ListenerDeclarations } from "@getstrata/bootstrap/discoverListeners";
-import { service } from "@getstrata/core/contracts/services";
-import { createServiceToken } from "@getstrata/core/contracts/token";
-import { modelEffects, type AfterCommitRepositoryListener } from "@getstrata/core/database/definitions";
-import { APPLICATION_QUEUE as STARTER_QUEUE_TOKEN, APPLICATION_WEBHOOKS as STARTER_WEBHOOK_OPTIONS_TOKEN } from "@getstrata/bootstrap/application";
-import { Note, type NoteRecord } from "../models/Note.ts";
+function renderDispatchWebhook(): string {
+  return `import type { DatabaseSession, TransactionSession } from "@getstrata/core/database/session";
+import type { QueueDispatcher } from "@getstrata/core/queue";
 import DispatchOutboundWebhookJob from "../jobs/dispatchOutboundWebhookJob.ts";
 
-const noteCreated = createServiceToken<AfterCommitRepositoryListener<NoteRecord>>("starter.webhooks.note-created");
-const declarations: ListenerDeclarations = Object.freeze({
-  services: Object.freeze([service(noteCreated, {
-    lifetime: "application",
-    dependencies: [STARTER_QUEUE_TOKEN, STARTER_WEBHOOK_OPTIONS_TOKEN],
-    create: (queue, options) => async (payload, { database }) => {
-      const rows = await database.execute<{
-        id: number;
-        url: string;
-        secret: string;
-        active: number | boolean;
-        events: string;
-      }>({text: "SELECT id, url, secret, active, events FROM webhooks", params: []});
-      const event = "notes.created";
-      const body = JSON.stringify({ event, data: payload });
-      for (const hook of rows) {
-        // Only the named event or explicit wildcard subscribes to this event.
-        if (!hook.active || (hook.events !== "*" && hook.events !== event)) continue;
-        await queue.dispatch(new DispatchOutboundWebhookJob(), {
-          webhookId: hook.id,
-          event,
-          url: hook.url,
-          secret: hook.secret,
-          body,
-          allowPrivate: options.allowPrivate,
-          signatureHeader: options.signatureHeader,
-        });
-      }
-    },
-  })]),
-  repositoryEffects: Object.freeze([modelEffects(Note, [
-    {action: "created", afterCommit: noteCreated},
-  ])]),
-});
+interface WebhookPorts {
+  database: DatabaseSession | TransactionSession;
+  queue: QueueDispatcher;
+  options: Readonly<{ allowPrivate: boolean; signatureHeader: string }>;
+}
 
-export default declarations;
+/** Call after commit; choose a public payload explicitly, excluding account credentials. */
+export async function dispatchWebhook({ database, queue, options }: WebhookPorts, event: string, data: unknown): Promise<void> {
+  if (!event.trim()) throw new Error("A webhook event name is required.");
+  const body = JSON.stringify({ event, data });
+  const hooks = await database.execute<{
+    id: number;
+    url: string;
+    secret: string;
+    active: number | boolean;
+    events: string;
+  }>({ text: "SELECT id, url, secret, active, events FROM webhooks", params: [] });
+  for (const hook of hooks) {
+    if (!hook.active || (hook.events !== "*" && hook.events !== event)) continue;
+    await queue.dispatch(new DispatchOutboundWebhookJob(), {
+      webhookId: hook.id,
+      event,
+      url: hook.url,
+      secret: hook.secret,
+      body,
+      allowPrivate: options.allowPrivate,
+      signatureHeader: options.signatureHeader,
+    });
+  }
+}
 `;
 }
 
@@ -419,7 +409,7 @@ export {
   renderBillingMigration,
   renderBillingModule,
   renderDispatchOutboundWebhookJob,
-  renderNoteCreatedWebhookListener,
+  renderDispatchWebhook,
   renderWebhooksMigration,
   webhookMigrationName,
 };

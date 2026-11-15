@@ -30,7 +30,6 @@ import { databaseOptions } from "./database.ts";
 import { createStarterAuthServices, STARTER_AUTH_SERVICES } from "./auth.ts";
 import { modelDefinitions${plan.decisions.workTracker ? ", repositoryDefinitions" : ""} } from "../models/register.ts";
 import { applicationRoutes } from "../routes/index.ts";
-import { Note } from "../models/Note.ts";
 import { migrate } from "../db/migrate.ts";
 import { listeners } from "../outbox/registry.ts";
 ${plan.decisions.ensureDatabase ? 'import { ensureAppDatabase } from "./ensureDatabase.ts";\n' : ""}${plan.decisions.workTracker ? 'import { WORK_TRACKER_OUTBOX } from "../domain/workTracker.ts";\n' : ""}
@@ -44,7 +43,10 @@ const { bootstrapApp, createApp, createAppServer } = defineApp({
   routes: applicationRoutes,${plan.decisions.workTracker ? "\n  repositories: repositoryDefinitions," : ""}
   migrate,${plan.decisions.ensureDatabase ? "\n  ensureDatabase: ensureAppDatabase," : ""}
   outbox: { listeners${plan.decisions.workTracker ? ", token: WORK_TRACKER_OUTBOX" : ""} },
-  health: async database => { await database.model(Note).query().limit(1).select("id").get(); return true; },
+  health: async database => {
+    const applied = await database.execute({ text: "SELECT name FROM framework_migrations WHERE name = '0001_starter_schema'", params: [] });
+    return applied.length === 1;
+  },
 });
 export { bootstrapApp, createApp, createAppServer };
 export type { BootstrappedApp, BootstrapOptions };

@@ -429,15 +429,30 @@ export function commitContract(database: DatabaseSession, transaction: Transacti
       }
 
       if (!scaffolded) {
-        for (const [command, name] of [
+        for (const [command, ...args] of [
           ["make:model", "AuthoringProbe"],
           ["make:controller", "AuthoringProbeController"],
           ["make:request", "StoreAuthoringProbeRequest"],
           ["make:policy", "AuthoringProbePolicy"],
           ["make:migration", "schema_contract_probe"],
+          ["make:factory", "AuthoringProbe"],
+          ["make:job", "AuthoringProbeJob"],
+          ["make:listener", "AuthoringProbeCreated", "authoring-probes.created"],
+          ["make:view", "authoring-probe/index"],
+          ["make:module", "scaffold-product"],
         ] as const) {
-          const scaffold = await run(["bun", "x", "--no-install", "strata", command, name], appDir);
-          if (scaffold.exitCode !== 0)
+          const scaffold = await run(
+            ["bun", "x", "--no-install", "strata", command, ...args],
+            appDir,
+          );
+          const manifest = await Bun.file(join(appDir, "strata.layers.json")).json();
+          const tenantModule =
+            command === "make:module" &&
+            ["column", "rls"].includes(manifest.layers?.tenancy ?? manifest.tenancy);
+          if (tenantModule) {
+            if (scaffold.exitCode === 0 || !scaffold.output.includes("trusted tenant scoping"))
+              failures.push(`${testCase.name}: CLI failed to reject unscoped tenant CRUD`);
+          } else if (scaffold.exitCode !== 0)
             failures.push(
               `${testCase.name}: published CLI ${command} scaffold failed\n${scaffold.output}`,
             );
@@ -512,7 +527,7 @@ export function commitContract(database: DatabaseSession, transaction: Transacti
       if (JSON.stringify(received) !== '["active"]') throw new Error("Packed listener subscription lifetime differs");
       const { createDatabaseBindings } = await import("@getstrata/core/database/bindings");
       const { DATABASE_SESSION_TOKEN } = await import("@getstrata/core/database/tokens");
-      const { Note } = await import("./src/models/Note.ts");
+      const { AuthoringProbe } = await import("./src/models/AuthoringProbe.ts");
       const { modelDefinitions } = await import("./src/models/register.ts");
       class PackedCategory extends models.defineModel({
         table:"packed_categories",fields:{id:models.field.number(),name:models.field.string()},
@@ -531,7 +546,7 @@ export function commitContract(database: DatabaseSession, transaction: Transacti
       }
       // The neutral definitions bind in a real owned SQLite app; emitted native drivers are typechecked above.
       const application = createApplication({providers:[],services:createDatabaseBindings({
-        default:"main",connections:{main:{driver:"sqlite",filename:":memory:"}},models:[...modelDefinitions,PackedCategory,PackedEntry],
+        default:"main",connections:{main:{driver:"sqlite",filename:":memory:"}},models:[...modelDefinitions,AuthoringProbe,PackedCategory,PackedEntry],
       })});
       const probeFailures = [];
       try {
@@ -540,10 +555,10 @@ export function commitContract(database: DatabaseSession, transaction: Transacti
           const selected=scope.resolve(DATABASE_SESSION_TOKEN);
           const rows=await selected.execute({text:"SELECT 1 AS value",params:[]});
           if (rows[0]?.value !== 1) throw new Error("Owned SQLite startup query failed");
-          const bound=selected.model(Note);
-          const entity=bound.newRecord({body:"startup proof"});
-          if (Object.getPrototypeOf(entity) !== Note.prototype || !(entity instanceof Note) || !(entity instanceof core.Model)) throw new Error("Generated model binding/constructor identity differs");
-          if (bound.repository().getTable().name !== "notes") throw new Error("Missing selected default model repository");
+          const bound=selected.model(AuthoringProbe);
+          const entity=bound.newRecord({id:1});
+          if (Object.getPrototypeOf(entity) !== AuthoringProbe.prototype || !(entity instanceof AuthoringProbe) || !(entity instanceof core.Model)) throw new Error("Generated model binding/constructor identity differs");
+          if (bound.repository().getTable().name !== "authoring_probes") throw new Error("Missing selected default model repository");
           await selected.execute({text:"CREATE TABLE packed_categories(id INTEGER PRIMARY KEY,name TEXT NOT NULL)",params:[]});
           await selected.execute({text:"CREATE TABLE packed_entries(id INTEGER PRIMARY KEY,category_id INTEGER NOT NULL,body TEXT NOT NULL)",params:[]});
           const category=await selected.model(PackedCategory).create({name:"packed"});

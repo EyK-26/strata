@@ -30,21 +30,6 @@ export { ${name} };
 `;
 }
 
-function renderNoteModel(plan: StarterFeaturePlan): string {
-  const tenant = plan.decisions.tenantTable;
-  return renderModel(
-    "Note",
-    "notes",
-    {
-      id: "field.number()",
-      body: "field.string()",
-      ...(tenant ? { tenant_id: "field.number()" } : {}),
-      created_at: "field.timestamp()",
-    },
-    ["body", ...(tenant ? ["tenant_id"] : [])],
-  );
-}
-
 function renderUserModel(plan: StarterFeaturePlan): string {
   const tenant = plan.decisions.schemaTenants;
   const mfa = plan.layers.extras.mfa;
@@ -86,6 +71,33 @@ function renderUserModel(plan: StarterFeaturePlan): string {
   );
 }
 
+function renderUserFactory(plan: StarterFeaturePlan): string {
+  return `import { hashPassword } from "@getstrata/core/auth/password";
+import { createFactory, type FactoryPersist } from "@getstrata/core/database/factory";
+import type { UserRecord } from "../../models/User.ts";
+
+/** Explicit credentials and persistence keep test data local to its invocation. */
+export async function createUserFactory(password: string, ${plan.decisions.schemaTenants ? "tenantId: number, " : ""}persist?: FactoryPersist<UserRecord>) {
+  const hashedPassword = await hashPassword(password);
+  return createFactory<UserRecord>({
+    definition: () => ({
+      id: 0,
+      name: "Test User",
+      email: \`user-\${crypto.randomUUID()}@example.test\`,
+      password: hashedPassword,
+      is_admin: false,
+      is_active: true,
+      auth_version: 0,
+${plan.decisions.schemaTenants ? "      tenant_id: tenantId,\n" : ""}${plan.decisions.mfa ? "      mfa_secret: null,\n      mfa_enabled: false,\n      mfa_recovery_codes: null,\n" : ""}      session_valid_after: null,
+      email_verified_at: null,
+      created_at: new Date().toISOString(),
+    }),
+    persist,
+  });
+}
+`;
+}
+
 function renderApiTokenModel(): string {
   return renderModel(
     "ApiToken",
@@ -121,7 +133,7 @@ function renderAuthOneTimeTokenModel(): string {
 }
 
 function renderModelsRegister(plan: StarterFeaturePlan): string {
-  const names = ["Note"];
+  const names: string[] = [];
   if (plan.decisions.users) names.push("User", "AuthOneTimeToken");
   if (plan.decisions.token) names.push("ApiToken");
   return `${names.map((name) => `import { ${name} } from "./${name}";`).join("\n")}
@@ -134,6 +146,6 @@ export {
   renderApiTokenModel,
   renderAuthOneTimeTokenModel,
   renderModelsRegister,
-  renderNoteModel,
+  renderUserFactory,
   renderUserModel,
 };

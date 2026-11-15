@@ -65,7 +65,9 @@ export { ${className} };
     "Model",
   );
   console.log(`Created model: ${path}`);
-  console.log("Register the exported class in createDatabaseBindings({ models: [...] }).");
+  console.log(
+    "Add the exported class to src/models/register.ts modelDefinitions (passed to defineApp({ models })).",
+  );
   console.log(
     `Next: strata make:migration create_${table}; define schema explicitly before strata migrate.`,
   );
