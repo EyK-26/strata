@@ -8,7 +8,10 @@ import type {
   ModelState,
   RepositoryDefinition,
 } from "@getstrata/core/database/definitions";
-import { defineModel, defineRepository } from "@getstrata/core/database/definitions";
+import {
+  defineModel as defineModelDefinition,
+  defineRepository,
+} from "@getstrata/core/database/definitions";
 import { isUniqueConstraintError, RecordNotFoundError } from "@getstrata/core/database/errors";
 import { getBindingPorts } from "#strata-orm-internal";
 import type { ServiceToken } from "../contracts/token";
@@ -28,6 +31,17 @@ import {
   type ModelCasts,
   snapshotAttributes,
 } from "./modelAttributes.ts";
+import type {
+  AnyModelClass,
+  AuthoredModelClass,
+  ClassModelInstance,
+  ClassModelKey,
+  ClassModelRow,
+  InferModelFields,
+  ModelClassOptions,
+  ModelFields,
+} from "./modelAuthoring";
+import { defineAuthoredModel } from "./modelAuthoring";
 import {
   type AnyModel,
   flattenRelationNames,
@@ -39,6 +53,7 @@ import {
   type RelationNameInput,
   snapshotModelQuery,
 } from "./modelQuery.ts";
+import type { ModelRelation } from "./modelRelationTypes";
 import { quoteIdentifier, resolveSoftDeleteColumn } from "./query.ts";
 import { snapshotQueryPlan } from "./queryPlanSnapshot.ts";
 import type { AnyRelationQuery, RelatedModelClass } from "./relationQuery.ts";
@@ -87,8 +102,9 @@ type RelatedRef<
   M extends Model<TRelated, RelatedKey> = Model<TRelated, RelatedKey>,
 > =
   | ModelDefinition<TRelated, RelatedKey, M>
+  | AuthoredModelClass<TRelated, RelatedKey, M>
   | string
-  | (() => ModelDefinition<TRelated, RelatedKey, M>);
+  | (() => ModelDefinition<TRelated, RelatedKey, M> | AuthoredModelClass<TRelated, RelatedKey, M>);
 
 function accessorName(key: string): string {
   const pascal = key.replace(/_([a-z])/g, (_match, letter: string) => letter.toUpperCase());
@@ -644,6 +660,14 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     );
   }
 
+  hasMany<C extends AnyModelClass>(
+    related: C | (() => C),
+    foreignKey?: keyof ClassModelRow<C> & string,
+    localKey?: PrimaryKey,
+  ): ModelRelation<
+    HasManyRelationQuery<TEntity, PrimaryKey, ClassModelRow<C>, ClassModelKey<C>>,
+    ClassModelInstance<C>
+  >;
   hasMany<
     TRelated extends object,
     RelatedKey extends keyof TRelated & string,
@@ -652,7 +676,18 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     related: RelatedRef<TRelated, RelatedKey, M>,
     foreignKey?: keyof TRelated & string,
     localKey?: PrimaryKey,
-  ): HasManyRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey> {
+  ): HasManyRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>;
+  hasMany<
+    TRelated extends object,
+    RelatedKey extends keyof TRelated & string,
+    M extends Model<TRelated, RelatedKey>,
+  >(
+    related: RelatedRef<TRelated, RelatedKey, M>,
+    foreignKey?: keyof TRelated & string,
+    localKey?: PrimaryKey,
+  ):
+    | HasManyRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>
+    | ModelRelation<HasManyRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>, M> {
     const table = this.repository.getTable();
     const relatedClass = resolveRelated(this as never, related);
     return new HasManyRelationQuery(
@@ -666,6 +701,14 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     );
   }
 
+  hasOne<C extends AnyModelClass>(
+    related: C | (() => C),
+    foreignKey?: keyof ClassModelRow<C> & string,
+    localKey?: PrimaryKey,
+  ): ModelRelation<
+    HasOneRelationQuery<TEntity, PrimaryKey, ClassModelRow<C>, ClassModelKey<C>>,
+    ClassModelInstance<C>
+  >;
   hasOne<
     TRelated extends object,
     RelatedKey extends keyof TRelated & string,
@@ -674,7 +717,18 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     related: RelatedRef<TRelated, RelatedKey, M>,
     foreignKey?: keyof TRelated & string,
     localKey?: PrimaryKey,
-  ): HasOneRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey> {
+  ): HasOneRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>;
+  hasOne<
+    TRelated extends object,
+    RelatedKey extends keyof TRelated & string,
+    M extends Model<TRelated, RelatedKey>,
+  >(
+    related: RelatedRef<TRelated, RelatedKey, M>,
+    foreignKey?: keyof TRelated & string,
+    localKey?: PrimaryKey,
+  ):
+    | HasOneRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>
+    | ModelRelation<HasOneRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>, M> {
     const table = this.repository.getTable();
     const relatedClass = resolveRelated(this as never, related);
     return new HasOneRelationQuery(
@@ -688,6 +742,14 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     );
   }
 
+  belongsTo<C extends AnyModelClass>(
+    related: C | (() => C),
+    foreignKey?: keyof TEntity & string,
+    ownerKey?: ClassModelKey<C>,
+  ): ModelRelation<
+    BelongsToRelationQuery<TEntity, PrimaryKey, ClassModelRow<C>, ClassModelKey<C>>,
+    ClassModelInstance<C>
+  >;
   belongsTo<
     TRelated extends object,
     RelatedKey extends keyof TRelated & string,
@@ -696,7 +758,18 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     related: RelatedRef<TRelated, RelatedKey, M>,
     foreignKey?: keyof TEntity & string,
     ownerKey?: RelatedKey,
-  ): BelongsToRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey> {
+  ): BelongsToRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>;
+  belongsTo<
+    TRelated extends object,
+    RelatedKey extends keyof TRelated & string,
+    M extends Model<TRelated, RelatedKey>,
+  >(
+    related: RelatedRef<TRelated, RelatedKey, M>,
+    foreignKey?: keyof TEntity & string,
+    ownerKey?: RelatedKey,
+  ):
+    | BelongsToRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>
+    | ModelRelation<BelongsToRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>, M> {
     const relatedClass = resolveRelated(this as never, related);
     const relatedTable = relatedClass.repository().getTable();
     return new BelongsToRelationQuery(
@@ -712,6 +785,22 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   }
 
   hasManyThrough<
+    C extends AnyModelClass,
+    TThrough extends object,
+    ThroughKey extends keyof TThrough & string,
+    ThroughM extends Model<TThrough, ThroughKey>,
+  >(
+    related: C | (() => C),
+    through: RelatedRef<TThrough, ThroughKey, ThroughM>,
+    firstKey?: string,
+    secondKey?: keyof ClassModelRow<C> & string,
+    localKey?: PrimaryKey,
+    secondLocalKey?: ThroughKey,
+  ): ModelRelation<
+    HasManyThroughRelationQuery<TEntity, PrimaryKey, ClassModelRow<C>, ClassModelKey<C>>,
+    ClassModelInstance<C>
+  >;
+  hasManyThrough<
     TRelated extends object,
     TThrough extends object,
     RelatedKey extends keyof TRelated & string,
@@ -725,7 +814,24 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     secondKey?: keyof TRelated & string,
     localKey?: PrimaryKey,
     secondLocalKey?: ThroughKey,
-  ): HasManyThroughRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey> {
+  ): HasManyThroughRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>;
+  hasManyThrough<
+    TRelated extends object,
+    TThrough extends object,
+    RelatedKey extends keyof TRelated & string,
+    ThroughKey extends keyof TThrough & string,
+    M extends Model<TRelated, RelatedKey>,
+    ThroughM extends Model<TThrough, ThroughKey>,
+  >(
+    related: RelatedRef<TRelated, RelatedKey, M>,
+    through: RelatedRef<TThrough, ThroughKey, ThroughM>,
+    firstKey?: string,
+    secondKey?: keyof TRelated & string,
+    localKey?: PrimaryKey,
+    secondLocalKey?: ThroughKey,
+  ):
+    | HasManyThroughRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>
+    | ModelRelation<HasManyThroughRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>, M> {
     const table = this.repository.getTable();
     const relatedClass = resolveRelated(this as never, related);
     const throughClass = resolveRelated(this as never, through);
@@ -744,6 +850,15 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     );
   }
 
+  belongsToMany<C extends AnyModelClass, Pivot extends object = Record<string, unknown>>(
+    related: C | (() => C),
+    pivotTable?: string,
+    foreignPivotKey?: keyof Pivot & string,
+    relatedPivotKey?: keyof Pivot & string,
+  ): ModelRelation<
+    BelongsToManyRelationQuery<TEntity, PrimaryKey, ClassModelRow<C>, ClassModelKey<C>, Pivot>,
+    ClassModelInstance<C>
+  >;
   belongsToMany<
     TRelated extends object,
     RelatedKey extends keyof TRelated & string,
@@ -754,7 +869,23 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     pivotTable?: string,
     foreignPivotKey?: keyof Pivot & string,
     relatedPivotKey?: keyof Pivot & string,
-  ): BelongsToManyRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey, Pivot> {
+  ): BelongsToManyRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey, Pivot>;
+  belongsToMany<
+    TRelated extends object,
+    RelatedKey extends keyof TRelated & string,
+    Pivot extends object = Record<string, unknown>,
+    M extends Model<TRelated, RelatedKey> = Model<TRelated, RelatedKey>,
+  >(
+    related: RelatedRef<TRelated, RelatedKey, M>,
+    pivotTable?: string,
+    foreignPivotKey?: keyof Pivot & string,
+    relatedPivotKey?: keyof Pivot & string,
+  ):
+    | BelongsToManyRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey, Pivot>
+    | ModelRelation<
+        BelongsToManyRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey, Pivot>,
+        M
+      > {
     const table = this.repository.getTable();
     const relatedClass = resolveRelated(this as never, related);
     const relatedTable = relatedClass.repository().getTable();
@@ -774,6 +905,16 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     );
   }
 
+  morphMany<C extends AnyModelClass>(
+    related: C | (() => C),
+    morphName: string,
+    typeKey?: keyof ClassModelRow<C> & string,
+    idKey?: keyof ClassModelRow<C> & string,
+    morphType?: string,
+  ): ModelRelation<
+    MorphManyRelationQuery<TEntity, PrimaryKey, ClassModelRow<C>, ClassModelKey<C>>,
+    ClassModelInstance<C>
+  >;
   morphMany<
     TRelated extends object,
     RelatedKey extends keyof TRelated & string,
@@ -784,7 +925,20 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     typeKey?: keyof TRelated & string,
     idKey?: keyof TRelated & string,
     morphType?: string,
-  ): MorphManyRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey> {
+  ): MorphManyRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>;
+  morphMany<
+    TRelated extends object,
+    RelatedKey extends keyof TRelated & string,
+    M extends Model<TRelated, RelatedKey>,
+  >(
+    related: RelatedRef<TRelated, RelatedKey, M>,
+    morphName: string,
+    typeKey?: keyof TRelated & string,
+    idKey?: keyof TRelated & string,
+    morphType?: string,
+  ):
+    | MorphManyRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>
+    | ModelRelation<MorphManyRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>, M> {
     const table = this.repository.getTable();
     const relatedClass = resolveRelated(this as never, related);
     return new MorphManyRelationQuery(
@@ -800,6 +954,16 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     );
   }
 
+  morphOne<C extends AnyModelClass>(
+    related: C | (() => C),
+    morphName: string,
+    typeKey?: keyof ClassModelRow<C> & string,
+    idKey?: keyof ClassModelRow<C> & string,
+    morphType?: string,
+  ): ModelRelation<
+    MorphOneRelationQuery<TEntity, PrimaryKey, ClassModelRow<C>, ClassModelKey<C>>,
+    ClassModelInstance<C>
+  >;
   morphOne<
     TRelated extends object,
     RelatedKey extends keyof TRelated & string,
@@ -810,7 +974,20 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
     typeKey?: keyof TRelated & string,
     idKey?: keyof TRelated & string,
     morphType?: string,
-  ): MorphOneRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey> {
+  ): MorphOneRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>;
+  morphOne<
+    TRelated extends object,
+    RelatedKey extends keyof TRelated & string,
+    M extends Model<TRelated, RelatedKey>,
+  >(
+    related: RelatedRef<TRelated, RelatedKey, M>,
+    morphName: string,
+    typeKey?: keyof TRelated & string,
+    idKey?: keyof TRelated & string,
+    morphType?: string,
+  ):
+    | MorphOneRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>
+    | ModelRelation<MorphOneRelationQuery<TEntity, PrimaryKey, TRelated, RelatedKey>, M> {
     const table = this.repository.getTable();
     const relatedClass = resolveRelated(this as never, related);
     return new MorphOneRelationQuery(
@@ -827,7 +1004,10 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
   }
 
   morphTo(
-    relatedByType: Record<string, AnyModelDefinition | string | (() => AnyModelDefinition)>,
+    relatedByType: Record<
+      string,
+      AnyModelDefinition | AnyModelClass | string | (() => AnyModelDefinition | AnyModelClass)
+    >,
     morphName?: string,
     typeKey?: keyof TEntity & string,
     idKey?: keyof TEntity & string,
@@ -844,7 +1024,9 @@ class Model<TEntity extends object, PrimaryKey extends keyof TEntity & string> {
       Object.entries(relatedByType).map(([type, related]) => [
         type,
         getBindingPorts(this.#binding).model(
-          (typeof related === "function" ? related() : related) as never,
+          (typeof related === "function" && !(related.prototype instanceof Model)
+            ? related()
+            : related) as never,
         ),
       ]),
     ) as Record<string, RelatedModelClass<Record<string, unknown>, "id">>;
@@ -1040,8 +1222,13 @@ class BoundModelFacade<R extends object, K extends keyof R & string, M extends M
   resolveRelated<A extends object, B extends keyof A & string, Related extends Model<A, B>>(
     reference: RelatedRef<A, B, Related>,
   ): RelatedModelClass<A, B> {
-    const definition = typeof reference === "function" ? reference() : reference;
-    return getBindingPorts(this.binding).model(definition) as unknown as RelatedModelClass<A, B>;
+    const definition =
+      typeof reference === "function" && !(reference.prototype instanceof Model)
+        ? (reference as () => ModelDefinition<A, B, Related> | AuthoredModelClass<A, B, Related>)()
+        : reference;
+    return getBindingPorts(this.binding).model(
+      definition as ModelDefinition<A, B, Related> | AuthoredModelClass<A, B, Related> | string,
+    ) as unknown as RelatedModelClass<A, B>;
   }
   private terminal<V, A>(
     work: (facade: BoundModelFacade<R, K, M>, input: A, query: ModelQuery<M>) => Promise<V>,
@@ -1504,6 +1691,18 @@ function createBoundModel<R extends object, K extends keyof R & string, M extend
   return new BoundModelFacade(binding);
 }
 
+/** Concise class authoring; low-level definitions remain an explicit extension point. */
+type DefineModel = (<F extends ModelFields, K extends keyof F & string = "id" & keyof F & string>(
+  options: ModelClassOptions<F, K>,
+) => AuthoredModelClass<InferModelFields<F>, K, Model<InferModelFields<F>, K>>) &
+  typeof defineModelDefinition;
+const defineModel: DefineModel = ((options: object): unknown => {
+  // Inspect descriptors so selecting the authoring path never invokes metadata getters.
+  if (Object.getOwnPropertyDescriptor(options, "fields"))
+    return defineAuthoredModel(options as ModelClassOptions<ModelFields, string>);
+  return defineModelDefinition(options as Parameters<typeof defineModelDefinition>[0]);
+}) as DefineModel;
+
 /** Declare an ordinary model without selecting a database session or constructing entities. */
 function createModel<R extends object, K extends keyof R & string>(options: {
   name: string;
@@ -1553,7 +1752,16 @@ function createModel<R extends object, K extends keyof R & string>(options: {
   };
 }
 
-export { defineModel } from "@getstrata/core/database/definitions";
+export { modelEffects } from "@getstrata/core/database/definitions";
+export type {
+  AnyModelClass,
+  AuthoredModelClass,
+  InferModelFields,
+  ModelClassOptions,
+  ModelField,
+  ModelFields,
+} from "./modelAuthoring";
+export { field, modelTable } from "./modelAuthoring";
 export {
   BelongsToManyRelationQuery,
   BelongsToRelationQuery,
@@ -1570,6 +1778,7 @@ export {
   BoundModelFacade,
   createBoundModel,
   createModel,
+  defineModel,
   dehydrateValue,
   filterMassAssignable,
   getModelBinding,

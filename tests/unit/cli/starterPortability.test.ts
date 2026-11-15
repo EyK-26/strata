@@ -140,7 +140,7 @@ describe("MySQL portability", () => {
       "--email-verification",
       "--yes",
     ]);
-    const mysqlAuth = await readFile(join(mysqlApp, "src/modules/auth/index.ts"), "utf8");
+    const mysqlAuth = await readAuthSources(mysqlApp);
     expect(mysqlAuth).toContain("prepareAccountMail(ports");
     expect(mysqlAuth).toContain("registerAccount(ports");
     expect(mysqlAuth).not.toContain('.slice(0, 19).replace("T", " ")');
@@ -271,7 +271,7 @@ describe("extras flags match the wizard", () => {
 
     expect(env).toContain("FEATURE_MFA=false");
     expect(env).not.toContain("FEATURE_SCIM=true");
-    expect(existsSync(join(app, "src/modules/scim/index.ts"))).toBe(false);
+    expect(existsSync(join(app, "src/http/controllers/ScimController.ts"))).toBe(false);
     expect(existsSync(join(app, "src/bootstrap/pendingMfa.ts"))).toBe(false);
   });
 
@@ -437,8 +437,7 @@ describe("generated API docs", () => {
         "--yes",
       ]);
       const docs = await readFile(join(app, "docs/API.md"), "utf8");
-      const source =
-        auth === "headers" ? "" : await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+      const source = auth === "headers" ? "" : await readAuthSources(app);
       for (const row of docs.matchAll(/\| `(GET|POST)` \| `([^`]+)`/g)) {
         const path = row[2];
         if (!path?.startsWith("/api/")) continue;
@@ -467,7 +466,7 @@ describe("generated API docs", () => {
         "--email-verification",
         "--yes",
       ]);
-      const source = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+      const source = await readAuthSources(app);
       const readme = await readFile(join(app, "README.md"), "utf8");
       const json = frontend !== "server-htmx";
       for (const path of [
@@ -692,7 +691,7 @@ test("hybrid cookie apps retain HTML and add the React JSON account contract", a
       "--email-verification",
       "--yes",
     ]);
-    const source = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+    const source = await readAuthSources(app);
     for (const path of [
       "/login",
       "/register",
@@ -722,5 +721,17 @@ test("header apps register the complete published AuthManager and GuestGuard", a
   expect(source).toContain("authenticate: request => auth.authenticate(request)");
   expect(source).toContain("const env = Object.freeze({...options.environment});");
   expect(source).not.toContain("class StarterAuthManager");
-  expect(existsSync(join(app, "src/modules/auth/index.ts"))).toBe(false);
+  expect(existsSync(join(app, "src/http/controllers/AuthController.ts"))).toBe(false);
 });
+
+async function readAuthSources(app: string): Promise<string> {
+  const paths = [
+    "src/http/auth/account.ts",
+    "src/http/controllers/AuthController.ts",
+    "src/routes/api.ts",
+    "src/routes/web.ts",
+  ];
+  const web = join(app, "src/http/controllers/AuthWebController.ts");
+  if (existsSync(web)) paths.push("src/http/controllers/AuthWebController.ts");
+  return (await Promise.all(paths.map((path) => readFile(join(app, path), "utf8")))).join("\n");
+}

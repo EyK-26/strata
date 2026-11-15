@@ -7,6 +7,7 @@ export {
   type ApplicationAuthServices,
   type BootstrapOptions,
   type BootstrappedApp,
+  buildApplicationRoutes,
   defineApp,
   serveApplication,
 } from "./application";

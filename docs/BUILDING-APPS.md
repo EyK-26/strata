@@ -69,16 +69,17 @@ Start with the generated application definition and the `defineApp` factory from
 and `createAppServer`; keep the generated entrypoints small and put application
 choices in the definition. `src/config/app.ts` holds the selected frontend, tenancy,
 views, extras and environment-default snapshot; it does not mutate `process.env`.
-Native Bun request and server options remain available. Module routes are assembled
-by default; `defineApp.routes` is an optional callback for custom route composition.
-A separate `src/routes.ts` file is unnecessary.
+Native Bun request and server options remain available. Generated applications compose `src/routes/api.ts` and `src/routes/web.ts` at
+startup. Put request handling in named classes under `src/http/controllers`,
+application form requests in `src/http/requests`, and policies in `src/policies`.
+Optional domain modules remain available for larger applications.
 
-A simple module needs a model, controller, request and policy. Controllers can use
+A typical CRUD feature uses a model, controller, request validation and policy. Controllers can use
 models selected from their owned execution (`database.model(definition)`) directly.
 Add a service when it coordinates business work or owns a reusable capability;
-pass-through service and repository classes are unnecessary. Use `createModel` for
-ordinary model declarations; custom repositories and low-level adapter APIs remain
-supported for applications that need them.
+pass-through service and repository classes are unnecessary. Use classes extending `defineModel({ table, fields })` for ordinary models. Their
+default repositories are derived internally; custom repositories and low-level
+adapter APIs remain available when they add real behavior.
 
 Jobs and listener declarations are discovered before startup completes. The
 application owns its registry, services, database, cache and queue resources.
@@ -564,12 +565,13 @@ Writes and filters infer declared field names and value types. Use `products.que
 
 ### Model composition
 
-For ordinary SQL models, use `createModel({ name, table, attributes })` from
-`@getstrata/core/database/model`. Register the definition with the application and
-select `database.model(definition)` from the current execution or transaction.
-The bound facade provides query, create and instance write APIs. Advanced
-`defineRepository` / `defineModel` declarations support custom behavior and
-explicit dependencies. See [DATABASE.md](DATABASE.md#declarative-model-binding).
+For ordinary SQL models, extend `defineModel({ table, fields })` from
+`@getstrata/core/database/model`. Declare each field once using `field` helpers;
+add attributes and relationships directly to the class. Register the class with
+the application and select `database.model(Note)` from the current execution or
+transaction. No separate repository definition is required. See
+[model authoring](DATABASE.md#declarative-model-binding) and the
+[Laravel alignment decisions](architecture/laravel-authoring-alignment.md).
 
 ### Graceful lifecycle
 

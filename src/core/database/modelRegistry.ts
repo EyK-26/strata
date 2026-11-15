@@ -30,8 +30,10 @@ import {
 import {
   BaseRepository,
   createBoundModel,
+  createClassModelDefinition,
   getModelBinding,
   getRepositoryBinding,
+  isModelClass,
   Model,
 } from "#strata-orm-runtime";
 import type { ExecutionContext } from "../contracts/application";
@@ -39,6 +41,13 @@ import type { OwnedExecution } from "../contracts/executionOwnership";
 import { EventBus } from "../events/eventBusClass";
 import { createScopedPolicy } from "../tenant/scopedDatabasePolicy";
 import type { RawPool } from "./driverPorts";
+import type {
+  AnyModelClass,
+  AuthoredModelClass,
+  ClassModelInstance,
+  ClassModelKey,
+  ClassModelRow,
+} from "./modelAuthoring";
 import type { DatabaseSession } from "./session";
 import type { TransactionSession } from "./transactionSession";
 
@@ -61,8 +70,10 @@ interface PreparedRegistry {
   readonly repositories: ReadonlyMap<AnyRepositoryDefinition, PreparedRepository>;
   readonly models: ReadonlyMap<AnyModelDefinition, PreparedModel>;
   readonly names: ReadonlyMap<string, AnyModelDefinition>;
+  readonly classes: ReadonlyMap<AnyModelClass, AnyModelDefinition>;
 }
 interface RegistrySnapshot {
+  readonly classes: ReadonlyMap<AnyModelClass, AnyModelDefinition>;
   readonly repositories: readonly AnyRepositoryDefinition[];
   readonly models: readonly AnyModelDefinition[];
   readonly dependencies: readonly AnyServiceToken[];
@@ -81,11 +92,21 @@ function definitionArray<T>(values: readonly T[]): readonly T[] {
 }
 function snapshotRegistry(
   repositories: readonly AnyRepositoryDefinition[] = [],
-  models: readonly AnyModelDefinition[] = [],
+  models: readonly (AnyModelDefinition | AnyModelClass)[] = [],
   repositoryEffects: readonly RepositoryEffectsDeclaration[] = [],
 ): RegistrySnapshot {
   repositories = definitionArray(repositories);
-  models = definitionArray(models);
+  const classDefinitions = new Map<AnyModelClass, AnyModelDefinition>();
+  const implicitRepositories: AnyRepositoryDefinition[] = [];
+  const resolvedModels = definitionArray(models).map((model) => {
+    if (!isModelClass(model)) return model;
+    if (classDefinitions.has(model)) throw new TypeError("Duplicate model class.");
+    const definition = createClassModelDefinition(model);
+    classDefinitions.set(model, definition);
+    implicitRepositories.push(definition.repository);
+    return definition;
+  });
+  repositories = Object.freeze([...repositories, ...implicitRepositories]);
   repositoryEffects = definitionArray(repositoryEffects);
   const repos = new Set<AnyRepositoryDefinition>();
   const repoNames = new Set<string>();
@@ -110,15 +131,17 @@ function snapshotRegistry(
   }
   for (const declaration of repositoryEffects) {
     assertRepositoryEffectsDeclaration(declaration);
-    assertDefinition(declaration.definition, "repository");
-    if (!repos.has(declaration.definition))
-      throw new TypeError("Effect repository is not registered.");
+    const effectRepository = isModelClass(declaration.definition)
+      ? classDefinitions.get(declaration.definition)?.repository
+      : declaration.definition;
+    assertDefinition(effectRepository, "repository");
+    if (!repos.has(effectRepository)) throw new TypeError("Effect repository is not registered.");
     for (const effect of declaration.effects) {
       if (effect.transactional) add(effect.transactional);
       if (effect.afterCommit) add(effect.afterCommit);
     }
   }
-  for (const definition of models) {
+  for (const definition of resolvedModels) {
     assertDefinition(definition, "model");
     if (definitions.has(definition) || !repos.has(definition.repository))
       throw new TypeError("Duplicate model or unregistered repository.");
@@ -140,7 +163,8 @@ function snapshotRegistry(
   }
   return Object.freeze({
     repositories: Object.freeze([...repositories]),
-    models: Object.freeze([...models]),
+    models: Object.freeze(resolvedModels),
+    classes: classDefinitions,
     dependencies: Object.freeze(dependencies),
     repositoryEffects,
   });
@@ -160,7 +184,12 @@ function prepareRegistry(
     for (const effect of [
       ...definition.effects,
       ...snapshot.repositoryEffects
-        .filter((item) => item.definition === definition)
+        .filter(
+          (item) =>
+            (isModelClass(item.definition)
+              ? snapshot.classes.get(item.definition)?.repository
+              : item.definition) === definition,
+        )
         .flatMap((item) => item.effects),
     ]) {
       if (effect.transactional) {
@@ -203,7 +232,7 @@ function prepareRegistry(
     );
     for (const name of [definition.name, ...definition.aliases]) names.set(name, definition);
   }
-  return Object.freeze({ app, repositories, models, names });
+  return Object.freeze({ app, repositories, models, names, classes: snapshot.classes });
 }
 interface SessionAuthority {
   readonly pool: RawPool;
@@ -218,6 +247,9 @@ interface BoundRegistry {
   repository<R extends object, K extends keyof R & string, T extends BaseRepository<R, K>>(
     definition: RepositoryDefinition<R, K, T>,
   ): T;
+  model<C extends AnyModelClass>(
+    model: C,
+  ): BoundModel<ClassModelRow<C>, ClassModelKey<C>, ClassModelInstance<C>>;
   model<R extends object, K extends keyof R & string, M extends Model<R, K>>(
     definition: ModelDefinition<R, K, M>,
   ): BoundModel<R, K, M>;
@@ -263,11 +295,14 @@ function createBoundRegistryFactory(
           return result;
         },
         model<R extends object, K extends keyof R & string, M extends Model<R, K>>(
-          definition: ModelDefinition<R, K, M>,
+          definition: ModelDefinition<R, K, M> | AuthoredModelClass<R, K, M>,
         ): BoundModel<R, K, M> {
           authority.assertActive();
-          assertDefinition(definition, "model");
-          const erased = definition as unknown as AnyModelDefinition;
+          const resolved =
+            typeof definition === "function" ? prepared.classes.get(definition) : definition;
+          if (!resolved) throw new TypeError("Model is not registered in this application.");
+          assertDefinition(resolved, "model");
+          const erased = resolved as unknown as AnyModelDefinition;
           const template = prepared.models.get(erased);
           if (!template) throw new TypeError("Model is not registered in this application.");
           const cached = models.get(erased);
@@ -313,7 +348,7 @@ function createBoundRegistryFactory(
           assertActive: authority.assertActive,
           repository: registry.repository,
           model: <R extends object, K extends keyof R & string, M extends Model<R, K>>(
-            value: ModelDefinition<R, K, M> | string,
+            value: ModelDefinition<R, K, M> | AuthoredModelClass<R, K, M> | string,
           ) => {
             const def = typeof value === "string" ? prepared.names.get(value) : value;
             if (!def) throw new TypeError("Unknown related model.");

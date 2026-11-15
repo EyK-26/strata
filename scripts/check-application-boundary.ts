@@ -199,6 +199,7 @@ const neutralEdges: Readonly<
       "database/acquisitionMetrics",
       "database/sqlDialects",
       "database/definitions",
+      "database/modelAuthoring",
       "contracts/token",
     ],
   },
@@ -264,6 +265,7 @@ const neutralEdges: Readonly<
       "database/baseRepository",
       "database/driverPorts",
       "database/model",
+      "database/modelAuthoring",
       "database/modelAttributes",
       "database/modelQuery",
       "database/relationQuery",
@@ -286,6 +288,7 @@ const neutralEdges: Readonly<
       "tenant/scopedDatabasePolicy",
     ],
     types: [
+      "database/modelAuthoring",
       "contracts/application",
       "contracts/executionOwnership",
       "database/driverPorts",
@@ -314,13 +317,34 @@ const neutralEdges: Readonly<
       "database/definitions",
       "database/driverPorts",
       "database/model",
+      "database/modelAuthoring",
       "database/session",
       "database/transactionSession",
     ],
   },
   [PATH("database/ormRuntime")]: {
-    values: ["database/baseRepository", "database/repositoryQuery", "database/model"],
-    types: [],
+    values: [
+      "database/baseRepository",
+      "database/repositoryQuery",
+      "database/model",
+      "database/modelAuthoring",
+    ],
+    types: ["database/modelRelationTypes"],
+  },
+  // Class authoring compiles immutable metadata; it cannot own application/SQL resources.
+  [PATH("database/modelAuthoring")]: {
+    values: ["database/definitions", "database/ormRuntime"],
+    types: [
+      "contracts/token",
+      "database/baseRepository",
+      "database/modelAttributes",
+      "database/table",
+      "database/model",
+    ],
+  },
+  [PATH("database/modelRelationTypes")]: {
+    values: [],
+    types: ["database/modelQuery", "database/relationQuery", "database/types"],
   },
   [PATH("database/baseRepository")]: {
     values: [
@@ -355,8 +379,10 @@ const neutralEdges: Readonly<
       "database/relationQuery",
       "database/relationships",
       "database/definitions",
+      "database/modelAuthoring",
     ],
     types: [
+      "database/modelRelationTypes",
       "contracts/token",
       "database/table",
       "pagination/index",

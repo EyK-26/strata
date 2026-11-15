@@ -56,7 +56,9 @@ function createDatabaseSession(
     };
     const session: DatabaseSession = {
       repository: (definition) => registry.repository(definition),
-      model: (definition) => registry.model(definition),
+      get model() {
+        return registry.model;
+      },
 
       dialect: pool.dialect,
       capabilities: pool.capabilities,

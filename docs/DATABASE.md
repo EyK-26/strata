@@ -281,25 +281,44 @@ They do not register a global model or connection.
 
 ### Declarative model binding
 
-For ordinary models, `createModel` supplies the standard repository and entity constructors at declaration time:
+For ordinary models, use a named class with one typed field declaration:
 
 ```typescript
-import { createModel } from "@getstrata/core/database/model";
-import { defineTable } from "@getstrata/core/database/table";
+import { defineModel, field, type ModelAttributes } from "@getstrata/core/database/model";
 
-const products = defineTable<{ sku: string; title: string }, "sku">({
-  name: "products", primaryKey: "sku", columns: ["sku", "title"],
-});
-const productModel = createModel({
-  name: "Product", table: products,
-  attributes: { fillable: ["sku", "title"] },
-});
-const productRepository = productModel.repository;
+export class Product extends defineModel({
+  table: "products",
+  primaryKey: "sku",
+  fields: { sku: field.string(), title: field.string() },
+}) {
+  static $fillable = ["sku", "title"] as const;
+  static $timestamps = false;
+
+  label() { return this.get("title").toUpperCase(); }
+}
+export type ProductRecord = ModelAttributes<Product>;
 ```
 
-The helper defaults timestamps to `false`; enable them explicitly when the table declares the timestamp columns. Writable attributes remain an explicit allowlist. Register the definition in `createDatabaseBindings({ models: [productModel], ... })`, then select `database.model(productModel)` from an owned session or transaction. Register `productModel.repository` in `repositories` when selecting it directly. Definitions acquire no connections.
+Register `models: [Product]` with the application. Its registry derives the default
+repository and snapshots model metadata before serving requests. Then use
+`database.model(Product).find(sku)` from the current execution or transaction.
+Returned models retain custom methods, including relationship methods. Related
+classes must also be registered; use `this.belongsTo(Category, "category_id")`
+or a lazy reference `() => Category` for circular imports.
 
-For custom entity methods, repository hooks, service dependencies, scopes or observers, retain the advanced declarations:
+The default primary key is `id`; non-id tables declare it explicitly. Model fields
+supply runtime column metadata and TypeScript types, not schema DDL or HTTP input
+validation. Migrations create the actual schema. Keep writable fields explicit and
+enable timestamps only when their columns exist. `field.nullable(field.string())`
+represents nullable fields; driver boolean and timestamp representations remain
+explicit rather than introducing hidden query-time conversion.
+
+Existing object definitions created by `createModel({ name, table, attributes })`
+remain supported. Custom repository hooks and injected construction dependencies
+can use the lower-level declarations below. Ordinary custom methods and relationships
+do not require those declarations.
+
+For custom repositories or injected construction dependencies, use the advanced declarations:
 
 ```typescript
 import { BaseRepository } from "@getstrata/core/database/baseRepository";

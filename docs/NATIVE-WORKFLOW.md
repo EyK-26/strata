@@ -11,26 +11,26 @@ bunx strata make:model Contact --table=workflow_contacts --key-type=string
 bunx strata make:migration create_workflow_contacts
 ```
 
-The commands create separate files. Edit `src/models/Contact.ts` to add the domain field to the record, table columns and explicit fillable allowlist:
+The commands create separate files. Edit `src/models/Contact.ts` to declare each
+field once and keep its mass-assignment allowlist explicit:
 
 ```typescript
-import { createModel } from "@getstrata/core/database/model";
-import { defineTable } from "@getstrata/core/database/table";
+import { defineModel, field } from "@getstrata/core/database/model";
 
-interface ContactRecord { id: string; name: string }
-const table = defineTable<ContactRecord, "id">({
-  name: "workflow_contacts",
-  primaryKey: "id",
-  columns: ["id", "name"],
-});
-export const ContactDefinition = createModel({
-  name: "Contact", table,
-  attributes: { fillable: ["id", "name"], timestamps: false },
-});
-export const ContactRepository = ContactDefinition.repository;
+export class Contact extends defineModel({
+  table: "workflow_contacts",
+  fields: { id: field.string(), name: field.string() },
+}) {
+  static $fillable = ["id", "name"] as const;
+  static $timestamps = false;
+}
 ```
 
-Register `ContactDefinition` in the `models` list passed to `createDatabaseBindings` in your application's composition root (generated apps use `src/models/register.ts`). Include `ContactRepository` in its repository list when using it directly. The generator writes a declaration; registration and session selection remain explicit. Keep the allowlist explicit. Use application validation and authorization before mass assignment; timestamps default to off in `createModel` and can be enabled when their columns are declared. Advanced models with custom entity methods, repositories, dependencies, scopes or observers can continue using `defineModel` and `defineRepository` from `database/definitions`.
+Add `Contact` to the model list in `src/models/register.ts`. The application derives
+its default repository; no separate repository, table object or row interface is
+required. Use `ModelAttributes<Contact>` when a row type is needed. Add domain and
+relationship methods directly to the class. Registration and session selection stay
+explicit; no class holds the current connection or tenant.
 
 ## Define the migration explicitly
 
@@ -43,7 +43,7 @@ schema.create("workflow_contacts", (table) => {
 });
 ```
 
-Its down callback uses `schema.drop("workflow_contacts")`. The generated callbacks run inside `Schema.run(db, currentSqlDialect().driver, ...)`. Apply the migration with the app's migration identity:
+Its down callback uses `schema.drop("workflow_contacts")`. The generated `defineMigration` callbacks receive the schema builder and migration database explicitly. Apply the migration with the app's migration identity:
 
 ```sh
 bunx strata migrate
@@ -58,15 +58,15 @@ Keep previously applied migration names/history stable. For an existing table, g
 Inside an application invocation, select its database session (or transaction session) explicitly:
 
 ```typescript
-import { ContactDefinition } from "./src/models/Contact";
+import { Contact } from "./src/models/Contact";
 
 // selectedSession is the invocation-owned DatabaseSession or TransactionSession.
-const Contact = selectedSession.model(ContactDefinition);
+const contacts = selectedSession.model(Contact);
 
-const contact = await Contact.create({ id: crypto.randomUUID(), name: "Příliš žluťoučký" });
+const contact = await contacts.create({ id: crypto.randomUUID(), name: "Příliš žluťoučký" });
 await contact.update({ name: "Updated <contact>" });
-const found = await Contact.find(contact.toObject().id);
-// Contact.repository() is available for repository operations; no boilerplate subclass required.
+const found = await contacts.find(contact.toObject().id);
+// Ordinary model operations need no repository declaration.
 ```
 
 Generate only a template:

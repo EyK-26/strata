@@ -4,7 +4,7 @@ import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import type { CachedJson } from "@getstrata/core/contracts/di";
 import type { RouteRequest } from "@getstrata/core/http/route";
 import type { RouteModelBindingPorts } from "@getstrata/core/http/securedRouteModelBinding";
-import TargetController from "./controller";
+import TargetController from "./http/controllers/TargetController";
 import { createTargetRoutes } from "./routes";
 
 export function generatedHandlerContracts(

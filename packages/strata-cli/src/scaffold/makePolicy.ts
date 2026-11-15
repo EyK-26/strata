@@ -1,68 +1,48 @@
-import { access } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
 import { scaffoldArguments, writeScaffoldFile } from "./scaffoldFile";
-import { moduleDirectory, toKebabCase, toPascalCase } from "./utils";
+import { toKebabCase, toPascalCase } from "./utils";
 
 async function makePolicyCommand(...args: string[]): Promise<void> {
   const parsed = scaffoldArguments("make:policy", args);
   if (!parsed) return;
-  const [moduleName] = parsed;
-  if (!moduleName) {
-    throw new Error("make:policy requires a module name.");
-  }
+  const [input] = parsed;
+  if (!input) throw new Error("make:policy requires a policy name.");
+  const parts = input.split("/").map(toPascalCase);
+  const name = parts.at(-1) ?? "";
+  const className = name.endsWith("Policy") ? name : `${name}Policy`;
+  if (className === "Policy")
+    throw new Error("make:policy requires a resource policy name, such as NotePolicy.");
+  const resource = toKebabCase(name.replace(/Policy$/, ""));
+  const content = `import type { AuthUser } from "@getstrata/core/auth/authContext";
+import { Policy } from "@getstrata/core/auth/policy";
 
-  const moduleSlug = toKebabCase(moduleName);
-  const resourceName = toPascalCase(moduleName);
-  const directory = await moduleDirectory(moduleSlug);
-  const policyPath = join(directory, "policy.ts");
-
-  try {
-    await access(directory);
-  } catch {
-    throw new Error(`Module not found: ${directory}`);
-  }
-
-  try {
-    await access(policyPath);
-    throw new Error(`Policy already exists: ${policyPath}`);
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith("Policy already exists:")) {
-      throw error;
-    }
-  }
-
-  const recordType = `${resourceName}Record`;
-  const policyClass = `${resourceName}Policy`;
-
-  const content = `import { Policy } from "@getstrata/core/auth/policy";
-import type { ${recordType} } from "./types";
-
-class ${policyClass} extends Policy {
-  override view(_user: unknown, _resource: ${recordType}): boolean {
+class ${className} extends Policy {
+  override view(_user: AuthUser | null, _resource: unknown): boolean {
     return true;
   }
 
-  override create(_user: unknown): boolean {
-    return true;
+  override create(_user: AuthUser | null): boolean {
+    return false;
   }
 
-  override update(_user: unknown, _resource: ${recordType}): boolean {
-    return true;
+  override update(_user: AuthUser | null, _resource: unknown): boolean {
+    return false;
   }
 
-  override delete(_user: unknown, _resource: ${recordType}): boolean {
-    return true;
+  override delete(_user: AuthUser | null, _resource: unknown): boolean {
+    return false;
   }
 }
 
-export default ${policyClass};
+export default ${className};
 `;
-
-  await writeScaffoldFile(relative(process.cwd(), policyPath).split(sep), content, "Policy");
-
-  console.log(`Created policy in: ${policyPath}`);
+  const path = await writeScaffoldFile(
+    ["src", "policies", ...parts.slice(0, -1), `${className}.ts`],
+    content,
+    "Policy",
+  );
+  console.log(`Created policy: ${path}`);
   console.log(
-    `Register it in your module index: policies: { "${moduleSlug}": new ${policyClass}() }.`,
+    `Register the policy in your application policy map: "${resource}": new ${className}().`,
   );
 }
 

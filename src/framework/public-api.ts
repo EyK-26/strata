@@ -80,8 +80,8 @@ export type {
   TypedRepositoryEffect,
 } from "@getstrata/core/database/definitions";
 export {
-  defineModel,
   defineRepository,
+  modelEffects,
   repositoryEffects,
 } from "@getstrata/core/database/definitions";
 export type {
@@ -106,6 +106,14 @@ export type {
   StatelessFactoryConstruction,
 } from "@getstrata/core/database/factory";
 export { defineFactory, Factory } from "@getstrata/core/database/factory";
+export type {
+  AnyModelClass,
+  AuthoredModelClass,
+  InferModelFields,
+  ModelClassOptions,
+  ModelField,
+  ModelFields,
+} from "@getstrata/core/database/model";
 export { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
 export {
   BadRequestError,
@@ -139,6 +147,8 @@ export {
   BelongsToManyRelationQuery,
   BelongsToRelationQuery,
   createModel,
+  defineModel,
+  field,
   HasManyRelationQuery,
   HasManyThroughRelationQuery,
   HasOneRelationQuery,
@@ -147,6 +157,7 @@ export {
   MorphManyRelationQuery,
   MorphOneRelationQuery,
   MorphToRelationQuery,
+  modelTable,
   RepositoryQuery,
 } from "#strata-orm-runtime";
 export type {

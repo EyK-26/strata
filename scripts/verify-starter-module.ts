@@ -316,17 +316,13 @@ try {
     registerBefore,
     "Scaffolding must leave application repository registration unchanged.",
   );
-  // Static composition supplies the SAME definition to runtime bindings and cache effects.
-  const repositories = "export const repositoryDefinitions = Object.freeze([";
+  // Class registration derives its repository for the same invocation-scoped database.
   const models = "export const modelDefinitions = Object.freeze([";
-  assert.equal(registerBefore.split(repositories).length, 2);
   assert.equal(registerBefore.split(models).length, 2);
   await writeFile(
     registerPath,
-    "import {TargetDefinition,targetRepository} from '../modules/target/model.ts';\n" +
-      registerBefore
-        .replace(repositories, `${repositories}targetRepository, `)
-        .replace(models, `${models}TargetDefinition, `),
+    "import { Target } from '../modules/target/models/Target.ts';\n" +
+      registerBefore.replace(models, `${models}Target, `),
   );
   if (process.argv.includes("--typed-handlers")) {
     await writeFile(

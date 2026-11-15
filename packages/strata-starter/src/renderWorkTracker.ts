@@ -1,3 +1,4 @@
+import { ControllerActions, type RenderedHttpFeature, renderAction } from "./controllerActions.ts";
 import type { StarterFeaturePlan } from "./featurePlan.ts";
 
 export function renderWorkTrackerModels(): string {
@@ -172,8 +173,8 @@ export default migration;
 `;
 }
 
-export function renderWorkTrackerModule(): string {
-  return `import type { AppModule, BusinessRequestPorts } from "@getstrata/bootstrap/contracts";
+function renderWorkTrackerParts(actions?: ControllerActions) {
+  const support = `import type { AppModule, ModuleRouteContext, BusinessRequestPorts } from "@getstrata/bootstrap/contracts";
 import { BadRequestError, NotFoundError, UnauthorizedError } from "@getstrata/core/errors/http";
 import { jsonResponse } from "@getstrata/core/http/response";
 import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
@@ -183,7 +184,10 @@ function identity(ports:BusinessRequestPorts){
   if(!user)throw new UnauthorizedError();
   return {tenantId:ports.established.tenant.id,userId:Number(user.id)};
 }
-async function fields(request:Request):Promise<Record<string,unknown>>{
+${
+  actions
+    ? 'import { readWorkFields as fields } from "../requests/WorkRequest.ts";\n'
+    : `async function fields(request:Request):Promise<Record<string,unknown>>{
   const content=request.headers.get("content-type")??"";
   if(content.includes("application/json")){
     const value:unknown=await request.json();
@@ -191,6 +195,8 @@ async function fields(request:Request):Promise<Record<string,unknown>>{
     return value as Record<string,unknown>;
   }
   return Object.fromEntries(await request.formData());
+}
+`
 }
 async function mutate(input:Record<string,unknown>,ports:BusinessRequestPorts,publisher:WorkPublisher){
   try {
@@ -211,22 +217,45 @@ async function mutate(input:Record<string,unknown>,ports:BusinessRequestPorts,pu
   }
 }
 function escape(value:string){return value.replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]!);}
-const module:AppModule={name:"work-tracker",order:5,
+`;
+  const api = `${
+    actions
+      ? `export function workTrackerApiRoutes(context: ModuleRouteContext): AppRouteMap {
+    const { kernel, dependencies } = context;
+    const publisher = dependencies.container.resolve(WORK_TRACKER_OUTBOX);
+    const controller = new WorkTrackerController(publisher);`
+      : `const module:AppModule={name:"work-tracker",order:5,
   routes({kernel,dependencies}){
-    const publisher=dependencies.container.resolve(WORK_TRACKER_OUTBOX);
+    const publisher=dependencies.container.resolve(WORK_TRACKER_OUTBOX);`
+  }
     return {"/api/v1/work":{
-      GET:kernel.wrapApi(async(request,ports)=>{
+      GET:kernel.wrapApi(${renderAction(
+        actions,
+        "index",
+        `async(request,ports)=>{
         const service=createWorkTracker(ports.database,publisher,identity(ports));
         const organization=new URL(request.url).searchParams.get("organization");
         return jsonResponse(organization?await service.tasks(organization):await service.organizations());
-      }),
-      POST:kernel.wrapApi(async(request,ports)=>jsonResponse(await mutate(await fields(request),ports,publisher))),
+      }`,
+      )}),
+      POST:kernel.wrapApi(${renderAction(actions, "store", `async(request,ports)=>jsonResponse(await mutate(await fields(request),ports,publisher))`)}),
     }};
-  },
-  webRoutes({kernel,dependencies}){
-    const publisher=dependencies.container.resolve(WORK_TRACKER_OUTBOX);
+  }${actions ? "" : ","}
+`;
+  const web = `${
+    actions
+      ? `export function workTrackerWebRoutes(context: ModuleRouteContext): AppRouteMap {
+    const { kernel, dependencies } = context;
+    const publisher = dependencies.container.resolve(WORK_TRACKER_OUTBOX);
+    const controller = new WorkTrackerController(publisher);`
+      : `  webRoutes({kernel,dependencies}){
+    const publisher=dependencies.container.resolve(WORK_TRACKER_OUTBOX);`
+  }
     return {"/work":{
-      GET:kernel.wrapWebAuthenticated(async(request,ports)=>{
+      GET:kernel.wrapWebAuthenticated(${renderAction(
+        actions,
+        "showPage",
+        `async(request,ports)=>{
         const service=createWorkTracker(ports.database,publisher,identity(ports));
         const organization=new URL(request.url).searchParams.get("organization")??"";
         const organizations=await service.organizations();
@@ -236,18 +265,47 @@ const module:AppModule={name:"work-tracker",order:5,
         const form=(content:string)=>'<form method="post" action="/work">'+hidden+content+'</form>';
         const html='<!doctype html><title>Work tracker</title><h1>Work tracker</h1><nav>'+organizations.map(org=>'<a href="/work?organization='+encodeURIComponent(org.id)+'">'+escape(org.name)+'</a> ').join('')+'</nav>'+form('<input name="name" required maxlength="200" placeholder="Organization name"><button name="action" value="organization">Create organization</button>')+(organization?'<h2>Projects</h2>'+form('<input name="name" required maxlength="200" placeholder="Project name"><button name="action" value="project">Create project (owner)</button>')+projects.map(project=>'<h3>'+escape(project.name)+'</h3>'+form('<input type="hidden" name="project" value="'+escape(project.id)+'"><input name="title" required maxlength="200" placeholder="Task title"><button name="action" value="task">Create task</button>')).join('')+'<h2>Tasks</h2><ul>'+tasks.map(task=>'<li>'+escape(task.title)+' ('+escape(task.status)+')'+form('<input type="hidden" name="task" value="'+escape(task.id)+'"><button name="action" value="complete">Complete task</button>')+'</li>').join('')+'</ul>':'');
         return new Response(html,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"private, no-store"}});
-      }),
-      POST:kernel.wrapWebAuthenticated(async(request,ports)=>{
+      }`,
+      )}),
+      POST:kernel.wrapWebAuthenticated(${renderAction(
+        actions,
+        "storeFromPage",
+        `async(request,ports)=>{
         const input=await fields(request);
         const result=await mutate(input,ports,publisher);
         const organization=input.action==="organization"?(result as {id:string}).id:String(input.organization??"");
         return new Response(null,{status:303,headers:{location:"/work?organization="+encodeURIComponent(organization)}});
-      }),
+      }`,
+      )}),
     }};
-  },
-};
-export default module;
+  }${actions ? "" : ",\n};\nexport default module;"}
 `;
+  return { support, api, web };
+}
+
+export function renderWorkTrackerModule(): string {
+  const parts = renderWorkTrackerParts();
+  return parts.support + parts.api + parts.web;
+}
+
+export function renderWorkTrackerHttp(): RenderedHttpFeature {
+  const actions = new ControllerActions("WorkTrackerController");
+  const parts = renderWorkTrackerParts(actions);
+  const construction = `  constructor(private readonly publisher: WorkPublisher) {}`;
+  const support = parts.support
+    .replace("AppModule, ModuleRouteContext, BusinessRequestPorts", "BusinessRequestPorts")
+    .replace("createWorkTracker, WORK_TRACKER_OUTBOX,", "createWorkTracker,");
+  return {
+    files: {
+      "http/requests/WorkRequest.ts": renderWorkRequest(),
+      "http/controllers/WorkTrackerController.ts":
+        support +
+        'import type { BusinessRouteHandler } from "@getstrata/bootstrap/persistenceContracts";\n' +
+        actions.render(construction, ["publisher"]),
+    },
+    api: { name: "workTrackerApiRoutes", source: parts.api },
+    web: { name: "workTrackerWebRoutes", source: parts.web },
+  };
 }
 
 export function renderWorkTrackerGuide(): string {
@@ -285,5 +343,19 @@ If audit or outbox persistence fails, the organization/project/task mutation rol
 PostgreSQL/RLS uses a restricted runtime role and adds RLS policies to every work table.
 Column-tenancy drivers use explicit tenant/organization predicates and composite foreign keys.
 Schema commands use the migration connection; keep privileged credentials out of the runtime.
+`;
+}
+
+function renderWorkRequest(): string {
+  return `import { BadRequestError } from "@getstrata/core/errors/http";
+export async function readWorkFields(request:Request):Promise<Record<string,unknown>>{
+  const content=request.headers.get("content-type")??"";
+  if(content.includes("application/json")){
+    const value:unknown=await request.json();
+    if(!value||typeof value!=="object"||Array.isArray(value))throw new BadRequestError("Expected an object.");
+    return value as Record<string,unknown>;
+  }
+  return Object.fromEntries(await request.formData());
+}
 `;
 }

@@ -82,7 +82,7 @@ describe("create-strata integration extras", () => {
     expect(env).toContain("FEATURE_OAUTH=true");
     expect(env).toContain("GITHUB_REDIRECT_URI=http://localhost:3000/auth/github/callback");
     expect(env).toMatch(/^OAUTH_STATE_SECRET=.*change-me/m);
-    const auth = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+    const auth = await readAuthSources(app);
     expect(auth).toContain('"/auth/github"');
     expect(auth).toContain('"/auth/github/callback"');
     expect(auth).toContain("GitHubOAuthProvider");
@@ -105,7 +105,7 @@ describe("create-strata integration extras", () => {
     expect(env).toContain("OIDC_ISSUER=http://127.0.0.1:8080");
     expect(env).toContain("OIDC_REDIRECT_URI=http://localhost:3000/auth/oidc/callback");
     expect(env).toContain("# OIDC_ALLOW_PRIVATE=true");
-    const auth = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+    const auth = await readAuthSources(app);
     expect(auth).toContain('"/auth/oidc"');
     expect(auth).toContain('"/auth/oidc/callback"');
     expect(auth).toContain("createAuthorization");
@@ -138,9 +138,11 @@ describe("create-strata integration extras", () => {
       "--billing",
       "--yes",
     ]);
-    expect(existsSync(join(app, "src/modules/billing/index.ts"))).toBe(true);
+    expect(existsSync(join(app, "src/http/controllers/BillingController.ts"))).toBe(true);
     expect(existsSync(join(app, "src/db/migrations/0002_billing_schema.ts"))).toBe(true);
-    const billing = await readFile(join(app, "src/modules/billing/index.ts"), "utf8");
+    const billing =
+      (await readFile(join(app, "src/http/controllers/BillingController.ts"), "utf8")) +
+      (await readFile(join(app, "src/routes/api.ts"), "utf8"));
     expect(billing).toContain("/billing/webhooks/stripe");
     expect(billing).toContain("/api/v1/billing/subscription");
     expect(billing).toContain("verifyStripeWebhookSignature");
@@ -184,7 +186,7 @@ describe("create-strata integration extras", () => {
       "utf8",
     );
     expect(listener).toContain('const event = "notes.created"');
-    expect(listener).toContain("repositoryEffects(NoteRepository");
+    expect(listener).toContain("modelEffects(Note");
     expect(listener).toContain('{action: "created", afterCommit: noteCreated}');
     expect(listener).toContain(
       "dependencies: [STARTER_QUEUE_TOKEN, STARTER_WEBHOOK_OPTIONS_TOKEN]",
@@ -210,7 +212,9 @@ describe("create-strata integration extras", () => {
     const job = await readFile(join(app, "src/jobs/dispatchOutboundWebhookJob.ts"), "utf8");
     expect(job).toContain("VALUES ($1, $2, $3, $4, $5, $6)");
     expect(job).not.toContain("VALUES (?, ?, ?, ?, ?, ?)");
-    const billing = await readFile(join(app, "src/modules/billing/index.ts"), "utf8");
+    const billing =
+      (await readFile(join(app, "src/http/controllers/BillingController.ts"), "utf8")) +
+      (await readFile(join(app, "src/routes/api.ts"), "utf8"));
     expect(billing).toContain("tenant_id = $1");
     const readme = await readFile(join(app, "README.md"), "utf8");
     expect(readme).toContain("HTML admin and storefront paths are not");
@@ -257,3 +261,15 @@ test("packaged webhook options retain production private-network restriction and
     }
   }
 });
+
+async function readAuthSources(app: string): Promise<string> {
+  const paths = [
+    "src/http/auth/account.ts",
+    "src/http/controllers/AuthController.ts",
+    "src/routes/api.ts",
+    "src/routes/web.ts",
+  ];
+  const web = join(app, "src/http/controllers/AuthWebController.ts");
+  if (existsSync(web)) paths.push("src/http/controllers/AuthWebController.ts");
+  return (await Promise.all(paths.map((path) => readFile(join(app, path), "utf8")))).join("\n");
+}

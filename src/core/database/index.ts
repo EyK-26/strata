@@ -14,8 +14,8 @@ export type {
   TypedRepositoryEffect,
 } from "@getstrata/core/database/definitions";
 export {
-  defineModel,
   defineRepository,
+  modelEffects,
   repositoryEffects,
 } from "@getstrata/core/database/definitions";
 export {
@@ -33,11 +33,21 @@ export type {
   StatelessFactoryConstruction,
 } from "@getstrata/core/database/factory";
 export { defineFactory, Factory } from "@getstrata/core/database/factory";
+export type {
+  AnyModelClass,
+  AuthoredModelClass,
+  InferModelFields,
+  ModelClassOptions,
+  ModelField,
+  ModelFields,
+} from "@getstrata/core/database/model";
 export {
   BaseRepository,
   BelongsToManyRelationQuery,
   BelongsToRelationQuery,
   createModel,
+  defineModel,
+  field,
   HasManyRelationQuery,
   HasManyThroughRelationQuery,
   HasOneRelationQuery,
@@ -46,6 +56,7 @@ export {
   MorphManyRelationQuery,
   MorphOneRelationQuery,
   MorphToRelationQuery,
+  modelTable,
   RepositoryQuery,
 } from "#strata-orm-runtime";
 export { createDatabaseConnection } from "./connection.ts";

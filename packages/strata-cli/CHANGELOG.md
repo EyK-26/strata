@@ -1,5 +1,10 @@
 # @getstrata/cli changelog
 
+## Unreleased
+
+- Generate concise model classes and infer factory/record types without table, interface or repository companion files.
+- Add `make:controller`; align requests and policies with `src/http/requests` and `src/policies`. Optional domain modules emit named controllers and retain secured CRUD, cache and route-model-binding behavior.
+
 ## 3.0.8
 
 Synchronize the Strata packages for the published starter template-discovery fix. Both generator entrypoints now locate their bundled templates after the source-template cleanup, and CI verifies generation from installed tarballs. See docs/releases/3.0.8.md.

@@ -1,11 +1,12 @@
+import { ControllerActions, type RenderedHttpFeature, renderAction } from "./controllerActions.ts";
 import type { StarterFeaturePlan } from "./featurePlan.ts";
 
-function renderScimModule(plan: StarterFeaturePlan): string | null {
+function renderScimParts(plan: StarterFeaturePlan, actions?: ControllerActions) {
   if (!plan.decisions.scim) {
     return null;
   }
 
-  return `import { randomBytes } from "node:crypto";
+  const support = `import { randomBytes } from "node:crypto";
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { routeParams } from "@getstrata/bootstrap/web/routing";
@@ -161,7 +162,7 @@ async function readScimBody(request: Request): Promise<Record<string, unknown> |
   }
 }
 
-function wrapScim(kernel: HttpKernel, services:StarterAuthServices, handler: BusinessRouteHandler) {
+${actions ? "export " : ""}function wrapScim(kernel: HttpKernel, services:StarterAuthServices, handler: BusinessRouteHandler) {
   const enabled = services.config.scimEnabled;
   const throttle = kernel.ownThrottle(createScimThrottleMiddleware({
     redisUrl: services.config.redisUrl,
@@ -179,16 +180,26 @@ function wrapScim(kernel: HttpKernel, services:StarterAuthServices, handler: Bus
   }, [throttle]);
 }
 
-const scimModule: AppModule = {
+`;
+  const routes = `${
+    actions
+      ? `export function scimApiRoutes(context: ModuleRouteContext): AppRouteMap {
+    const { kernel, dependencies } = context;
+    const controller = new ScimController();`
+      : `const scimModule: AppModule = {
   name: "scim",
   order: 8,
-  routes({ kernel, dependencies }) {
+  routes({ kernel, dependencies }) {`
+  }
     const services = dependencies.container.resolve(STARTER_AUTH_SERVICES);
     return {
       "/scim/v2/ServiceProviderConfig": {
         GET: kernel.wrap(
           "api",
-          wrapScim(kernel, services, async () =>
+          wrapScim(kernel, services, ${renderAction(
+            actions,
+            "configuration",
+            `async () =>
             scimJson({
               schemas: [CONFIG_SCHEMA],
               patch: { supported: true },
@@ -206,14 +217,18 @@ const scimModule: AppModule = {
                   primary: true,
                 },
               ],
-            }),
+            })`,
+          )},
           ),
         ),
       },
       "/scim/v2/Users": {
         GET: kernel.wrap(
           "api",
-          wrapScim(kernel, services, async (request, ports) => {
+          wrapScim(kernel, services, ${renderAction(
+            actions,
+            "index",
+            `async (request, ports) => {
             const url = new URL(request.url);
             const filter = url.searchParams.get("filter") ?? "";
             const match = /userName\\s+eq\\s+"([^"]+)"/i.exec(filter);
@@ -241,11 +256,15 @@ const scimModule: AppModule = {
               itemsPerPage: page.length,
               Resources: page.map(toScimUser),
             });
-          }),
+          }`,
+          )}),
         ),
         POST: kernel.wrap(
           "api",
-          wrapScim(kernel, services, async (request, ports) => {
+          wrapScim(kernel, services, ${renderAction(
+            actions,
+            "store",
+            `async (request, ports) => {
             const body = await readScimBody(request);
             if (body instanceof Response) return body;
             const invalid = validateScimProfile(body);
@@ -265,13 +284,17 @@ const scimModule: AppModule = {
               return scimError("Could not create user.", 500);
             }
             return scimJson(toScimUser(created), 201);
-          }),
+          }`,
+          )}),
         ),
       },
       "/scim/v2/Users/:id": {
         GET: kernel.wrap(
           "api",
-          wrapScim(kernel, services, async (request, ports) => {
+          wrapScim(kernel, services, ${renderAction(
+            actions,
+            "show",
+            `async (request, ports) => {
             const id = readScimUserId(request);
             if (id instanceof Response) {
               return id;
@@ -281,11 +304,15 @@ const scimModule: AppModule = {
               return scimError("User not found.", 404);
             }
             return scimJson(toScimUser(user));
-          }),
+          }`,
+          )}),
         ),
         PUT: kernel.wrap(
           "api",
-          wrapScim(kernel, services, async (request, ports) => {
+          wrapScim(kernel, services, ${renderAction(
+            actions,
+            "update",
+            `async (request, ports) => {
             const id = readScimUserId(request);
             if (id instanceof Response) {
               return id;
@@ -305,11 +332,15 @@ const scimModule: AppModule = {
             }
             await applyAccountUpdate(ports, user, name, email, typeof body.active === "boolean" ? body.active : undefined);
             return scimJson(toScimUser(user));
-          }),
+          }`,
+          )}),
         ),
         PATCH: kernel.wrap(
           "api",
-          wrapScim(kernel, services, async (request, ports) => {
+          wrapScim(kernel, services, ${renderAction(
+            actions,
+            "patch",
+            `async (request, ports) => {
             const id = readScimUserId(request);
             if (id instanceof Response) {
               return id;
@@ -364,11 +395,15 @@ const scimModule: AppModule = {
             }
             await applyAccountUpdate(ports, user, name, email, active);
             return scimJson(toScimUser(user));
-          }),
+          }`,
+          )}),
         ),
         DELETE: kernel.wrap(
           "api",
-          wrapScim(kernel, services, async (request, ports) => {
+          wrapScim(kernel, services, ${renderAction(
+            actions,
+            "destroy",
+            `async (request, ports) => {
             const id = readScimUserId(request);
             if (id instanceof Response) {
               return id;
@@ -378,15 +413,37 @@ const scimModule: AppModule = {
               await user.delete();
             }
             return new Response(null, { status: 204 });
-          }),
+          }`,
+          )}),
         ),
       },
     };
-  },
-};
-
-export default scimModule;
+  }${actions ? "" : ",\n};\n\nexport default scimModule;"}
 `;
+  return { support, routes };
+}
+
+function renderScimModule(plan: StarterFeaturePlan): string | null {
+  const parts = renderScimParts(plan);
+  return parts ? parts.support + parts.routes : null;
+}
+
+export function renderScimHttp(plan: StarterFeaturePlan): RenderedHttpFeature | null {
+  const actions = new ControllerActions("ScimController");
+  const parts = renderScimParts(plan, actions);
+  if (!parts) return null;
+  return {
+    files: {
+      "http/controllers/ScimController.ts":
+        parts.support
+          .replace('import type { AppModule } from "@getstrata/bootstrap/contracts";\n', "")
+          .replace(
+            "import { STARTER_AUTH_SERVICES, type StarterAuthServices }",
+            "import type { StarterAuthServices }",
+          ) + actions.render(),
+    },
+    api: { name: "scimApiRoutes", source: parts.routes },
+  };
 }
 
 export { renderScimModule };

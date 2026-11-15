@@ -28,7 +28,8 @@ import config from "../config/app.ts";
 import paths from "../../strata.config.ts";
 import { databaseOptions } from "./database.ts";
 import { createStarterAuthServices, STARTER_AUTH_SERVICES } from "./auth.ts";
-import { modelDefinitions, repositoryDefinitions } from "../models/register.ts";
+import { modelDefinitions${plan.decisions.workTracker ? ", repositoryDefinitions" : ""} } from "../models/register.ts";
+import { applicationRoutes } from "../routes/index.ts";
 import { Note } from "../models/Note.ts";
 import { migrate } from "../db/migrate.ts";
 import { listeners } from "../outbox/registry.ts";
@@ -40,7 +41,7 @@ const { bootstrapApp, createApp, createAppServer } = defineApp({
   database: databaseOptions,
   auth: { create: createStarterAuthServices, token: STARTER_AUTH_SERVICES },
   models: modelDefinitions,
-  repositories: repositoryDefinitions,
+  routes: applicationRoutes,${plan.decisions.workTracker ? "\n  repositories: repositoryDefinitions," : ""}
   migrate,${plan.decisions.ensureDatabase ? "\n  ensureDatabase: ensureAppDatabase," : ""}
   outbox: { listeners${plan.decisions.workTracker ? ", token: WORK_TRACKER_OUTBOX" : ""} },
   health: async database => { await database.model(Note).query().limit(1).select("id").get(); return true; },

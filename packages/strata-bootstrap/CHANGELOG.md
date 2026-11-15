@@ -1,5 +1,10 @@
 # @getstrata/bootstrap changelog
 
+## Unreleased
+
+- Allow applications to register model classes without manual repository declarations; preserve after-commit cache invalidation for their derived repositories.
+- Expose startup route composition for conventional application route files while retaining middleware, collision detection, tenant boundaries and native Bun responses.
+
 ## 3.0.8
 
 Synchronize the Strata packages for the published starter template-discovery fix. Both generator entrypoints now locate their bundled templates after the source-template cleanup, and CI verifies generation from installed tarballs. See docs/releases/3.0.8.md.

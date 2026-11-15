@@ -1,5 +1,11 @@
 # create-strata changelog
 
+## Unreleased
+
+- Generate class models with one typed field declaration and no mandatory repository exports.
+- Move selected HTTP handlers into named controllers and application routes into `src/routes/api.ts` and `web.ts`. Controllers receive concrete dependencies; route composition resolves services at startup. Preserve account workflows, middleware, SSO state binding and tenant isolation.
+- Align generated guidance and scaffolding with Laravel 13 conventions using native Bun/TypeScript execution. Existing generated apps are not rewritten by a package upgrade; see the Laravel authoring alignment guide.
+
 ## 3.0.8
 
 Synchronize the Strata packages for the published starter template-discovery fix. Both generator entrypoints now locate their bundled templates after the source-template cleanup, and CI verifies generation from installed tarballs. See docs/releases/3.0.8.md.

@@ -214,7 +214,7 @@ function renderMigrateTs(plan: StarterFeaturePlan): string {
   const rlsOn = plan.decisions.rls;
   const imports = usersOn
     ? `import { hashPassword } from "@getstrata/core/auth/password";
-import { User, UserRepository } from "../models/User.ts";
+import { User } from "../models/User.ts";
 `
     : "";
   const tenant = plan.decisions.schemaTenants
@@ -241,7 +241,7 @@ import { createPersistenceInvocation } from "@getstrata/bootstrap/persistenceInv
 import { migrateDatabase } from "@getstrata/core/database/migrations";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { databaseOptions, databaseEnvironment } from "../bootstrap/database.ts";
-import { Note, NoteRepository } from "../models/Note.ts";
+import { Note } from "../models/Note.ts";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 /** An explicit development-only command owns its own canonical Application. */
@@ -249,7 +249,7 @@ export async function seed(input: Readonly<Record<string, string | undefined>> =
   const environment = databaseEnvironment(input);
   if (isProductionEnv(environment)) throw new Error("Demo seeding is disabled in production and staging.");
 ${ensureCall(plan)}  const connection = databaseOptions(environment);
-  const application = createApplication({providers:[],services:createDatabaseBindings({default:"main",connections:{main:connection},repositories:[NoteRepository${usersOn ? ",UserRepository" : ""}],models:[Note${usersOn ? ",User" : ""}]})});
+  const application = createApplication({providers:[],services:createDatabaseBindings({default:"main",connections:{main:connection},models:[Note${usersOn ? ",User" : ""}]})});
   await application.start();
   try {
     const invoke = createPersistenceInvocation(application, "main");

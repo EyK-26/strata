@@ -145,7 +145,7 @@ export interface AppDefinition<A extends ApplicationAuthServices> {
     readonly token: ServiceToken<A>;
   };
   readonly models: NonNullable<DatabaseDefinition["models"]>;
-  readonly repositories: NonNullable<DatabaseDefinition["repositories"]>;
+  readonly repositories?: NonNullable<DatabaseDefinition["repositories"]>;
   readonly migrate: (environment?: Readonly<Record<string, string | undefined>>) => Promise<void>;
   readonly ensureDatabase?: (options: {
     provision: boolean;
@@ -179,7 +179,7 @@ export function defineApp<A extends ApplicationAuthServices>(input: AppDefinitio
     root: resolve(input.root),
     auth: Object.freeze({ ...input.auth }),
     models: Object.freeze([...input.models]),
-    repositories: Object.freeze([...input.repositories]),
+    repositories: Object.freeze([...(input.repositories ?? [])]),
     outbox: Object.freeze({
       ...input.outbox,
       listeners: Object.freeze([...input.outbox.listeners]),
@@ -254,10 +254,15 @@ export function defineApp<A extends ApplicationAuthServices>(input: AppDefinitio
     const listenerDeclarations = await discoverListeners({
       directory: join(definition.root, "src/listeners"),
     });
-    const cacheEffects = createModelCacheInvalidationEffects(repositoryDefinitions, modules, {
-      cache: APPLICATION_CACHE,
-      queue: APPLICATION_QUEUE,
-    });
+    const cacheEffects = createModelCacheInvalidationEffects(
+      repositoryDefinitions,
+      modules,
+      {
+        cache: APPLICATION_CACHE,
+        queue: APPLICATION_QUEUE,
+      },
+      modelDefinitions,
+    );
     const catalog = [cacheEffects, ...listenerDeclarations];
     let invoke: PersistenceInvocation | undefined;
     let auditExport: (() => Promise<number>) | undefined;
@@ -617,7 +622,7 @@ export {
   APPLICATION_WEBHOOKS,
 } from "./application/services";
 
-function buildApplicationRoutes(
+export function buildApplicationRoutes(
   dependencies: import("./contracts").AppDependencies,
   modules: readonly AppModule[],
   options: { frontend: FrontendMode },

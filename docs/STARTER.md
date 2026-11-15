@@ -63,8 +63,8 @@ The required `generatedAdminer` E2E test runs both generated MySQL and Postgres 
 
 - `GET /health` after `strata migrate` (plain text `ok` when configured database/Redis checks succeed and `notes` is readable, including zero rows; 503 `degraded` when a dependency or schema check fails). The bootstrap probe is independent of API auth/tenancy admission; it never selects a tenant, bypasses RLS, or returns rows. Docker HEALTHCHECK uses `/health`. Migrations do not seed accounts.
 - `GET /ready` (from `@getstrata/bootstrap/health`): JSON database and Redis pings, 200 or 503. No schema check, so it can be 200 before the first migrate; `/health` is the gate.
-- Notes table and a `Note` model on every app. Seed uses `Note.query().value`. `/health` uses `Note.query().limit(1).select("id").get()`. There is no notes CRUD route.
-- Cookie, token, and JWT apps also get a `User` model (`$hidden` for password and MFA secrets). Token layers add `ApiToken`. Seed uses two `User.create` calls. Auth directory, login/register, and SCIM read and write through that model. Auth code that needs secrets uses `user.get("password")` or `toObject()`, not `toArray()`. Login, register, and forgot-password use `validateObject` (`emailRule`, `required`, `minLength(8)` on register) so JSON returns `{ error, details }` and HTML uses field errors.
+- Notes table and a `Note` model on every app. Seed and `/health` select `database.model(Note)` from their owned execution before querying. There is no notes CRUD route.
+- Cookie, token, and JWT apps also get a `User` model (`$hidden` for password and MFA secrets). Token layers add `ApiToken`. Seed creates users through `database.model(User)`. Auth directory, login/register, and SCIM read and write through that model. Auth code that needs secrets uses `user.get("password")` or `toObject()`, not `toArray()`. Login, register, and forgot-password use `validateObject` (`emailRule`, `required`, `minLength(8)` on register) so JSON returns `{ error, details }` and HTML uses field errors.
 - Cookie / cookie-* apps (HTML auth kit you can restyle): welcome `/`, `/login`, `/register`, `/forgot-password`, signed `/reset-password`. Edit `views/*.eta`, `views/layouts/app.eta`, and `public/assets/site.css`. Login forms start empty and public pages do not advertise demo credentials. Development accounts require the explicit `bun run db:seed:demo` command.
 - Token apps: `POST /api/v1/auth/login`, `/api/v1/auth/register`, `/api/v1/auth/forgot-password`
 - JWT apps: `POST /api/auth/token` plus the same JSON register/reset routes
@@ -100,6 +100,50 @@ The monorepo fixture keeps its own file-based history under the framework repo's
 
 ## Scaffold commands (`make:*`)
 
+### Finding application code
+
+New apps separate application HTTP handling from framework bootstrap:
+
+```text
+src/
+  models/                 # Named model classes; register.ts lists application models
+  http/
+    controllers/          # Selected auth, home and integration controllers
+    requests/             # Application form requests, created when needed
+  policies/               # Application resource policies, created when needed
+  routes/
+    api.ts                # API endpoints and their middleware
+    web.ts                # Browser endpoints and their middleware
+    index.ts              # Startup composition with optional domain modules
+  db/migrations/          # Explicit schema changes
+  config/                 # Application choices
+  jobs/                   # Queued work, when needed
+  listeners/              # Event/effect handlers, when needed
+```
+
+Start with the route file to find an endpoint, follow its named controller action,
+then inspect the model, request validation and policy used by that action. Read
+`bootstrap/` when configuring application services or lifecycle, not to add normal
+business endpoints. Only selected frontend/auth/integration controllers are emitted;
+empty feature directories do not need placeholder classes.
+
+For a new feature, generate a model and migration, then a controller and any request
+or policy classes the operation needs:
+
+```sh
+bunx strata make:model Product
+bunx strata make:migration create_products
+bunx strata make:controller ProductController
+bunx strata make:request StoreProductRequest
+bunx strata make:policy ProductPolicy
+```
+
+Declare model fields once, register the class in `src/models/register.ts`, implement
+the migration, and connect controller actions in the route file with the appropriate
+middleware. Select models through the action's owned database session. A repository
+or forwarding service is not a prerequisite for ordinary CRUD. Schema changes and
+route authorization are explicit choices; scaffolding does not guess either.
+
 Run `bunx strata help` in an app to discover its registered commands. Worker descriptions distinguish Redis queued jobs (`queue:work`) from SQL durable listener deliveries (`outbox:work`). `dev` and `start` start HTTP only. Run workers in separate terminals when the app uses those mechanisms; synchronous queues and apps without durable events do not need background workers. Use the same application configuration across HTTP and workers, including the database, Redis URL and `APP_KEY_PREFIX`. Explicitly configured durable cache invalidation needs its outbox worker too.
 
 Both worker helpers announce polling after application boot and report when polling stops. Idle polling is normal. The startup message is not a Redis/SQL health probe or proof of successful delivery; boot/runtime/cleanup errors still reject the command. No credentials, payloads or connection URLs are printed by these messages, and there is no repeating idle log. Stop HTTP and workers before resetting a development database. Production keeps independently supervised workers and the existing stop/drain/flush/close lifecycle.
@@ -109,9 +153,11 @@ scheduler commands through the installed package. Configure the generated
 application and schedule entrypoints in `strata.config.ts`; keep product commands
 in `src/cli/register.ts`. Workers boot this application's owned services.
 
-`make:*` resolves paths from the application root; `modulesDirectory` is shared with application discovery and OpenAPI (`src/modules` by default). Other defaults include `src/db/migrations`, `src/jobs` and `src/listeners`. `make:job` emits `static jobName` so `queue.dispatch(new FooJob(), payload)` works after `await discoverJobs()` on boot. `make:module` emits explicit repository/model definitions for the application registry. `openapi:*` boots `createApp()` routes. `schedule:run` boots the app, then loads `src/bootstrap/schedule.ts`.
+`make:*` resolves paths from the application root; `modulesDirectory` is shared with application discovery and OpenAPI (`src/modules` by default). Other defaults include `src/db/migrations`, `src/jobs` and `src/listeners`. `make:job` emits `static jobName` so `queue.dispatch(new FooJob(), payload)` works after `await discoverJobs()` on boot. `make:module` emits an optional domain folder containing a class model, named controllers, request validation and policies. Register its model before startup; ordinary models need no repository declaration. `openapi:*` boots `createApp()` routes. `schedule:run` boots the app, then loads `src/bootstrap/schedule.ts`.
 
-`make:model <Name|Group/Name>` emits a typed table, repository and model definition. Add these to the application registry; migration generation stays separate. Use `--table=name`, `--primary-key=id` and `--key-type=number|string`. Domain columns and writable fields remain explicit. See [declarative model binding](DATABASE.md#declarative-model-binding).
+`make:model <Name|Group/Name>` emits a class in `src/models` with one typed field declaration. Add the class to the application model registry; migration generation stays separate. Use `--table=name`, `--primary-key=id` and `--key-type=number|string`. Domain columns and writable fields remain explicit. See [declarative model binding](DATABASE.md#declarative-model-binding).
+
+`make:controller NoteController` writes `src/http/controllers/NoteController.ts`; register its actions in `src/routes/api.ts` or `web.ts`. `make:request StoreNoteRequest` and `make:policy NotePolicy` write to `src/http/requests` and `src/policies`. These commands never insert an unauthenticated route or choose authorization policy on your behalf.
 
 The installed CLI owns scaffold commands. Keep application-specific commands in
 `src/cli/register.ts`; a copied older registry can adopt these built-ins when
@@ -139,9 +185,9 @@ Generated `.env.example` includes commented CORS origin and additional-header ex
 
 Generated bootstrap code instantiates the public `ConfigStore` from `@getstrata/bootstrap/contracts`. There is no app-owned store implementation or cast to its type. It uses the framework's existing presence-based contract: missing keys throw `Config key "..." is not defined.`, while a deliberately registered `undefined` is present. Existing applications adopting this shape should check any reliance on the old copied store's error text or rejection of registered `undefined`.
 
-Generated models use `defineRepository` and `defineModel` construction functions with typed table metadata and explicit writable/hidden attributes. Register definitions with the application before startup and select them from its owned execution session.
+Generated models are named classes extending `defineModel({ table, fields })`. Field types and runtime columns come from one declaration; writable/hidden attributes remain explicit. Register model classes before startup and select them with `database.model(Note)` inside the owned execution. The application derives their default repositories internally.
 
-Custom repository methods and native private state belong to definition constructors; aliases belong to the owning registry. Global `discoverModels`, `bootModels` and mutable class-to-repository registration are removed. See [declarative model binding](DATABASE.md#declarative-model-binding).
+Custom repository methods and native private state belong to definition constructors; aliases belong to the owning registry. Global `discoverModels`, `bootModels` and mutable class-to-repository registration are removed; registering a class never assigns it a global session. See [declarative model binding](DATABASE.md#declarative-model-binding).
 
 ### Account-state adoption
 

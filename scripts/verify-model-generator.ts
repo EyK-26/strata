@@ -4,8 +4,15 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp";
 
+const dialects = ["sqlite", "postgres", "mysql"] as const;
+const selected = process.argv.find((arg) => arg.startsWith("--database="))?.slice(11);
+assert.ok(
+  selected === undefined || dialects.some((dialect) => dialect === selected),
+  "Unknown model verification database.",
+);
+const databases = selected ? dialects.filter((dialect) => dialect === selected) : dialects;
 const passed: string[] = [];
-for (const database of ["sqlite", "postgres", "mysql"] as const) {
+for (const database of databases) {
   const fixture = await createGeneratedSecurityApp(database, [
     "--frontend=server-htmx",
     "--auth=headers",
@@ -148,9 +155,8 @@ for (const database of ["sqlite", "postgres", "mysql"] as const) {
     const contact = await readFile(contactPath, "utf8");
     let editedContact = contact;
     for (const [before, after] of [
-      ["id: string;", "id: string;\n  name: string;"],
-      ['columns: ["id"]', 'columns: ["id", "name"]'],
-      ['attributes: { fillable: ["id"]', 'attributes: { fillable: ["id", "name"]'],
+      ["id: field.string(),", "id: field.string(),\n    name: field.string(),"],
+      ['static $fillable = ["id"]', 'static $fillable = ["id", "name"]'],
     ]) {
       assert.ok(before !== undefined && after !== undefined);
       assert.equal(
@@ -190,7 +196,9 @@ for (const database of ["sqlite", "postgres", "mysql"] as const) {
         productFactory,
         "Module generation preserves the factory made first.",
       );
-      assert.ok(await Bun.file(join(fixture.app, "src/features/product/model.ts")).exists());
+      assert.ok(
+        await Bun.file(join(fixture.app, "src/features/product/models/Product.ts")).exists(),
+      );
       const filesBeforeHelp = (await readdir(join(fixture.app, "src"), { recursive: true })).sort();
       for (const command of ["make:factory", "make:module"]) {
         assert.match(await run([cli, command, "Unused", "--help"]), /Usage:/);
@@ -210,23 +218,16 @@ for (const database of ["sqlite", "postgres", "mysql"] as const) {
       registerBefore,
       "Generation must leave application registration unchanged.",
     );
-    // The application explicitly composes the generated definitions after proving generator behavior.
-    const repositoryDeclaration = "export const repositoryDefinitions = Object.freeze([";
+    // The application registers classes; their repositories are derived by the bindings.
     const modelDeclaration = "export const modelDefinitions = Object.freeze([";
-    assert.equal(registerBefore.split(repositoryDeclaration).length, 2);
     assert.equal(registerBefore.split(modelDeclaration).length, 2);
     await writeFile(
       registerPath,
-      `import {NativeLeadDefinition,NativeLeadRepository} from './Native/Lead.ts';\nimport {CounterDefinition,CounterRepository} from './Counter.ts';\nimport {ContactDefinition,ContactRepository} from './Contact.ts';\n` +
-        registerBefore
-          .replace(
-            repositoryDeclaration,
-            `${repositoryDeclaration}NativeLeadRepository, CounterRepository, ContactRepository, `,
-          )
-          .replace(
-            modelDeclaration,
-            `${modelDeclaration}NativeLeadDefinition, CounterDefinition, ContactDefinition, `,
-          ),
+      `import { NativeLead } from './Native/Lead.ts';\nimport { Counter } from './Counter.ts';\nimport { Contact } from './Contact.ts';\n` +
+        registerBefore.replace(
+          modelDeclaration,
+          `${modelDeclaration}NativeLead, Counter, Contact, `,
+        ),
     );
     await run([cli, "make:view", "contacts/show"]);
     await run([cli, "make:migration", "create_native_records"]);
@@ -260,13 +261,13 @@ export default migration;
 import type {Application} from '@getstrata/core/contracts/application';
 import {PersistenceError} from '@getstrata/core/database/errors';
 import {bootstrapApp} from './src/bootstrap/createApp.ts';
-import {NativeLeadDefinition,NativeLeadRepository} from './src/models/Native/Lead.ts';
+import {NativeLead} from './src/models/Native/Lead.ts';
 import {createNativeLeadFactory} from './src/db/factories/Native/LeadFactory.ts';
-import {CounterDefinition,CounterRepository} from './src/models/Counter.ts';
-import {ContactDefinition} from './src/models/Contact.ts';
+import {Counter} from './src/models/Counter.ts';
+import {Contact} from './src/models/Contact.ts';
 import {createContactFactory} from './src/db/factories/ContactFactory.ts';
 import {createProductFactory} from './src/db/factories/ProductFactory.ts';
-import {ProductDefinition} from './src/features/product/model.ts';
+import {Product} from './src/features/product/models/Product.ts';
 import {EtaViewEngine,htmlResponse} from '@getstrata/core/view';
 assert.equal(process.env.MIGRATION_DATABASE_URL??'','');
 const envelope={kind:'command' as const,actor:{kind:'system' as const,policy:'fixture.generated-models'}};
@@ -282,12 +283,12 @@ try{
  const app=await bootstrapApp({migrate:false,mode:'command',onConstructed:application=>{owner=application;return undefined;}});
  const id=crypto.randomUUID();
  // Both generated Product models are compiled, without requesting unregistered definitions.
- assert.equal(ProductDefinition.name,'Product');
+ assert.equal(Product.name,'Product');
  assert.equal(createProductFactory(()=>({id:23})).make().id,23);
  await app.invoke(envelope,async({database})=>{
-  const leads=database.model(NativeLeadDefinition);const repository=database.repository(NativeLeadRepository);
-  assert.strictEqual(leads,database.model(NativeLeadDefinition));
-  assert.strictEqual(repository,database.repository(NativeLeadRepository));
+  const leads=database.model(NativeLead);const repository=leads.repository();
+  assert.strictEqual(leads,database.model(NativeLead));
+  assert.strictEqual(repository,database.repository(leads.definition.repository));
   assert.strictEqual(leads.repository(),repository);
   assert.equal(repository.getTable().name,'native_records');
   const leadFactory=createNativeLeadFactory(()=>({id}),async values=>(await leads.create(values)).toObject());
@@ -295,9 +296,9 @@ try{
   assert.equal((await leads.find(id))?.toObject().id,id);
  });
  // Expected native duplicate failure ends its invocation; unrelated workflow gets a new one.
- await assert.rejects(()=>app.invoke(envelope,({database})=>database.model(NativeLeadDefinition).create({id})),nativeDuplicate);
+ await assert.rejects(()=>app.invoke(envelope,({database})=>database.model(NativeLead).create({id})),nativeDuplicate);
  await app.invoke(envelope,async({database})=>{
-  const counters=database.model(CounterDefinition);const repository=database.repository(CounterRepository);
+  const counters=database.model(Counter);const repository=counters.repository();
   assert.strictEqual(counters.repository(),repository);assert.equal(repository.getTable().name,'counters');
   await repository.create({id:17});assert.equal((await counters.find(17))?.toObject().id,17);
   // The id-only repository requires column values; native default insertion proves generated IDs.
@@ -308,7 +309,7 @@ try{
   const assigned=await counters.find(generated.id);assert.ok(assigned);
   assigned.fill({id:9999});assert.equal(assigned.toObject().id,generated.id);
   assert.equal(await counters.find(9999),null);
-  const contacts=database.model(ContactDefinition);
+  const contacts=database.model(Contact);
   const contactFactory=createContactFactory(()=>({id:crypto.randomUUID(),name:'Příliš žluťoučký'}),async values=>(await contacts.create(values)).toObject());
   const made=await contactFactory.create();
   const person=await contacts.findOrFail(made.id);
@@ -345,12 +346,12 @@ console.log(JSON.stringify({installedModel:true,explicitRegistration:true,select
     `PASS installed CLI/model/factory/module/UUID migration/explicit registration ${database}`,
   );
 }
-assert.deepEqual(passed, ["sqlite", "postgres", "mysql"]);
+assert.deepEqual(passed, [...databases]);
 console.log(
   JSON.stringify({
     installedModelGenerator: true,
     dialects: passed,
-    explicitRepositories: true,
+    derivedRepositories: true,
     noImplicitMigration: true,
   }),
 );

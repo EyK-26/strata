@@ -1,5 +1,10 @@
 # @getstrata/core changelog
 
+## Unreleased
+
+- Add class-based model authoring with one typed field declaration, inferred record types, instance relationship methods and application-owned default repositories. Preserve low-level definition APIs and explicit session/transaction selection.
+- Add typed class relationship results, model-targeted effects and immutable table metadata access without global connection state. Keep neutral definition factories independent of the ORM implementation.
+
 ## 3.0.8
 
 Synchronize the Strata packages for the published starter template-discovery fix. Both generator entrypoints now locate their bundled templates after the source-template cleanup, and CI verifies generation from installed tarballs. See docs/releases/3.0.8.md.

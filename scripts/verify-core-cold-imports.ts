@@ -100,7 +100,11 @@ for (const [ErrorType, status] of [[authOutcome.AuthenticationRequiredError,401]
 assert.strictEqual(root.BaseRepository,base.BaseRepository);
 assert.strictEqual(base.default,base.BaseRepository);
 assert.strictEqual(root.Model,model.Model);
-assert.strictEqual(model.defineModel,definitions.defineModel);
+assert.strictEqual(model.defineModel,root.defineModel);
+// Exercise construction too: identical class exports alone cannot detect duplicated definition brands.
+const bindings = await import('@getstrata/core/database/bindings');
+class ColdModel extends model.defineModel({table:'cold_models',fields:{id:model.field.number(),body:model.field.string()}}) {}
+assert.doesNotThrow(()=>bindings.createDatabaseBindings({default:'main',connections:{main:{driver:'sqlite',filename:':memory:'}},models:[ColdModel]}));
 assert.strictEqual(model.defineRepository,definitions.defineRepository);
 assert.ok(jobs.FailedJobRepository.prototype instanceof base.BaseRepository);
 const names=['BadRequestError','ConflictError','ForbiddenError','HttpError','InternalServerError','InvalidCredentialsError','isHttpErrorLike','NotFoundError','PayloadTooLargeError','PreconditionFailedError','toHttpError','UnauthorizedError','UnprocessableEntityError','ValidationError'];

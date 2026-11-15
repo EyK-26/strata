@@ -154,15 +154,19 @@ describe("request-path RLS bypass fence", () => {
     const sources = await sourceInventory();
     for (const profile of ["rls", "team", "integrations"]) {
       for (const file of [
-        "src/modules/auth/index.ts",
+        "src/http/controllers/AuthController.ts",
         "src/bootstrap/authDirectory.ts",
         "src/bootstrap/createApp.ts",
       ])
         expect(sources.has(`generated.${profile}/${file}`), file).toBe(true);
       if (profile !== "team")
-        expect(sources.has(`generated.${profile}/src/modules/scim/index.ts`)).toBe(true);
+        expect(sources.has(`generated.${profile}/src/http/controllers/ScimController.ts`)).toBe(
+          true,
+        );
       if (profile === "integrations")
-        expect(sources.has("generated.integrations/src/modules/billing/index.ts")).toBe(true);
+        expect(
+          sources.has("generated.integrations/src/http/controllers/BillingController.ts"),
+        ).toBe(true);
     }
     const inventory: Record<string, number> = {};
     for (const [file, text] of sources) {
@@ -179,7 +183,10 @@ describe("request-path RLS bypass fence", () => {
   });
 
   test("an injected current request-path bypass is rejected, including an indirect object", async () => {
-    const request = await readFile(join(generated.rls, "src/modules/auth/index.ts"), "utf8");
+    const request = await readFile(
+      join(generated.rls, "src/http/controllers/AuthController.ts"),
+      "utf8",
+    );
     expect(unboundedPolicies(request)).toHaveLength(0);
     for (const injection of [
       'ports.policy.run(ports.database, { kind: "bypass" }, business);',
@@ -189,9 +196,9 @@ describe("request-path RLS bypass fence", () => {
     ]) {
       const count = unboundedPolicies(`${request}\n${injection}`).length;
       expect(count).toBe(1);
-      expect(unexpected({ "generated.rls/src/modules/auth/index.ts": count })).toEqual([
-        ["generated.rls/src/modules/auth/index.ts", 1],
-      ]);
+      expect(unexpected({ "generated.rls/src/http/controllers/AuthController.ts": count })).toEqual(
+        [["generated.rls/src/http/controllers/AuthController.ts", 1]],
+      );
     }
     // An allowed composition file cannot hide an added HTTP bypass either.
     const composition = await readFile(join(repoRoot, "src/bootstrap/application.ts"), "utf8");
@@ -220,7 +227,7 @@ describe("request-path RLS bypass fence", () => {
     expect(command).toContain("const provision = async (db: TransactionSession)");
     expect(command).toMatch(/finally\s*\{\s*await app.context.dispose\(\)/);
     for (const app of [generated.rls, generated.team]) {
-      for (const directory of ["src/modules", "src/bootstrap"]) {
+      for (const directory of ["src/http", "src/routes", "src/bootstrap"]) {
         for (const file of await listTsFiles(join(app, directory))) {
           const source = await readFile(file, "utf8");
           expect(source, file).not.toContain("initialAdminCommand");
@@ -290,7 +297,9 @@ describe("request-path RLS bypass fence", () => {
     expect(job).toContain("Webhook delivery requires an owned queue invocation.");
     expect(job).toContain("await context.database.execute({");
     expect(
-      unboundedPolicies(await readFile(join(integrations, "src/modules/billing/index.ts"), "utf8")),
+      unboundedPolicies(
+        await readFile(join(integrations, "src/http/controllers/BillingController.ts"), "utf8"),
+      ),
     ).toHaveLength(0);
   });
 });

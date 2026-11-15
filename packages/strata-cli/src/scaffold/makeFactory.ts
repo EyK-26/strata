@@ -21,9 +21,14 @@ async function makeFactoryCommand(...args: string[]): Promise<void> {
     `${classParts.at(-1)}Factory.ts`,
   );
   if (await Bun.file(filePath).exists()) throw new Error(`Factory already exists: ${filePath}`);
-  const standalone = join(process.cwd(), "src", "models", ...classParts) + ".ts";
+  const standalone = `${join(process.cwd(), "src", "models", ...classParts)}.ts`;
   const module = await moduleDirectory(toKebabCase(name));
-  const candidates = [standalone, join(module, "types.ts"), join(module, "model.ts")];
+  const candidates = [
+    standalone,
+    join(module, "models", `${modelName}.ts`),
+    join(module, "types.ts"),
+    join(module, "model.ts"),
+  ];
   let recordPath: string | undefined;
   for (const candidate of candidates) {
     if (await Bun.file(candidate).exists()) {
@@ -38,13 +43,20 @@ async function makeFactoryCommand(...args: string[]): Promise<void> {
   let recordImport = relative(dirname(filePath), recordPath).split(sep).join("/");
   if (!recordImport.startsWith(".")) recordImport = `./${recordImport}`;
   const content = `import { createFactory, type FactoryPersist } from "@getstrata/core/database/factory";
-import type { ${modelName}Record } from "${recordImport}";
+${
+  candidates.indexOf(recordPath) < 2
+    ? `import type { ModelAttributes } from "@getstrata/core/database/model";
+import type { ${modelName} } from "${recordImport}";
+
+type ${modelName}Record = ModelAttributes<${modelName}>;`
+    : `import type { ${modelName}Record } from "${recordImport}";`
+}
 
 function create${modelName}Factory(definition: () => ${modelName}Record, persist?: FactoryPersist<${modelName}Record>) {
   return createFactory({ definition, persist });
 }
 
-// Supply persistence from the current invocation, e.g. async values => (await session.model(${modelName}Definition).create(values)).toObject().
+// Supply persistence from the current invocation, e.g. async values => (await session.model(${modelName}).create(values)).toObject().
 export { create${modelName}Factory };
 `;
 

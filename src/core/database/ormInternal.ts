@@ -19,6 +19,7 @@ import type {
 } from "./definitions";
 import type { DatabaseConnectionOptions, DatabaseDriver } from "./driverPorts";
 import type { Model } from "./model";
+import type { AuthoredModelClass } from "./modelAuthoring";
 import type { DatabaseSession } from "./session";
 import type { TransactionSession } from "./transactionSession";
 
@@ -39,7 +40,7 @@ interface BindingPorts<R extends object, K extends keyof R & string> {
     definition: RepositoryDefinition<A, B, T>,
   ) => T;
   readonly model: <A extends object, B extends keyof A & string, M extends Model<A, B>>(
-    definition: ModelDefinition<A, B, M> | string,
+    definition: ModelDefinition<A, B, M> | AuthoredModelClass<A, B, M> | string,
   ) => BoundModel<A, B, M>;
   readonly reselect: <T extends BaseRepository<R, K>>(session: Session) => T;
   readonly assertMutation: (action: RepositoryAction) => void;

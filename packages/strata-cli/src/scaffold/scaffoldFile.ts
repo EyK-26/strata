@@ -79,8 +79,9 @@ function scaffoldArguments(
         "make:factory": "model name",
         "make:job": "job name",
         "make:listener": "listener name",
-        "make:policy": "module name",
-        "make:request": "module name",
+        "make:policy": "policy name",
+        "make:request": "request name",
+        "make:controller": "controller name",
       } as Record<string, string>
     )[command] ?? "name";
   if (!names[0]) throw new Error(`${command} requires a ${noun}.`);
