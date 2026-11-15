@@ -81,7 +81,7 @@ imports such as `@getstrata/core/database/model` over the root barrel.
 
 ## Packages
 
-Package version: **3.1.3** (this checkout; publication is tracked on npm).
+Package version: **3.1.4** (this checkout; publication is tracked on npm).
 
 | Package | Purpose |
 | --- | --- |

@@ -1,5 +1,10 @@
 # create-strata changelog
 
+## 3.1.4
+
+- Update generated React browser acceptance to verify the authenticated account dashboard after removing the Notes example. Preserve credential, CSRF, tenant-isolation and business-write checks in test-owned fixtures.
+- Coordinate generated app dependency pins at 3.1.4. Includes the 3.1.3 starter cleanup; the failed 3.1.3 release stopped before npm publication.
+
 ## 3.1.3
 
 - Generate only the auth imports, helper declarations and controller service aliases required by selected features. Validate unused declarations across generated backend, frontend and CLI files.

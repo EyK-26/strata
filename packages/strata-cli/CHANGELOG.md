@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 3.1.4
+
+- Synchronize package versions and dependency pins at 3.1.4 for the corrected starter release validation. No additional runtime changes in this package.
+
 ## 3.1.3
 
 - Generate class-based model listeners instead of missing repository imports; reject missing models before writing files.
