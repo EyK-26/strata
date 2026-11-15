@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 3.1.1
+
+- Synchronize the package version for the 3.1.1 application-agent guide release and update public documentation.
+
 ## 3.1.0
 
 - Simplify public documentation and consumer guides.

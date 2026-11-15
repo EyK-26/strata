@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 3.1.1
+
+- Align core/bootstrap peer ranges with 3.1.1 so generated applications use the coordinated package set.
+
 ## 3.1.0
 
 - Generate concise model classes and infer factory/record types without table, interface or repository companion files.

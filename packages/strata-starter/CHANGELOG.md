@@ -1,6 +1,6 @@
 # create-strata changelog
 
-## Unreleased
+## 3.1.1
 
 - Generate an application-specific AGENTS.md with the selected stack, conventional feature workflow, public API guidance, access-control rules and available commands. Link it from the generated README; framework contributor instructions are not copied into apps.
 

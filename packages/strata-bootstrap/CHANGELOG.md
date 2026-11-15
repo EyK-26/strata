@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 3.1.1
+
+- Synchronize the package version and core peer range for the 3.1.1 application-agent guide release.
+
 ## 3.1.0
 
 - Preserve API/web classification when composing unclassified route maps, preventing generated browser pages from leaking into API-only OpenAPI output.
