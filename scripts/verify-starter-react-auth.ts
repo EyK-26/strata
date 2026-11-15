@@ -477,9 +477,9 @@ export default {name:'acceptance',routes({kernel}){return {
   await installQualificationNotes(fixture.app, database, tenancy);
   const { TENANCY_ENABLED } = await import(join(fixture.app, "frontend/src/config.ts"));
   assert.equal(TENANCY_ENABLED, tenancy !== "none");
-  const example = qualificationNotesModule(TENANCY_ENABLED);
+  const qualificationModule = qualificationNotesModule(TENANCY_ENABLED);
   await mkdir(join(fixture.app, "src/modules/notes"));
-  await writeFile(join(fixture.app, "src/modules/notes/index.ts"), example);
+  await writeFile(join(fixture.app, "src/modules/notes/index.ts"), qualificationModule);
   await command(["run", "check"]);
   await command(["run", "db:migrate", "--seed"], {
     ...env,
@@ -636,10 +636,38 @@ if(errors.length===1)throw errors[0];if(errors.length>1)throw new AggregateError
     return w.acceptanceFetch("/acceptance-identity");
   });
   assert.ok(identity.id);
+  await mountedPage
+    .getByRole("heading", {
+      name: auth === "headers" ? "Development identity selected" : "Signed in",
+      exact: true,
+    })
+    .waitFor();
+  const profileValue = (label: string) =>
+    mountedPage
+      .getByRole("row")
+      .filter({ has: mountedPage.locator("th", { hasText: new RegExp(`^${label}$`) }) })
+      .getByRole("cell")
+      .innerText();
   assert.equal(
-    await mountedPage.locator("pre code").textContent(),
-    example,
-    "Compile and execute exactly the source shown in the real browser",
+    await profileValue("ID"),
+    String(identity.id),
+    "The dashboard must display the authenticated identity",
+  );
+  assert.equal(
+    await profileValue("Role"),
+    identity.role,
+    "The dashboard must display the authenticated role",
+  );
+  if (auth === "jwt") {
+    assert.equal(await profileValue("Name"), "—");
+    assert.equal(await profileValue("Email"), "—");
+  } else if (auth !== "headers") {
+    assert.equal(await profileValue("Name"), "Demo User");
+    assert.equal(await profileValue("Email"), "demo@example.com");
+  }
+  assert.equal(
+    await mountedPage.getByRole("heading", { name: "Starter-only example", exact: true }).count(),
+    0,
   );
   const etag = await mountedPage.evaluate(async () =>
     (globalThis as unknown as { acceptanceEtag: (p: string) => Promise<string> }).acceptanceEtag(
@@ -667,18 +695,15 @@ if(errors.length===1)throw errors[0];if(errors.length>1)throw new AggregateError
       globalThis as unknown as { acceptanceFetch: (p: string) => Promise<{ data: unknown[] }> }
     ).acceptanceFetch("/notes"),
   );
-  assert.ok(
-    Array.isArray(notes.data),
-    "The displayed ORM example must actually serve its resource",
-  );
+  assert.ok(Array.isArray(notes.data), "The qualification module must serve its ORM resource");
   assert.ok(
     notes.data.some((note) => (note as { id: number }).id === created.id),
-    "Authenticated client writes must be visible through the displayed ORM resource",
+    "Authenticated client writes must be visible through the qualification ORM resource",
   );
   if (tenancy !== "none") {
     assert.ok(
       notes.data.every((note) => (note as { tenant_id: number }).tenant_id === 1),
-      "The displayed tenant resource must not expose another tenant's rows",
+      "The qualification tenant resource must not expose another tenant's rows",
     );
   }
 
