@@ -44,7 +44,7 @@ Import from `@getstrata/core/...` subpaths rather than the package root, so sing
 ## Generating an app instead
 
 ```bash
-bunx create-strata my-app --frontend api --yes
+bunx create-strata@latest my-app --frontend api --yes
 ```
 
 A generated app writes its own `docs/API.md` listing only the routes its layers actually serve.

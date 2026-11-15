@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 3.1.2
+
+- Clarify the npm description around Laravel-inspired Bun and TypeScript application development. Update generator examples to request `create-strata@latest` and synchronize packages at 3.1.2.
+
 ## 3.1.1
 
 - Synchronize the package version for the 3.1.1 application-agent guide release and update public documentation.

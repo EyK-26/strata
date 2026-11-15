@@ -78,10 +78,10 @@ Options:
   -h, --help
 
 Examples:
-  bunx create-strata my-app
-  bunx create-strata my-app --yes
-  bunx create-strata html --frontend server-htmx --database postgres --auth cookie --cache redis --queue redis --docker --yes
-  bunx create-strata html --frontend server-htmx --database postgres --no-docker --yes
+  bunx create-strata@latest my-app
+  bunx create-strata@latest my-app --yes
+  bunx create-strata@latest html --frontend server-htmx --database postgres --auth cookie --cache redis --queue redis --docker --yes
+  bunx create-strata@latest html --frontend server-htmx --database postgres --no-docker --yes
 `;
 }
 

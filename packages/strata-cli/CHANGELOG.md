@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 3.1.2
+
+- Describe application servers, scaffolding, migrations, workers and scheduling in npm metadata. Update generator guidance to request `create-strata@latest` and align peer dependencies with 3.1.2.
+
 ## 3.1.1
 
 - Align core/bootstrap peer ranges with 3.1.1 so generated applications use the coordinated package set.

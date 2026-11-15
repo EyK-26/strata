@@ -117,7 +117,7 @@ async function newCommand(...args: string[]): Promise<void> {
     );
     if (!existsSync(starterGenerate)) {
       console.error(
-        `Creating a new directory uses create-strata. Run: bunx create-strata ${projectName}`,
+        `Creating a new directory uses create-strata. Run: bunx create-strata@latest ${projectName}`,
       );
       process.exit(1);
     }

@@ -7,7 +7,7 @@ own project. Models describe attributes; migrations describe the database schema
 ## Scaffold
 
 ```bash
-bunx create-strata my-app
+bunx create-strata@latest my-app
 cd my-app
 cp .env.example .env
 bun install
