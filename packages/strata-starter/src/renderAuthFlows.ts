@@ -3,6 +3,7 @@ import { renderBrowserAuthRoutes } from "./auth/renderBrowserRoutes.ts";
 import { renderAuthImports } from "./auth/renderImports.ts";
 import { createAuthRenderingContext } from "./auth/renderingContext.ts";
 import { renderAuthHelpers, renderMfaEnrollment } from "./auth/renderWorkflows.ts";
+import { ControllerActions, type RenderedHttpFeature } from "./controllerActions.ts";
 import type { StarterFeaturePlan } from "./featurePlan.ts";
 
 function renderPendingMfaTs(): string {
@@ -62,3 +63,94 @@ export default authModule;
 }
 
 export { renderAuthModule, renderPendingMfaTs, renderSiteModule };
+
+/** App-owned HTTP actions; account transactions and security workflows stay package-provided. */
+export function renderAuthHttp(plan: StarterFeaturePlan): RenderedHttpFeature | null {
+  if (!plan.decisions.users) return null;
+  const context = createAuthRenderingContext(plan);
+  const imports = renderAuthImports(context).join("\n");
+  const helperNames = [
+    "runWithLockedAccount",
+    "authTimestamp",
+    "deferAuthEffect",
+    "authenticatePasswordUser",
+    "runWithLoginUser",
+    "runAuthWrite",
+    "issueSignedAuthMail",
+    "createRegistration",
+    "completeSignedPasswordReset",
+    "persistAuthRecovery",
+    ...(context.verify ? ["completeSignedEmailVerification"] : []),
+    ...(context.cookie ? ["redirectTo", "sessionUser", "completeBrowserSsoLogin"] : []),
+    ...(context.mfa ? ["enrollMfa"] : []),
+  ];
+  const helpers = `${imports}
+${renderAuthHelpers(context)}
+${renderMfaEnrollment(context.mfa)}
+export { ${helperNames.join(", ")} };
+`;
+  const controllerDependencies = renderAuthImports(context)
+    .filter(
+      (line) =>
+        !line.includes("AppModule") &&
+        !line.includes("CORE_VIEW_RENDERER_TOKEN") &&
+        !line.includes("wrapWebLogin"),
+    )
+    .map((line) =>
+      line.includes("STARTER_AUTH_SERVICES")
+        ? 'import type { StarterAuthServices } from "../../bootstrap/auth.ts";'
+        : line,
+    )
+    .join("\n");
+  const controllerImports = `${controllerDependencies}
+${context.cookie ? 'import type { NamespacedViewRenderer } from "@getstrata/core/view";\n' : ""}
+import type { BusinessRouteHandler } from "@getstrata/bootstrap/persistenceContracts";
+import { ${helperNames.join(", ")} } from "../auth/account.ts";
+`;
+  const apiActions = new ControllerActions("AuthController");
+  const api = renderApiAuthRoutes(context, apiActions);
+  const apiScope = ["authServices", ...(plan.decisions.mfaViews ? ["views"] : [])];
+  const construction = (views: boolean) =>
+    `  constructor(private readonly authServices: StarterAuthServices${views ? ", private readonly views: NamespacedViewRenderer" : ""}) {}`;
+  const files: Record<string, string> = {
+    "http/auth/account.ts": helpers,
+    "http/controllers/AuthController.ts":
+      controllerImports + apiActions.render(construction(plan.decisions.mfaViews), apiScope),
+  };
+  const webActions = new ControllerActions("AuthWebController");
+  const web = renderBrowserAuthRoutes(context, webActions);
+  if (web)
+    files["http/controllers/AuthWebController.ts"] =
+      controllerImports + webActions.render(construction(true), ["authServices", "views"]);
+  return {
+    files,
+    api: { name: "authApiRoutes", source: api },
+    ...(web ? { web: { name: "authWebRoutes", source: web } } : {}),
+  };
+}
+
+export function renderHomeHttp(): RenderedHttpFeature {
+  return {
+    files: {
+      "http/controllers/HomeController.ts": `import type { BusinessRouteHandler } from "@getstrata/bootstrap/persistenceContracts";
+import type { ViewRenderer } from "@getstrata/core/view";
+
+export class HomeController {
+  constructor(private readonly views: ViewRenderer) {}
+
+  index: BusinessRouteHandler = async (request) =>
+    this.views.renderHtmx("home.eta", { layout: { title: "Welcome", description: "Welcome to your Strata app. Restyle views/home.eta and public/assets/site.css." } }, { request });
+}
+`,
+    },
+    web: {
+      name: "homeWebRoutes",
+      source: `export function homeWebRoutes(context: ModuleRouteContext): AppRouteMap {
+  const views = context.dependencies.container.resolve(CORE_VIEW_RENDERER_TOKEN);
+  const controller = new HomeController(views);
+  return { "/": context.kernel.wrapWeb(controller.index) };
+}
+`,
+    },
+  };
+}

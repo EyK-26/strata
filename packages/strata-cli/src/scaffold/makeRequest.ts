@@ -1,72 +1,42 @@
-import { join, relative, sep } from "node:path";
 import { scaffoldArguments, writeScaffoldFile } from "./scaffoldFile";
-import { moduleDirectory, toKebabCase, toPascalCase } from "./utils";
+import { toPascalCase } from "./utils";
 
 async function makeRequestCommand(...args: string[]): Promise<void> {
   const parsed = scaffoldArguments("make:request", args);
   if (!parsed) return;
-  const [moduleName] = parsed;
-  if (!moduleName) {
-    throw new Error("make:request requires a module name.");
-  }
+  const [input] = parsed;
+  if (!input) throw new Error("make:request requires a request name.");
+  const parts = input.split("/").map(toPascalCase);
+  const name = parts.at(-1) ?? "";
+  const className = name.endsWith("Request") ? name : `${name}Request`;
+  if (className === "FormRequest")
+    throw new Error("make:request requires a specific request name, such as StoreNoteRequest.");
+  const content = `import { FormRequest } from "@getstrata/core/http/formRequest";
+import { maxLength, minLength, required, stringRule, validateObject } from "@getstrata/core/validation/rules";
 
-  const moduleSlug = toKebabCase(moduleName);
-  const moduleNamePascal = toPascalCase(moduleName);
-  const filePath = join(await moduleDirectory(moduleSlug), "requests.ts");
-
-  const exists = await Bun.file(filePath).exists();
-  if (exists) {
-    throw new Error(`Request file already exists: ${filePath}`);
-  }
-
-  const content = `import { FormRequest } from "@getstrata/core/http";
-import { parsePositiveIntParam } from "@getstrata/core/http/validation";
-import {
-  maxLength,
-  minLength,
-  required,
-  stringRule,
-  validateObject,
-} from "@getstrata/core/validation/rules";
-
-type ${moduleNamePascal}IdParams = { id: string };
-
-interface Create${moduleNamePascal}BodyDto {
+interface ${className}Data {
   name: string;
 }
 
-class Create${moduleNamePascal}Request extends FormRequest<Create${moduleNamePascal}BodyDto> {
-  protected parse(payload: unknown): Create${moduleNamePascal}BodyDto {
-    const validated = validateObject(payload, {
+class ${className} extends FormRequest<${className}Data> {
+  protected parse(payload: unknown): ${className}Data {
+    const data = validateObject(payload, {
       name: [required(), stringRule(), minLength(1), maxLength(120)],
     });
-
-    return {
-      name: validated.name as string,
-    };
+    return { name: data.name as string };
   }
 }
 
-const create${moduleNamePascal}Request = new Create${moduleNamePascal}Request();
-
-function parse${moduleNamePascal}IdParams(params: ${moduleNamePascal}IdParams): { id: number } {
-  return {
-    id: parsePositiveIntParam(params.id, "${moduleSlug} id"),
-  };
-}
-
-async function parseCreate${moduleNamePascal}Body(
-  request: Request,
-): Promise<Create${moduleNamePascal}BodyDto> {
-  return await create${moduleNamePascal}Request.validate(request);
-}
-
-export { parseCreate${moduleNamePascal}Body, parse${moduleNamePascal}IdParams };
-export type { Create${moduleNamePascal}BodyDto, ${moduleNamePascal}IdParams };
+export default ${className};
+export type { ${className}Data };
 `;
-
-  await writeScaffoldFile(relative(process.cwd(), filePath).split(sep), content, "Request");
-  console.log(`Created request helpers: ${filePath}`);
+  const path = await writeScaffoldFile(
+    ["src", "http", "requests", ...parts.slice(0, -1), `${className}.ts`],
+    content,
+    "Request",
+  );
+  console.log(`Created request: ${path}`);
+  console.log(`Validate in a controller with await new ${className}().validate(request).`);
 }
 
 export { makeRequestCommand };

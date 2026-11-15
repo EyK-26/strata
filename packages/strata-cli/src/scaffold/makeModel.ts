@@ -15,7 +15,7 @@ async function makeModelCommand(...args: string[]): Promise<void> {
     console.log(
       "Usage: strata make:model <Name|Group/Name> [--table=name] [--primary-key=id] [--key-type=number|string]",
     );
-    console.log("Creates an id-only declarative model in src/models with an automatic repository.");
+    console.log("Creates a model class in src/models; add fields and $fillable values as needed.");
     console.log("No schema changes: run strata make:migration <name> separately.");
     return;
   }
@@ -44,23 +44,20 @@ async function makeModelCommand(...args: string[]): Promise<void> {
   if (keyType !== "number" && keyType !== "string")
     throw new Error("--key-type must be number or string; UUID model keys use string.");
   const fillable = keyType === "string" ? JSON.stringify(key) : "";
-  const content = `import { createModel, type Model } from "@getstrata/core/database/model";
-import { defineTable } from "@getstrata/core/database/table";
+  const content = `import { defineModel, field } from "@getstrata/core/database/model";
 
-interface ${className}Record { ${key}: ${keyType}; }
-const table = defineTable<${className}Record, "${key}">({
-  name: "${table}", primaryKey: "${key}", columns: ["${key}"],
-});
-type ${className} = Model<${className}Record, "${key}">;
-const ${className}Definition = createModel({
-  name: "${className}", table,
-  attributes: { fillable: [${fillable}], timestamps: false },
-});
-const ${className}Repository = ${className}Definition.repository;
-// Register this definition in createDatabaseBindings({ models: [...] }).
-// Use selectedSession.model(${className}Definition) inside an application invocation.
-export type { ${className}Record, ${className} };
-export { ${className}Definition, ${className}Repository };
+class ${className} extends defineModel({
+  table: "${table}",
+  primaryKey: "${key}",
+  fields: {
+    ${key}: field.${keyType}(),
+  },
+}) {
+  static $fillable = [${fillable}] as const;
+  static $timestamps = false;
+}
+
+export { ${className} };
 `;
   const path = await writeScaffoldFile(
     ["src", "models", ...classParts.slice(0, -1), `${classParts.at(-1)}.ts`],
@@ -68,7 +65,7 @@ export { ${className}Definition, ${className}Repository };
     "Model",
   );
   console.log(`Created model: ${path}`);
-  console.log("Register the exported definition in the application database bindings.");
+  console.log("Register the exported class in createDatabaseBindings({ models: [...] }).");
   console.log(
     `Next: strata make:migration create_${table}; define schema explicitly before strata migrate.`,
   );

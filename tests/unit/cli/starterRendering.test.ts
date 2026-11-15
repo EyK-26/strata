@@ -33,11 +33,11 @@ for (const { name, args, files: expected } of baselines) {
         workspaceDependencies: true,
       });
       const register = await readFile(join(directory, "src/models/register.ts"), "utf8");
-      expect(register).toContain("export const repositoryDefinitions = Object.freeze([");
+      expect(register).not.toContain("repositoryDefinitions");
       expect(register).toContain("export const modelDefinitions = Object.freeze([");
       expect(register).not.toContain("registerModelClass");
       const composition = await readFile(join(directory, "src/bootstrap/createApp.ts"), "utf8");
-      expect(composition).toContain("repositories: repositoryDefinitions");
+      expect(composition).not.toContain("repositories: repositoryDefinitions");
       expect(composition).toContain("models: modelDefinitions");
       const actual: Record<string, unknown> = {};
       async function visit(path: string): Promise<void> {

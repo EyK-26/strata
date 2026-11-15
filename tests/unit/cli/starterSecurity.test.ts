@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -122,7 +123,7 @@ describe("starter security flows", () => {
       "--mfa",
       "--yes",
     ]);
-    const scim = await readFile(join(app, "src/modules/scim/index.ts"), "utf8");
+    const scim = await readFile(join(app, "src/http/controllers/ScimController.ts"), "utf8");
     expect(scim).toContain(
       "ports.database.model(User).where({ email, tenant_id: tenantId(ports) }).first()",
     );
@@ -141,9 +142,7 @@ describe("starter security flows", () => {
     expect(scim).not.toContain("FROM users");
     expect(scim).not.toContain("INTO users");
     expect(scim).not.toMatch(/SELECT id, name, email FROM users"/);
-    expect(await readFile(join(app, "src/modules/auth/index.ts"), "utf8")).toContain(
-      "authServices.config.registrationEnabled",
-    );
+    expect(await readAuthSources(app)).toContain("authServices.config.registrationEnabled");
     expect(await readFile(join(app, "src/bootstrap/auth.ts"), "utf8")).toContain(
       "createAuthRuntimeConfig(options,",
     );
@@ -360,3 +359,15 @@ describe("starter security flows", () => {
     }
   });
 });
+
+async function readAuthSources(app: string): Promise<string> {
+  const paths = [
+    "src/http/auth/account.ts",
+    "src/http/controllers/AuthController.ts",
+    "src/routes/api.ts",
+    "src/routes/web.ts",
+  ];
+  const web = join(app, "src/http/controllers/AuthWebController.ts");
+  if (existsSync(web)) paths.push("src/http/controllers/AuthWebController.ts");
+  return (await Promise.all(paths.map((path) => readFile(join(app, path), "utf8")))).join("\n");
+}

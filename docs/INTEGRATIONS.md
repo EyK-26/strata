@@ -41,7 +41,7 @@ Generated billing migrations also reverse their owned `tenant.stripe_customer_id
 
 `notes.created` (and other `BaseRepository` model events) is commit-aware. `create()` inside an owned transaction under explicit tenant policy does not run listeners until that transaction commits. If the callback throws, queued events are dropped, so a rolled-back order cannot enqueue `webhook.dispatch`. Nested transactions keep that guarantee until the outermost commit. Listeners then run with the tenant that was active at the write. `eventBus.dispatch` for non-model events is still immediate. Model observers (`creating` / `created`) still run inside the transaction.
 
-For effects that must survive a producer crash after commit, use the opt-in SQL outbox described in [BUILDING-APPS.md](./BUILDING-APPS.md#durable-transactional-events-opt-in-sql-outbox). Publish explicitly inside the business transaction and deliver in a separate worker with idempotent listeners. The default generated model listener remains in-process.
+For effects that must survive a producer crash after commit, use the opt-in SQL outbox described in [BUILDING-APPS.md](./BUILDING-APPS.md). Publish explicitly inside the business transaction and deliver in a separate worker with idempotent listeners. The default generated model listener remains in-process.
 
 Raw `pool.begin()` does not defer events unless you wrap it with `runWithDeferredModelEvents()` from `@getstrata/core/events`.
 

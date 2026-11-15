@@ -1,3 +1,4 @@
+import { ControllerActions, type RenderedHttpFeature, renderAction } from "./controllerActions.ts";
 import type { StarterFeaturePlan } from "./featurePlan.ts";
 import { dialectFragments } from "./renderMigrations.ts";
 import type { DatabaseLayer, StarterLayers } from "./types.ts";
@@ -226,9 +227,9 @@ function renderNoteCreatedWebhookListener(): string {
   return `import type { ListenerDeclarations } from "@getstrata/bootstrap/discoverListeners";
 import { service } from "@getstrata/core/contracts/services";
 import { createServiceToken } from "@getstrata/core/contracts/token";
-import { repositoryEffects, type AfterCommitRepositoryListener } from "@getstrata/core/database/definitions";
+import { modelEffects, type AfterCommitRepositoryListener } from "@getstrata/core/database/definitions";
 import { APPLICATION_QUEUE as STARTER_QUEUE_TOKEN, APPLICATION_WEBHOOKS as STARTER_WEBHOOK_OPTIONS_TOKEN } from "@getstrata/bootstrap/application";
-import { NoteRepository, type NoteRecord } from "../models/Note.ts";
+import { Note, type NoteRecord } from "../models/Note.ts";
 import DispatchOutboundWebhookJob from "../jobs/dispatchOutboundWebhookJob.ts";
 
 const noteCreated = createServiceToken<AfterCommitRepositoryListener<NoteRecord>>("starter.webhooks.note-created");
@@ -261,7 +262,7 @@ const declarations: ListenerDeclarations = Object.freeze({
       }
     },
   })]),
-  repositoryEffects: Object.freeze([repositoryEffects(NoteRepository, [
+  repositoryEffects: Object.freeze([modelEffects(Note, [
     {action: "created", afterCommit: noteCreated},
   ])]),
 });
@@ -293,7 +294,7 @@ export { applyStripeWebhook };
 `;
 }
 
-function renderBillingModule(plan: StarterFeaturePlan): string {
+function renderBillingParts(plan: StarterFeaturePlan, actions?: ControllerActions) {
   const layers = plan.layers;
   const tenancyOn = plan.decisions.tenantTable;
   const tenantPlaceholder = layers.database === "postgres" ? "$1" : "?";
@@ -311,20 +312,31 @@ function renderBillingModule(plan: StarterFeaturePlan): string {
           params: [],
         });`;
 
-  return `import type { AppModule } from "@getstrata/bootstrap/contracts";
+  const support = `import type { AppModule, ModuleRouteContext } from "@getstrata/bootstrap/contracts";
 import { jsonResponse } from "@getstrata/core/http/response";
 import { verifyStripeWebhookSignature } from "@getstrata/core/security/stripeWebhook";
 import { applyStripeWebhook } from "../../billing/applyStripeWebhook.ts";
 import { APPLICATION_BILLING as STARTER_BILLING_OPTIONS_TOKEN } from "@getstrata/bootstrap/application";
 
-const billingModule: AppModule = {
+`;
+  const routes = `${
+    actions
+      ? `export function billingApiRoutes(context: ModuleRouteContext): AppRouteMap {
+    const { kernel, dependencies } = context;
+    const { enabled, stripeSecret } = dependencies.container.get(STARTER_BILLING_OPTIONS_TOKEN);
+    const controller = new BillingController(enabled, stripeSecret);`
+      : `const billingModule: AppModule = {
   name: "billing",
   order: 40,
   routes({ kernel, dependencies }) {
-    const {enabled:billingEnabled,stripeSecret:secret} = dependencies.container.get(STARTER_BILLING_OPTIONS_TOKEN);
+    const {enabled:billingEnabled,stripeSecret:secret} = dependencies.container.get(STARTER_BILLING_OPTIONS_TOKEN);`
+  }
     return {
       "/billing/webhooks/stripe": {
-        POST: kernel.wrap("api", kernel.wrapIdentity(async (request, ports) => {
+        POST: kernel.wrap("api", kernel.wrapIdentity(${renderAction(
+          actions,
+          "stripeWebhook",
+          `async (request, ports) => {
           if (!billingEnabled) return new Response("Not found", { status: 404 });
           if (!secret) {
             return jsonResponse({ error: "STRIPE_WEBHOOK_SECRET is not set." }, { status: 503 });
@@ -339,10 +351,14 @@ const billingModule: AppModule = {
           }
           await applyStripeWebhook(event, ports);
           return jsonResponse({ received: true, id: event.id ?? null, type: event.type ?? null });
-        })),
+        }`,
+        )})),
       },
       "/api/v1/billing/subscription": {
-        GET: kernel.wrapApi(async (_request, ports) => {
+        GET: kernel.wrapApi(${renderAction(
+          actions,
+          "subscription",
+          `async (_request, ports) => {
           if (!billingEnabled) return new Response("Not found", { status: 404 });
 ${subscriptionQuery}
           const row = rows[0];
@@ -353,14 +369,43 @@ ${subscriptionQuery}
             stripe_subscription_id: row.stripe_subscription_id ?? null,
             current_period_end: row.current_period_end ?? null,
           });
-        }),
+        }`,
+        )}),
       },
     };
-  },
-};
-
-export default billingModule;
+  }${actions ? "" : ",\n};\n\nexport default billingModule;"}
 `;
+  return { support, routes };
+}
+
+function renderBillingModule(plan: StarterFeaturePlan): string {
+  const parts = renderBillingParts(plan);
+  return parts.support + parts.routes;
+}
+
+export function renderBillingHttp(plan: StarterFeaturePlan): RenderedHttpFeature | null {
+  if (!plan.layers.extras.billing) return null;
+  const actions = new ControllerActions("BillingController");
+  const parts = renderBillingParts(plan, actions);
+  const construction = `  constructor(private readonly billingEnabled: boolean, private readonly secret: string | undefined) {}`;
+  const support = parts.support
+    .replace(
+      'import type { AppModule, ModuleRouteContext } from "@getstrata/bootstrap/contracts";\n',
+      "",
+    )
+    .replace(
+      'import { APPLICATION_BILLING as STARTER_BILLING_OPTIONS_TOKEN } from "@getstrata/bootstrap/application";\n',
+      "",
+    );
+  return {
+    files: {
+      "http/controllers/BillingController.ts":
+        support +
+        'import type { BusinessRouteHandler } from "@getstrata/bootstrap/persistenceContracts";\n' +
+        actions.render(construction, ["billingEnabled", "secret"]),
+    },
+    api: { name: "billingApiRoutes", source: parts.routes },
+  };
 }
 
 function githubOAuthEnabled(plan: StarterFeaturePlan): boolean {

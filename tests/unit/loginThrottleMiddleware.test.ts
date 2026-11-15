@@ -90,7 +90,7 @@ describe("createMemoryLoginThrottleMiddleware", () => {
 
 describe("wrapLogin wiring", () => {
   test("generated RLS JSON login and JWT mint call wrapLogin", async () => {
-    const auth = await readFile(join(generated.rls, "src/modules/auth/index.ts"), "utf8");
+    const auth = await readFile(join(generated.rls, "src/routes/api.ts"), "utf8");
     expect(auth).toMatch(/"\/api\/v1\/auth\/login":[\s\S]*?wrapLogin\(/);
     expect(auth).toMatch(/"\/api\/auth\/token":[\s\S]*?wrapLogin\(/);
   });

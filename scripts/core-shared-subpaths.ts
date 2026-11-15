@@ -23,6 +23,7 @@ export const CORE_STANDALONE_SUBPATHS = [
   "database/acquisitionMetrics",
   "database/errors",
   "errors/http",
+  "http/parseMultipartUpload",
   "database/definitions",
   "database/factory",
   "queue/failedJobRepository",

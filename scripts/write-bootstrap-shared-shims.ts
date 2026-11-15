@@ -7,5 +7,5 @@ const directory = join(import.meta.dir, "../packages/strata-bootstrap/dist/entri
 await mkdir(directory, { recursive: true });
 await writeFile(
   join(directory, "application.js"),
-  'export { defineApp, serveApplication, APPLICATION_BILLING, APPLICATION_WEBHOOKS, APPLICATION_QUEUE } from "../index.js";\n',
+  'export { defineApp, buildApplicationRoutes, serveApplication, APPLICATION_BILLING, APPLICATION_WEBHOOKS, APPLICATION_QUEUE } from "../index.js";\n',
 );

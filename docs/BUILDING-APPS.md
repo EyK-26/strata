@@ -1,6 +1,8 @@
 # Building your own app
 
-For a product app, use `bunx create-strata` and the published packages. Framework acceptance generates disposable candidate-package applications; external product dogfood lives in [strata-shop](https://github.com/EyK-26/strata-shop).
+Strata gives Bun and TypeScript applications a familiar model, controller, request
+and policy workflow. Start with `create-strata`, then edit application code in your
+own project. Models describe attributes; migrations describe the database schema.
 
 ## Scaffold
 
@@ -13,674 +15,213 @@ bun run db:migrate
 bun run dev
 ```
 
-`strata` installs into the app rather than globally, so use the `bun run` scripts above, or `bunx strata <command>` from inside the app directory.
+Configure database settings and secrets in `.env` before migrating. The generated
+README covers Docker services and React frontend installation/build steps.
+Migrations do not create demo accounts; `bun run db:seed:demo` is an explicit local
+option. For a production administrator, use [initial-admin provisioning](INITIAL-ADMIN.md).
+The CLI is installed in the app: run package scripts or `bunx strata <command>`.
+See [starter options](STARTER.md) for noninteractive generation and feature flags.
 
-The CLI is interactive in a terminal. Move with ↑/↓ and Enter, or type a number. Toggle extras that apply to your stack (MFA, email verification, SCIM, metrics, GitHub OAuth, billing, webhooks) with Space. Header auth does not offer MFA, SCIM, or GitHub login. `--no-metrics` skips the metrics extra and does not write `GET /metrics`. For CI, pass `--yes` and layer flags (`--frontend`, `--database`, `--auth`, `--tenancy`, `--cache`, `--queue`, `--mail`). Docker Compose is optional: `--docker`, `--no-docker`, or `--docker-services=postgres,redis`. The wizard offers optional Adminer in both Docker and Mix modes when Postgres/MySQL is in Compose. For noninteractive generation, add it explicitly: `--docker-services=mysql,mailpit,adminer` (or use `postgres`). `--docker` alone includes required services only. If selected, Adminer uses the `debug` profile: start it with `docker compose --profile debug up -d` and open http://localhost:8080.
+## Find application code
 
-Layer flags: [STARTER.md](./STARTER.md). The starter templates and layer renderer are the source of the wizard. CI generates temporary applications instead of maintaining checked-in copies.
+```text
+src/
+  bootstrap/createApp.ts   Application definition and startup
+  config/app.ts           Frontend, tenancy and feature configuration
+  models/                 Model classes and register.ts
+  http/controllers/       Named HTTP controllers
+  http/requests/          Input validation
+  policies/               Authorization rules
+  routes/api.ts           JSON endpoints
+  routes/web.ts           Browser endpoints
+  routes/index.ts         Startup route composition
+  db/migrations/          File-based schema changes
+  jobs/                   Queue jobs
+  listeners/              Event listeners
+views/                    Eta templates, when selected
+frontend/                 React application, when selected
+```
 
-For typed native Bun transport options, WebSockets, request-hook coverage and streamed-body limits, see [native HTTP configuration](NATIVE-HTTP.md). Review the transport ceiling and hook changes before upgrading existing applications.
+Use optional domain modules when a larger application benefits from grouping.
+They are not required for ordinary CRUD features. Add a service for business work
+that coordinates several operations; a forwarding service or custom repository is
+unnecessary for a simple model query.
 
-## Environment validation
+## Add a feature
 
-`validateEnv` validates integer rules against the complete trimmed signed decimal
-string. Fractions, exponents and trailing text are rejected rather than partially
-parsed. Signed values, leading zeros, defaults and minimum bounds remain supported;
-the result retains the original string instead of normalizing application settings.
+```bash
+bunx strata make:model Task
+bunx strata make:controller TaskController
+bunx strata make:request StoreTaskRequest
+bunx strata make:policy TaskPolicy
+bunx strata make:migration create_tasks
+```
 
-## Frontend shapes
+Generators never overwrite existing files or register routes/models automatically.
+They do not apply migrations. `make:module Task` is an optional grouped scaffold;
+use `--help` for each command's options.
 
-Set `FRONTEND_MODE`. Allowed values live in `@getstrata/core/runtime/frontendMode` (`parseFrontendMode`, `FRONTEND_MODE_PATTERN`). Apps should reuse that pattern in their env schema instead of copying a regex.
+Edit `src/models/Task.ts`:
 
-1. **`api`.** JSON routes only. Clients send Bearer or Basic. Guest JSON login (`POST /api/v1/auth/login` and `POST /api/auth/token`) needs `GET /api/v1/auth/csrf` first. That GET returns the same token it Set-Cookies. Send `X-CSRF-Token` plus the CSRF cookie. A missing token is JSON 403. Bearer and Basic skip CSRF only after that guard authenticates.
-2. **`server-htmx`.** Eta HTML + HTMX. Cookie session + CSRF.
-3. **`spa-react`.** JSON API plus a SPA document under `SPA_PREFIX` (default `/app`). Prefer opaque tokens for the SPA. Cookie JSON after login needs `GET /api/v1/auth/csrf`.
-4. **`hybrid`.** HTML at `/` plus a SPA prefix. Framework SPA routes stay under `SPA_PREFIX` (`/app`, `/app/`, `/app/*` by default) and do not redirect `/`. Apps call `mergeSpaRoutes` with `distDirectory` and `wrap`. Do not copy a second static-file server.
+```ts
+import { defineModel, field } from "@getstrata/core/database/model";
 
-`.eta` files are HTML plus Eta tags (`<% %>`, `<%= %>`, `<%~ include() %>`). Class shorthand such as `section.section` fails at render.
-
-## Cookie HTML apps
-
-Generated `src/bootstrap/auth.ts` constructs cookie authentication from the current execution's explicit database session and scoped policy. `createCookieSessionAuthManager` requires `{ selected, policy, secret, production, rls }`; optional `cookieName`, `loadSessionUser` and `mapUser` customize the application schema and identity. Keep that manager within the execution that supplied its session and policy rather than retaining a request-bound manager as an application singleton.
-
-Set `cookieName` to `"myapp_session"` in the generated auth configuration to rename the cookie. Supply `loadSessionUser` when the default session/user query does not match your schema; its arguments are the selected session, scoped policy, RLS flag and session ID. Preserve live account status and auth-version metadata when mapping users. Generated cookie apps map `is_admin` in `src/bootstrap/auth.ts`.
-
-Use `signIn` / `signOut` (or the redirect helpers). Do not mint cookies in controllers.
-
-`wrapWebGuest` sends already-signed-in people to `/` (pass a path if your home is not `/`). `wrapWebLogin` already includes throttle. Do not wrap it with `wrapWeb` again.
-
-Cookie apps from `create-strata` include restyleable welcome, login, register, and password reset screens in `views/` plus `public/assets/site.css`. Add more routes in `src/modules`.
-
-## Adding API tokens, JWT, or Basic
-
-Compose guards with explicit capabilities in `src/bootstrap/auth.ts`. `DatabaseTokenGuard` takes an `AuthBearerResolver`; `JwtGuard` takes `{ directory, secret }`. `BasicAuthGuard` takes account lookup, an MFA secret codec, recovery-code persistence and email lookup or credential verification. Register the resulting guards with `auth.registerGuard(name, guard)`. A service container is not a guard constructor argument.
-
-Use the generated auth service composition and `src/bootstrap/auth.ts` to select those capabilities from the owning execution. See [AUTH.md](./AUTH.md).
-
-## HTTP kernel
-
-`createHttpKernel(dependencies)` groups middleware (`web`, `api`, `authenticated`). Generated apps use `buildModuleRoutes` / `buildWebModuleRoutes`. `@getstrata/bootstrap/createRoutes` still assembles leftover fixture HTTP for framework tests. It is not your starter.
-
-## Application startup and modules
-
-Strata aims for Laravel's application workflow with native Bun HTTP, SQL and tooling.
-Start with the generated application definition and the `defineApp` factory from
-`@getstrata/bootstrap/application`. The package supplies `bootstrapApp`, `createApp`
-and `createAppServer`; keep the generated entrypoints small and put application
-choices in the definition. `src/config/app.ts` holds the selected frontend, tenancy,
-views, extras and environment-default snapshot; it does not mutate `process.env`.
-Native Bun request and server options remain available. Module routes are assembled
-by default; `defineApp.routes` is an optional callback for custom route composition.
-A separate `src/routes.ts` file is unnecessary.
-
-A simple module needs a model, controller, request and policy. Controllers can use
-models selected from their owned execution (`database.model(definition)`) directly.
-Add a service when it coordinates business work or owns a reusable capability;
-pass-through service and repository classes are unnecessary. Use `createModel` for
-ordinary model declarations; custom repositories and low-level adapter APIs remain
-supported for applications that need them.
-
-Jobs and listener declarations are discovered before startup completes. The
-application owns its registry, services, database, cache and queue resources.
-For application services and startup work, use `defineProvider` with declarative
-services and `setup` / `boot` hooks in the application definition's `providers`.
-Owned resources use `resourceService` or `scope.acquire`; cleanup stays with the
-application lifecycle. See [authoring providers](application-providers.md).
-Module `register` / `boot` providers remain an advanced bootstrap adapter surface.
-
-Keep the returned application handle. Stop it with
-`await app.application.stop({ reason: "MANUAL" })` and inspect `result.successful`.
-The owner stops admission, drains work, flushes and closes its resources. Custom
-background runners register cancellation and drain before startup. See
-[application ownership](APPLICATION-OWNERSHIP.md), [discovery](DISCOVERY.md) and
-[lifecycle](LIFECYCLE.md) for advanced composition and operational contracts.
-
-## Database migrations
-
-### Business transactions and request tenancy
-
-Use `DatabaseSession.transaction(async tx => ...)` for atomic business work and
-select repositories/models from `tx`. Nested transactions use savepoints: throws
-roll back nested writes and deferred effects; successful inner work remains subject
-to the outer commit. Map errors outside the transaction: returning a deliberate
-4xx Response is still a successful callback. Await sibling savepoints sequentially.
-Tenant/bypass policy runs through the execution's explicit `ScopedPolicy`; switching
-owners or tenants is rejected.
-
-Greenfield apps from `create-strata` use **file-based** migrations in `src/db/migrations/` plus `@getstrata/core/database/migrations` (`migrateDatabase`) from `src/db/migrate.ts`. Seed stays in `migrate.ts`. The runner records applied files in **`framework_migrations`**. See [STARTER.md](./STARTER.md#migrations).
-
-`0001_starter_schema` uses `CREATE TABLE IF NOT EXISTS`. Redis/queue apps include **`failed_job`** there (`queue:failed` / `queue:retry` persist into that table). An inline-SQL app that never created `failed_job` will break those commands even if the rest of the schema looks fine.
-
-### Concurrent Postgres app-role provisioning
-
-`ensurePostgresAppRole` and the generated `postgresAppRoleSql` acquire `SHARE ROW EXCLUSIVE` on `pg_catalog.pg_authid` before checking or changing a role. [Postgres stores this role catalog once per cluster](https://www.postgresql.org/docs/current/catalog-pg-authid.html), so the relation lock coordinates provisioners connected to different databases. Database-local advisory locks cannot provide that guarantee. The lock allows catalog reads but serializes role changes, including changes to other roles; use the admin/superuser provisioning connection and keep these transactions short. Runtime RLS credentials must not provision roles.
-
-The helper submits role creation/update and grants as one SQL batch. Its lock remains held through grant/default-ACL writes and is released at commit, rollback or connection loss. When called inside an explicit transaction it lasts until the caller settles that transaction. New starter scripts use the core SQL renderer and wrap the complete script in `BEGIN`/`COMMIT`, so standalone execution retains the same lock through grants. Existing generated SQL files should be regenerated from the new starter; do not edit application packages or keep a second role helper. Normal standalone role SQL participates in Postgres implicit transactions. Do not wrap provisioning in an HTTP or long-lived application transaction.
-
-Credential behavior is unchanged: explicit `password`, or the database bootstrap's `STRATA_APP_PASSWORD`/existing development default, is applied on both create and update. Provisioners sharing a role must agree on its credentials; conflicting password rotations still require administrative coordination. This is not a password-rotation protocol. `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOINHERIT` and `NOBYPASSRLS` remain enforced. Custom provisioners need permission to lock the shared catalog; failures do not fall back to uncoordinated writes.
-
-This addresses [#85](https://github.com/EyK-26/strata/issues/85)'s role-provisioning race. Continue running schema migrations once per deployment: role serialization does not serialize independent migration runners, create a missing database concurrently, or coordinate the standalone grant-only helper with arbitrary DDL. No app schema migration or production capacity claim follows from this mechanism fix.
-
-### Adopting file migrations from a legacy inline migrate.ts
-
-Apps scaffolded before file migrations often loop `db.unsafe(...)` in one file and have **no** `framework_migrations` table.
-
-1. Copy the generated shape: `src/db/migrationRuntime.ts` (`loadMigrationsFromDirectory` + `withMigrationDatabase`) and `src/db/migrations/*.ts` (start with `0001_starter_schema` plus your extra tables).
-2. Replace the inline SQL loop with `await migrateDatabase(db, await loadStarterMigrations())`. Keep seed in `migrate.ts`.
-3. First `bun run db:migrate` creates `framework_migrations` and applies every file not already recorded. Keep `CREATE TABLE IF NOT EXISTS` (and additive `ALTER`s) so a database that already has the tables does not fail on duplicate DDL.
-4. If Redis queue is on, add `failed_job` in that first file if the live schema does not have it. `queue:work` atomically creates an individually identified reservation and owner lease before `handle()`. It renews that lease while the handler/retries run, and acknowledges only after success or a successfully persisted failure record. Recovery atomically returns expired work to its pending list; stale owners cannot acknowledge a replacement. `QUEUE_VISIBILITY_MS` defaults to 60 seconds and must be an integer of at least 30 milliseconds. Delivery is at-least-once, so handlers must be idempotent.
-
-When history is untrustworthy:
-
-- **Local / empty data:** `strata migrate:fresh` (generated `src/db/fresh.ts` → `freshDatabase`) runs `down` for recorded files with an explicit development-reset context, removes each successfully reversed history record, then applies all files. It is destructive. Do not use it on production data.
-- **Production / keep rows:** keep `IF NOT EXISTS`, run `migrate` once so the runner records the files, then add later changes as **new** numbered files. Do not hand-insert `framework_migrations` rows unless a file must never run (document why). `migrate:status` shows pending vs `up`.
-
-Do not mix the monorepo fixture runner with a product app’s `src/db/migrations/` on the same database.
-
-## Storage failures
-
-The official storage provider exposes `StorageManager` and the configured local or native Bun S3 driver. `get(path)` returns `null` only for a missing object; `delete(path)` returns `Promise<void>` and is idempotent: deleting an existing or missing object resolves without a value. Other failures reject: invalid local paths, filesystem errors, denied S3 access, missing buckets and unavailable endpoints must remain visible to HTTP error handling or job retry logic. Do not turn every rejected read into a 404 or mark rejected deletion as successful cleanup.
-
-S3 deletion follows the provider's acknowledgement semantics: a successful DELETE resolves without a value, including when an S3-compatible provider acknowledges deletion of an already absent key. It does not establish prior existence and does not perform an existence check before deleting. Reads use one GET, avoiding the old HEAD/GET race and redundant request. Native S3 signing, transport and provider errors remain Bun's responsibility; this contract does not add application retries or exactly-once guarantees. If a response is lost, callers must reconcile the uncertain outcome.
-
-Applications own the order of file and SQL writes and reconciliation of orphaned uploads; SQL transactions cannot atomically commit S3 effects. Use stable object identities and explicit commerce rules. Local storage is not shared across replicas; production apps should configure shared storage through the official provider.
-
-## Repeated form fields
-
-Native `await request.formData()` already preserves entries: use `form.getAll("email")` when working directly with `FormData`. The core flat helper retains its existing last-text-value behavior, ignoring files. Opt in when a validator needs multiplicity:
-
-```typescript
-import { parseFormBody } from "@getstrata/core/http/parseFormBody";
-const fields = await parseFormBody(request, { preserveRepeated: true });
-// Record<string, (string | File)[]>: even one value is an array.
-const email = fields.email;
-if (!email || email.length !== 1 || typeof email[0] !== "string") {
-  // The application chooses its validation response; the parser does not reject duplicates.
+export class Task extends defineModel({
+  table: "tasks",
+  fields: { id: field.number(), title: field.string() },
+}) {
+  static $fillable = ["title"] as const;
+  static $timestamps = false;
 }
 ```
 
-`formDataToRecord(form, { preserveRepeated: true })` provides the same grouping for existing form data. Values retain field order and bracketed names stay literal (`tags[]` is one field name). Files remain raw files, without upload validation. The opt-in does not impose limits, canonicalize email, select an entry or authorize a request. Keep request-size and upload checks in the existing HTTP stack.
+Import `Task` in `src/models/register.ts` and add it to the existing
+`modelDefinitions` array. Keep the other generated models. The application derives
+its default repository; no `table.ts`, row interface or repository class is needed.
 
-For `WebFormRequest`, use `new MyRequest({ preserveRepeated: true })` and check the arrays in the application's `parse(payload)` method. Authorization still runs before body parsing; JSON payloads retain their existing shape. Existing subclasses calling `super()` keep flat form values. `validatePayload()` still takes the caller's supplied payload directly.
+In the generated migration, keep its generated `name` and replace the callbacks:
 
-The older `@getstrata/bootstrap/web/forms` helper has a distinct `{ fields, files }` result and still collapses repeated names. Import the **core** helper above, or use native `FormData.getAll`, for ambiguity-sensitive fields. An upgrade does not change existing app validators or reject ambiguous submissions automatically.
+```ts
+up(schema) {
+  schema.create("tasks", table => {
+    table.id();
+    table.string("title");
+  });
+},
+down(schema) {
+  schema.drop("tasks");
+},
+```
 
-## File uploads
+Run `bun run db:migrate`. For a tenant-owned feature, add its tenant column,
+constraints and access rules before exposing endpoints; see [tenancy](TENANCY.md).
 
-`parseMultipartUpload` (JSON / single-file API) already enforces `MAX_UPLOAD_BYTES` / `MAX_REQUEST_BODY_BYTES` and `ALLOWED_UPLOAD_MIME_TYPES` via `@getstrata/core/http/uploads`.
+## Validate input in a request
 
-`@getstrata/bootstrap/web/forms` `parseFormBody` is for mixed HTMX forms (fields + `File`). It returns **raw** `files[name]: File` and does **not** apply those guards.
+Edit `src/http/requests/StoreTaskRequest.ts`:
 
-```typescript
-import { parseFormBody } from "@getstrata/bootstrap/web/forms";
-import { validateUploadFile } from "@getstrata/core/http/parseMultipartUpload";
-import { isAllowedMimeType } from "@getstrata/core/http/uploads";
+```ts
+import { FormRequest } from "@getstrata/core/http/formRequest";
+import { maxLength, required, stringRule, validateObject } from "@getstrata/core/validation/rules";
 
-const { fields, files } = await parseFormBody(request);
-const image = files.image;
-if (image) {
-  const upload = await validateUploadFile(image, "image");
-  // upload.fileName, mimeType, size, contents
+export default class StoreTaskRequest extends FormRequest<{ title: string }> {
+  protected parse(payload: unknown): { title: string } {
+    const body = validateObject(payload, {
+      title: [required(), stringRule(), maxLength(120)],
+    });
+    return { title: body.title as string };
+  }
 }
 ```
 
-Use `parseMultipartUpload(request, "file")` when the request is only that one file field. Do not reimplement the MIME list; import `isAllowedMimeType` / `resolveMaxUploadBytes` from `@getstrata/core/http/uploads`. `UPLOAD_ALLOW_UNKNOWN_MIME=true` is required before `application/octet-stream` is accepted.
+`FormRequest` reads JSON. Use `WebFormRequest` from
+`@getstrata/core/http/webFormRequest` for HTML forms or JSON. Its optional
+`{ preserveRepeated: true }` retains repeated form fields as arrays. Validate their
+multiplicity explicitly. Validation does not authorize a row or replace `$fillable`.
 
-## Extending the CLI
+## Write a controller and register routes
 
-Generated apps depend on `@getstrata/cli`. Configure the application and schedule
-entrypoints through `strata.config.ts` (`application` and `schedule`). Package-owned
-commands provide `queue:work`, failed-job operations, `make:*`, `openapi:*` and
-`schedule:run`, booting the selected application when necessary. Existing apps
-adopt the generated configuration when upgrading; installing a package does not
-rewrite their local adapters.
+Edit `src/http/controllers/TaskController.ts`:
 
-Use `src/cli/register.ts` (`commands` or `registerCommands()`) for application
-commands. Scaffold commands resolve paths from the app working directory
-(`src/db/migrations`, `src/jobs`, `views/`). `modulesDirectory` selects the same
-module root for application discovery, scaffolding and OpenAPI. `openapi:*` uses the
-application's routes; scheduled commands boot before running the configured
-schedule and close their application afterward.
+```ts
+import type { BusinessRouteHandler } from "@getstrata/bootstrap/persistenceContracts";
+import { createdResponse, jsonResponse } from "@getstrata/core/http/response";
+import { Task } from "../../models/Task";
+import StoreTaskRequest from "../requests/StoreTaskRequest";
 
-## Optional feature flags
+export class TaskController {
+  readonly index: BusinessRouteHandler = async (_request, { database }) => {
+    const tasks = await database.model(Task).query().orderBy({ id: "desc" }).limit(50).get();
+    return jsonResponse(tasks.map(task => task.toArray()));
+  };
 
-The starter wizard covers MFA, email verification, SCIM, metrics, plus optional `--oauth-github`, `--oidc`, `--billing`, and `--webhooks` (all off by default). SIEM export and hybrid SPA stay env-driven or deferred. See [INTEGRATIONS.md](./INTEGRATIONS.md) and [PRODUCTION.md](./PRODUCTION.md). Outbound webhooks use discovery with the application-owned job registry, not a `registerWebhookJobs()` helper (that symbol was never exported).
+  readonly store: BusinessRouteHandler = async (request, { database }) => {
+    const values = await new StoreTaskRequest().validate(request);
+    const task = await database.model(Task).create(values);
+    return createdResponse(task.toArray());
+  };
+}
+```
+
+Add these entries to the existing route map in `src/routes/api.ts`, keeping its
+other routes and imports:
+
+```ts
+import type { AppRouteMap, ModuleRouteContext } from "@getstrata/bootstrap/contracts";
+import { TaskController } from "../http/controllers/TaskController";
+
+export function apiRoutes(context: ModuleRouteContext): AppRouteMap {
+  const tasks = new TaskController();
+  return {
+    // Keep the application's other route entries here too.
+    "/api/v1/tasks": {
+      GET: context.kernel.wrapAuthenticated(tasks.index),
+      POST: context.kernel.wrapAbility("tasks:create", tasks.store),
+    },
+  };
+}
+```
+
+Use your configured API prefix if it differs from `/api/v1`. Configure the
+`tasks:create` ability for the intended role/token; authentication alone does not
+grant it. For row-specific decisions, implement and register `TaskPolicy`, then
+apply the policy to the loaded row. A generated policy has no effect until wired
+into authorization. See [authentication and policies](AUTH.md).
+
+Controllers receive native `Request` values and return native `Response` values.
+The kernel supplies request-scoped database, authentication and tenant policy
+ports. Keep database sessions in the handler's execution. Application-lifetime
+controllers may retain stable services, not a previous request's session.
+Use transactions for multi-write workflows; see [databases](DATABASE.md).
 
 ## Views and errors
 
-Configure layout data (`currentUser`, `csrfToken`, `flash`) and error templates (`errors/not-found.eta`, `errors/forbidden.eta`, `errors/error.eta`). Production 5xx must not leak stacks.
+HTML apps use Eta templates in `views/`. `bunx strata make:view tasks/index` creates
+a template; add its controller and route separately. Inject the configured view
+renderer in route composition and call `views.render()` or `views.renderHtmx()`
+with the request. Ordinary HTMX targets receive fragments; boosted/history requests
+retain the layout. Escape user values with `<%= value %>`.
 
-Generated HTML applications enable packaged views through application configuration.
-Controllers resolve the typed `CORE_VIEW_RENDERER_TOKEN` from their owned execution.
+Keep browser endpoints in `web.ts` behind the appropriate web/auth middleware.
+Cookie forms need CSRF protection. JSON boundaries retain JSON error responses;
+production errors must not expose secrets or stacks. Auth pages and credential
+responses use private, non-cacheable responses. See [native HTTP](NATIVE-HTTP.md)
+for server options, body limits, WebSockets and response streaming.
 
-For advanced custom view composition, register `createViewProvider` from
-`@getstrata/bootstrap/providers/view` in your provider list, then inject the
-typed `CORE_VIEW_RENDERER_TOKEN` from `@getstrata/core/view` into controllers:
+## Background work and application lifetime
 
-```ts
-createViewProvider({
-  directory: join(import.meta.dir, "../../views"),
-  layout: "layouts/app",
-  data: {
-    userKey: "currentUser",
-    extra: { appName: "My app" },
-    // Optional loadUser(container, request) supplies app-owned display fields.
-  },
-});
-const views = container.resolve(CORE_VIEW_RENDERER_TOKEN);
-return views.render("orders/index", { title: "Orders", orders }, {
-  request,
-  layout: "layouts/account", // false renders only the template
-  status: 200,
-  headers: { "Cache-Control": "private, no-store" },
-});
-```
+`dev` and `start` run HTTP. Run `bun run queue:work` separately for Redis jobs.
 
-`ViewRenderer` returns `Promise<Response>` with HTML UTF-8 content type and
-copies supplied headers. A render failure propagates to normal error handling.
-Template data and layout selection are separate: `data.layout` is ordinary
-application data; `options.layout` chooses the wrapping template. Omitting it
-uses the provider default (otherwise the engine's existing `layouts/app.eta`).
-Eta continues to own escaping and includes; templates and navigation stay in
-the app. Direct `EtaViewEngine.render()` remains available for string output.
+### Durable events
 
-The factory captures the application's directory, layout, CSRF/flash policy and
-error renderer, then resolves request data from that owner's execution context.
-It registers the typed engine/response-renderer/error-renderer tokens. The static
-`viewProvider` and global layout/error configuration APIs are removed. HTMX fragment
-selection remains explicit; templates and navigation stay application-owned.
-Explicit scoped
-error rendering remains separate follow-up work. Generated HTML apps now register
-the factory and resolve the typed renderer directly; see [STARTER.md](STARTER.md).
+Publish durable outbox events in the same transaction as the business writes.
+Register listeners before publishing and run `bun run outbox:work` separately.
+Handlers must tolerate at-least-once delivery; use stable identities for deduplication.
 
-### Explicit view namespaces
+### Retrying failed jobs safely
 
-A controller can receive `views.namespace("orders")` once during module composition, typed as `NamespacedViewRenderer` from `@getstrata/core/view`. It then renders relative template names without deriving them from the controller class, action, URL or request input:
+Use `bunx strata queue:failed` and `bunx strata queue:retry`. Retry retains the failed
+record until queue admission succeeds; a retry is not an exactly-once guarantee.
+See [queues](QUEUES.md) for worker settings and recovery.
 
-```ts
-const orderViews = dependencies.container.resolve(CORE_VIEW_RENDERER_TOKEN).namespace("orders");
-// In the controller:
-return orderViews.render("show", { order }, { request, layout: "layouts/admin" });
-// views/orders/show.eta, wrapped in views/layouts/admin.eta
-```
+Keep the application handle in custom entrypoints. Call
+`await app.application.stop({ reason: "MANUAL" })` and inspect `result.successful`.
+The owner stops admission, drains work and closes resources. Use declared providers
+for shared services and startup work; see [application ownership](APPLICATION-OWNERSHIP.md).
 
-`renderHtmx("index", { orders }, { request, fragment: "table" })` selects `orders/index.eta` for full pages and `orders/table.eta` for targeted requests. Omitting `fragment` uses the relative page template without its layout, as on the root renderer. Namespace prefixes and template/fragment names must be relative paths without dot segments or trailing slashes; `.eta` remains optional. Layout names stay relative to the app's view directory and never gain the namespace prefix. Use the original renderer for a template outside the namespace.
+### Adopting file migrations from a legacy inline migrate.ts
 
-Scopes delegate to their app's renderer, preserving request-specific data, escaping, headers, status, errors, HTMX selection and `Vary`. They hold no current action/request state; independent controllers and concurrent requests do not change each other's prefix. Template data remains explicitly passed and every action still returns a native response or its promise. No controller base class, implicit rendering, filename inference or automatic model loading is introduced.
+Move schema changes into `src/db/migrations` and use the generated migration runner.
+Preserve existing data and migration names; upgrading packages does not rewrite
+application files or deployed schemas. `migrate:fresh` is a destructive development
+reset. See [migration guidance](DATABASE.md#application-migrations) before adoption.
 
-### Opt-in HTMX page and fragment responses
+## Continue
 
-Use `views.renderHtmx()` only on HTML routes designed for both representations:
+Run `bun run check` and test authorized, denied and invalid requests. Discover
+commands with `bunx strata help`; application commands belong in `src/cli/register.ts`.
+Configure entrypoints in `strata.config.ts`.
 
-```ts
-return views.renderHtmx("orders/index", { orders }, {
-  request,
-  fragment: "orders/_table",
-  layout: "layouts/account",
-  headers: { "Cache-Control": "private, no-store" },
-});
-```
-
-Ordinary requests, boosted navigation (`HX-Boosted: true`), and history cache
-miss restoration (`HX-History-Restore-Request: true`) use the page template and
-configured layout. Only `HX-Request: true` without those two flags selects the
-fragment, always with `layout: false`. Without a fragment name, it renders the
-page template without its layout. Layout names are chosen by application code,
-never by incoming headers. A request must be provided or available in the
-framework request context; rendering without one fails explicitly. Plain
-`views.render()` keeps its existing behavior regardless of HX headers.
-
-Every negotiated response varies on all three selecting headers, including
-full pages. Existing `Vary` values are preserved and deduplicated without
-case-sensitive duplicates; `Vary: *` remains intact. Status, other headers,
-escaping, request data and normal route auth/CSRF/tenant scopes are preserved.
-These client headers select presentation only, never permission to access data.
-Keep personalized responses private; Vary does not replace authorization or
-cache privacy. If using ETags, derive them from the selected representation
-rather than sharing one validator between different HTML bodies.
-
-The page endpoint must remain usable as a normal URL for history restoration
-and JavaScript-free navigation. `hx-get`/`hx-target` selectors and fragment
-markup must agree; the helper does not infer targets, perform DOM swaps, emit
-redirect/trigger instructions, or change HTMX's handling of 4xx/5xx responses.
-Configure any desired validation-error swapping explicitly in the client.
-See the official [HTMX history](https://htmx.org/docs/#history),
-[caching](https://htmx.org/docs/#caching) and
-[boosted navigation](https://htmx.org/attributes/hx-boost/) contracts.
-
-## Secrets
-
-Call `assertProductionSecrets()` from your `createApp` / `serve` path when `isProductionEnv()` is true. Staging counts as production for this check. It is feature-gated: a cookie HTML app with `SESSION_SECRET` and `AUTH_DEV_HEADERS=false` does not need API tokens if those features are off. Generated apps call it at boot. Production boot rejects `TENANT_DEV_HEADERS=true`; public-read admission has a separate trusted-host tenancy contract.
-
-## Public HTML reads (`FEATURE_PUBLIC_READS`)
-
-Generated apps default to authenticated reads. For a public catalog, opt in on its route:
-
-```typescript
-"GET /shop": kernel.wrapWebPublicRead(controller.index, { allowAnonymous: true }),
-```
-
-The JSON counterpart is `kernel.wrapPublicRead(handler, { allowAnonymous: true })`, composed with the normal API group. Omit the option to use `FEATURE_PUBLIC_READS` as the default policy, or set it false to require authentication. Only the exact string `true` enables that default. Writes and administrator routes retain their existing authorization.
-
-Public admission does not enable anonymous tenant headers. Production/staging tenancy requires an approved-host binding through `CORE_PUBLIC_TENANCY_TOKEN`; generated apps approve only the configured `APP_URL` hostname for their starter tenant. Multi-tenant applications provide their own domain mapping. Unknown hosts fail closed, and forwarded hosts require configured immediate socket-peer IPs. Keep the separate `TENANT_DEV_HEADERS` flag false in production. See [TENANCY.md](./TENANCY.md#trusted-public-tenancy-and-public-read-admission) for configuration and upgrade requirements.
-
-## API abilities vs HTML admin
-
-Product apps often authorize the same resource two ways. That is expected.
-
-| Helper | Surface | What it checks |
-|--------|---------|----------------|
-| `kernel.wrapAbility("products:create")` | JSON (`api` group) | Token/session **ability** string (`RequireAbility`). Pair with a `Policy` / `PolicyGate` inside the controller or `wrapPolicy("products", "create", …)` when the action is on a loaded model. |
-| `kernel.wrapPolicy("products", "update", …)` | JSON or HTML | `PolicyGate` + `ProductPolicy` (view/update/delete **this** row). |
-| `kernel.wrapWebGlobalAdmin(handler)` | HTML cookie admin | Signed-in, verified (if that extra is on), `users.is_admin`. No ability string. |
-| `kernel.wrapWebAbility("products:create", handler)` | HTML | Cookie session + the same ability checker as JSON. |
-| `kernel.wrapWebPublicRead(handler)` | HTML catalog | Guest vs login, depending on `FEATURE_PUBLIC_READS`. Not an admin check. |
-
-Shop-style split: JSON `/api/v1/products` uses `wrapAbility("products:*")` plus `ProductPolicy`; HTMX `/admin/products` uses `wrapWebGlobalAdmin`. Admins who pass `is_admin` on HTML do not automatically get JSON abilities — grant `*` or `products:*` on the token/catalog too. See [AUTH.md](./AUTH.md).
-
-## Identity env
-
-| Variable | Default when unset |
-|----------|--------------------|
-| `APP_KEY_PREFIX` | `strata` |
-| `APP_NAME` | `Strata` |
-| `API_PREFIX` | `/api/v1` |
-| `APP_SDK_CLASS` | `${APP_NAME}Client` |
-
-Generated apps derive `APP_KEY_PREFIX` and `APP_NAME` from the project name and use `API_PREFIX=/api`. The HTML session cookie is still `strata_session` unless you change `cookieName`.
-
-## Next
-
-- [AUTH.md](./AUTH.md)
-- [DATABASE.md](./DATABASE.md)
-- [PACKAGING.md](./PACKAGING.md)
-
-## Queue reservation rollout
-
-Stop and drain old workers before starting this reservation implementation. Producers retain the same pending-list envelope, so existing pending jobs need no SQL migration. Never run destructive-pop workers alongside the corrected workers. Preserve pending lists, processing lists, lease hashes and failed-job rows during deployment. Legacy processing entries with timestamp leases are recovered after expiration; newly claimed entries use unique reservation IDs and owners. Reservation and recovery scripts use Redis server time, validate key types before writes, and publish destination state before deleting source state. Commands poll priority lists without blocking the heartbeat connection. Redis ACLs must permit EVAL and its list/hash, TYPE and TIME operations; test the configured worker role before rollout.
-
-Malformed and unregistered jobs are kept as raw payloads in `queue:<priority>:invalid` (under the app namespace) after ownership-checked quarantine. Inspect and repair those payloads before deliberately re-enqueuing them; do not delete them as deployment cleanup. Identical pending payloads have separate reservations and leases. A failure-record database outage leaves the reservation available for recovery rather than acknowledging it. A crash after failure persistence but before acknowledgement may create another failure record on replay.
-
-A stalled process or Redis outage can still lose its lease; its effects may overlap a replay. Lease ownership fences acknowledgement, not arbitrary external side effects. Handlers must use business idempotency. The opt-in Streams transport adds stable job IDs, persisted retry schedules, deadlines and cancellation through a separate maintenance rollout; see [QUEUES.md](QUEUES.md). These contracts do not apply to legacy list workers and do not establish measured production capacity.
-
-### HTTP completion includes commit and deferred hooks
-
-The global HTTP error boundary encloses authentication, tenancy, the business transaction, commit, and deferred in-process listeners. API routes keep JSON error responses regardless of `Accept`, including nested `withErrorHandling` wrappers from older scaffolds; HTML routes retain negotiated web error pages. Request IDs, logs, metrics, and tracing observe the final response after that boundary settles. A constraint failure at commit rolls back writes and discards deferred events. A deferred listener failure happens after commit: it returns a controlled error, but cannot undo already committed business data. Handlers and effects must support replay. Use a durable outbox for effects that must survive process death; in-process deferred events alone are not durable.
-
-### SQLite transactions
-
-`createSqliteConnection` supports awaited `begin()` callbacks and owned `DatabaseSession.transaction`. Nested framework transactions use savepoints. A single native SQLite connection serializes root transactions and unrelated queries; transaction-local queries use the bound handle, so another request cannot observe uncommitted writes. Failed callbacks and deferred constraint failures roll back before the next operation starts. Do not nest native `begin()` calls or issue manual transaction-control SQL inside a managed callback; use the selected session's `transaction` method. Drain operations before closing the connection. This does not turn SQLite into a distributed writer database: file locking and the existing busy timeout still apply between processes.
-
-### MySQL transactions
-
-The MySQL adapter reserves a pool connection for each awaited transaction and binds transaction-local pool/repository queries to that session. Selected-session `transaction` nests through savepoints. Queries with bound values use the prepared protocol; parameterless savepoint/DDL operations use the driver's query protocol. Failed callbacks or commits roll back before release. Uncertain BEGIN and failed rollback discard the session rather than returning it to the pool. Adapters supplied through `createMysqlConnectionFromPool` need `getConnection()` to support transactions; use the selected session's `transaction` method for nesting and do not reuse transaction handles after completion.
-
-MySQL has no native mutation `RETURNING`. Entity-returning repository creates, upserts, ID updates/increments and restores therefore run their write and row readback in one framework transaction on one reserved session. Generated keys come from that statement's insert metadata; supplied string keys and stored defaults are preserved. No-op ID updates/increments return the live row even when the MySQL client reports changed rather than matched rows. Soft-delete and force-delete return false for absent/scoped-out rows, and observers receive rows rather than driver headers. Set-based conditional writes still use `affectedRows` metadata and bypass per-row observers. Postgres and SQLite retain their native RETURNING statements.
-
-Select repositories and models from the supplied transaction session. Nested calls
-use savepoints and reject switching to an unrelated pool. A callback must not
-outlive its execution. Use an explicit outer business transaction when writes and
-observers must commit together.
-
-Repositories with constructor-initialized state or JavaScript `#private` fields
-use a `defineRepository` construction function. Its `create(binding, ...dependencies)`
-returns a new valid instance using the supplied owner/session binding. Declare
-those definitions in `createDatabaseBindings` and select them with
-`database.repository(definition)`. The framework does not copy prototypes or invoke
-`cloneWithConnection`; the former protected override and `withConnection` rebinding
-contract are removed. See [explicit model binding](DATABASE.md#declarative-model-binding).
-
-MySQL upsert uses the engine's native unique-index semantics, which do not target a single named conflict constraint. Supply non-null conflict-column values so zero-insert-ID results can be resolved deterministically; an unresolved row rolls back instead of returning metadata. An explicit empty update-column list returns null for an existing conflict and a row for a new insert. This path locks the conflict lookup and may deadlock under contention, like other transactional MySQL upserts; callers must handle transaction failures rather than retry external effects blindly.
-
-
-### Recoverable model cache invalidation
-
-The generated `createModelCacheInvalidationEffects` declares after-commit queue dispatch; that handoff does not survive process death before dispatch. For recoverable invalidation, declare transactional repository effects against the application definitions and owned SQL outbox. Publication participates in the selected business transaction; workers enter fresh trusted tenant/actor executions.
-
-Use one complete durable listener registry for cache invalidation and business
-listeners. Include the owned outbox services in the application and register effects
-before admitting HTTP/jobs. Do not let a cache-only worker claim the shared table.
-
-With those transactional effects installed, row writes publish versioned cache intents through their supplied `TransactionSession` before commit. Publication/schema failure rolls back the business write; cache/Redis availability does not participate in the commit response. Later synchronous hooks retain their normal order. The worker directly invokes the framework cache invalidation job, bypassing the Redis queue handoff, and the SQL outbox provides leases, retry, failed-delivery retention and `replay(eventId, "strata.cache.invalidate-tags.v1")`. Tune retry/attempt policy and alert on failed or aged cache deliveries.
-
-Durable mode requires explicit framework transactions around row writes (including workers and CLI commands). The RLS request scope already supplies one. Standalone writes or repositories bound to an unrelated connection fail **before SQL mutation**; this prevents an outbox record from claiming another connection's write. Direct SQL and bulk/projection APIs remain supported escape hatches: explicitly publish `strata.cache.invalidate-tags` with `{ tags }` inside their business transaction when they bypass row events. Transactional repository effects execute inside the selected transaction; after-commit effects run after durability. Hooks must only persist intents, never perform remote delivery.
-
-Rollout: stop/drain old writers and workers, deploy the outbox file migration with the migration owner, install the complete listener registry and transactional effect declarations, and then restart writers and the outbox worker. Preserve old queue jobs and pending SQL deliveries. Use a shared cache for multi-process workers; an array/memory cache belongs to its own process and cannot be invalidated by a different process. Invalidation is eventually consistent: worker lag can expose stale cached values, so use bounded TTLs and bypass cache for authoritative/financial decisions. This fixes recoverability of the handoff. The Redis cache driver also provides shared generation fencing, bounded metadata/LRU eviction and renewable fill leases; see [shared Redis cache](REDIS-CACHE.md) for consistency limits, configuration and the required cold-cache rollout. Existing generated apps must opt in; the legacy 2.x queue mode is not made durable by upgrading packages alone.
-
-### Durable transactional events (opt-in SQL outbox)
-
-Import `SqlOutbox` and `createOutboxMigration` from `@getstrata/core/events/outbox`. A new `create-strata` app already writes `0005_outbox.ts`, `src/outbox/registry.ts`, and `bun run outbox:work`. An existing app adds a numbered file migration exporting `createOutboxMigration("0010_outbox", "pgsql", { rls: true })` (use the selected driver and enable RLS only for Postgres RLS apps). This helper owns the infrastructure schema; do not copy its SQL into the application. Run migrations separately from workers. MySQL requires 8.0.16+ (8.4 is tested) for `SKIP LOCKED` and enforced checks. Grant the runtime role SELECT/INSERT/UPDATE on both outbox tables. DDL requires the migration owner; migration bypass is a row policy, not DDL permission. Downgrade refuses tables containing any undelivered event.
-
-Compose `createSqlOutboxBindings({ invoke, connection, tenancy, listeners })` and
-include its service declarations in the application. Publish using
-`outbox.publish(tx, name, payload, { tenantId, id, version })` with that owner's
-`TransactionSession`; the tenant must match the execution envelope.
-
-
-Publication requires an owned business `TransactionSession`. A savepoint keeps publication atomic even if the caller catches its error. Event payloads are JSON, versioned, limited to 64 KiB by default, and accompanied by the current tenant identity. The transaction captures the registered listener names and attempt budget. Reusing an event ID requires the same name, version, tenant and serialized payload; it never adds listeners retroactively. Canonicalize application payloads if object key ordering may differ between retries. Keep IDs globally unique (include the tenant when business IDs are tenant-local). Retain event rows for the required idempotency/audit window; deleting them permits that ID to be published again.
-
-Durable listeners execute only in workers outside the business transaction; publication never calls a listener or a Redis queue. This differs from synchronous observers and commit-aware in-process model listeners, which are useful hooks but do not survive process death. Register the same durable listeners in producers and workers. Removing or renaming a listener leaves its existing delivery recoverable as a failure. Do not automatically convert all model hooks to durable events: apps choose which effects need durability.
-
-The official `runOutboxWorkerCommand` from `@getstrata/cli/outboxWorker` owns stop/drain/flush/close handling. Generated apps pass `listeners`, which constructs an outbox with framework defaults. Apps with a configured outbox pass `outbox` instead, preserving their tenant resolver, lease/retry settings and complete listener registry. Choose exactly one source; TypeScript and runtime validation reject ambiguous configuration. A supplied instance is reused directly after successful boot, with the same cancellation and cleanup contracts.
-
-Generated `outbox:work` wiring supplies the owned application and outbox. Shutdown
-stops admission, drains work, flushes and closes through the application handle.
-Do not combine that handle with a separate `context.dispose()`/global database cleanup chain.
-
-
-Workers use database time, indexed claim scans, renewable unique ownership tokens and ownership-checked acknowledgement. Expired ownership is reclaimed before new work. Short coordination transactions retry only database deadlock/serialization aborts, with a bounded retry budget; persistent infrastructure errors propagate to the worker supervisor. Delivery is **at least once**. A lease fences acknowledgement, not arbitrary provider effects: a killed worker may have already sent email or charged a provider. Handlers must support replay and observe the abort signal. Cancellation does not delete work. Failed delivery persists a bounded code, not provider exception text; attempts and exponential retry deadlines survive restart. Defaults are a 60-second lease, five attempts, and a one-second initial retry delay capped at five minutes. Provision pool headroom for lease renewal in addition to active listeners. SQLite has one writer per connection; keep application write transactions short.
-
-Tenant listeners resolve the captured tenant and run through their explicit scoped policy, with Postgres RLS bypass disabled. Missing tenants fail closed. The default resolver uses the generated tenant directory; inject the application's trusted directory when its schema differs. Non-RLS handlers receive tenant context and must explicitly use the selected session's `transaction` method for atomic business writes. Platform events have no tenant; reserve them for authorized platform code.
-
-Use `processNext({ signal })` for bounded worker orchestration/tests, or `work({ signal, pollMs })` for the framework polling loop. Monitor pending age, expired leases, attempts, and failed deliveries in the two SQL tables. `replay(eventId, listenerName)` atomically resets only that failed listener's delivery, preserving the original event and completed listeners. Expose replay solely through an authorized operator command, never an anonymous endpoint. Outbox schema/data must survive rolling deployment and restore. This API is additive and opt-in; the starter does not silently change existing listener execution semantics.
-
-### Application OpenAPI operation metadata
-
-Modules may declare `openApi` using the same paths and uppercase methods as their `routes` result (before `apiPrefix`). Metadata for a missing API path/method fails bootstrap; `webRoutes` never enters the API registry. Existing modules and SDK methods retain their defaults when metadata is absent.
-
-```ts
-const module: AppModule = {
-  name: "orders",
-  openApi: {
-    "/orders": {
-      POST: {
-        summary: "Create an order",
-        parameters: [{ name: "Idempotency-Key", in: "header", required: true,
-          schema: { type: "string", minLength: 16 } }],
-        responses: { "200": { description: "Accepted" },
-          "409": { description: "Conflicting checkout identity" } },
-      },
-    },
-  },
-  routes({ kernel }) { return { "/orders": { POST: kernel.wrap("authenticated", createOrder) } }; },
-};
-```
-
-The public metadata types describe parameters, JSON Schema, media types, request bodies, response/error schemas, and security overrides following [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.1.html). Provided responses replace generic responses; `security: []` documents a public operation. Metadata documents your handler contract; it does not replace request validation or authorization. Run `openapi:generate` and `openapi:check` after a change. Required path parameters must match the route and header names are case-insensitive for duplicate validation.
-
-The generated fetch SDK keeps `RequestInit` and native `Response` as escape hatches. Declared headers add typed `operationHeaders`; required headers must be supplied, are checked at runtime, and are merged with a native `Headers` instance. For the example: `client.postOrders({ operationHeaders: { "Idempotency-Key": key }, credentials: "include" })`. Declared operation request/response contracts are available in the generated class's `operationContracts`; Declared scalar path/query parameters add typed `operationPath`/`operationQuery`, required-field checks and URL encoding. Cookies use native credentials/headers; JSON decoding, body encoding, advanced parameter serialization and runtime schema validation remain explicit caller responsibilities. This is not a complete OpenAPI-to-TypeScript schema compiler.
-
-
-### Explicit application CORS headers
-
-For browser callers on an approved different origin, set `CORS_ALLOWED_ORIGINS` to explicit origins and `CORS_ADDITIONAL_ALLOWED_HEADERS=Idempotency-Key,X-Correlation-Id` to extend the framework's existing request-header defaults. The generated HTTP kernel consumes this environment setting; existing applications require no copied CORS middleware. Unset/empty extra headers keep the previous defaults. Names are HTTP field-name tokens, merged case-insensitively; wildcards, empty list entries, whitespace inside names and invalid characters fail middleware construction before admission. Environment entries are comma-separated and trimmed. The typed API accepts exact names:
-
-```ts
-import { createCorsMiddleware, type CorsOptions } from "@getstrata/core/http/corsMiddleware";
-const options: CorsOptions = { additionalAllowedHeaders: ["Idempotency-Key"] };
-const cors = createCorsMiddleware(options);
-```
-
-Options and the environment setting both extend defaults; options are copied so subsequent caller-array mutation cannot widen the middleware policy. Existing origin/method/credential behavior is unchanged: only listed origins receive reflected CORS permission and credentials, and development wildcard origins receive no credentials. The framework never reflects arbitrary `Access-Control-Request-Headers`. OpenAPI operation metadata documents a contract, not permission to send its headers from another origin. Authorize origins and extra names deliberately, then deploy/restart writers so invalid settings fail at startup. Header permission does not provide authentication, CSRF exemption or authorization. Same-origin/native clients do not need extra CORS settings. HTTP field-name syntax follows [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.1); browser preflight rules follow the [Fetch standard](https://fetch.spec.whatwg.org/#http-access-control-allow-headers).
-
-
-Registered Bun route method maps need a route-level OPTIONS entry to reach CORS middleware. `createWebServer` synthesizes that preflight handler for registered paths, including GET shorthand and parameterized routes, when the application has no explicit OPTIONS handler. It invokes only the framework CORS policy: no business handler, authentication, CSRF check or tenant transaction runs during the preflight. Actual requests retain their existing middleware checks. Unknown paths keep normal fallback handling. Synthetic OPTIONS entries belong to native server dispatch and do not enter the API route registry/OpenAPI document or mutate the application route map.
-
-Generated apps consume the environment policy above. Custom native server composition may pass `cors: { additionalAllowedHeaders: ["X-Correlation-Id"] }` to `createWebServer` for its synthesized preflights; use the matching approved-header options in the CORS middleware wrapping actual handlers. Explicit application OPTIONS handlers take precedence and own their response policy. Arbitrary `Bun.serve`/fetch handlers are outside this adapter; compose the core middleware there explicitly. Test preflights through the actual generated method map, not only middleware invoked from a catch-all fetch function.
-
-## Typed service tokens and narrow controller dependencies
-
-Use `createServiceToken<T>()` from `@getstrata/core/contracts/container` for new application bindings. Tokens carry opaque symbol identities and use the existing container lifecycle. Their invariant type supplies inference and rejects a mismatched value/factory or an explicit resolution generic that disagrees with the token.
-
-```typescript
-import { createServiceToken } from "@getstrata/core/contracts/container";
-
-export const catalogServiceToken = createServiceToken<CatalogService>("catalog.service");
-
-// Provider / composition root:
-container.singleton(catalogServiceToken, () => new CatalogService());
-const controller = new CatalogController(container.resolve(catalogServiceToken));
-
-// Controller depends on its capability, not the entire application container:
-class CatalogController {
-  constructor(private readonly catalog: CatalogService) {}
-}
-```
-
-`container.set`, `instance`, `singleton`, `bind`, `get`, `resolve`, `make` and `resolveService(dependencies, token)` require an opaque typed token and preserve its service type. String service keys reject, including calls from JavaScript. Each `createServiceToken` call creates a distinct identity even when labels match; export one canonical token declaration for each shared service. TypeScript checks registered values, but `any`, assertions and JavaScript can bypass value typing. Token identity is validated at runtime; arbitrary service payloads are not runtime type-checked.
-
-Use constructor parameters for the services a controller actually needs; resolve them in module/provider composition. Stateful services can remain classes, while stateless business operations can remain functions. This API does not alter request scoping, model typing, middleware typing, queues or transactions, and upgrading packages does not rewrite existing controllers.
-
-For tenant-specific API allowances, bind `CORE_THROTTLE_QUOTA_POLICY_TOKEN` during provider registration rather than adding plan rules to core. Use trusted tenant metadata and the synchronous `ThrottleQuotaPolicy` contract. The generated kernel applies it to API throttles. Dedicated login and SCIM limits remain additional controls when those routes also use the API group. See [application-owned quotas and local storage bounds](PRODUCTION.md#application-owned-quotas) for an example, failure semantics and cleanup requirements.
-
-## Optional resource routes
-
-`resourceRoutes` from `@getstrata/core/http/route` expands explicitly supplied actions into the existing native Bun route map. It does not inspect controller methods, instantiate controllers, select middleware, authorize models, or infer views.
-
-```ts
-return mergeRouteMaps(
-  resourceRoutes("/orders", {
-    index: kernel.wrapWebAuthenticated(controller.index),
-    show: kernel.wrapWebAuthenticated(controller.show),
-  }),
-  { "/orders/:id/cancel": { POST: kernel.wrapWebAuthenticated(controller.cancel) } },
-);
-```
-
-Import both helpers from `@getstrata/core/http/route`. Paths are static absolute prefixes without a trailing slash (for example `/orders` or `/admin/orders`); member actions receive the typed `request.params.id`. Nested parent parameters and different member parameter names remain explicit route maps. Only supplied actions are registered: `index` is `GET /orders`, `create` is `GET /orders/create`, `store` is `POST /orders`, `show` is `GET /orders/:id`, `edit` is `GET /orders/:id/edit`, `update` handles `PUT` and `PATCH /orders/:id`, and `destroy` is `DELETE /orders/:id`. Empty action maps register nothing; unsupported actions or non-function values fail at construction. Supply bound handlers (such as arrow fields) when a controller uses `this`.
-
-Web resources belong in `webRoutes`; API resources belong in `routes`, with operation metadata under their expanded paths in `openApi`. The existing kernel wrappers still own auth, tenancy, CSRF and error contracts. Resource helpers introduce no HTTP method spoofing: ordinary HTML mutation forms need explicit POST endpoints; JavaScript/API clients may send PUT/PATCH/DELETE. Refunds, cancellation and other business commands remain explicit app routes.
-
-`mergeRouteMaps` returns a fresh map and rejects duplicate paths, including two method maps for the same path, before handlers can be silently replaced. Define all methods of a shared path together. Use it when composing resource and custom maps; object spreads and existing cross-module overrides retain their prior semantics and do not gain collision checking automatically. Explicit maps remain fully supported.
-
-## Preserve route request types through middleware
-
-`RouteHandler<TRequest>` defaults to the standard `Request`, and accepts a narrower native request contract when a controller needs route parameters. `composeMiddleware`, `withMiddleware`, the `HttpKernel` wrappers and web login/register throttles preserve that contract, so casting parameterized handlers to an untyped `RouteHandler` is unnecessary.
-
-```typescript
-import type { RouteHandler } from "@getstrata/core/http/middleware";
-import type { RouteRequest } from "@getstrata/core/http/route";
-
-const show: RouteHandler<RouteRequest<{ id: string }>> = async (request) => {
-  return Response.json({ id: request.params.id });
-};
-
-// Module composition: no handler assertion required.
-const route = kernel.wrapWebAuthenticated(show);
-```
-
-Middleware still receives standard `Request` and invokes its continuation without replacing the request. Composition returns a handler requiring the original subtype; it does not manufacture route parameters or make a narrow handler safe to call with a plain `Request`. Register it under the matching native Bun path (`/items/:id` in this example). This change does not validate route-map paths, add request fields, decode parameters differently, change authorization/CSRF order, or make middleware-added context available as typed fields. Existing plain-request handlers remain supported. Model binding and JSON/HTML error wrappers compose without erasing the request contract.
-
-### Inferred model results
-
-Owned model lookups and writes, query chains, awaited queries, pagination and chunk callbacks preserve the concrete model class and its declared record type:
-
-```ts
-class Product extends Model<ProductRecord, "id"> {
-  label() { return this.get("title"); }
-}
-// productModel is the definition whose construct callback creates Product.
-const products = database.model(productModel);
-const product = await products.with("category").findOrFail(id);
-const record: ProductRecord = product.toObject();
-product.label();
-const page = await products.query().paginate({ page: 1, perPage: 20 });
-// page.data is Product[], while find()/first()/firstWhere() remain nullable.
-```
-
-Declare record fields to match hydrated values, including configured casts. These types do not validate database rows, cast definitions, mass-assignment input, or dynamically named loaded relations. `withCount("reviews")` adds `reviews_count` to the result record; a custom alias and multiple counts are preserved. Count values remain `unknown` because driver scalar representations and model casts differ; normalize them explicitly before arithmetic. Prefer aliases that do not overwrite model fields.
-
-Writes and filters infer declared field names and value types. Use `products.query().select("title", "price").get()` for plain selected records with model casts; these rows have no model methods or unselected fields. Model-returning `all` and `firstWhere` helpers do not accept partial selects. Repository queries, direct SQL and bulk operations remain available; `pluck` and `value` retain their existing `unknown` results. Use `newFromTrustedRecord` for deliberate partial SQL hydration, where the caller owns completeness. See [typed model inputs and projections](./DATABASE.md#typed-model-inputs-and-projections) for defaults, cast boundaries, dynamic predicates and source compatibility.
-
-### Model composition
-
-For ordinary SQL models, use `createModel({ name, table, attributes })` from
-`@getstrata/core/database/model`. Register the definition with the application and
-select `database.model(definition)` from the current execution or transaction.
-The bound facade provides query, create and instance write APIs. Advanced
-`defineRepository` / `defineModel` declarations support custom behavior and
-explicit dependencies. See [DATABASE.md](DATABASE.md#declarative-model-binding).
-
-### Graceful lifecycle
-
-Generated HTTP, queue worker and scheduler entrypoints coordinate stop, drain, flush and close phases. Providers can register `onCleanup(handler, "drain")` for admitted work, `onCleanup(handler, "flush")` for telemetry, and default cleanup for resource closure. The generated provider list includes the shared `tracingProvider` for OpenTelemetry flush and shutdown; older generated lists must add it explicitly. See [TRACING.md](TRACING.md) for collector configuration and sampling. Existing custom entrypoints must adopt the coordinator explicitly. See [LIFECYCLE.md](LIFECYCLE.md) for integration, deadlines and recovery contracts.
-
-### Runtime observation ownership
-
-The metrics extra accepts explicit `BootstrapOptions.runtimeMetrics` settings. Its generated provider drains owned outbox/failed-job collectors before database closure and cleans them up on startup failure. Defaults stay HTTP-only; schemas and durable workers remain explicit deployment/application choices. Existing tracing/acquisition observers are borrowed and retain their original owners. See [runtime metrics](RUNTIME-METRICS.md) for the generated shape and operational boundaries.
-
-### Awaited infrastructure discovery
-
-Jobs and listener modules load through awaited ESM imports before provider startup finishes. Malformed exports and duplicate discovered job/module names fail startup with their locations. Use explicit manifests for bundles and preserve DI factories instead of reconstructing their dependencies. See [DISCOVERY.md](DISCOVERY.md) for supported file/export shapes, caching and migration requirements.
-
-Redis queue apps can opt into consumer-group recovery with `QUEUE_REDIS_TRANSPORT=streams` after the required maintenance conversion. See [queue recovery and Streams rollout](QUEUES.md) for ownership, cancellation, priority, durability, and migration contracts.
-
-## Retrying failed jobs safely
-
-`queue:retry <id>` boots the generated application, resolves its configured queue, recreates the registered job, and dispatches its persisted payload at the job's configured priority. It removes the `failed_job` row only after dispatch resolves. Unknown jobs and rejected dispatches leave that recovery row intact. The standalone command uses `QUEUE_DRIVER` and `REDIS_URL`, closing only the queue it creates; the generated app owns its bootstrapped queue's lifecycle.
-
-Applications calling `FailedJobService.retry` directly must now provide an awaited admission callback:
-
-```ts
-await failedJobs.retry(id, async (record) => {
-  const job = jobRegistry.create(record.job_name);
-  if (!job) throw new Error(`Unknown job "${record.job_name}".`);
-  jobRegistry.track(record.job_name, job);
-  if (record.job_id != null) {
-    if (!queue.replay) throw new Error("This queue cannot preserve replay identity.");
-    await queue.replay(job, record.payload, record.job_id);
-  } else {
-    await queue.dispatch(job, record.payload);
-  }
-});
-```
-
-The former one-argument call is rejected before reading or deleting any recovery row. Upgrade `@getstrata/core` and `@getstrata/cli` together when adopting this contract. The CLI reports enqueue success, not eventual handler success. `sync` runs inline and `async` remains process-local; use Redis for shared worker admission. Opt-in Streams and persisted delayed retries require the separate [queue migration](QUEUES.md), including the failed-job identity schema change.
-
-SQL record deletion and Redis admission are separate operations. A crash, lost Redis acknowledgement, concurrent retry, or SQL deletion failure after admission can cause duplicate delivery on another retry. Handlers must be idempotent. The admission callback must resolve only when its queue has accepted the replay; it must not fire and forget. If record deletion fails, inspect both queue and recovery state before retrying. Queue durability still depends on Redis persistence and failover configuration.
-
-### Explicit development resets and protected rollback history
-
-`freshDatabase(db, migrations, { destructive: true })` supplies `{ operation: "fresh" }` as the optional second argument to each recorded migration's `down`. This is an explicit data-loss operation, rejected in production/staging before database access. Generated `migrate:fresh` entries use it; the CLI also rejects production/staging and unsupported arguments before importing the reset entry. Stop application admission and workers before resetting. The command does not clear Redis or storage and does not seed unless `--seed` is explicitly supplied.
-
-Ordinary rollback and legacy `freshDatabase` calls without the option retain their existing guards. Protected migrations can distinguish intentional development reset from rollback using the typed context; encryption-rotation checkpoints use this contract without relaxing their ordinary archival requirement. Application-owned payment/order audit migrations must explicitly adopt it when intentional development reset should discard their history. Existing migrations that ignore the context keep their behavior. This is not a universal database-drop shortcut, nor an automatic archival operation. Fresh records each completed `down` in migration history before continuing. If a later migration refuses reset, `migrate` can reapply the successfully removed migrations; retrying fresh also uses the remaining applied records. This is not atomic DDL/history: a failure inside a migration, process death between DDL and history recording, or history-delete failure can still require administrative reconciliation. Do not assume a failed reset preserved data or schema. Back up before destructive operations and qualify them on disposable databases. Older releases that cleared history only after all downs may require inspection and explicit reconciliation of already-dropped migrations before `migrate` can restore schema.
-
-Migration definitions are checked before callbacks, migration locks or database access: each definition needs a non-empty string `name` and callable `up`/`down`, and names must be unique. File loading rejects malformed/missing default exports with the source path and reports both files for duplicate names. Migration directories contain definition files; reserved `types`, `index`, `runner` and legacy `advisoryLock`/`migrationDatabase` infrastructure files (`.ts`/`.js`) and `.d.ts` declarations are excluded. Move other helper modules outside the migration directory instead of relying on silently ignored exports.
-
-Before fresh runs any `down`, it checks that every applied history record has a supplied definition. Ordinary rollback checks the definitions for its latest batch. Missing definitions stop the operation before callbacks, application DDL or history deletion; restore the original migration files from version control and retry. Do not delete history records to bypass this check: the corresponding schema/data may still exist. Forward migration still accepts a partial list and preserves older applied records. Status describes only the supplied definitions; it does not inspect physical schema or prove consistency. Successful fresh removes only records for completed downs, with no blanket history clear. These checks do not add cross-process writer exclusion or make DDL/history atomic; use a maintenance window and the recovery guidance above.
-
-For repeated history guards, use the optional typed `guardMigrationRollback` helper from `@getstrata/core/database/migrations`:
-
-```ts
-async down(db, context) {
-  await guardMigrationRollback(context, {
-    hasHistory: async () =>
-      (await db.unsafe("SELECT id FROM order_refunds LIMIT 1")).length > 0,
-    message: "Cannot discard refund history.",
-  });
-  await Schema.run(db, "pgsql", schema => { schema.drop("order_refunds"); });
-}
-```
-
-Import `guardMigrationRollback` and `Schema` from their documented subpaths. Call and await the guard before destructive DDL. The application owns the history predicate and refusal text; it may use a repository instead of a migration query. The predicate must return a boolean (synchronously or asynchronously). Ordinary rollback and legacy resets evaluate it: `true` refuses the operation, `false` permits the following code, and a thrown/rejected read propagates without permitting the following code. An explicit fresh context skips the predicate entirely. The helper does not wrap DDL, provide transaction atomicity, archive data, authorize a reset or check environment configuration: the reset runner/CLI owns those checks. Manually passing a context is trusted application code, not an authorization token. The guard does not exclude concurrent writers between the history read and DDL; use a maintenance window for history-sensitive rollback.
-
-Most migrations need no guard. Existing `down(db, context)` checks remain supported, and migrations are never made resettable automatically. A migration that must prohibit deletion even during development reset should keep its own unconditional refusal and omit this helper. Encryption-rotation checkpoints use the helper with an unconditional ordinary-rollback refusal; their archival policy is unchanged. Outbox migrations use it to retain unfinished deliveries on ordinary rollback/legacy reset, while explicit development fresh discards pending, processing and failed deliveries alongside their events.
-
-Default 422 HTML pages use a native same-origin return link, with `/` as the fallback when the referrer is absent, malformed, external or points to the same failed GET/HEAD path. A failed POST can return to the corresponding GET form/list path. Only the path is retained; query credentials and fragments are omitted. This works under strict CSP and without JavaScript. Postgres/SQLite foreign-key errors keep status 422 but use a neutral related-record message because their error codes cover both missing parents and protected referenced rows. Apps should express domain-specific refusal rules (for example, preserving products with order history) through their normal validation contract; database constraints remain the final integrity boundary.
-
-### Integer input contracts
-
-`integerRule`, `positiveIntegerRule` and `integerRange` validate complete safe integers. By default they accept actual numbers and whole signed decimal strings (including surrounding whitespace and leading zeros), preserving form compatibility. Fractional, exponent, hexadecimal and suffix strings, unsafe integers and coerced objects reject. Numeric exponent notation in JavaScript is already a number and passes if its value is a safe integer.
-
-Use `integerRange(0, 2147483647, { allowNumericStrings: false })` for a JSON-number-only contract. `integerRule` and `positiveIntegerRule` accept the same option. The rules still abstain for undefined, null and the empty string; combine with `required()` for mandatory fields. Range bounds must be safe integers with minimum no greater than maximum. Existing field error messages remain unchanged.
-
-Validation is not casting: `validateObject` trims strings but keeps valid numeric strings as strings. Convert validated form data explicitly before typed writes. Do not use these integer rules for bigint identifiers beyond the JavaScript safe-integer range. Earlier releases accepted malformed numeric prefixes; callers relying on that unintended behavior must correct their inputs.
-
-### Controlled outbound transport in installed-package tests
-
-`setDnsLookupForTests` and `resetDnsLookupForTests` from `@getstrata/core/testing` control the process-wide resolver used by the packaged `safeFetch` API and its consumers, including `GitHubOAuthProvider`. Always restore the hook in `finally` and isolate these tests in their own process. This is a test fixture seam, not an application DNS-policy configuration API.
-
-A controlled resolver does not disable URL/IP validation, address pinning, redirect policy or the whole-request deadline. Private DNS answers remain rejected before transport. Pair synthetic DNS answers with a controlled fetch transport: returning a public address alone does not create an owned HTTP server at that address. Such a fixture qualifies installed API composition and request/response contracts; it does not qualify live provider DNS, TLS, availability, credentials or account settings. Do not replace the provider or patch installed framework code to make a callback test pass.
-
-### Configured membership lookup across package exports
-
-Configure the application-owned `MembershipLookup` through `@getstrata/core/auth/membershipContext` before serving membership-scoped requests. The installed `createMembershipMiddleware` and default `MembershipService` consume that same configured lookup. Middleware resolves the current lookup per request; a newly constructed default service captures the lookup at construction. Explicit `new MembershipService(lookup)` remains available for a deliberately scoped dependency. Replacing configuration does not silently replace dependencies already captured by existing service instances.
-
-Authentication and membership contexts remain request-local. Concurrent users must not share organization IDs, and lookup failures propagate rather than becoming an authorized or empty-success fallback. Configure membership from trusted application boot code, not request input. The packed generated-app acceptance checks these contracts outside the framework's source aliases.
-
-### Configured error rendering through response wrappers
-
-The error renderer supplied through `createViewProvider({ error: { render } })`
-is application-owned. The HTTP kernel carries its renderer, enabled mode and
-production redaction policy in request metadata; generic wrappers preserve that
-owner and mapped status. Explicit JSON/API boundaries retain JSON even when the
-client accepts HTML. Direct wrappers may receive explicit rendering options;
-ownerless wrappers default to JSON. There is no global configure/reset API.
-
-Framework HTML and JSON error responses use `Cache-Control: no-store`, including configured/fallback error renderers and custom-body `notFoundHtmlResponse` calls. Error views/details can contain request-specific data; neither cookies nor `Set-Cookie` are a cache-protection policy ([RFC 9111 section 7.3](https://www.rfc-editor.org/rfc/rfc9111.html#section-7.3)). This default does not change successful response caching or make malicious caches trustworthy. An application deliberately producing public, cacheable not-found content should create an explicit normal response with its reviewed headers rather than using the framework error boundary as a cache-control escape hatch.
-
-Core JSON admission denials for authentication, policies, global-admin access, abilities, verification, password confirmation and body limits use the canonical error-response serializer as well. Their original status/message envelopes and security events remain; an ability checker's extra error details remain excluded from its JSON denial contract. HTML throw/redirect branches and admitted responses retain their existing behavior. This avoids requiring application header middleware to repair core admission responses.
-
-
-### Explicit cache privacy for authentication responses
-
-Generated auth routes use `privateJsonResponse` from `@getstrata/core/http/response` for identity, credentials, CSRF and handled auth JSON responses. It preserves payloads, status and supplied headers/cookies, and sets `Cache-Control: private, no-store` even if a conflicting cache header was supplied. Ordinary `jsonResponse` retains its existing defaults.
-
-Rendered auth pages explicitly select `renderer.namespace("auth", { headers: { "Cache-Control": "private, no-store" } })`. Namespace defaults are copied when the namespace is created; rendering remains explicit. Per-render headers override defaults with the same name, including replacing the complete Set-Cookie list. Other defaults survive, multiple cookies remain separate, and `renderHtmx` still adds its representation Vary fields. Applications own their public/private page policy; no controller-name inference or global successful-response policy is introduced. Explicit redirects and arbitrary native responses retain their existing contracts. Existing apps must adopt this generated shape after upgrading; installing packages alone does not rewrite auth modules.
-
-Synchronous container factories report a circular dependency with its requesting
-service path. Resolution state is cleared when a factory throws, so a repaired
-registration can be resolved again. Singleton values are cached only after a
-successful factory return; transient factories still run on every resolution.
-Factories retain their existing synchronous contract. This diagnostic does not
-add asynchronous dependency resolution or change provider boot/cleanup ownership.
+- [Databases](DATABASE.md): models, relationships, transactions and SQL limits.
+- [Authentication](AUTH.md) and [tenancy](TENANCY.md): identity and data access.
+- [Uploads and images](MEDIA.md) and [storage](STORAGE.md): streamed files and Bun transforms.

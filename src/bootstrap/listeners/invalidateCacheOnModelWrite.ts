@@ -4,11 +4,13 @@ import { createServiceToken, type ServiceToken } from "@getstrata/core/contracts
 import type { BaseRepository } from "@getstrata/core/database/baseRepository";
 import {
   type AfterCommitRepositoryListener,
+  type AnyModelDefinition,
   type AnyRepositoryDefinition,
   type RepositoryDefinition,
   type RepositoryEffectsDeclaration,
   repositoryEffects,
 } from "@getstrata/core/database/definitions";
+import { type AnyModelClass, modelEffects, modelTable } from "@getstrata/core/database/model";
 import type { DurableListener } from "@getstrata/core/events/outbox";
 import { InvalidateCacheTagsJob } from "@getstrata/core/jobs/invalidateCacheTagsJob";
 import type { Queue } from "@getstrata/core/queue";
@@ -23,15 +25,20 @@ export function createModelCacheInvalidationEffects<C extends CacheLike>(
   repositories: readonly AnyRepositoryDefinition[],
   modules: readonly AppModule[],
   tokens: { readonly cache: ServiceToken<C>; readonly queue: ServiceToken<Queue> },
+  models: readonly (AnyModelDefinition | AnyModelClass)[] = [],
 ): ListenerDeclarations {
   const services: ServiceDeclaration[] = [];
   const effects: RepositoryEffectsDeclaration[] = [];
-  for (const definition of repositories) {
+  const classes = models.filter((model): model is AnyModelClass => typeof model === "function");
+  for (const definition of [...repositories, ...classes]) {
+    const model = typeof definition === "function" ? (definition as AnyModelClass) : undefined;
+    const repository = definition as AnyRepositoryDefinition;
+    const table = model ? modelTable(model) : repository.table;
     for (const action of ACTIONS) {
-      const tags = Object.freeze(cacheTagsForModelWrite(definition.table.name, action, modules));
+      const tags = Object.freeze(cacheTagsForModelWrite(table.name, action, modules));
       if (!tags.length) continue;
-      const listener = createServiceToken<AfterCommitRepositoryListener<Record<string, unknown>>>(
-        `cache.${definition.name}.${action}`,
+      const listener = createServiceToken<AfterCommitRepositoryListener<object>>(
+        `cache.${table.name}.${action}`,
       );
       services.push(
         service(listener, {
@@ -43,13 +50,11 @@ export function createModelCacheInvalidationEffects<C extends CacheLike>(
         }),
       );
       // Composition erases row types only; helper still validates the original definition identity.
-      type Erased = RepositoryDefinition<
-        Record<string, unknown>,
-        string,
-        BaseRepository<Record<string, unknown>, string>
-      >;
+      type Erased = RepositoryDefinition<object, never, BaseRepository<object, never>>;
       effects.push(
-        repositoryEffects(definition as unknown as Erased, [{ action, afterCommit: listener }]),
+        model
+          ? modelEffects(model, [{ action, afterCommit: listener }])
+          : repositoryEffects(repository as unknown as Erased, [{ action, afterCommit: listener }]),
       );
     }
   }

@@ -32,7 +32,10 @@ type DatabaseDefinition = Readonly<{
   default: string;
   connections: Readonly<Record<string, DatabaseConnectionOptions>>;
   repositories?: readonly import("./definitions").AnyRepositoryDefinition[];
-  models?: readonly import("./definitions").AnyModelDefinition[];
+  models?: readonly (
+    | import("./definitions").AnyModelDefinition
+    | import("./modelAuthoring").AnyModelClass
+  )[];
   repositoryEffects?: readonly import("./definitions").RepositoryEffectsDeclaration[];
   preparation?: readonly import("../contracts/token").AnyServiceToken[];
 }>;

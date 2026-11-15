@@ -1,36 +1,32 @@
 # create-strata
 
-Starter for [Strata](https://github.com/EyK-26/strata), a Bun + TypeScript HTTP framework. The wizard asks for each layer, then writes an app you own.
-
-## Usage
+Create a [Strata](https://github.com/EyK-26/strata/blob/main/README.md) application with Bun and TypeScript. Requires Bun >=1.4.4; tested on Bun 1.4.4.
 
 ```bash
 bunx create-strata my-app
-bunx create-strata my-app --yes
-bunx create-strata /tmp/my-app --yes --frontend server-htmx --database postgres --auth cookie --docker
 ```
 
-A directory path works as well as a bare name. The last path segment becomes the project name.
+The wizard asks for each layer. Use `--yes` with flags for unattended generation:
 
-In a terminal, lists use up/down and Enter, or a number key. Extras (MFA, email verification, SCIM, metrics) are toggled one at a time, and only the ones that apply to your auth choice are offered.
+```bash
+bunx create-strata my-app --yes --frontend=server-htmx --database=sqlite --auth=cookie --no-docker
+```
 
-## Layers
+A target can be a project name or directory path. Existing output paths are refused.
 
-| Flag | Choices |
+| Layer | Choices |
 | --- | --- |
-| `--frontend` | `api`, `server-htmx`, `spa-react`, `hybrid` |
-| `--database` | `sqlite`, `postgres`, `mysql` (pick one) |
-| `--auth` | `headers`, `cookie`, `token`, `jwt`, `cookie-token`, `cookie-token-jwt` |
-| `--tenancy` | `none`, `column`, `rls` (`rls` needs Postgres; other engines fall back to `column`) |
-| `--cache` | `array`, `redis` |
-| `--queue` | `sync`, `redis` |
-| `--mail` | `log`, `smtp` |
+| Frontend | `api`, `server-htmx`, `spa-react`, `hybrid` |
+| Database | `sqlite`, `postgres`, `mysql` |
+| Authentication | `headers`, `cookie`, `token`, `jwt`, `cookie-token`, `cookie-token-jwt` |
+| Tenancy | `none`, `column`, `rls` (PostgreSQL) |
+| Cache | `array`, `redis` |
+| Queue | `sync`, `redis` |
+| Mail | `log`, `smtp` |
 
-Extras: `--mfa`, `--email-verification`, `--scim`, `--metrics` and their `--no-` forms. Docker Compose is optional (`--docker`, `--no-docker`, `--docker-services=postgres,redis`) and only includes services for the tools you picked. `--docker` with Postgres or MySQL also writes Adminer on port 8080.
+Optional features include MFA, email verification, SCIM, metrics, OAuth, billing, and webhooks. Availability depends on the selected layers. Docker Compose is optional; Adminer is an explicit selection. Run `bunx create-strata --help` for flags and defaults.
 
-Choices are recorded in `strata.layers.json`.
-
-## After generating
+For the SQLite example above:
 
 ```bash
 cd my-app
@@ -40,15 +36,10 @@ bun run db:migrate
 bun run dev
 ```
 
-The `strata` binary is installed into the app's `node_modules/.bin`, not globally, so use the `bun run` scripts or `bunx strata <command>` from inside the app directory. Running `bunx strata` outside a Strata app resolves an unrelated npm package named `strata`.
+Other choices may need database services or a frontend build; follow the generated README. Apps use model classes in `src/models`, named actions in `src/http/controllers`, and route declarations in `src/routes/web.ts` and `src/routes/api.ts`.
 
-## Relationship to @getstrata/starter
+The generator installs the application-local `strata` CLI. Run the generated `bun run` scripts or `bunx strata <command>` from inside the app directory.
 
-`create-strata` and [`@getstrata/starter`](https://www.npmjs.com/package/@getstrata/starter) ship the same generator from the same source at the same version. `bunx create-strata` is the documented entry point because `bunx` resolves the package name; `bunx @getstrata/starter` also works.
+`create-strata` and [`@getstrata/starter`](https://www.npmjs.com/package/@getstrata/starter) provide the same generator.
 
-## Docs
-
-- [Getting started](https://github.com/EyK-26/strata/blob/main/docs/GETTING-STARTED.md)
-- [Starter and layers](https://github.com/EyK-26/strata/blob/main/docs/STARTER.md)
-- [Building apps](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md)
-- [Auth choices](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md)
+See the [project README](https://github.com/EyK-26/strata/blob/main/README.md), [starter guide](https://github.com/EyK-26/strata/blob/main/docs/STARTER.md), [authentication guide](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md), and [integration guide](https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md).

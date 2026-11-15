@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp";
@@ -54,14 +55,16 @@ try {
       "strata.config.ts",
       "src/cli/register.ts",
     ];
-    async function modules(directory: string): Promise<void> {
+    async function sources(directory: string): Promise<void> {
       for (const entry of await readdir(join(fixture.app, directory), { withFileTypes: true })) {
         const path = `${directory}/${entry.name}`;
-        if (entry.isDirectory()) await modules(path);
+        if (entry.isDirectory()) await sources(path);
         else paths.push(path);
       }
     }
-    await modules("src/modules");
+    for (const directory of ["src/routes", "src/http", "src/modules"]) {
+      if (existsSync(join(fixture.app, directory))) await sources(directory);
+    }
     return Promise.all(
       paths
         .sort()

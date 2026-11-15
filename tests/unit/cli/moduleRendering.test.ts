@@ -1,16 +1,15 @@
 import { expect, test } from "bun:test";
-import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { makeModuleCommand } from "../../../packages/strata-cli/src/scaffold/makeModule";
 import { renderModuleScaffold } from "../../../packages/strata-cli/src/scaffold/renderModule";
 import historical from "../../fixtures/scaffolds/module-rendering.sha256.json";
 import baselines from "../../fixtures/scaffolds/module-rendering-canonical.sha256.json";
 import { captureConsole } from "./helpers";
 
-for (const { profile, files: expected } of baselines) {
-  test(`module rendering matches canonical full-file hashes: ${profile.name}`, async () => {
+for (const { profile } of baselines) {
+  test(`module rendering emits class models and named application files: ${profile.name}`, async () => {
     const directory = await mkdtemp(join(tmpdir(), "strata-module-rendering-"));
     const previousCwd = process.cwd();
     const output = captureConsole();
@@ -20,21 +19,31 @@ for (const { profile, files: expected } of baselines) {
       if (profile.views) await mkdir(join(directory, "views"));
       process.chdir(directory);
       await makeModuleCommand(...(profile.withWeb ? ["--with-web"] : []), profile.name);
-      const actual: Record<string, unknown> = {};
-      async function visit(path: string): Promise<void> {
-        for (const item of await readdir(path, { withFileTypes: true })) {
-          const full = join(path, item.name);
-          if (item.isDirectory()) await visit(full);
-          else {
-            const relative = full.slice(directory.length + 1);
-            actual[relative] = createHash("sha256")
-              .update(await readFile(full))
-              .digest("hex");
-          }
-        }
+      const className = profile.name
+        .split(/[- _]+/)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join("");
+      const modulePath = join(directory, "src/modules", profile.name.replaceAll(" ", "-"));
+      const model = await readFile(join(modulePath, `models/${className}.ts`), "utf8");
+      expect(model).toContain(`class ${className} extends defineModel({`);
+      expect(model).not.toContain("createModel");
+      for (const path of ["table.ts", "types.ts", "repository.ts"]) {
+        expect(await Bun.file(join(modulePath, path)).exists()).toBe(false);
       }
-      await visit(directory);
-      expect(actual).toEqual(expected);
+      const controller = await readFile(
+        join(modulePath, `http/controllers/${className}Controller.ts`),
+        "utf8",
+      );
+      expect(controller).toContain(`this.database.model(${className})`);
+      expect(controller).toContain("securedBindRouteModel(");
+      expect(controller).toContain("record.update(body)");
+      expect(controller).toContain("record.delete()");
+      const routes = await readFile(join(modulePath, "routes.ts"), "utf8");
+      expect(routes).toContain("kernel.wrapAbility(");
+      expect(routes).toContain("ports.database");
+      expect(await readFile(join(directory, "src/models/register.ts"), "utf8")).toBe(
+        "// Existing model registry\n",
+      );
     } finally {
       output.restore();
       process.chdir(previousCwd);
@@ -51,11 +60,11 @@ test("rendering produces independent in-memory manifests without writing to disk
     withWeb: true,
   };
   const first = renderModuleScaffold(options);
-  const originalController = first.files.get("controller.ts");
-  first.files.set("controller.ts", "caller-edited");
+  const originalController = first.files.get("http/controllers/ItemController.ts");
+  first.files.set("http/controllers/ItemController.ts", "caller-edited");
   const next = renderModuleScaffold(options);
-  expect(next.files.get("controller.ts")).toBe(originalController);
-  expect(next.webFiles.has("webController.ts")).toBe(true);
+  expect(next.files.get("http/controllers/ItemController.ts")).toBe(originalController);
+  expect(next.webFiles.has("http/controllers/ItemWebController.ts")).toBe(true);
   expect(next.viewFiles.has("index.eta")).toBe(true);
 });
 
@@ -75,10 +84,11 @@ test("emitted module declaration typechecks and carries its genuine typed policy
       withWeb: true,
     });
     for (const [name, source] of [...rendered.files, ...rendered.webFiles]) {
+      await mkdir(dirname(join(directory, name)), { recursive: true });
       await writeFile(join(directory, name), source);
     }
     const consumer = `import module from "./index";
-import InvoicePolicy from "./policy";
+import InvoicePolicy from "./policies/InvoicePolicy";
 import { PolicyGate } from "@getstrata/core/auth/policy";
 const gate = new PolicyGate();
 const policy = module.policies?.invoice;

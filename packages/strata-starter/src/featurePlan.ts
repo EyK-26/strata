@@ -248,16 +248,23 @@ export function compileStarterFeatures(
   const artifacts = [
     "package.json",
     "src/bootstrap/createApp.ts",
+    "src/routes/api.ts",
+    "src/routes/web.ts",
+    "src/routes/index.ts",
     "src/models/Note.ts",
     "src/models/register.ts",
     "src/db/migrations/0001_starter_schema.ts",
   ];
   if (decisions.users)
     artifacts.push(
+      "src/http/controllers/AuthController.ts",
+      "src/http/auth/account.ts",
       "src/models/User.ts",
       "src/models/AuthOneTimeToken.ts",
       "src/db/migrations/0006_account_state.ts",
     );
+  if (decisions.cookie) artifacts.push("src/http/controllers/AuthWebController.ts");
+  if (decisions.serverViews) artifacts.push("src/http/controllers/HomeController.ts");
   if (decisions.token) artifacts.push("src/models/ApiToken.ts");
   if (decisions.frontendBuild)
     artifacts.push("frontend/src/auth/config.ts", "frontend/src/config.ts");
@@ -277,9 +284,12 @@ export function compileStarterFeatures(
     );
   if (decisions.htmlAuth && layers.extras.emailVerification)
     artifacts.push("views/auth/verify-email.eta");
-  if (layers.extras.scim) artifacts.push("src/modules/scim/index.ts");
+  if (layers.extras.scim) artifacts.push("src/http/controllers/ScimController.ts");
   if (layers.extras.billing)
-    artifacts.push("src/billing/applyStripeWebhook.ts", "src/modules/billing/index.ts");
+    artifacts.push(
+      "src/billing/applyStripeWebhook.ts",
+      "src/http/controllers/BillingController.ts",
+    );
   if (layers.extras.webhooks)
     artifacts.push(
       "src/jobs/dispatchOutboundWebhookJob.ts",
@@ -290,7 +300,8 @@ export function compileStarterFeatures(
       "docs/WORK_TRACKER.md",
       "src/domain/workTracker.ts",
       "src/models/workTracker.ts",
-      "src/modules/workTracker/index.ts",
+      "src/http/controllers/WorkTrackerController.ts",
+      "src/http/requests/WorkRequest.ts",
       "src/db/migrations/0007_work_tracker.ts",
     );
   return Object.freeze({

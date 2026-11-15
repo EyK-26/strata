@@ -45,8 +45,14 @@ describe("makeModuleCommand", () => {
 
       const moduleDirectory = join(workspace, "src", "modules", "billing-widget");
       expect(await Bun.file(join(moduleDirectory, "index.ts")).exists()).toBe(true);
-      expect(await Bun.file(join(moduleDirectory, "controller.ts")).exists()).toBe(true);
-      expect(await Bun.file(join(moduleDirectory, "policy.ts")).exists()).toBe(true);
+      expect(
+        await Bun.file(
+          join(moduleDirectory, "http/controllers/BillingWidgetController.ts"),
+        ).exists(),
+      ).toBe(true);
+      expect(
+        await Bun.file(join(moduleDirectory, "policies/BillingWidgetPolicy.ts")).exists(),
+      ).toBe(true);
       expect(output.logs.some((line) => line.includes("Created module scaffold in:"))).toBe(true);
       expect(output.logs.some((line) => line.includes(moduleDirectory))).toBe(true);
     });
@@ -113,12 +119,14 @@ export const repositoryDefinitions = [NoteRepository];
 export const modelDefinitions = [Note];
 export const repositoryDefinitions = [NoteRepository];
 `);
-      const repository = await Bun.file(join(workspace, "src/modules/invoice/model.ts")).text();
-      expect(repository).toContain("createModel({");
-      expect(repository).toContain("invoiceRepository");
+      const repository = await Bun.file(
+        join(workspace, "src/modules/invoice/models/Invoice.ts"),
+      ).text();
+      expect(repository).toContain("class Invoice extends defineModel({");
+      expect(repository).not.toContain("Repository");
       expect(repository).not.toContain("registerModelClass");
       expect(output.logs).toContain(
-        "Register the generated model and its repository in src/models/register.ts.",
+        "Register the generated model class in createDatabaseBindings({ models: [...] }).",
       );
     });
   });
@@ -258,81 +266,45 @@ describe("makeJobCommand", () => {
 });
 
 describe("makePolicyCommand", () => {
-  test("creates a policy file for an existing module", async () => {
+  test("creates a named policy without requiring a module", async () => {
     await withTempWorkspace(async (workspace) => {
-      const moduleDirectory = join(workspace, "src", "modules", "inventory");
-      await ensureDirectory(moduleDirectory);
-      await writeFile(
-        join(moduleDirectory, "types.ts"),
-        "export type InventoryRecord = { id: number };",
-      );
-
       const { makePolicyCommand } = await import("../../../src/cli/commands/makePolicy");
-      const output = captureConsole();
-
-      try {
-        await makePolicyCommand("inventory");
-      } finally {
-        output.restore();
-      }
-
-      const policyPath = join(moduleDirectory, "policy.ts");
-      expect(await Bun.file(policyPath).exists()).toBe(true);
-      const policySource = await Bun.file(policyPath).text();
-      expect(policySource).toContain('from "@getstrata/core/auth/policy"');
-      expect(output.logs[0]).toBe(`Created policy in: ${policyPath}`);
-      expect(output.logs.some((line) => line.includes("apps/hiroapp"))).toBe(false);
-      expect(output.logs.some((line) => line.includes("src/modules/inventory"))).toBe(true);
+      await makePolicyCommand("InventoryPolicy");
+      const path = join(workspace, "src/policies/InventoryPolicy.ts");
+      const source = await Bun.file(path).text();
+      expect(source).toContain('from "@getstrata/core/auth/policy"');
+      expect(source).toContain("class InventoryPolicy extends Policy");
+      expect(source).toContain("return false;");
+      await expect(makePolicyCommand("InventoryPolicy")).rejects.toThrow("already exists");
+      expect(await Bun.file(path).text()).toBe(source);
     });
   });
 
-  test("requires a module name", async () => {
+  test("requires a policy name", async () => {
     const { makePolicyCommand } = await import("../../../src/cli/commands/makePolicy");
-
-    await expect(makePolicyCommand()).rejects.toThrow("make:policy requires a module name.");
-  });
-
-  test("requires the module directory to exist", async () => {
-    await withTempWorkspace(async () => {
-      const { makePolicyCommand } = await import("../../../src/cli/commands/makePolicy");
-
-      await expect(makePolicyCommand("missing-module")).rejects.toThrow("Module not found:");
-    });
+    await expect(makePolicyCommand()).rejects.toThrow("make:policy requires a policy name.");
   });
 });
 
 describe("makeRequestCommand", () => {
-  test("creates request helpers for an existing module", async () => {
+  test("creates a named FormRequest without requiring a module", async () => {
     await withTempWorkspace(async (workspace) => {
-      const moduleDirectory = join(workspace, "src", "modules", "catalog");
-      await ensureDirectory(moduleDirectory);
-      await writeFile(
-        join(moduleDirectory, "types.ts"),
-        "export type CatalogRecord = { id: number };",
-      );
-
       const { makeRequestCommand } = await import("../../../src/cli/commands/makeRequest");
-      const output = captureConsole();
-
-      try {
-        await makeRequestCommand("catalog");
-      } finally {
-        output.restore();
-      }
-
-      const requestPath = join(moduleDirectory, "requests.ts");
-      expect(await Bun.file(requestPath).exists()).toBe(true);
-      const requestSource = await Bun.file(requestPath).text();
-      expect(requestSource).toContain('from "@getstrata/core/http"');
-      expect(requestSource).not.toContain("../../core/http");
-      expect(output.logs[0]).toBe(`Created request helpers: ${requestPath}`);
+      await makeRequestCommand("StoreCatalogRequest");
+      const path = join(workspace, "src/http/requests/StoreCatalogRequest.ts");
+      const source = await Bun.file(path).text();
+      expect(source).toContain('from "@getstrata/core/http/formRequest"');
+      expect(source).toContain(
+        "class StoreCatalogRequest extends FormRequest<StoreCatalogRequestData>",
+      );
+      await expect(makeRequestCommand("StoreCatalogRequest")).rejects.toThrow("already exists");
+      expect(await Bun.file(path).text()).toBe(source);
     });
   });
 
-  test("requires a module name", async () => {
+  test("requires a request name", async () => {
     const { makeRequestCommand } = await import("../../../src/cli/commands/makeRequest");
-
-    await expect(makeRequestCommand()).rejects.toThrow("make:request requires a module name.");
+    await expect(makeRequestCommand()).rejects.toThrow("make:request requires a request name.");
   });
 });
 
@@ -363,7 +335,7 @@ describe("makeListenerCommand", () => {
   });
 });
 
-test("make:model emits an executable declaration with an explicit repository and session", async () => {
+test("make:model emits an executable class usable through session registration alone", async () => {
   await withTempWorkspace(async (workspace) => {
     const { makeModelCommand } = await import(
       "../../../packages/strata-cli/src/scaffold/makeModel"
@@ -371,7 +343,7 @@ test("make:model emits an executable declaration with an explicit repository and
     await makeModelCommand("Contact", "--key-type=string");
     const path = join(workspace, "src/models/Contact.ts");
     const source = await Bun.file(path).text();
-    expect(source).toContain("createModel({");
+    expect(source).toContain("class Contact extends defineModel({");
     expect(source).not.toContain("construct:");
     // Point this temporary consumer at the real source, independent of installed workspace links.
     await writeFile(
@@ -380,31 +352,26 @@ test("make:model emits an executable declaration with an explicit repository and
         .replace("@getstrata/core/database/model", join(repoRoot, "src/core/database/model.ts"))
         .replace("@getstrata/core/database/table", join(repoRoot, "src/core/database/table.ts")),
     );
-    type GeneratedDefinition = ReturnType<
-      typeof import("../../../src/core/database/model").createModel<{ id: string }, "id">
-    >;
-    const { ContactDefinition, ContactRepository } = (await import(path)) as {
-      ContactDefinition: GeneratedDefinition;
-      ContactRepository: GeneratedDefinition["repository"];
-    };
-    expect(ContactDefinition.repository).toBe(ContactRepository);
-    expect(ContactDefinition.attributes.fillable).toEqual(["id"]);
-    expect(ContactDefinition.attributes.timestamps).toBe(false);
+    const { defineModel, field } = await import("../../../src/core/database/model");
+    class ContactContract extends defineModel({
+      table: "contacts",
+      fields: { id: field.string() },
+    }) {}
+    const { Contact } = (await import(path)) as { Contact: typeof ContactContract };
     const { withBoundDatabase } = await import("../../helpers/boundRepositoryHarness");
     await withBoundDatabase(
       {
         definition: {
           default: "main",
           connections: { main: { driver: "sqlite", filename: ":memory:" } },
-          repositories: [ContactRepository],
-          models: [ContactDefinition],
+          models: [Contact],
         },
       },
       async (db) => {
         await db.execute({ text: "CREATE TABLE contacts (id TEXT PRIMARY KEY)", params: [] });
-        const contact = await db.model(ContactDefinition).create({ id: "generated" });
+        const contact = await db.model(Contact).create({ id: "generated" });
         expect(contact.id).toBe("generated");
-        expect((await db.model(ContactDefinition).findOrFail("generated")).id).toBe("generated");
+        expect((await db.model(Contact).findOrFail("generated")).id).toBe("generated");
       },
     );
   });

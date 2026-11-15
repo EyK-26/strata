@@ -67,15 +67,14 @@ await discoverJobs(registry, {
 const declarations = await discoverListeners({ manifest: [notificationDeclarations] });
 ```
 
-Use static imports so the bundler includes modules. Factory closures retain application DI decisions and are not invoked during discovery. A factory must return a valid job when the worker invokes it. For custom composition, pass the collected providers to `createApplicationContext(providers, { definition, connection, ... })`; generated apps assemble their own provider list. pass job manifests to discovery with the owned registry and assemble listener declarations once into the application graph. A manifest bypasses filesystem scanning. For repeated module loads within one application, use `const discovery = createModuleDiscovery(options)` and `await discovery.load()`. This owner captures the source directory, manifest array and exclusions, shares one pending/successful result, and evicts failed attempts for retry. Independent owners never mutate each other’s results. One-shot `ensureModulesLoaded(options)` has no shared cache.
+Use static imports so the bundler includes modules. Factory closures retain application DI decisions and are not invoked during discovery. A factory must return a valid job when the worker invokes it. For custom composition, pass the collected providers to `createApplicationContext(providers, { definition, connection, ... })`; generated apps assemble their own provider list. Pass job manifests to discovery with the owned registry and assemble listener declarations once into the application graph. A manifest bypasses filesystem scanning. For repeated module loads within one application, use `const discovery = createModuleDiscovery(options)` and `await discovery.load()`. This owner captures the source directory, manifest array and exclusions, shares one pending/successful result, and evicts failed attempts for retry. Independent owners never mutate each other’s results. One-shot `ensureModulesLoaded(options)` has no shared cache.
 
-## Source compatibility and release
+## Public signatures
 
-`discoverJobs(registry, options)` returns `Promise<string[]>` and `discoverListeners(options)` returns `Promise<readonly ListenerDeclarations[]>`. The 3.x API requires awaited discovery, an owned job registry and inert listener declarations. The removed synchronous/global registration contracts are not compatibility fallbacks. Malformed files fail startup. See the [migration guide](architecture/target-api-migration.md) for the supported composition contracts.
+`discoverJobs(registry, options)` returns `Promise<string[]>` and
+`discoverListeners(options)` returns `Promise<readonly ListenerDeclarations[]>`.
+Await discovery during startup; malformed declarations fail startup.
 
-Generated entrypoints adopt awaited infrastructure discovery. Models use explicit
-`defineRepository`/`defineModel` definitions registered with the application's
-`createDatabaseBindings`; the former global `discoverModels`/`bootModels` APIs are
-removed. Tests cover trusted imports, deterministic nested exports, malformed and
-duplicate diagnostics, failed-load retry, custom factories, inert listener
-declarations, actual Bun bundles and packed-package contracts.
+Models are registered explicitly in the application's model list. Use named model
+classes for ordinary code; low-level definitions remain available for custom
+repositories and dependencies. See [database authoring](DATABASE.md).

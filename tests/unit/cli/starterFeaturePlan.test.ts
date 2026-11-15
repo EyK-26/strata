@@ -169,7 +169,8 @@ describe("compiled decision consumption", () => {
       const provider = renderAuthProvider(plan);
       const env = renderEnvExample("app", plan);
       const manifest = JSON.parse(renderPackageJson("app", { plan }));
-      expect(models).toContain("UserRepository");
+      expect(models).toContain("User");
+      expect(models).not.toContain("UserRepository");
       expect(migration).toContain("CREATE TABLE IF NOT EXISTS users");
       expect(provider).toContain(JSON.stringify(plan.decisions.authMechanisms));
       expect(auth.includes('"/api/v1/auth/register"')).toBe(plan.decisions.jsonAccounts);

@@ -9,7 +9,7 @@ import {
   retargetStrataPins,
   setExpectedVersions,
   setPackageVersion,
-  setPublishedReadmeVersion,
+  setReadmePackageVersion,
 } from "../../scripts/bump-version.ts";
 
 describe("parseVersion", () => {
@@ -131,27 +131,27 @@ const OTHER = { "@getstrata/core": "1.0.6" };`;
   });
 });
 
-describe("setPublishedReadmeVersion", () => {
+describe("setReadmePackageVersion", () => {
   const readme = `# Strata
 
-Published as **1.0.8**:
+Package version: **1.0.8**
 
 | Package | What it is |
 `;
 
-  test("rewrites the Published as line", () => {
-    expect(setPublishedReadmeVersion(readme, "1.0.9")).toContain("Published as **1.0.9**:");
-    expect(setPublishedReadmeVersion(readme, "1.0.9")).not.toContain("Published as **1.0.8**");
+  test("rewrites the Package version: line", () => {
+    expect(setReadmePackageVersion(readme, "1.0.9")).toContain("Package version: **1.0.9**");
+    expect(setReadmePackageVersion(readme, "1.0.9")).not.toContain("Package version: **1.0.8**");
   });
 
   test("is idempotent", () => {
-    const once = setPublishedReadmeVersion(readme, "1.0.9");
-    expect(setPublishedReadmeVersion(once, "1.0.9")).toBe(once);
+    const once = setReadmePackageVersion(readme, "1.0.9");
+    expect(setReadmePackageVersion(once, "1.0.9")).toBe(once);
   });
 
   test("leaves unrelated version numbers alone", () => {
     const mixed = `${readme}\nSee 1.0.8 in the changelog.\n`;
-    const after = setPublishedReadmeVersion(mixed, "1.0.9");
+    const after = setReadmePackageVersion(mixed, "1.0.9");
     expect(after).toContain("See 1.0.8 in the changelog.");
   });
 
@@ -163,7 +163,7 @@ Published as **1.0.8**:
       version: string;
     };
     const committed = await readFile(join(root, "README.md"), "utf8");
-    expect(committed).toContain(`Published as **${pkg.version}**:`);
+    expect(committed).toContain(`Package version: **${pkg.version}**`);
   });
 });
 
@@ -263,7 +263,7 @@ describe("bump workspace install contract", () => {
         "scripts/verify-package-versions.ts",
         `const EXPECTED: Record<string, string> = {\n  "@getstrata/core": "1.0.0",\n};`,
       );
-      await write("README.md", "Published as **1.0.0**");
+      await write("README.md", "Package version: **1.0.0**");
       for (const file of [
         "packages/strata-starter/src/renderProjectMetadata.ts",
         "tests/unit/cli/starterGenerate.test.ts",

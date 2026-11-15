@@ -121,31 +121,30 @@ ${authNote}
 
 ## Adding a route
 
-Create a module under \`src/modules/\` and return a route map. Modules are discovered on boot.
+Put HTTP actions in \`src/http/controllers/\` and register their paths and middleware in \`src/routes/api.ts\` or \`src/routes/web.ts\`. The bootstrap loads these route files once. Controller methods receive Bun's native \`Request\` and explicit request ports.
 
 \`\`\`typescript
-// src/modules/notes/index.ts
-import type { AppModule } from "@getstrata/bootstrap/contracts";
-import { jsonResponse } from "@getstrata/core/http/response";
+// src/http/controllers/NoteController.ts
+import type { BusinessRouteHandler } from "@getstrata/bootstrap/persistenceContracts";
 import { Note } from "../../models/Note.ts";
 
-const notesModule: AppModule = {
-  name: "notes",
-  order: 2,
-  routes({ kernel }) {
-    return {
-      "/api/v1/notes": kernel.wrap("api", async (_request, { database }) => {
-        const bodiesById = await database.model(Note).query().orderBy({ id: "desc" }).pluck("body", "id");
-        return jsonResponse({ data: Object.fromEntries(bodiesById) });
-      }),
-    };
-  },
-};
-
-export default notesModule;
+export class NoteController {
+  index: BusinessRouteHandler = async (_request, { database }) => {
+    const notes = await database.model(Note).query().orderBy({ id: "desc" }).get();
+    return Response.json({ data: notes.map(note => note.toJSON()) });
+  };
+}
 \`\`\`
 
-Use the handler’s explicit \`database\` port to bind model definitions to the current application and execution. Public root and subpath imports share the same definitions and runtime classes.
+In \`src/routes/api.ts\`, import \`NoteController\` from \`../http/controllers/NoteController.ts\`, construct it in \`apiRoutes(context)\`, and add this map to that function's \`composeRouteMaps(...)\` arguments:
+
+\`\`\`typescript
+{ "/api/v1/notes": { GET: context.kernel.wrapApi(notes.index) } }
+\`\`\`
+
+Here \`notes\` is \`const notes = new NoteController();\`. Keep existing route maps and middleware. Use the handler's \`database\` port to bind the model class to the current application and execution. Use \`src/http/requests/\` for application request validation; account credential validation and account workflows are provided by the framework.
+
+Optional modules in \`src/modules/\` remain available for feature composition. They use the same kernel and execution ports.
 
 ## Docs
 
@@ -173,14 +172,14 @@ function renderIntegrationsReadme(plan: StarterFeaturePlan): string {
     "",
     "OAuth, billing, outbound webhooks, SIEM, and SAML are **off by default**. Commented placeholders live in `.env.example`. Framework map: [INTEGRATIONS.md](https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md).",
     "",
-    "Wizard flags (any stack unless noted): `--oauth-github` and `--oidc` (cookie HTML), `--billing`, `--webhooks`. They emit modules, migrations, jobs, or listeners. `createApp` still calls `await discoverListeners()` and `await discoverJobs()`.",
+    "Wizard flags (any stack unless noted): `--oauth-github` and `--oidc` (cookie HTML), `--billing`, `--webhooks`. They emit controllers, routes, migrations, jobs, or listeners. `createApp` still calls `await discoverListeners()` and `await discoverJobs()`.",
     "",
   ];
   if (enabled.length > 0) {
     lines.push("Enabled in this app:", "", ...enabled.map((row) => `- ${row}`), "");
   } else {
     lines.push(
-      "This app did not pass those flags. Turn a flag on and re-run `create-strata`, or copy the commented env block and add a module yourself.",
+      "This app did not pass those flags. Turn a flag on and re-run `create-strata`, or copy the commented env block and add the integration controller and routes yourself.",
       "",
     );
   }
@@ -270,6 +269,18 @@ function renderReadme(
 | Docker Compose | ${dockerLabel} |
 ${extras.length > 0 ? `| Extras | ${extras.join(", ")} |\n` : ""}
 This file is the map for this app. Framework guides: [Building apps](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md), [Auth](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md), [Starter](https://github.com/EyK-26/strata/blob/main/docs/STARTER.md), [Integrations](https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md).
+
+## Application files
+
+- \`src/routes/web.ts\`: browser routes and middleware.
+- \`src/routes/api.ts\`: API and integration routes and middleware.
+- \`src/http/controllers/\`: named HTTP actions for the selected features.
+- \`src/http/requests/\`: application request validation when needed. Account parsers and workflows come from the framework.
+- \`src/models/\`: model classes extending \`defineModel(...)\`; register them in \`src/models/register.ts\`.
+- \`src/db/migrations/\`: explicit schema changes.
+- \`src/bootstrap/createApp.ts\`: application services and the route entry point. Optional \`src/modules/\` packages can add feature composition.
+
+Start a feature with \`bunx strata make:model Task\`, \`bunx strata make:controller Task\`, and \`bunx strata make:request StoreTask\`. Register the model and route explicitly. Controller methods take Bun's native \`Request\` and execution ports; use \`database.model(Task)\` inside the action. Models declare fields, \`$fillable\`, and \`$timestamps\`; a normal model does not need a separate table, repository, or record declaration.
 
 ${renderIntegrationsReadme(plan)}
 ## Run it

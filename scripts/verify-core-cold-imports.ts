@@ -71,6 +71,23 @@ const [root,base,model,definitions,errors,jobs]=await Promise.all([
  import('@getstrata/core/errors/http'),import('@getstrata/core/queue/failedJobRepository'),
 ]);
 const testing = await import('@getstrata/core/testing');
+const uploadApi = await import('@getstrata/core/http/parseMultipartUpload');
+const httpApi = await import('@getstrata/core/http');
+assert.strictEqual(root.UploadedFile, uploadApi.UploadedFile);
+assert.strictEqual(httpApi.UploadedFile, uploadApi.UploadedFile);
+const mediaApi = await import('@getstrata/core/media/imageTransform');
+const mediaInput = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), c => c.charCodeAt(0));
+const transformedImage = await mediaApi.transformImageContents(mediaInput, {width:4,format:'webp',withoutEnlargement:false,contentType:'image/png'});
+assert.equal(transformedImage.width,4);
+const mediaForm = new FormData();
+mediaForm.set('file',new File([transformedImage.body],'photo.webp',{type:transformedImage.contentType}));
+const mediaUpload = await root.parseMultipartUploadStream(new Request('https://example.test/upload',{method:'POST',body:mediaForm}));
+assert.ok(mediaUpload instanceof uploadApi.UploadedFile);
+const storageApi = await import('@getstrata/core/storage/storage');
+const mediaStorage = new storageApi.LocalStorageDriver(new URL('./upload-smoke/',import.meta.url).pathname);
+const mediaPath = await mediaUpload.store(mediaStorage,'images');
+assert.deepEqual(new Uint8Array(await mediaStorage.get(mediaPath)),transformedImage.body);
+await mediaStorage.delete(mediaPath);
 for (const name of ['setNodeSamlLoaderForTests','resetMysqlLoaderForTests','resetMemoryThrottleForTests','resetMemoryLoginThrottleForTests','resetDnsLookupForTests','setDnsLookupForTests']) {
  assert.equal(name in root, false, name+' belongs only to the testing surface');
  assert.equal(typeof testing[name], 'function', name+' must be available to tests');
@@ -100,7 +117,11 @@ for (const [ErrorType, status] of [[authOutcome.AuthenticationRequiredError,401]
 assert.strictEqual(root.BaseRepository,base.BaseRepository);
 assert.strictEqual(base.default,base.BaseRepository);
 assert.strictEqual(root.Model,model.Model);
-assert.strictEqual(model.defineModel,definitions.defineModel);
+assert.strictEqual(model.defineModel,root.defineModel);
+// Exercise construction too: identical class exports alone cannot detect duplicated definition brands.
+const bindings = await import('@getstrata/core/database/bindings');
+class ColdModel extends model.defineModel({table:'cold_models',fields:{id:model.field.number(),body:model.field.string()}}) {}
+assert.doesNotThrow(()=>bindings.createDatabaseBindings({default:'main',connections:{main:{driver:'sqlite',filename:':memory:'}},models:[ColdModel]}));
 assert.strictEqual(model.defineRepository,definitions.defineRepository);
 assert.ok(jobs.FailedJobRepository.prototype instanceof base.BaseRepository);
 const names=['BadRequestError','ConflictError','ForbiddenError','HttpError','InternalServerError','InvalidCredentialsError','isHttpErrorLike','NotFoundError','PayloadTooLargeError','PreconditionFailedError','toHttpError','UnauthorizedError','UnprocessableEntityError','ValidationError'];

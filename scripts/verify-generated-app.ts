@@ -189,6 +189,17 @@ async function useTarballs(appDir: string, tarballs: Record<string, string>): Pr
 
 // Match the public core/bootstrap peer contract, including declarations emitted by TS 7.
 const TYPESCRIPT_VERSIONS = ["5.9.3", "6.0.3", "7.0.2"] as const;
+// Narrow local acceptance runs keep the default published-package matrix intact.
+const selectedCase = process.argv.find((arg) => arg.startsWith("--case="))?.slice(7);
+const selectedCompiler = process.argv.find((arg) => arg.startsWith("--typescript="))?.slice(13);
+if (selectedCase && !CASES.some(({ name }) => name === selectedCase))
+  throw new Error(`Unknown generated app case: ${selectedCase}`);
+if (selectedCompiler && !TYPESCRIPT_VERSIONS.some((version) => version === selectedCompiler))
+  throw new Error(`Unsupported generated app compiler: ${selectedCompiler}`);
+const cases = selectedCase ? CASES.filter(({ name }) => name === selectedCase) : CASES;
+const compilers = selectedCompiler
+  ? TYPESCRIPT_VERSIONS.filter((version) => version === selectedCompiler)
+  : TYPESCRIPT_VERSIONS;
 
 const workspace = await mkdtemp(join(tmpdir(), "strata-verify-"));
 const failures: string[] = [];
@@ -201,7 +212,7 @@ try {
   const tarballs = await packPackages(workspace);
   const starterCli = join(ROOT, "packages/strata-starter/dist/cli.js");
 
-  for (const testCase of CASES) {
+  for (const testCase of cases) {
     const generated = await run(
       ["bun", starterCli, testCase.name, "--yes", ...testCase.flags],
       workspace,
@@ -347,8 +358,12 @@ export function commitContract(database: DatabaseSession, transaction: Transacti
       join(appDir, "src/default-subpath-exports.contract.ts"),
       await readFile(join(ROOT, "tests/types/defaultSubpathExports.contract.ts"), "utf8"),
     );
+    await writeFile(
+      join(appDir, "src/class-model-authoring.contract.ts"),
+      await readFile(join(ROOT, "tests/types/classModelAuthoring.contract.ts"), "utf8"),
+    );
     let migrationScaffolded = false;
-    for (const version of TYPESCRIPT_VERSIONS) {
+    for (const version of compilers) {
       const manifestPath = join(appDir, "package.json");
       const manifest = await Bun.file(manifestPath).json();
       manifest.devDependencies = { ...manifest.devDependencies, typescript: version };
@@ -430,6 +445,8 @@ export function commitContract(database: DatabaseSession, transaction: Transacti
       if (core.Model !== models.Model || database.Model !== models.Model) throw new Error("Model import identity differs");
       if (core.defineModel !== models.defineModel || database.defineModel !== models.defineModel) throw new Error("Model definition factories differ");
       if (core.createModel !== models.createModel || database.createModel !== models.createModel) throw new Error("Model convenience factories differ");
+      if (core.field !== models.field || database.field !== models.field) throw new Error("Typed model field import identity differs");
+      if (core.modelEffects !== models.modelEffects || database.modelEffects !== models.modelEffects) throw new Error("Model effects import identity differs");
       const { createApplication } = await import("@getstrata/core/runtime/application");
       const { defineEventListener } = await import("@getstrata/bootstrap/discoverListeners");
       const { createEventBindings, APPLICATION_EVENT_BUS_TOKEN } = await import("@getstrata/bootstrap/providers/events");
@@ -451,12 +468,26 @@ export function commitContract(database: DatabaseSession, transaction: Transacti
       if (JSON.stringify(received) !== '["active"]') throw new Error("Packed listener subscription lifetime differs");
       const { createDatabaseBindings } = await import("@getstrata/core/database/bindings");
       const { DATABASE_SESSION_TOKEN } = await import("@getstrata/core/database/tokens");
-      const { Note, NoteRepository } = await import("./src/models/Note.ts");
-      const { modelDefinitions, repositoryDefinitions } = await import("./src/models/register.ts");
-      if (Note.repository !== NoteRepository) throw new Error("Generated model repository definition identity differs");
+      const { Note } = await import("./src/models/Note.ts");
+      const { modelDefinitions } = await import("./src/models/register.ts");
+      class PackedCategory extends models.defineModel({
+        table:"packed_categories",fields:{id:models.field.number(),name:models.field.string()},
+      }) {
+        static $fillable=["name"];
+        static $timestamps=false;
+        entries() { return this.hasMany(() => PackedEntry, "category_id"); }
+      }
+      class PackedEntry extends models.defineModel({
+        table:"packed_entries",fields:{id:models.field.number(),category_id:models.field.number(),body:models.field.string()},
+      }) {
+        static $fillable=["category_id","body"];
+        static $timestamps=false;
+        upperBody() { return this.get("body").toUpperCase(); }
+        category() { return this.belongsTo(PackedCategory,"category_id"); }
+      }
       // The neutral definitions bind in a real owned SQLite app; emitted native drivers are typechecked above.
       const application = createApplication({providers:[],services:createDatabaseBindings({
-        default:"main",connections:{main:{driver:"sqlite",filename:":memory:"}},models:modelDefinitions,repositories:repositoryDefinitions,
+        default:"main",connections:{main:{driver:"sqlite",filename:":memory:"}},models:[...modelDefinitions,PackedCategory,PackedEntry],
       })});
       const probeFailures = [];
       try {
@@ -467,8 +498,17 @@ export function commitContract(database: DatabaseSession, transaction: Transacti
           if (rows[0]?.value !== 1) throw new Error("Owned SQLite startup query failed");
           const bound=selected.model(Note);
           const entity=bound.newRecord({body:"startup proof"});
-          if (bound.definition !== Note || Object.getPrototypeOf(entity) !== core.Model.prototype || !(entity instanceof core.Model)) throw new Error("Generated model binding/constructor identity differs");
-          if (bound.repository() !== selected.repository(NoteRepository) || bound.repository().getTable().name !== "notes") throw new Error("Missing selected default model repository");
+          if (Object.getPrototypeOf(entity) !== Note.prototype || !(entity instanceof Note) || !(entity instanceof core.Model)) throw new Error("Generated model binding/constructor identity differs");
+          if (bound.repository().getTable().name !== "notes") throw new Error("Missing selected default model repository");
+          await selected.execute({text:"CREATE TABLE packed_categories(id INTEGER PRIMARY KEY,name TEXT NOT NULL)",params:[]});
+          await selected.execute({text:"CREATE TABLE packed_entries(id INTEGER PRIMARY KEY,category_id INTEGER NOT NULL,body TEXT NOT NULL)",params:[]});
+          const category=await selected.model(PackedCategory).create({name:"packed"});
+          const entry=await selected.model(PackedEntry).create({category_id:category.id,body:"authoring proof"});
+          if (!(entry instanceof PackedEntry) || entry.upperBody() !== "AUTHORING PROOF") throw new Error("Packed class methods were not hydrated");
+          if ((await entry.category().first())?.get("name") !== "packed") throw new Error("Packed belongsTo class relationship failed");
+          const related=await category.entries().get();
+          if (related.length !== 1 || !(related[0] instanceof PackedEntry) || related[0].upperBody() !== "AUTHORING PROOF") throw new Error("Packed hasMany class relationship failed");
+          if (!((await selected.model(PackedEntry).with("category").findOrFail(entry.id)).loaded("category") instanceof PackedCategory)) throw new Error("Packed eager class relationship failed");
         });
       } catch (error) {
         probeFailures.push(error);
@@ -519,5 +559,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `\nGenerated app typecheck gate passed (${CASES.length} layer combinations × ${TYPESCRIPT_VERSIONS.length} compiler versions).`,
+  `\nGenerated app typecheck gate passed (${cases.length} layer combinations × ${compilers.length} compiler versions).`,
 );

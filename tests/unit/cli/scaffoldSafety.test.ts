@@ -3,10 +3,13 @@ import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
+  makeControllerCommand,
   makeFactoryCommand,
   makeJobCommand,
   makeModelCommand,
   makeModuleCommand,
+  makePolicyCommand,
+  makeRequestCommand,
   scaffoldCommands,
 } from "../../../packages/strata-cli/src/scaffold";
 
@@ -52,7 +55,12 @@ test("module uses configured directory and ordinary model without pass-through s
   );
   await makeModuleCommand("Product");
   const files = await readdir(join(workspace, "app/features/product"));
-  expect(files).toContain("model.ts");
+  expect(files).toContain("models");
+  expect(files).not.toContain("table.ts");
+  expect(files).not.toContain("types.ts");
+  expect(
+    await Bun.file(join(workspace, "app/features/product/models/Product.ts")).text(),
+  ).toContain("class Product extends defineModel({");
   expect(files).not.toContain("repository.ts");
   expect(files).not.toContain("service.ts");
   expect(files).not.toContain("provider.ts");
@@ -107,6 +115,9 @@ test("model, factory and module journey preserves factory and typechecks emitted
   const factory = join(workspace, "src/db/factories/ProductFactory.ts");
   const before = await Bun.file(factory).text();
   await makeModuleCommand("Product");
+  await makeControllerCommand("ProductController");
+  await makeRequestCommand("StoreProductRequest");
+  await makePolicyCommand("ProductPolicy");
   expect(await Bun.file(factory).text()).toBe(before);
   const config = JSON.parse(await readFile(join(repository, "tsconfig.json"), "utf8"));
   for (const [alias, paths] of Object.entries(config.compilerOptions.paths))
@@ -161,7 +172,7 @@ test("factory resolves configured module records and prefers standalone models",
   await makeModuleCommand("Widget");
   await makeFactoryCommand("Widget");
   expect(await Bun.file(join(workspace, "src/db/factories/WidgetFactory.ts")).text()).toContain(
-    'from "../../../app/features/widget/types.ts"',
+    'from "../../../app/features/widget/models/Widget.ts"',
   );
   await makeModelCommand("Product");
   await makeModuleCommand("Product");
@@ -182,4 +193,27 @@ test("factory accepts module model record exports without a legacy types file", 
   expect(await Bun.file(join(workspace, "src/db/factories/WidgetFactory.ts")).text()).toContain(
     'from "../../modules/widget/model.ts"',
   );
+});
+
+test("controller, request and policy use conventional nested names and preserve app routes", async () => {
+  await setup();
+  await mkdir(join(workspace, "src/routes"), { recursive: true });
+  const routes = join(workspace, "src/routes/api.ts");
+  await writeFile(routes, "// application-owned routes\n");
+  await makeControllerCommand("Admin/Product");
+  await makeRequestCommand("Admin/StoreProductRequest");
+  await makePolicyCommand("Admin/ProductPolicy");
+  const controller = join(workspace, "src/http/controllers/Admin/ProductController.ts");
+  const source = await Bun.file(controller).text();
+  expect(source).toContain("class ProductController");
+  expect(source).toContain("index(_request: Request): Response");
+  expect(
+    await Bun.file(join(workspace, "src/http/requests/Admin/StoreProductRequest.ts")).exists(),
+  ).toBe(true);
+  expect(await Bun.file(join(workspace, "src/policies/Admin/ProductPolicy.ts")).exists()).toBe(
+    true,
+  );
+  await expect(makeControllerCommand("Admin/Product")).rejects.toThrow("already exists");
+  expect(await Bun.file(controller).text()).toBe(source);
+  expect(await Bun.file(routes).text()).toBe("// application-owned routes\n");
 });

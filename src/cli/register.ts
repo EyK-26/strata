@@ -10,6 +10,7 @@ const commands: StrataCommandMap = {
   seed: async () => (await import("./commands/seed.ts")).seedCommand,
   "make:migration": async () => (await import("./commands/makeMigration.ts")).makeMigrationCommand,
   "make:module": async () => (await import("./commands/makeModule.ts")).makeModuleCommand,
+  "make:controller": async () => (await import("@getstrata/cli/scaffold")).makeControllerCommand,
   "make:model": async () => (await import("@getstrata/cli/scaffold")).makeModelCommand,
   "make:view": async () => (await import("@getstrata/cli/scaffold")).makeViewCommand,
   "make:policy": async () => (await import("./commands/makePolicy.ts")).makePolicyCommand,

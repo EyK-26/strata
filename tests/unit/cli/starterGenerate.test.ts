@@ -12,15 +12,18 @@ async function prepareObserverFixture(app: string): Promise<void> {
     source;
   source = source
     .replace(
-      "const User = createModel",
-      'const FixtureObserver=createServiceToken<ModelObserver<User>>("fixture.user.observer");\nexport function fixtureObserverService(observer:ModelObserver<User>){return valueService(FixtureObserver,observer); }\nconst User = createModel',
+      "class User extends defineModel({",
+      'const FixtureObserver=createServiceToken<ModelObserver<User>>("fixture.user.observer");\nexport function fixtureObserverService(observer:ModelObserver<User>){return valueService(FixtureObserver,observer); }\nclass User extends defineModel({',
     )
     .replace(
-      "  attributes: { fillable:",
-      "  observers:[FixtureObserver],\n  attributes: { fillable:",
+      "  static $fillable =",
+      "  static $observers = [FixtureObserver];\n  static $fillable =",
     );
-  if (!source.includes("const FixtureObserver=") || !source.includes("observers:[FixtureObserver]"))
-    throw new Error("Generated observer fixture did not match the immutable User declaration.");
+  if (
+    !source.includes("const FixtureObserver=") ||
+    !source.includes("static $observers = [FixtureObserver]")
+  )
+    throw new Error("Generated observer fixture did not match the User model class.");
   await writeFile(path, source);
 }
 
@@ -161,6 +164,28 @@ async function installPackedGeneratedApp(app: string): Promise<void> {
     await writeFile(join(directory, "bun.lock"), await readFile(join(app, "bun.lock")));
     await writeFile(join(directory, "resolved.json"), JSON.stringify({ app, installed }, null, 2));
   }
+}
+
+/** Security workflows and explicit route wrappers are emitted into their app-owned files. */
+async function generatedAuthSource(app: string): Promise<string> {
+  const files = [
+    "src/http/auth/account.ts",
+    "src/http/controllers/AuthController.ts",
+    "src/routes/api.ts",
+    "src/routes/web.ts",
+  ];
+  if (existsSync(join(app, "src/http/controllers/AuthWebController.ts")))
+    files.push("src/http/controllers/AuthWebController.ts");
+  return (await Promise.all(files.map((file) => readFile(join(app, file), "utf8")))).join("\n");
+}
+
+async function generatedScimSource(app: string): Promise<string> {
+  return (
+    await Promise.all([
+      readFile(join(app, "src/http/controllers/ScimController.ts"), "utf8"),
+      readFile(join(app, "src/routes/api.ts"), "utf8"),
+    ])
+  ).join("\n");
 }
 
 function generateFromArgs(directory: string, argv: string[]): string {
@@ -341,22 +366,20 @@ describe("create-strata generate", () => {
 
     const modelsRegister = await readFile(join(app, "src/models/register.ts"), "utf8");
     expect(modelsRegister).toContain("export const modelDefinitions = Object.freeze([Note])");
-    expect(modelsRegister).toContain(
-      "export const repositoryDefinitions = Object.freeze([NoteRepository])",
-    );
+    expect(modelsRegister).not.toContain("repositoryDefinitions");
     expect(modelsRegister).not.toContain("\nimport { registerModelClass }");
     expect(modelsRegister).not.toContain("void registerModelClass;");
     const noteModel = await readFile(join(app, "src/models/Note.ts"), "utf8");
-    expect(noteModel).toContain('type Note = Model<NoteRecord, "id">');
-    expect(noteModel).toContain("const Note = createModel");
+    expect(noteModel).toContain("type NoteRecord = ModelAttributes<Note>");
+    expect(noteModel).toContain("class Note extends defineModel({");
     expect(noteModel).not.toContain("registerModelRepository");
-    expect(noteModel).toContain("const NoteRepository = Note.repository");
+    expect(noteModel).not.toContain("NoteRepository");
     expect(noteModel).not.toContain("class NoteRepository");
     const bootstrap = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(bootstrap).toContain('from "@getstrata/bootstrap/application"');
     expect(bootstrap).toContain("defineApp({");
     expect(bootstrap).toContain("models: modelDefinitions");
-    expect(bootstrap).toContain("repositories: repositoryDefinitions");
+    expect(bootstrap).not.toContain("repositories: repositoryDefinitions");
     expect(existsSync(join(app, "src/bootstrap/preload.ts"))).toBe(false);
     expect(existsSync(join(app, "src/bootstrap/providers/index.ts"))).toBe(false);
     const { default: appConfig } = await import(join(app, "src/config/app.ts"));
@@ -376,7 +399,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^3.0.8");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^3.1.0");
     expect(pkg.dependencies.eta).toBeUndefined();
     expect(pkg.dependencies.mysql2).toBeUndefined();
     expect(pkg.scripts.dev).toBe("strata dev");
@@ -393,8 +416,8 @@ describe("create-strata generate", () => {
     expect(existsSync(join(app, "src/models/User.ts"))).toBe(false);
     expect(existsSync(join(app, "src/models/ApiToken.ts"))).toBe(false);
     const note = await readFile(join(app, "src/models/Note.ts"), "utf8");
-    expect(note).toContain("const Note = createModel(");
-    expect(note).toContain('fillable: ["body"]');
+    expect(note).toContain("class Note extends defineModel({");
+    expect(note).toContain('static $fillable = ["body"]');
     expect(note).not.toContain('from "@getstrata/core"');
 
     const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
@@ -415,7 +438,10 @@ describe("create-strata generate", () => {
     expect(healthBootstrap).not.toContain("runWithMigrationBypass");
 
     const api = await readFile(join(app, "docs/API.md"), "utf8");
-    expect(api).toContain('.pluck("body", "id")');
+    expect(api).toContain('database.model(Note).query().orderBy({ id: "desc" }).get()');
+    expect(api).toContain("src/http/controllers/NoteController.ts");
+    expect(api).toContain("src/routes/api.ts");
+    expect(api).toContain("context.kernel.wrapApi(notes.index)");
     expect(api).toContain("zero rows is still 200");
     expect(api).not.toContain("SELECT id, body FROM notes");
     expect(api).not.toContain("/webhooks");
@@ -674,7 +700,7 @@ describe("create-strata generate", () => {
     expect(seedFn.indexOf("const connection = databaseOptions(environment)")).toBeLessThan(
       seedFn.indexOf('policy.run(database, {kind:"bypass"}, writeSeed)'),
     );
-    const authModule = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+    const authModule = await generatedAuthSource(app);
     expect(authModule).toContain("completePasswordLogin");
     expect(authModule).toMatch(/"\/api\/v1\/auth\/login":[\s\S]*?wrapLogin\(/);
     expect(authModule).toMatch(/"\/api\/auth\/token":[\s\S]*?wrapLogin\(/);
@@ -747,7 +773,7 @@ describe("create-strata generate", () => {
     expect(init).toBe(ensure);
     expect(init).toContain("already-existing volume");
     expect(init).toContain("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public");
-    const site = await readFile(join(app, "src/modules/site/index.ts"), "utf8");
+    const site = await readFile(join(app, "src/http/controllers/HomeController.ts"), "utf8");
     expect(site).not.toContain("/health");
     const healthBootstrap = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(healthBootstrap).toContain('database.model(Note).query().limit(1).select("id").get()');
@@ -773,10 +799,10 @@ describe("create-strata generate", () => {
     expect(existsSync(join(app, "views/auth/mfa-challenge.eta"))).toBe(true);
     expect(existsSync(join(app, "views/auth/verify-email.eta"))).toBe(true);
     expect(existsSync(join(app, "src/bootstrap/pendingMfa.ts"))).toBe(true);
-    const scim = await readFile(join(app, "src/modules/scim/index.ts"), "utf8");
+    const scim = await generatedScimSource(app);
     expect(scim).toContain("/scim/v2/Users");
     expect(scim).toContain("kernel.wrapScim");
-    const auth = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+    const auth = await generatedAuthSource(app);
     expect(auth).toContain("/register");
     expect(auth).toContain("/forgot-password");
     expect(auth).toContain("/email/verify");
@@ -802,7 +828,7 @@ describe("create-strata generate", () => {
       "--mfa",
       "--yes",
     ]);
-    const scim = await readFile(join(app, "src/modules/scim/index.ts"), "utf8");
+    const scim = await generatedScimSource(app);
     expect(scim).toContain(
       "ports.database.model(User).where({ email, tenant_id: tenantId(ports) }).first()",
     );
@@ -830,7 +856,7 @@ describe("create-strata generate", () => {
       "ports.database.model(User).where({ tenant_id: tenantId(ports) }).get()",
     );
 
-    const auth = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+    const auth = await generatedAuthSource(app);
     expect(auth).toContain("ports.database.model(User).create({");
     expect(auth).toContain("database.model(ApiToken).create({");
     expect(auth).toContain("ports.database.model(AuthOneTimeToken).create({");
@@ -882,8 +908,10 @@ describe("create-strata generate", () => {
     expect(migrate).not.toContain("INSERT INTO notes");
 
     const userModel = await readFile(join(app, "src/models/User.ts"), "utf8");
-    expect(userModel).toContain('hidden: ["password", "mfa_secret", "mfa_recovery_codes"]');
-    expect(userModel).toContain("timestamps: false");
+    expect(userModel).toMatch(
+      /static \$hidden = \["password",\s*"mfa_secret",\s*"mfa_recovery_codes"\]/,
+    );
+    expect(userModel).toContain("static $timestamps = false");
     expect(userModel).toContain("tenant_id");
     expect(existsSync(join(app, "src/models/ApiToken.ts"))).toBe(true);
     expect(existsSync(join(app, "src/models/AuthOneTimeToken.ts"))).toBe(true);
@@ -905,7 +933,7 @@ describe("create-strata generate", () => {
   test("token API apps write JSON register and password reset", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["token-app", "--auth=token", "--yes"]);
-    const auth = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+    const auth = await generatedAuthSource(app);
     expect(auth).toContain("/api/v1/auth/register");
     expect(auth).toContain("/api/v1/auth/forgot-password");
     expect(auth).toContain("parseJsonBody(request, parseRegisterCredentials)");
@@ -1484,11 +1512,14 @@ export default probeModule;
       const config = await readFile(join(app, "src/config/app.ts"), "utf8");
       expect(config).toContain('"views": true');
       expect(existsSync(join(app, "src/bootstrap/providers/view.ts"))).toBe(false);
-      const site = await readFile(join(app, "src/modules/site/index.ts"), "utf8");
-      expect(site).toContain("resolve(CORE_VIEW_RENDERER_TOKEN)");
+      const site = await readFile(join(app, "src/http/controllers/HomeController.ts"), "utf8");
+      expect(site).toContain("constructor(private readonly views: ViewRenderer)");
+      expect(site).not.toContain("container.resolve");
+      const webRoutes = await readFile(join(app, "src/routes/web.ts"), "utf8");
+      expect(webRoutes).toContain("resolve(CORE_VIEW_RENDERER_TOKEN)");
       expect(site).toContain("views.renderHtmx(");
       if (auth === "cookie") {
-        const authModule = await readFile(join(app, "src/modules/auth/index.ts"), "utf8");
+        const authModule = await generatedAuthSource(app);
         expect(authModule).toContain("views.render(");
         expect(authModule).toContain(
           '.namespace("auth", { headers: { "Cache-Control": "private, no-store" } })',

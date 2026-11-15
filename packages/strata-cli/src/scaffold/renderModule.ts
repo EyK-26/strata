@@ -17,47 +17,28 @@ function renderModuleScaffold({
 
   const files = new Map<string, string>([
     [
-      "types.ts",
-      `interface ${moduleName}Record {
-  id: number;
-  name: string;
+      `models/${moduleName}.ts`,
+      `import { defineModel, field, type ModelAttributes } from "@getstrata/core/database/model";
+
+class ${moduleName} extends defineModel({
+  table: "${moduleSlug}",
+  fields: { id: field.number(), name: field.string() },
+  defaultOrderBy: { column: "id", direction: "ASC" },
+}) {
+  static $fillable = ["name"] as const;
+  static $timestamps = false;
 }
 
+type ${moduleName}Record = ModelAttributes<${moduleName}>;
+export { ${moduleName} };
 export type { ${moduleName}Record };
 `,
     ],
     [
-      "table.ts",
-      `import { defineTable } from "@getstrata/core/database/table";
-import type { ${moduleName}Record } from "./types";
-
-const ${moduleIdentifier}Table = defineTable<${moduleName}Record, "id">({
-  name: "${moduleSlug}",
-  primaryKey: "id",
-  columns: ["id", "name"],
-  defaultOrderBy: { column: "id", direction: "ASC" },
-});
-
-export { ${moduleIdentifier}Table };
-`,
-    ],
-    [
-      "model.ts",
-      `import { createModel } from "@getstrata/core/database/model";
-import { ${moduleIdentifier}Table } from "./table";
-const ${moduleName}Definition = createModel({
-  name: "${moduleName}", table: ${moduleIdentifier}Table,
-  attributes: { fillable: ["name"], timestamps: false },
-});
-const ${moduleIdentifier}Repository = ${moduleName}Definition.repository;
-export { ${moduleName}Definition, ${moduleIdentifier}Repository };
-`,
-    ],
-    [
-      "policy.ts",
+      `policies/${moduleName}Policy.ts`,
       `import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { Policy } from "@getstrata/core/auth/policy";
-import type { ${moduleName}Record } from "./types";
+import type { ${moduleName}Record } from "../models/${moduleName}";
 
 class ${moduleName}Policy extends Policy {
   override create(_user: AuthUser | null): boolean {
@@ -77,7 +58,7 @@ export default ${moduleName}Policy;
 `,
     ],
     [
-      "requests.ts",
+      `http/requests/${moduleName}Requests.ts`,
       `import { parseJsonBody, parsePositiveIntParam } from "@getstrata/core/http/validation";
 import { parsePaginationQuery } from "@getstrata/core/http/pagination";
 import {
@@ -159,7 +140,7 @@ export type {
       "resources.ts",
       `import { toPaginatedResourceCollection, toResourceCollection } from "@getstrata/core/http/resources";
 import type { PaginationMeta } from "@getstrata/core/pagination";
-import type { ${moduleName}Record } from "./types";
+import type { ${moduleName}Record } from "./models/${moduleName}";
 
 interface ${moduleName}Resource {
   id: number;
@@ -195,8 +176,8 @@ export type { ${moduleName}Resource };
 `,
     ],
     [
-      "controller.ts",
-      `import type { BusinessRequestPorts } from "@getstrata/bootstrap/contracts";
+      `http/controllers/${moduleName}Controller.ts`,
+      `import type { BusinessRequestPorts } from "@getstrata/bootstrap/persistenceContracts";
 import type { CachedJson } from "@getstrata/core/contracts/di";
 import { bindRouteModel } from "@getstrata/core/http/routeModelBinding";
 import { buildRequestCacheKey } from "@getstrata/core/http/validation";
@@ -204,17 +185,17 @@ import {type RouteModelBindingPorts, securedBindRouteModel } from "@getstrata/co
 import type { RouteRequest } from "@getstrata/core/http/route";
 import { createdResponse, jsonResponse, noContentResponse } from "@getstrata/core/http/response";
 import { NotFoundError } from "@getstrata/core/errors/http";
-import { ${moduleIdentifier}Repository } from "./model";
+import { ${moduleName} } from "../../models/${moduleName}";
 import {
   parseCreate${moduleName}Body,
   parse${moduleName}ListQuery,
   parseUpdate${moduleName}Body,
   type ${moduleName}IdParams,
-} from "./requests";
+} from "../requests/${moduleName}Requests";
 import {
   to${moduleName}PaginatedResourceCollection,
   to${moduleName}Resource,
-} from "./resources";
+} from "../../resources";
 
 const ${moduleIdentifier.toUpperCase()}_CACHE_TAG = "${pluralSlug}";
 
@@ -231,11 +212,11 @@ class ${moduleName}Controller {
   readonly destroy:(request:RouteRequest<${moduleName}IdParams>)=>Promise<Response>;
 
   private get records() {
-    return this.database.repository(${moduleIdentifier}Repository);
+    return this.database.model(${moduleName});
   }
 
   private find(id: number) {
-    return this.records.findByIdOrThrow(id, () => new NotFoundError("${moduleName} not found."));
+    return this.records.findOrFail(id, () => new NotFoundError("${moduleName} not found."));
   }
 
   readonly index = (async (request?: Request) => {
@@ -245,8 +226,8 @@ class ${moduleName}Controller {
     return await this.cachedJson(
       cacheKey,
       async () => {
-        const result = await this.records.paginate(query);
-        return to${moduleName}PaginatedResourceCollection(result.data, result.meta);
+        const result = await this.records.query().paginate(query);
+        return to${moduleName}PaginatedResourceCollection(result.data.map((record) => record.toObject()), result.meta);
       },
       [${moduleIdentifier.toUpperCase()}_CACHE_TAG],
       request,
@@ -258,7 +239,7 @@ class ${moduleName}Controller {
       "id",
       (id) => this.find(id),
       async (_request: RouteRequest<${moduleName}IdParams>, record) => {
-        return jsonResponse(to${moduleName}Resource(record));
+        return jsonResponse(to${moduleName}Resource(record.toObject()));
       },
     )
   );
@@ -266,7 +247,7 @@ class ${moduleName}Controller {
   readonly store = (async (request: Request) => {
     const body = await parseCreate${moduleName}Body(request);
     const record = await this.records.create(body);
-    return createdResponse(to${moduleName}Resource(record));
+    return createdResponse(to${moduleName}Resource(record.toObject()));
   });
 
   private bindUpdate(binding:RouteModelBindingPorts) {return securedBindRouteModel(
@@ -275,8 +256,8 @@ class ${moduleName}Controller {
       { resource: "${moduleSlug}", action: "update" },
       async (req: RouteRequest<${moduleName}IdParams>, record) => {
         const body = await parseUpdate${moduleName}Body(req);
-        const updated = await this.records.updateByIdOrThrow(record.id, body, () => new NotFoundError("${moduleName} not found."));
-        return jsonResponse(to${moduleName}Resource(updated));
+        const updated = await record.update(body);
+        return jsonResponse(to${moduleName}Resource(updated.toObject()));
       },
       binding,
     );
@@ -287,7 +268,7 @@ class ${moduleName}Controller {
       (id) => this.find(id),
       { resource: "${moduleSlug}", action: "delete" },
       async (_request: RouteRequest<${moduleName}IdParams>, record) => {
-        await this.records.deleteById(record.id);
+        await record.delete();
         return noContentResponse();
       },
       binding,
@@ -301,11 +282,11 @@ export default ${moduleName}Controller;
     [
       "routes.ts",
       `import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
-import type { BusinessRequestPorts } from "@getstrata/bootstrap/contracts";
+import type { BusinessRequestPorts } from "@getstrata/bootstrap/persistenceContracts";
 import type { RouteRequest } from "@getstrata/core/http/route";
-import type { ${moduleName}IdParams } from "./requests";
+import type { ${moduleName}IdParams } from "./http/requests/${moduleName}Requests";
 import type { CachedJson } from "@getstrata/core/contracts/di";
-${withWeb ? 'import { apiPrefix } from "@getstrata/core/runtime/appKeyPrefix";\n' : ""}import ${moduleName}Controller from "./controller";
+${withWeb ? 'import { apiPrefix } from "@getstrata/core/runtime/appKeyPrefix";\n' : ""}import ${moduleName}Controller from "./http/controllers/${moduleName}Controller";
 
 function create${moduleName}Routes(
   cachedJson: CachedJson,
@@ -342,20 +323,19 @@ export { create${moduleName}Routes };
     [
       "index.ts",
       `import { type AppModule } from "@getstrata/bootstrap/contracts";
-import ${moduleName}Controller from "./controller";
-import ${moduleName}Policy from "./policy";
+import ${moduleName}Controller from "./http/controllers/${moduleName}Controller";
+import ${moduleName}Policy from "./policies/${moduleName}Policy";
 import { create${moduleName}Routes } from "./routes";${
         withWeb
           ? `
 import { create${moduleName}WebRoutes } from "./webRoutes";`
           : ""
       }
-import { ${moduleIdentifier}Table } from "./table";
 
 const ${moduleVariable}: AppModule = {
   name: "${moduleSlug}",
   order: 100,
-  tableName: ${moduleIdentifier}Table.name,
+  tableName: "${moduleSlug}",
   cacheTags: ["${pluralSlug}"],
   policies: { "${moduleSlug}": new ${moduleName}Policy() },
   routes({ cachedJson, kernel }) {
@@ -372,7 +352,7 @@ const ${moduleVariable}: AppModule = {
 
 export default ${moduleVariable};
 export { ${moduleName}Controller };
-export { parse${moduleName}IdParams, parse${moduleName}ListQuery } from "./requests";
+export { parse${moduleName}IdParams, parse${moduleName}ListQuery } from "./http/requests/${moduleName}Requests";
 export {
   to${moduleName}PaginatedResourceCollection,
   to${moduleName}Resource,
@@ -384,9 +364,8 @@ export { create${moduleName}Routes } from "./routes";${
 export { create${moduleName}WebRoutes } from "./webRoutes";`
           : ""
       }
-export { ${moduleName}Definition, ${moduleIdentifier}Repository } from "./model";
-export { ${moduleIdentifier}Table } from "./table";
-export type { ${moduleName}Record } from "./types";
+export { ${moduleName} } from "./models/${moduleName}";
+export type { ${moduleName}Record } from "./models/${moduleName}";
 `,
     ],
   ]);
@@ -406,22 +385,22 @@ export type { ${moduleName}Record } from "./types";
     );
 
     webFiles.set(
-      "webController.ts",
-      `import type { BusinessRequestPorts } from "@getstrata/bootstrap/contracts";
+      `http/controllers/${moduleName}WebController.ts`,
+      `import type { BusinessRequestPorts } from "@getstrata/bootstrap/persistenceContracts";
 import type { NamespacedViewRenderer } from "@getstrata/core/view";
-import { ${moduleIdentifier}Repository } from "./model";
-import { parse${moduleName}ListQuery } from "./requests";
+import { ${moduleName} } from "../../models/${moduleName}";
+import { parse${moduleName}ListQuery } from "../requests/${moduleName}Requests";
 
 class ${moduleName}WebController {
   constructor(private readonly views: NamespacedViewRenderer, private readonly database: BusinessRequestPorts["database"]) {}
 
   private get records() {
-    return this.database.repository(${moduleIdentifier}Repository);
+    return this.database.model(${moduleName});
   }
 
   readonly index = (async (request?: Request) => {
     const query = parse${moduleName}ListQuery(request);
-    const result = await this.records.paginate(query);
+    const result = await this.records.query().paginate(query);
 
     return this.views.renderHtmx("index.eta", {
         layout: { title: "${moduleName}s" },
@@ -441,8 +420,8 @@ export default ${moduleName}WebController;
       `import { resolveService, type AppDependencies } from "@getstrata/core/contracts/di";
 import { CORE_VIEW_RENDERER_TOKEN } from "@getstrata/core/view";
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
-import type { BusinessRequestPorts } from "@getstrata/bootstrap/contracts";
-import ${moduleName}WebController from "./webController";
+import type { BusinessRequestPorts } from "@getstrata/bootstrap/persistenceContracts";
+import ${moduleName}WebController from "./http/controllers/${moduleName}WebController";
 
 function create${moduleName}WebRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
   const views = resolveService(dependencies, CORE_VIEW_RENDERER_TOKEN).namespace("${pluralSlug}");

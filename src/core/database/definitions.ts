@@ -11,6 +11,7 @@ import type { BaseRepository } from "./baseRepository";
 import type { DatabaseCapabilities } from "./driverPorts";
 import type { Model } from "./model";
 import type { ModelCasts } from "./modelAttributes";
+import type { AnyModelClass, ClassModelKey, ClassModelRow } from "./modelAuthoring";
 import type { ModelQuery, RelationNameInput } from "./modelQuery";
 import type { AnyRelationQuery } from "./relationQuery";
 import type { RepositoryQuery } from "./repositoryQuery";
@@ -114,7 +115,7 @@ interface RepositoryEffect {
 }
 const effectsBrand: unique symbol = Symbol("database.repository.effects");
 interface RepositoryEffectsDeclaration {
-  readonly definition: AnyRepositoryDefinition;
+  readonly definition: AnyRepositoryDefinition | AnyModelClass;
   readonly effects: readonly RepositoryEffect[];
   readonly [effectsBrand]: object;
 }
@@ -501,11 +502,13 @@ function repositoryEffects<
 >(
   definition: RepositoryDefinition<R, K, T>,
   effects: readonly TypedRepositoryEffect<R, K>[],
-): RepositoryEffectsDeclaration {
+): RepositoryEffectsDeclaration & { readonly definition: AnyRepositoryDefinition } {
   assertDefinition(definition, "repository");
   const declaration = { definition, effects: snapshotEffects(effects) };
   Object.defineProperty(declaration, effectsBrand, { value: declaration });
-  return Object.freeze(declaration) as unknown as RepositoryEffectsDeclaration;
+  return Object.freeze(declaration) as unknown as RepositoryEffectsDeclaration & {
+    readonly definition: AnyRepositoryDefinition;
+  };
 }
 function assertRepositoryEffectsDeclaration(
   value: unknown,
@@ -521,3 +524,15 @@ function assertRepositoryEffectsDeclaration(
 
 export type { RepositoryEffectsDeclaration, TypedRepositoryEffect };
 export { assertRepositoryEffectsDeclaration, repositoryEffects };
+
+/** Attach effects to a class model's implicit repository at registry snapshot time. */
+function modelEffects<C extends AnyModelClass>(
+  model: C,
+  effects: readonly TypedRepositoryEffect<ClassModelRow<C>, ClassModelKey<C>>[],
+): RepositoryEffectsDeclaration {
+  const declaration = { definition: model, effects: snapshotEffects(effects) };
+  Object.defineProperty(declaration, effectsBrand, { value: declaration });
+  return Object.freeze(declaration) as unknown as RepositoryEffectsDeclaration;
+}
+
+export { modelEffects };

@@ -1,6 +1,11 @@
 function printHelp(commandNames: string[]): void {
   const unique = [...new Set(commandNames)].sort();
   const descriptions: Record<string, string> = {
+    "make:model": "Model class in src/models; migrations are separate",
+    "make:controller": "Controller class in src/http/controllers",
+    "make:request": "FormRequest class in src/http/requests",
+    "make:policy": "Policy class in src/policies",
+    "make:module": "Optional domain grouping with model, controller and routes",
     dev: "HTTP development server; workers run separately",
     start: "HTTP server; workers run separately",
     "queue:work": "Poll Redis for queued jobs; requires REDIS_URL",

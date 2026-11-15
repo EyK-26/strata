@@ -79,12 +79,18 @@ for (const [frontend, auth] of [
     expect(read("src/bootstrap/createApp.ts")).toContain(
       "outbox: { listeners, token: WORK_TRACKER_OUTBOX }",
     );
-    expect(read("src/models/register.ts")).toContain("...workTrackerRepositories");
+    expect(read("src/models/register.ts")).toContain(
+      "workTrackerRepositories as repositoryDefinitions",
+    );
     expect(read("src/outbox/registry.ts")).toContain("[workTrackerListener]");
     expect(read("src/domain/workTracker.ts")).toContain(
       'await gate(tx).authorize("work","mutateTask",principal,organizationId)',
     );
     expect(read("src/domain/workTracker.ts")).toContain('publisher.publish(tx,"work.changed"');
-    expect(read("src/modules/workTracker/index.ts")).toContain("ports.established.tenant.id");
-    expect(read("src/modules/workTracker/index.ts")).toContain("currentRequestMeta().csrfToken");
+    expect(read("src/http/controllers/WorkTrackerController.ts")).toContain(
+      "ports.established.tenant.id",
+    );
+    expect(read("src/http/controllers/WorkTrackerController.ts")).toContain(
+      "currentRequestMeta().csrfToken",
+    );
   });

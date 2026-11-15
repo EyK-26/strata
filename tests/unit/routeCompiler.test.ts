@@ -6,6 +6,26 @@ import { validateOpenApiSpec } from "../../src/core/openapi/validate";
 
 const handler = () => new Response("ok");
 
+test("nested route compositions inherit their boundary without replacing explicit contracts", () => {
+  const plain = compileRoutePlan([{ name: "page", routes: { "/login": { GET: handler } } }]);
+  const explicit = compileRoutePlan([
+    { name: "custom", routes: { "/custom": { GET: handler } }, middleware: ["custom"] },
+  ]);
+  const plan = compileRoutePlan([
+    { name: "application web", routes: plain.routes, middleware: ["global", "web"] },
+    { name: "custom web", routes: explicit.routes, middleware: ["global", "web"] },
+  ]);
+  expect(plan.inventory.filter((route) => route.path === "/login")).toEqual([
+    { method: "GET", path: "/login", middleware: ["global", "web"] },
+    { method: "HEAD", path: "/login", middleware: ["global", "web"] },
+  ]);
+  expect(plan.inventory.filter((route) => route.path === "/custom")).toEqual([
+    { method: "GET", path: "/custom", middleware: ["custom"] },
+    { method: "HEAD", path: "/custom", middleware: ["custom"] },
+  ]);
+  expect(plain.inventory.every((route) => route.middleware.length === 0)).toBe(true);
+});
+
 test("normalizes prefix, path and methods and merges disjoint operations in declaration order", () => {
   const plan = compileRoutePlan(
     [

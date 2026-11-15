@@ -1,4 +1,5 @@
 import type { StrataCommandMap } from "../types.ts";
+import { makeControllerCommand } from "./makeController.ts";
 import { makeFactoryCommand } from "./makeFactory.ts";
 import { makeJobCommand } from "./makeJob.ts";
 import { makeListenerCommand } from "./makeListener.ts";
@@ -20,6 +21,7 @@ import {
 } from "./utils.ts";
 
 const scaffoldCommands: StrataCommandMap = {
+  "make:controller": async () => makeControllerCommand,
   "make:model": async () => makeModelCommand,
   "make:view": async () => makeViewCommand,
   "make:module": async () => makeModuleCommand,
@@ -33,6 +35,7 @@ const scaffoldCommands: StrataCommandMap = {
 
 export {
   ensureDirectory,
+  makeControllerCommand,
   makeFactoryCommand,
   makeJobCommand,
   makeListenerCommand,

@@ -1,5 +1,8 @@
 # Storage
 
+For controller upload workflows, bounded multipart streams and native Bun image
+transforms, see [Uploads and images](MEDIA.md).
+
 Application dependencies and `CORE_STORAGE_TOKEN` expose the structural `Storage`
 consumer interface (`put`, `get`, `delete`). Custom adapters need no manager internals.
 Missing reads return `null`; deletion is idempotent; other failures reject.

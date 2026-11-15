@@ -234,7 +234,9 @@ class TransactionRuntime {
     };
     const session: TransactionSession = {
       repository: (definition) => registry.repository(definition),
-      model: (definition) => registry.model(definition),
+      get model() {
+        return registry.model;
+      },
       dialect: branch.pool.dialect,
       capabilities: branch.pool.capabilities,
       execute: <Row>(input: SqlStatement) => {

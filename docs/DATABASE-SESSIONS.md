@@ -130,12 +130,3 @@ Safe connection disposal and known data disposition are separate facts. A cleanu
 failure remains an execution failure even if the transaction waiter is caught;
 the application retains ownership when safe release cannot be proved. There is
 no automatic COMMIT retry or transaction replay.
-
-## Refactor scope
-
-SQL sessions, native transactions, bound models/repositories, tenancy/RLS and
-event/outbox integration now use explicit ownership. Generated HTTP and worker
-composition uses the same contracts. The
-[completion ledger](architecture/refactor-completion-ledger.md) maps native and
-installed-consumer acceptance; the [migration guide](architecture/target-api-migration.md)
-lists removed global connection and model APIs.

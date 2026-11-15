@@ -254,17 +254,15 @@ try {
   ])
     delete process.env[key];
   const { bootstrapApp } = await import(join(fixture.app, "src/bootstrap/createApp.ts"));
-  const { User, UserRepository } = await import(join(fixture.app, "src/models/User.ts"));
-  const { AuthOneTimeToken, AuthOneTimeTokenRepository } = await import(
-    join(fixture.app, "src/models/AuthOneTimeToken.ts")
-  );
+  const { User } = await import(join(fixture.app, "src/models/User.ts"));
+  const { AuthOneTimeToken } = await import(join(fixture.app, "src/models/AuthOneTimeToken.ts"));
   const { createServiceToken } = (await import(
     fixture.resolve("@getstrata/core/contracts/token")
   )) as typeof import("@getstrata/core/contracts/token");
   const { valueService } = (await import(
     fixture.resolve("@getstrata/core/contracts/services")
   )) as typeof import("@getstrata/core/contracts/services");
-  const { repositoryEffects } = (await import(
+  const { modelEffects } = (await import(
     fixture.resolve("@getstrata/core/database/definitions")
   )) as typeof import("@getstrata/core/database/definitions");
   const { generateTotp } = await import(fixture.resolve("@getstrata/core/security/totp"));
@@ -784,7 +782,7 @@ try {
           throw resetFailure;
         }),
       ],
-      [repositoryEffects(UserRepository, [{ action: "updated", transactional: ResetFault }])],
+      [modelEffects(User, [{ action: "updated", transactional: ResetFault }])],
     );
     await status(
       await request(competingReset, { password: "Rejected!Password789", email }),
@@ -918,11 +916,7 @@ try {
         throw tokenFailure;
       }),
     ],
-    [
-      repositoryEffects(AuthOneTimeTokenRepository, [
-        { action: "created", transactional: TokenFault },
-      ]),
-    ],
+    [modelEffects(AuthOneTimeToken, [{ action: "created", transactional: TokenFault }])],
   );
   await status(
     await request(register, { name: "Rollback User", email: faultEmail, password }),

@@ -6,6 +6,7 @@ export {
   BoundModelFacade,
   createBoundModel,
   createModel,
+  defineModel,
   getModelBinding,
   HasManyRelationQuery,
   HasManyThroughRelationQuery,
@@ -18,4 +19,11 @@ export {
   modelFacade,
   runObservers,
 } from "./model";
+export {
+  createClassModelDefinition,
+  defineAuthoredModel,
+  field,
+  isModelClass,
+  modelTable,
+} from "./modelAuthoring";
 export { RepositoryQuery, snapshotRepositoryQuery } from "./repositoryQuery";

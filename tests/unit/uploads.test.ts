@@ -101,7 +101,7 @@ describe("upload helpers", () => {
 
   test("parseMultipartUpload delegates field Files through validateUploadFile", async () => {
     const body = new FormData();
-    body.set("file", new File([new Uint8Array([1, 2, 3])], "note.txt", { type: "text/plain" }));
+    body.set("file", new File(["hello"], "note.txt", { type: "text/plain" }));
     const request = new Request("http://strata.test/upload", { method: "POST", body });
     const parsed = await parseMultipartUpload(request);
     expect(parsed.fileName).toBe("note.txt");

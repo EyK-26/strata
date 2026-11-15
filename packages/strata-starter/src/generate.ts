@@ -16,7 +16,6 @@ import { parseCreateStrataArgs, usage } from "./parseArgs.ts";
 import { resolveStarterPlan } from "./prompt.ts";
 import {
   renderAuthDirectory,
-  renderAuthModule,
   renderAuthProvider,
   renderConfirmPasswordView,
   renderForgotPasswordView,
@@ -29,7 +28,6 @@ import {
   renderRegisterView,
   renderResetPasswordView,
   renderSiteCss,
-  renderSiteModule,
   renderVerifyEmailView,
 } from "./renderAuth.ts";
 import {
@@ -52,12 +50,12 @@ import {
   renderPostgresAppRoleInitSql,
   renderReadme,
 } from "./renderEnv.ts";
+import { renderHttpFiles } from "./renderHttp.ts";
 import { renderInitialAdminCommand, renderInitialAdminMigration } from "./renderInitialAdmin.ts";
 import {
   billingMigrationName,
   renderApplyStripeWebhook,
   renderBillingMigration,
-  renderBillingModule,
   renderDispatchOutboundWebhookJob,
   renderNoteCreatedWebhookListener,
   renderWebhooksMigration,
@@ -81,13 +79,11 @@ import {
   renderNoteModel,
   renderUserModel,
 } from "./renderModels.ts";
-import { renderScimModule } from "./renderScim.ts";
 import {
   renderWorkTrackerDomain,
   renderWorkTrackerGuide,
   renderWorkTrackerMigration,
   renderWorkTrackerModels,
-  renderWorkTrackerModule,
 } from "./renderWorkTracker.ts";
 import type { GenerateOptions } from "./types.ts";
 
@@ -295,31 +291,19 @@ export const TENANCY_ENABLED = ${decisions.tenantTable};
   writeText(join(src, "db/seed.ts"), renderSeedTs());
   writeText(join(src, "db/status.ts"), renderStatusTs(plan));
   writeText(join(src, "db/rollback.ts"), renderRollbackTs(plan));
-  if (decisions.serverViews) writeText(join(src, "modules/site/index.ts"), renderSiteModule(plan));
+  for (const [path, source] of Object.entries(renderHttpFiles(plan))) {
+    writeText(join(src, path), source);
+  }
 
   const directory = renderAuthDirectory(plan);
   if (directory) {
     writeText(join(src, "bootstrap/authDirectory.ts"), directory);
   }
 
-  const authModule = renderAuthModule(plan);
-  if (authModule) {
-    writeText(join(src, "modules/auth/index.ts"), authModule);
-  }
-
-  const scimModule = renderScimModule(plan);
-  if (scimModule) {
-    writeText(join(src, "modules/scim/index.ts"), scimModule);
-  } else {
-    removeIfExists(join(src, "modules/scim/index.ts"));
-  }
-
   if (layers.extras.billing) {
     writeText(join(src, "billing/applyStripeWebhook.ts"), renderApplyStripeWebhook());
-    writeText(join(src, "modules/billing/index.ts"), renderBillingModule(plan));
   } else {
     removeIfExists(join(src, "billing/applyStripeWebhook.ts"));
-    removeIfExists(join(src, "modules/billing/index.ts"));
   }
 
   if (layers.extras.webhooks) {
@@ -388,7 +372,7 @@ export const TENANCY_ENABLED = ${decisions.tenantTable};
     );
     writeText(join(src, "domain/workTracker.ts"), renderWorkTrackerDomain());
     writeText(join(src, "models/workTracker.ts"), renderWorkTrackerModels());
-    writeText(join(src, "modules/workTracker/index.ts"), renderWorkTrackerModule());
+
     writeText(join(src, "db/migrations/0007_work_tracker.ts"), renderWorkTrackerMigration(plan));
   }
 
