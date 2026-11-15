@@ -46,10 +46,10 @@ function setExpectedVersions(text: string, version: string): string {
   });
 }
 
-const PUBLISHED_README_PATTERN = /Published as \*\*\d+\.\d+\.\d+\*\*/;
+const README_PACKAGE_VERSION_PATTERN = /Package version: \*\*\d+\.\d+\.\d+\*\*/;
 
-function setPublishedReadmeVersion(text: string, version: string): string {
-  return text.replace(PUBLISHED_README_PATTERN, `Published as **${version}**`);
+function setReadmePackageVersion(text: string, version: string): string {
+  return text.replace(README_PACKAGE_VERSION_PATTERN, `Package version: **${version}**`);
 }
 
 function insertChangelogEntry(text: string, version: string, notes = ""): string {
@@ -77,5 +77,5 @@ export {
   retargetStrataPins,
   setExpectedVersions,
   setPackageVersion,
-  setPublishedReadmeVersion,
+  setReadmePackageVersion,
 };

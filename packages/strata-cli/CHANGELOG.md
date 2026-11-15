@@ -1,6 +1,6 @@
 # @getstrata/cli changelog
 
-## Unreleased
+## 3.1.0
 
 - Generate concise model classes and infer factory/record types without table, interface or repository companion files.
 - Add `make:controller`; align requests and policies with `src/http/requests` and `src/policies`. Optional domain modules emit named controllers and retain secured CRUD, cache and route-model-binding behavior.

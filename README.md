@@ -82,6 +82,8 @@ imports such as `@getstrata/core/database/model` over the root barrel.
 
 ## Packages
 
+Package version: **3.1.0** (this checkout; publication is tracked on npm).
+
 | Package | Purpose |
 | --- | --- |
 | `@getstrata/core` | Runtime, HTTP, authentication, database, jobs, storage and media |

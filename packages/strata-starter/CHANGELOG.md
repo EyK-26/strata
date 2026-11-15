@@ -1,6 +1,6 @@
 # create-strata changelog
 
-## Unreleased
+## 3.1.0
 
 - Generate class models with one typed field declaration and no mandatory repository exports.
 - Move selected HTTP handlers into named controllers and application routes into `src/routes/api.ts` and `web.ts`. Controllers receive concrete dependencies; route composition resolves services at startup. Preserve account workflows, middleware, SSO state binding and tenant isolation.

@@ -9,7 +9,7 @@ import {
   retargetStrataPins,
   setExpectedVersions,
   setPackageVersion,
-  setPublishedReadmeVersion,
+  setReadmePackageVersion,
 } from "./bump-version.ts";
 
 const ROOT = join(import.meta.dir, "..");
@@ -83,7 +83,7 @@ for (const file of PIN_FILES) {
 }
 
 await edit(EXPECTED_FILE, (text) => setExpectedVersions(text, version));
-await edit(README_FILE, (text) => setPublishedReadmeVersion(text, version));
+await edit(README_FILE, (text) => setReadmePackageVersion(text, version));
 
 for (const file of CHANGELOGS) {
   await edit(file, (text) => insertChangelogEntry(text, version, notes));
