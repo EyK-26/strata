@@ -1,13 +1,19 @@
 # Strata
 
-Strata is a Bun framework for TypeScript HTTP apps. You pick one database, one auth style, and HTML, JSON, or both.
+Laravel-inspired application structure and developer experience, built for
+TypeScript and Bun. Strata combines named models, controllers, requests, policies,
+migrations and jobs with Bun's native HTTP, SQL, file, image and build capabilities.
+It is not a PHP compatibility layer or an implementation of every Laravel feature.
 
-## Create an app
+## Create an application
 
-You need [Bun](https://bun.sh) 1.4.x.
+Install [Bun](https://bun.sh) **1.4.4 or later**. The repository and generated Docker
+images pin the tested runtime in [.bun-version](.bun-version).
 
-```bash
-bunx create-strata my-app
+This local HTML starter uses SQLite and needs no database container:
+
+```sh
+bunx create-strata my-app --frontend server-htmx --database sqlite --auth cookie --no-docker --yes
 cd my-app
 cp .env.example .env
 bun install
@@ -15,75 +21,95 @@ bun run db:migrate
 bun run dev
 ```
 
-`strata` installs into the app rather than globally, so use the `bun run` scripts above, or `bunx strata <command>` from inside the app directory.
+Read the generated README for your selected configuration. Demo data is opt-in via
+`bun run db:seed:demo` and is restricted to development/test environments. Replace
+development secrets before deployment.
 
-The wizard asks each layer (frontend, database, auth, tenancy, cache, queue, mail, extras). In a terminal, move with arrow keys and Enter, or type a number. `--docker` with Postgres or MySQL also writes Adminer at http://localhost:8080.
+Run `bunx create-strata my-app` for the interactive wizard. Choose an API, HTMX,
+React SPA or hybrid frontend; PostgreSQL, MySQL or SQLite; authentication, tenancy,
+cache, queue, mail and optional integrations. Docker infrastructure is optional.
+See [starter options](docs/STARTER.md).
 
-```bash
-bunx create-strata my-app --yes
-bunx create-strata html --frontend server-htmx --database postgres --auth cookie --cache redis --queue redis --docker --yes
+## Familiar application code
+
+```text
+src/
+  models/                 Model classes and registration
+  http/controllers/       Request handlers
+  http/requests/          Input validation and authorization
+  policies/               Resource access rules
+  routes/api.ts           API routes and middleware
+  routes/web.ts           Browser routes and middleware
+  db/migrations/          Database schema changes
+  config/                 Application configuration
 ```
 
-Guides: [docs/STARTER.md](docs/STARTER.md), [docs/BUILDING-APPS.md](docs/BUILDING-APPS.md), [docs/AUTH.md](docs/AUTH.md), [initial admin](docs/INITIAL-ADMIN.md), [docs/DATABASE.md](docs/DATABASE.md), [docs/TENANCY.md](docs/TENANCY.md).
+Files are generated for selected features or created with `make:*` commands;
+optional directories need not exist in a new app. Domain modules are available
+when a larger application benefits from grouping a feature together.
+
+```ts
+import { defineModel, field } from "@getstrata/core/database/model";
+
+export class Note extends defineModel({
+  table: "notes",
+  fields: { id: field.number(), body: field.string() },
+}) {
+  static $fillable = ["body"] as const;
+  static $timestamps = false;
+}
+```
+
+Register the class in `src/models/register.ts` and create its table with a migration.
+Inside an owned database session, use `database.model(Note)` or
+`transaction.model(Note)`. Add relationship methods to the class. Ordinary models
+need no separate repository or repeated row interface. Controllers receive explicit
+capabilities; request sessions and tenant identities stay within their execution.
+
+Start with [building an application](docs/BUILDING-APPS.md). Prefer focused package
+imports such as `@getstrata/core/database/model` over the root barrel.
+
+## Guides
+
+| Task | Guide |
+| --- | --- |
+| Generate an app or feature | [Starter](docs/STARTER.md), [application workflow](docs/BUILDING-APPS.md) |
+| Models, relationships and migrations | [Database](docs/DATABASE.md) |
+| Authentication and access control | [Auth](docs/AUTH.md), [tenancy](docs/TENANCY.md), [initial admin](docs/INITIAL-ADMIN.md) |
+| Uploads, images and storage | [Media](docs/MEDIA.md), [storage](docs/STORAGE.md) |
+| Background work | [Queues](docs/QUEUES.md), [scheduler](docs/SCHEDULER.md) |
+| External services and deployment | [Integrations](docs/INTEGRATIONS.md), [production](docs/PRODUCTION.md) |
 
 ## Packages
 
-Published as **3.0.8**:
+| Package | Purpose |
+| --- | --- |
+| `@getstrata/core` | Runtime, HTTP, authentication, database, jobs, storage and media |
+| `@getstrata/bootstrap` | Application composition, providers and HTTP startup |
+| `@getstrata/cli` | Application lifecycle, migrations, workers and scaffolding |
+| `@getstrata/starter` | Configurable application generator |
+| `create-strata` | Convenient generator entrypoint for `bunx` |
 
-| Package | What it is |
-|---------|------------|
-| `@getstrata/core` | Runtime: auth, HTTP, database, queue, mail, security |
-| `@getstrata/bootstrap` | App boot: kernel, providers, cookie session helpers |
-| `@getstrata/cli` | `strata` commands: `dev`, `start`, `migrate`, `run` |
-| `@getstrata/starter` | The generator, also published as `create-strata` |
-| `create-strata` | What `bunx create-strata my-app` resolves |
+The five packages use one coordinated version. See their changelogs for the next
+release and [npm](https://www.npmjs.com/package/@getstrata/core) for published versions.
+Installing an update does not rewrite an existing application's generated files.
 
-Application code should import **subpaths**, not the root `@getstrata/core` barrel:
+## Contributing and AI agents
 
-```typescript
-import { Policy } from "@getstrata/core/auth/policy";
-import { BaseRepository } from "@getstrata/core/database/baseRepository";
-```
+Read [AGENTS.md](AGENTS.md) for the repository map, architectural rules, focused
+validation commands and release workflow. This checkout develops the framework;
+create a separate generated app when building a product.
 
-## Cookie HTML apps
-
-Generated cookie apps include restyleable welcome, login, register, and password reset screens (`views/` plus `public/assets/site.css`). Seed login is `demo@example.com` / `StrataDemo!ChangeMe`. Session cookie name is `strata_session`. CSRF field is `_token`.
-
-## This repository
-
-This repository contains framework packages and their tests. Product dogfood lives in [strata-shop](https://github.com/EyK-26/strata-shop), which consumes published packages. Acceptance tests generate disposable apps, install candidate tarballs and exercise their real CLI, security, HTTP, OpenAPI and Docker behavior. The legacy application directories have been removed after their assertions were transferred to generated acceptance and historical migration fixtures.
-
-Clone this repo to change Strata itself. For a product, use `create-strata` and its generated README/Dockerfile.
-
-```bash
+```sh
 bun install
 docker compose up -d postgres mysql redis --wait
+bunx playwright install chromium
 bun run validate:host
 ```
 
-The root CLI is a private framework fixture harness. Database operations require `STRATA_SCHEMA=fixture` and a development/test environment; generated apps use their own published `strata` CLI. Run `bun run verify:generated-runtime` through `scripts/with-host-env.sh` for isolated HTTP/OpenAPI acceptance. `bun run test:e2e` also qualifies the generated Docker image with an owned database/container. See [testing](docs/TESTING.md) and the [retirement evidence](docs/GENERATED-APP-ACCEPTANCE.md).
+The test suite exercises real PostgreSQL, MySQL and SQLite behavior and generated
+applications installed from candidate packages. Passing tests do not establish
+production capacity or compatibility with every external provider. PostgreSQL RLS
+is distinct from application-enforced tenant filtering on other engines.
 
-## Layout
-
-```
-src/core/               Framework runtime
-src/bootstrap/          Kernel, providers, cookie sessions
-packages/               Published npm packages
-templates/              App scaffolds
-docs/                   Guides
-tests/                  Framework tests
-```
-
-## Honest limits
-
-- RLS acceptance uses PostgreSQL; supported mechanisms also run against SQLite and MySQL. `tsMatch` (full-text search) throws on other dialects.
-- MySQL and SQLite SQL compilation exists. Query execution against those engines is not a CI guarantee.
-- An app picks one primary database. Do not run Postgres and MySQL together as two OLTP stores for the same product.
-- `AUTH_DEV_HEADERS=true` is for tests. Only that exact string enables header auth. Production must set it to `false`.
-- Production secret checks also run when `NODE_ENV=production` or `APP_ENV` is an unrecognized value. Do not derive JWT or session secrets from the app name.
-- The coverage gate is 100% of in-scope files, not all of `src/core`. See [docs/COVERAGE.md](docs/COVERAGE.md).
-- Published seed tokens such as `strata-admin-test-token` are blocked in production.
-
-## License
-
-MIT. See [CONTRIBUTING.md](CONTRIBUTING.md) if you are changing this repo.
+MIT licensed.

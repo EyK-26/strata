@@ -105,7 +105,7 @@ Recheck effective privileges on a fresh runtime login. Verify that runtime `CREA
 
 For rollback, restore only the specific grant or membership actually removed, under administrator control. Reinstalling an older package does not undo a revocation. Restoring runtime schema `CREATE` deliberately restores its ability to create objects and should not be necessary for the framework operations above.
 
-## Runtime table and sequence privileges (#364)
+## Runtime table and sequence privileges
 
 The corrected shared renderer reserves table maintenance for the migration/administrator identity. It revokes the runtime role's existing direct table and sequence grants, then grants table `SELECT, INSERT, UPDATE, DELETE` and sequence `USAGE, SELECT`. It likewise replaces the executing migration identity's per-schema default grants for future tables/sequences. Full provisioning, the grant-only helper and generated init/repeatable SQL share this policy. Schema `USAGE` and function `EXECUTE` remain unchanged.
 

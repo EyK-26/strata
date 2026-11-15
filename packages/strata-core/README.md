@@ -1,72 +1,35 @@
 # @getstrata/core
 
-Runtime library for [Strata](https://github.com/EyK-26/strata) apps: HTTP, auth, database, queue, mail, and security. Requires Bun >=1.4.4 (tested on 1.4.4).
+Database models, HTTP utilities, authentication, queues, mail, storage, and security for [Strata](https://github.com/EyK-26/strata/blob/main/README.md) applications. Requires Bun >=1.4.4; tested on Bun 1.4.4.
 
-Generate an app rather than wiring this by hand:
+Start an application with the generator:
 
 ```bash
 bunx create-strata my-app
 ```
 
-## Import subpaths, not the root
+To add the runtime library to an existing project:
 
-Apps, and anything they import, should use subpaths:
-
-```typescript
-import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
-import { createModel } from "@getstrata/core/database/model";
-import { defineTable } from "@getstrata/core/database/table";
-import { BaseRepository } from "@getstrata/core/database/baseRepository";
-import { FormRequest } from "@getstrata/core/http/formRequest";
-import { Policy } from "@getstrata/core/auth/policy";
-import { withErrorHandling } from "@getstrata/core/http/response";
-import { ValidationError } from "@getstrata/core/errors/http";
-import type { Migration } from "@getstrata/core/database/migrations/types";
+```bash
+bun add @getstrata/core
 ```
 
-Prefer focused subpaths for application imports and keep test seams on
-`@getstrata/core/testing`.
+Use focused public subpaths. Ordinary models extend `defineModel`; fields supply both runtime metadata and inferred attribute types:
 
-## Database
+```typescript
+import { defineModel, field } from "@getstrata/core/database/model";
 
-The application owns its connection and execution sessions. Configure its selected
-engine at startup, then use `database.model(definition)` or
-`database.repository(definition)` from the current execution. Transactions select
-models and repositories from their supplied transaction session. Global default
-pools, named-connection registries and `bindBunSql` are retired.
+export class Note extends defineModel({
+  table: "notes",
+  fields: { id: field.number(), body: field.string() },
+}) {
+  static $fillable = ["body"] as const;
+  static $timestamps = false;
+}
+```
 
-Use `createModel` and `defineTable` for ordinary models. Custom repository,
-connection and adapter APIs remain available for advanced integrations; see the
-[database guide](https://github.com/EyK-26/strata/blob/main/docs/DATABASE.md).
+Register the class with the application, then query through the current execution's `database.model(Note)`. Inside a transaction, use its supplied database session. Schema changes belong in migrations.
 
-`orderBy` takes `{ column, direction }` objects or column shorthand such as `{ published_at: "desc" }`. `{ ilike }` uses the value as-is, so pass `%term%` yourself.
+Other public APIs include `FormRequest` from `@getstrata/core/http/formRequest`, `Policy` from `@getstrata/core/auth/policy`, and response helpers from `@getstrata/core/http/response`. Testing controls live on `@getstrata/core/testing`.
 
-Full-text `tsMatch` is PostgreSQL only.
-
-`eta` and `mysql2` are optional peers. Core loads them with `import()` the first time you render a view or open a MySQL connection. SQLite and Postgres apps do not install `mysql2`. Generated apps add `eta` because the welcome page uses it. MySQL apps also add `mysql2`. The MySQL helpers are exported from `@getstrata/core/database/mysqlConnection`, `@getstrata/core/database`, and the root barrel; importing any of them does not install `mysql2`, and apps should prefer the subpath as with every other core module. The subpath re-exports the barrel, so both share one lazy `mysql2` load.
-
-## Views
-
-`.eta` files are HTML plus Eta tags (`<% %>`, `<%= %>`, `<%~ include() %>`). Pug-style class or id shorthand such as `section.section` throws at render time and names the offending template.
-
-## Admin and queue helpers
-
-- `AdminResourceRegistry`, `formatAdminValue`: read-only resource browsers
-- `createFailedJobService`, `FailedJobService.delete()`: failed job persistence and cleanup
-- `runQueueJob` with an application-owned job registry: dispatch retried jobs from admin UIs
-
-Generated apps do not include an admin dashboard, and the registry is optional.
-
-## Docs
-
-- [Getting started](https://github.com/EyK-26/strata/blob/main/docs/GETTING-STARTED.md)
-- [Building apps](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md)
-- [Auth choices](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md)
-- [Databases](https://github.com/EyK-26/strata/blob/main/docs/DATABASE.md)
-- [Production](https://github.com/EyK-26/strata/blob/main/docs/PRODUCTION.md)
-
-Contributing to the framework itself: [CONTRIBUTING.md](https://github.com/EyK-26/strata/blob/main/CONTRIBUTING.md).
-
-Test fixtures import loader, DNS and throttle controls from `@getstrata/core/testing`.
-These controls share the package's private runtime state and are absent from the root
-and every production subpath. Restore changed controls after each test.
+See the [project README](https://github.com/EyK-26/strata/blob/main/README.md) and the guides for [databases](https://github.com/EyK-26/strata/blob/main/docs/DATABASE.md), [authentication](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md), [tenancy](https://github.com/EyK-26/strata/blob/main/docs/TENANCY.md), [queues](https://github.com/EyK-26/strata/blob/main/docs/QUEUES.md), [storage](https://github.com/EyK-26/strata/blob/main/docs/STORAGE.md), and [media](https://github.com/EyK-26/strata/blob/main/docs/MEDIA.md).

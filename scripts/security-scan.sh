@@ -24,8 +24,6 @@ if rg -n \
   --glob '!src/bootstrap/secretsGuard.ts' \
   --glob '!src/db/seeders/**' \
   --glob '!docs/**' \
-  --glob '!DEPLOY.md' \
-  --glob '!RUNBOOK.md' \
   "${PATTERN}" \
   "${ROOT}" >/tmp/strata-secret-scan.txt 2>/dev/null; then
   echo "Default credential literals found outside approved paths:" >&2

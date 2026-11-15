@@ -5,7 +5,7 @@ coveragePath = ["src"]
 # Do not set coverageThreshold here. Per-file 100% source gates and the
 # exemption ratchet live in scripts/assert-core-coverage.ts; packed generated
 # runtime acceptance is an additional executable gate.
-# See docs/COVERAGE.md.
+# See AGENTS.md for coverage policy.
 coveragePathIgnorePatterns = [
   "tests/**",
   "packages/**",

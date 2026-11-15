@@ -1,13 +1,13 @@
 # Starter
 
-`bunx create-strata` scaffolds a runnable Strata app. The wizard always asks each layer: frontend, one database engine, auth, tenancy, cache, queue, mail, extras, then Docker vs local installs. Extra checkboxes depend on earlier answers (header auth does not offer MFA or SCIM). In a terminal, lists are ↑/↓ and Enter (or a number). Extras are toggled one by one with Space. If you see `Choose [1]:` instead, bunx did not get raw keyboard mode. Retry in a real terminal, or pass `--yes` with layer flags.
-
-Framework CI generates disposable applications from current templates, installs candidate packages, and exercises CLI, security, HTTP, API-only OpenAPI and Docker behavior. Product dogfood lives in the separate [strata-shop](https://github.com/EyK-26/strata-shop) repository. The legacy HiroApp directories have been retired; their supported preset IDs remain available as layer maps.
+`bunx create-strata my-app` creates an application with the selected layers. Use
+arrow keys and Enter in the wizard; Space toggles compatible extras. For automated
+or repeatable generation, pass `--yes` and explicit options.
 
 ## Quick start
 
-```bash
-bunx create-strata my-app
+```sh
+bunx create-strata my-app --frontend server-htmx --database sqlite --auth cookie --no-docker --yes
 cd my-app
 cp .env.example .env
 bun install
@@ -15,120 +15,73 @@ bun run db:migrate
 bun run dev
 ```
 
-New apps use TypeScript 7.0.2 for checking; Bun still runs and bundles the application. Core and bootstrap accept TypeScript 5.9, 6.x, and 7.x, with packed-package consumer checks for all three compiler majors. React scaffolds declare Bun-supported CSS imports and are checked and built in the generated-app gate.
+Bun runs the application; generated projects use TypeScript for checking. Use the
+app's scripts or `bunx strata <command>` from its directory. The CLI is local to
+the application, not a required global installation.
 
-`strata` installs into the app rather than globally, so use the `bun run` scripts above, or `bunx strata <command>` from inside the app directory.
-
-In CI, pass `--yes` and the layers you want. Defaults (no flags) are SQLite, JSON API, header auth:
-
-```bash
-bunx create-strata my-app --yes
-bunx create-strata html --frontend server-htmx --database postgres --auth cookie --cache redis --queue redis --docker --yes
-```
+With only `--yes`, defaults are JSON API, SQLite and development header auth. Select
+an appropriate real authentication mode for applications with user accounts.
 
 ## Layers
 
 | Flag | Values |
-|------|--------|
+| --- | --- |
 | `--frontend` | `api`, `server-htmx`, `spa-react`, `hybrid` |
-| `--database` | `sqlite`, `postgres`, `mysql` (one engine; not mixed) |
+| `--database` | `sqlite`, `postgres`, `mysql`; one primary database |
 | `--auth` | `headers`, `cookie`, `token`, `jwt`, `cookie-token`, `cookie-token-jwt` |
-| `--tenancy` | `none`, `column`, `rls` (`rls` is Postgres `SET LOCAL`; sqlite/mysql coerce `rls` to `column`) |
+| `--tenancy` | `none`, `column`, `rls`; RLS requires PostgreSQL, other engines use column mode |
 | `--cache` | `array`, `redis` |
 | `--queue` | `sync`, `redis` |
 | `--mail` | `log`, `smtp` |
-| `--spa-prefix` | default `/app` |
+| `--spa-prefix` | SPA mount path, default `/app` |
 
-Extras that apply to the stack (off until you toggle them, or pass flags): `--mfa`, `--email-verification`, `--scim`, `--metrics`, `--oauth-github`, `--oidc`, `--billing`, `--webhooks`. Header auth only offers metrics, billing, and webhooks. MFA and GitHub/OIDC cookie handshakes require a cookie auth stack. API/SPA cookie account flows are JSON; hybrid also keeps HTML account pages. SCIM and email verification need a users table. `--no-metrics` skips the metrics extra and does not write `GET /metrics`.
+Extras: `--mfa`, `--email-verification`, `--scim`, `--metrics`, `--oauth-github`,
+`--oidc`, `--billing`, `--webhooks`; use the corresponding `--no-*` flag to disable
+one. Compatibility depends on the selected auth/frontend layers. Header auth has
+no persisted account or password flow. MFA and browser OAuth handshakes need a
+cookie stack; SCIM and email verification need persisted users. Consult
+`bunx create-strata --help` and [integrations](INTEGRATIONS.md).
 
-You can add cache, SMTP, Redis, or another auth mode later by changing env and the matching bootstrap files. The generator only installs what you asked for. Generated apps always depend on `eta` (welcome HTML). `mysql2` is added only for `--database mysql`.
+Generated configuration and dependencies match the selection. Adding a different
+layer later may require application code and migrations as well as environment
+changes. Installing newer framework packages does not regenerate app-owned files.
 
-## Docker vs local tools
+## Docker or local services
 
-Postgres, MySQL, Redis, SMTP, and Adminer can run in Docker Compose. Adminer is a database UI and is only offered when Postgres or MySQL is in Compose (not SQLite, and not when the database is a local install). The wizard asks after layers. Both Docker and Mix modes offer the same optional Adminer confirmation when the selected database runs in Compose; declining keeps only the required services.
+| Flag | Behavior |
+| --- | --- |
+| `--docker` | Generate Compose for required services |
+| `--no-docker` | Use locally available services; no Compose file |
+| `--docker-services=postgres,redis` | Generate only the selected compatible services |
 
-| Flag | Effect |
-|------|--------|
-| `--docker` | Write Compose for required services only; add Adminer explicitly with `--docker-services` |
-| `--no-docker` | Do not write `docker-compose.yml`; point env at local installs |
-| `--docker-services=postgres,redis` | Compose only for that subset. Add `adminer` to include the UI |
+`--yes` does not imply Docker. Add `adminer` explicitly to `--docker-services` for
+a PostgreSQL/MySQL UI; the interactive wizard also offers it. Start the debug
+profile with `docker compose --profile debug up -d --wait`. Adminer binds to
+`127.0.0.1:8080`. The generated README contains the selected service names and
+local credentials. They are for development, not production.
 
-`--yes` does not write Compose unless you pass `--docker` or `--docker-services`. Compose never mixes two database engines. Postgres Compose binds `127.0.0.1` and creates `strata_app` (`NOSUPERUSER` `NOBYPASSRLS`). `.env.example` points `DATABASE_URL` at that role, including `--no-docker`. `db/ensure-postgres-app-role.sql` is repeatable on an existing volume. The `postgres` superuser is for CREATE ROLE / GRANT / migrate and Adminer.
+PostgreSQL applications use a restricted runtime role. Migrations/provisioning use
+separate administrative credentials. See [PostgreSQL provisioning](POSTGRES-PROVISIONING.md)
+and [production configuration](PRODUCTION.md).
 
-When Adminer is selected, the CLI next steps and generated README use `docker compose --profile debug up -d --wait --wait-timeout 180`. Plain `docker compose up -d` deliberately leaves this optional debug service stopped. Adminer binds only `127.0.0.1:8080`; its login server is the Compose service name (`mysql` or `postgres`), not `localhost`. The generated README includes the chosen system, development username/password and normalized application database name. These are local development credentials; the Postgres Adminer user is a superuser that bypasses RLS. Production application traffic must use the restricted app role.
-
-The required `generatedAdminer` E2E test runs both generated MySQL and Postgres Compose projects, proves default startup leaves Adminer stopped, enables the debug profile, and authenticates through the actual Adminer UI with the documented database credentials. It relies on the generated authenticated database healthchecks, overrides only host ports to avoid shared services, and removes its owned containers/networks/volumes. Docker Compose 2.24.4+ is required for the test's isolated `!override` port file. No local database or existing application is reset.
-
-## What you get that actually runs
-
-- `GET /health` after `strata migrate` (plain text `ok` when configured database/Redis checks succeed and `notes` is readable, including zero rows; 503 `degraded` when a dependency or schema check fails). The bootstrap probe is independent of API auth/tenancy admission; it never selects a tenant, bypasses RLS, or returns rows. Docker HEALTHCHECK uses `/health`. Migrations do not seed accounts.
-- `GET /ready` (from `@getstrata/bootstrap/health`): JSON database and Redis pings, 200 or 503. No schema check, so it can be 200 before the first migrate; `/health` is the gate.
-- Notes table and a `Note` model on every app. Seed and `/health` select `database.model(Note)` from their owned execution before querying. There is no notes CRUD route.
-- Cookie, token, and JWT apps also get a `User` model (`$hidden` for password and MFA secrets). Token layers add `ApiToken`. Seed creates users through `database.model(User)`. Auth directory, login/register, and SCIM read and write through that model. Auth code that needs secrets uses `user.get("password")` or `toObject()`, not `toArray()`. Login, register, and forgot-password use `validateObject` (`emailRule`, `required`, `minLength(8)` on register) so JSON returns `{ error, details }` and HTML uses field errors.
-- Cookie / cookie-* apps (HTML auth kit you can restyle): welcome `/`, `/login`, `/register`, `/forgot-password`, signed `/reset-password`. Edit `views/*.eta`, `views/layouts/app.eta`, and `public/assets/site.css`. Login forms start empty and public pages do not advertise demo credentials. Development accounts require the explicit `bun run db:seed:demo` command.
-- Token apps: `POST /api/v1/auth/login`, `/api/v1/auth/register`, `/api/v1/auth/forgot-password`
-- JWT apps: `POST /api/auth/token` plus the same JSON register/reset routes
-- Header auth: restyleable welcome page only (send `x-authenticated-user-id` in local/tests)
-- `--tenancy=column`: `tenant` table + `users.tenant_id` on any engine. `--tenancy=rls`: Postgres only (`SET LOCAL`). unsupported SQLite/MySQL RLS combinations reject before generation
-- Extras: MFA cookie challenge (`/login/mfa`, `/account/mfa` enroll POST uses `wrapWebPasswordConfirm`), email verification (`/email/verify`), SCIM `/scim/v2/Users` (the User model query still filters `tenant_id` on every lookup; unfiltered lists use `count` plus `offset`/`limit`; `:id` uses `parsePositiveIntParam`), metrics `GET /metrics` (only when that extra is on), optional `--oauth-github` (`GET /auth/github`), `--oidc` (`GET /auth/oidc`, PKCE in `oidc_pkce`), `--billing` (`POST /billing/webhooks/stripe` verifies only; plan sync stays in the app), `--webhooks` (`webhook.dispatch` + `notes.created` listener)
-- Generated models export explicit repository/model definitions. The application registers those definitions before startup; each execution selects them from its own `DatabaseSession`. There is no global model discovery or default repository cache.
-- Generated apps register an empty `PolicyGate`, boot **module** `providers` from discovered modules (after `ensureModulesLoaded`), register default queue jobs, discover `src/jobs/*.ts` via `await discoverJobs()`, wire cache-invalidation listeners on model writes (idempotent groups), and run `src/listeners/*.ts` default exports via `await discoverListeners()`.
-- `strata.config.ts` selects the application, server, schedule, modules and custom commands. Package-owned commands provide workers, failed-job operations, scaffolding, OpenAPI and scheduling; `src/cli/register.ts` contains application commands only.
-- `strata.layers.json` records generation provenance; it is not live application configuration. Detailed generator metadata lives in `.strata/generator.json`.
-
-## Migrations
-
-Migrations and resets do not seed by default. Use `bun run db:seed:demo` explicitly in development, or pass `--seed` to the CLI when an app provides a seed export. Generated demo seeds reject production and staging before accessing the database. Existing databases retain their current users; audit and disable or rotate known demo accounts before promotion. When upgrading, remove unconditional `seed()` calls from existing migration/fresh entries as well as upgrading the CLI, so seeding occurs exactly once when requested.
-
-User-auth starters also generate explicit `auth:provision-admin` and the separate `0004_initial_admin_provisioning` file migration. This production bootstrap command reads a private password from standard input, refuses existing accounts/admins, and commits a one-time claim with the new account. It does not seed, migrate, approve email or enroll MFA. See [initial-admin provisioning](INITIAL-ADMIN.md).
-
-Generated HTML apps enable views through their application configuration. Packaged
-composition supplies the view directory, request-scoped CSRF, flash, CSP nonce and
-`currentUser` data. Controllers select `CORE_VIEW_RENDERER_TOKEN` from their owned
-execution. Templates, navigation and presentation fields remain app-owned; custom
-view-provider composition is an advanced adapter option.
-
-The welcome route explicitly uses `views.renderHtmx`: an ordinary link returns the layout, a targeted HTMX request returns the page body, and boosted/history restoration requests retain the layout. Its refresh link targets `#page-content` and still works without JavaScript. Auth controllers explicitly select the `auth` view namespace, then use `views.render` with relative template names and always retain their full-page responses, including validation and throttling errors. Existing apps can migrate their rendering helper to this provider and token without changing their auth handshakes; see [view rendering and HTMX](BUILDING-APPS.md#views-and-errors).
-
-A new Redis queue app sets `QUEUE_REDIS_TRANSPORT=streams`. An unset variable still means lists, so an existing deployment does not switch until that variable is set after the maintenance conversion. See [queue recovery and Streams rollout](QUEUES.md).
-
-`queue:retry` dispatches through the bootstrapped app queue and retains the failed-job row until admission succeeds. Replay remains at least once; see [safe failed-job retry](BUILDING-APPS.md#retrying-failed-jobs-safely) for the direct API migration and duplicate-delivery boundary.
-
-Generated apps ship **file-based** migrations under `src/db/migrations/`, loaded by `@getstrata/core/database/migrations` from `src/db/migrate.ts` (seeds stay in that file). The first file is `0001_starter_schema` and uses `CREATE TABLE IF NOT EXISTS` so existing databases can adopt the runner. `0005_outbox.ts` creates the SQL outbox. `bun run outbox:work` boots the app and drains `SqlOutbox.work({ signal })` on shutdown. `src/outbox/registry.ts` starts empty; add listeners before publishing. An existing app adds `createOutboxMigration` under its next filename instead of copying this one. `0001_starter_schema` includes **`failed_job`** (required for Redis `queue:failed` / `queue:retry`). History lives in `framework_migrations`. `strata make:migration` writes the next file into that directory with `Schema.run(db, currentSqlDialect().driver, ...)` callbacks for up/down. Fill those callbacks with schema operations; retain explicit SQL for data changes or unsupported engine features. See [DATABASE.md](./DATABASE.md#schema-builder) for constraints and upgrade considerations. Postgres still migrates through the admin connection and grants the app role. Legacy inline `migrate.ts` apps: [BUILDING-APPS.md](./BUILDING-APPS.md#adopting-file-migrations-from-a-legacy-inline-migratets).
-
-The monorepo fixture keeps its own file-based history under the framework repo's `src/db/migrations/`. Do not mix two migration runners for the same schema without a plan.
-
-## Scaffold commands (`make:*`)
-
-### Finding application code
-
-New apps separate application HTTP handling from framework bootstrap:
+## Find application code
 
 ```text
 src/
-  models/                 # Named model classes; register.ts lists application models
-  http/
-    controllers/          # Selected auth, home and integration controllers
-    requests/             # Application form requests, created when needed
-  policies/               # Application resource policies, created when needed
-  routes/
-    api.ts                # API endpoints and their middleware
-    web.ts                # Browser endpoints and their middleware
-    index.ts              # Startup composition with optional domain modules
-  db/migrations/          # Explicit schema changes
-  config/                 # Application choices
-  jobs/                   # Queued work, when needed
-  listeners/              # Event/effect handlers, when needed
+  models/                 Model classes; register.ts lists app models
+  http/controllers/       Selected auth, home and integration actions
+  http/requests/          Form requests when needed
+  policies/               Resource policies when needed
+  routes/api.ts           API routes and middleware
+  routes/web.ts           Browser routes and middleware
+  routes/index.ts         Startup route composition
+  db/migrations/          Explicit schema changes
+  config/                 App configuration
 ```
 
-Start with the route file to find an endpoint, follow its named controller action,
-then inspect the model, request validation and policy used by that action. Read
-`bootstrap/` when configuring application services or lifecycle, not to add normal
-business endpoints. Only selected frontend/auth/integration controllers are emitted;
-empty feature directories do not need placeholder classes.
-
-For a new feature, generate a model and migration, then a controller and any request
-or policy classes the operation needs:
+Only selected features are emitted; optional folders need not contain placeholders.
+Start at a route, follow its controller, then the request, policy and model. Read
+bootstrap code when configuring dependencies or lifecycle, not for ordinary CRUD.
 
 ```sh
 bunx strata make:model Product
@@ -138,150 +91,51 @@ bunx strata make:request StoreProductRequest
 bunx strata make:policy ProductPolicy
 ```
 
-Declare model fields once, register the class in `src/models/register.ts`, implement
-the migration, and connect controller actions in the route file with the appropriate
-middleware. Select models through the action's owned database session. A repository
-or forwarding service is not a prerequisite for ordinary CRUD. Schema changes and
-route authorization are explicit choices; scaffolding does not guess either.
-
-For file-handling controllers, see [Uploads and images](MEDIA.md). The framework
-provides bounded upload streams, explicit storage and native Bun image transforms;
-scaffolding does not create an unauthenticated upload endpoint automatically.
-
-Run `bunx strata help` in an app to discover its registered commands. Worker descriptions distinguish Redis queued jobs (`queue:work`) from SQL durable listener deliveries (`outbox:work`). `dev` and `start` start HTTP only. Run workers in separate terminals when the app uses those mechanisms; synchronous queues and apps without durable events do not need background workers. Use the same application configuration across HTTP and workers, including the database, Redis URL and `APP_KEY_PREFIX`. Explicitly configured durable cache invalidation needs its outbox worker too.
-
-Both worker helpers announce polling after application boot and report when polling stops. Idle polling is normal. The startup message is not a Redis/SQL health probe or proof of successful delivery; boot/runtime/cleanup errors still reject the command. No credentials, payloads or connection URLs are printed by these messages, and there is no repeating idle log. Stop HTTP and workers before resetting a development database. Production keeps independently supervised workers and the existing stop/drain/flush/close lifecycle.
-
-`bunx strata` provides lifecycle, worker, failed-job, scaffolding, OpenAPI and
-scheduler commands through the installed package. Configure the generated
-application and schedule entrypoints in `strata.config.ts`; keep product commands
-in `src/cli/register.ts`. Workers boot this application's owned services.
-
-`make:*` resolves paths from the application root; `modulesDirectory` is shared with application discovery and OpenAPI (`src/modules` by default). Other defaults include `src/db/migrations`, `src/jobs` and `src/listeners`. `make:job` emits `static jobName` so `queue.dispatch(new FooJob(), payload)` works after `await discoverJobs()` on boot. `make:module` emits an optional domain folder containing a class model, named controllers, request validation and policies. Register its model before startup; ordinary models need no repository declaration. `openapi:*` boots `createApp()` routes. `schedule:run` boots the app, then loads `src/bootstrap/schedule.ts`.
-
-`make:model <Name|Group/Name>` emits a class in `src/models` with one typed field declaration. Add the class to the application model registry; migration generation stays separate. Use `--table=name`, `--primary-key=id` and `--key-type=number|string`. Domain columns and writable fields remain explicit. See [declarative model binding](DATABASE.md#declarative-model-binding).
-
-`make:controller NoteController` writes `src/http/controllers/NoteController.ts`; register its actions in `src/routes/api.ts` or `web.ts`. `make:request StoreNoteRequest` and `make:policy NotePolicy` write to `src/http/requests` and `src/policies`. These commands never insert an unauthenticated route or choose authorization policy on your behalf.
-
-The installed CLI owns scaffold commands. Keep application-specific commands in
-`src/cli/register.ts`; a copied older registry can adopt these built-ins when
-upgrading. No generator overwrites existing files or silently adds schema changes.
-
-`make:view reports/summary` creates an escaped-output Eta HTML template at `views/reports/summary.eta` when the app has `views/`; otherwise it uses `resources/views/`, matching the existing module/view conventions. Nested names, an optional `.eta` suffix, partials such as `partials/_card`, and numeric error pages such as `errors/404` are supported. Render it through the app's existing `ViewRenderer` using `reports/summary`. The command does not create routes/controllers, enable a view provider, change its configured directory or layout, or install Eta in API-only apps.
-
-View names normalize to kebab case (preserving a partial's leading underscore). Unsafe names, symlinked output paths and existing templates are refused; there is no force option. A custom nonconventional provider directory remains an explicit application choice rather than something the generator reads from private configuration.
-
-
-`APP_ENV=production` (or `NODE_ENV=production`) calls `assertProductionSecrets()` on boot. Generated `.env.example` sets `FEATURE_PUBLIC_READS=false`. `wrapWebPublicRead` then requires a login. Public catalogs may opt in per route with `{ allowAnonymous: true }` or set the default policy flag to `true`. Generated apps approve only their configured `APP_URL` hostname for anonymous tenant selection; multi-tenant applications replace that binding. Production rejects the separate `TENANT_DEV_HEADERS=true` flag. See [BUILDING-APPS.md](./BUILDING-APPS.md).
-
-## In this repo
-
-Generate new applications with `bunx create-strata my-app --yes`. Use the installed `bun run` scripts or `bunx strata <command>` inside the generated app for its published command set.
-
-The `exampleAppLayers` presets remain supported, including the legacy `hiroapp`, `hiroapp-hobby` and `hiroapp-team` IDs. They select layers, not repository directories. Native acceptance generates temporary source and installed-package fixtures; `generate:example-apps` is retired.
-
-SQL applications that need recoverable model cache effects should adopt the durable registrar described in [BUILDING-APPS](./BUILDING-APPS.md#recoverable-model-cache-invalidation). The generated 2.x listener is retained for compatibility; package installation alone does not provision an outbox or convert existing cache effects. Configure one complete application outbox registry, migrate separately, activate before admission, and wrap row writes in framework transactions. Use shared Redis cache across separate worker processes.
-
-
-Generated `.env.example` includes commented CORS origin and additional-header examples. Keep them unset for same-origin applications. For an approved cross-origin browser API, configure explicit `CORS_ALLOWED_ORIGINS` and optionally `CORS_ADDITIONAL_ALLOWED_HEADERS=Idempotency-Key,X-Correlation-Id`. The official HTTP kernel applies them; additional names are validated and extend existing defaults. OpenAPI metadata does not implicitly widen CORS policy. See [BUILDING-APPS](./BUILDING-APPS.md#explicit-application-cors-headers).
-
-## Shared model and bootstrap contracts
-
-Generated bootstrap code instantiates the public `ConfigStore` from `@getstrata/bootstrap/contracts`. There is no app-owned store implementation or cast to its type. It uses the framework's existing presence-based contract: missing keys throw `Config key "..." is not defined.`, while a deliberately registered `undefined` is present. Existing applications adopting this shape should check any reliance on the old copied store's error text or rejection of registered `undefined`.
-
-Generated models are named classes extending `defineModel({ table, fields })`. Field types and runtime columns come from one declaration; writable/hidden attributes remain explicit. Register model classes before startup and select them with `database.model(Note)` inside the owned execution. The application derives their default repositories internally.
-
-Custom repository methods and native private state belong to definition constructors; aliases belong to the owning registry. Global `discoverModels`, `bootModels` and mutable class-to-repository registration are removed; registering a class never assigns it a global session. See [declarative model binding](DATABASE.md#declarative-model-binding).
-
-### Account-state adoption
-
-User-backed scaffolds add `0006_account_state.ts`, persisted status/epoch fields and typed live directory projection. Cookie apps also persist the session epoch. Password/SSO and pending-MFA issuance use the official transaction and account-lock protocol; SCIM transitions revoke old credentials atomically. Existing apps must add an unused file migration and explicitly merge the generated auth shapes while old auth writers are stopped. Do not overwrite `0001_starter_schema` or assume a dependency upgrade rewrites application code. See [AUTH.md](AUTH.md#persisted-account-state-and-explicit-adoption) for upgrade, downgrade and custom-auth responsibilities.
-
-### Awaited provider startup migration
-
-Generated applications now use the framework `createAppContext([...starterProviders, ...moduleProviders])` lifecycle. Await every registration before booting any provider. Existing `bootstrapApp()` / `createApp()` callers already await; direct `createAppContext()`, `createAppDependencies()` and `runProviderPhase()` callers must adopt the new promise return types. `appContext` no longer boots lazily through getters.
-
-The application lifecycle owns admission, drain, flush and resource closure.
-Stop it through `application.stop()` and inspect the result; startup failure uses
-the same owner for cleanup. Custom resources join that lifecycle when acquired.
-See [application startup](BUILDING-APPS.md#application-startup-and-modules).
-
-### Discovery migration
-
-Current queue providers await `discoverJobs()` before constructing a queue. Listener providers iterate `await discoverListeners()` and await each registrar. Custom startup and worker entrypoints must adopt the same order. These APIs now return promises, and invalid infrastructure files require correction or explicit exclusion. See [DISCOVERY.md](DISCOVERY.md).
-
-### Runtime database credentials and explicit provisioning
-
-Production/staging SQL bootstrap resolves `APP_DATABASE_URL` before `DATABASE_URL`, pings the existing database and inspects the live RLS role. It does not CREATE DATABASE, CREATE/ALTER ROLE, GRANT or require administrative credentials. Application configuration snapshots selected defaults without mutating `process.env`; production does not receive development database/admin URLs. Missing runtime configuration and unavailable infrastructure reject startup before admission; no automatic migration or demo seed follows.
-
-`ensureAppDatabase({ provision: false })` resolves runtime configuration without provisioning. Its default still provisions locally, while production/staging defaults to resolution only. Generated `bootstrapApp({ migrate: false })` also disables automatic local database provisioning, so an explicitly pre-migrated app can boot with restricted runtime credentials. The default local bootstrap continues to provision and migrate; explicit migration commands still own their provisioning step. Generated migrate/fresh paths select `{ provision: true }` explicitly; status/rollback select resolution only and do not change role credentials. Postgres production provisioning requires `MIGRATION_DATABASE_URL` and an explicit non-development `STRATA_APP_PASSWORD`; this command can alter the generated role's password, so supply the administratively chosen credential and coordinate rotation. Do not give these administrative values to HTTP or background worker containers. MySQL explicit provisioning and migration execution use `MIGRATION_DATABASE_URL` when supplied, leaving the runtime URL and its privileges unchanged. Without that optional administrative URL, explicit schema operations use the configured runtime account and require its DDL privileges. Administrative migration scopes close on success or failure and restore the runtime connection; a pre-created database can boot in production with restricted runtime credentials.
-
-For pre-created PostgreSQL databases/roles without catalog administration, retain an explicit schema-only migration command using the [public migration runner](POSTGRES-PROVISIONING.md#externally-provisioned-databases-and-roles). The generated migrate/fresh commands still provision; a restricted `MIGRATION_DATABASE_URL` alone does not disable that step. The corrected runtime schema grant and its existing-app adoption requirements are documented [here](POSTGRES-PROVISIONING.md#runtime-schema-create).
-
-Existing apps must adopt the generated application definition, `src/config/app.ts`, database ownership and explicit database-command calls after publication. Package installation alone does not replace these generated files. PostgreSQL administrative helpers no longer try inferred development passwords in production/staging: configure `migrationUrl`/`MIGRATION_DATABASE_URL` or explicitly pass the administrative `superuserPassword`. Local fallback compatibility remains.
-
-### Runtime metrics ownership
-
-Apps generated with the metrics extra accept explicit `bootstrapApp({ runtimeMetrics: { ... } })` options for queue, outbox, failed-job, existing tracing and selected-transaction acquisition observations. The default remains HTTP-only. The generated provider drains owned SQL collectors before pool closure, including startup cleanup and worker context disposal. Adopt the current generated `createApp.ts`; enabling collectors never provisions schemas, changes queue transport or enables durable delivery. See [RUNTIME-METRICS.md](RUNTIME-METRICS.md) for authentication, dialect requirements, shared versus process-local aggregation and remaining operational qualification.
-
-Generated `src/db/fresh.ts` uses the explicit `{ destructive: true }` development-reset contract and rejects production/staging before provisioning. Protected application migrations may use the optional typed `guardMigrationRollback` helper to keep app-owned history predicates/refusal messages without repeating reset checks, or inspect the optional `down` context's `operation === "fresh"` to distinguish this intentional reset from rollback; ordinary rollback remains guarded. Reset does not clear Redis/storage and does not automatically seed. See [reset contracts](BUILDING-APPS.md#explicit-development-resets-and-protected-rollback-history).
-
-SCIM's generated Users adapter intentionally supports a limited profile contract. Unsupported PATCH operations return explicit SCIM errors; supported `active` changes use the account suspension/reactivation protocol. Mutations are transactional through immediate observers. See [the supported mutation contract](INTEGRATIONS.md#minimal-generated-scim-mutation-contract) before connecting a provisioning provider.
-
-
-### One-shot command ownership
-
-Package-owned OpenAPI and failed-job commands retain their booted application and
-stop its lifecycle owner after success or failure. That owner closes its database;
-commands do not add a second disposal or SQL-close chain. Advanced adapters can
-supply an explicit cleanup callback for infrastructure they own. Command and
-cleanup failures are both reported. Do not use `process.exit` to conceal leaked
-resources.
-
-`createAppServer(options)` accepts the generated application's bootstrap options,
-including native Bun listener controls. `HOST` selects the CLI listen address;
-`APP_URL` selects public URLs and trusted tenancy authority. Tests should select a
-literal loopback address and use the returned server's actual URL. See
-[native listener configuration](NATIVE-HTTP.md#generated-listener-options-and-owned-test-addresses).
-
-### Explicit cache privacy for authentication responses
-
-Generated auth routes use `privateJsonResponse` from `@getstrata/core/http/response` for identity, credentials, CSRF and handled auth JSON responses. It preserves payloads, status and supplied headers/cookies, and sets `Cache-Control: private, no-store` even if a conflicting cache header was supplied. Ordinary `jsonResponse` retains its existing defaults.
-
-Rendered auth pages explicitly select `renderer.namespace("auth", { headers: { "Cache-Control": "private, no-store" } })`. Namespace defaults are copied when the namespace is created; rendering remains explicit. Per-render headers override defaults with the same name, including replacing the complete Set-Cookie list. Other defaults survive, multiple cookies remain separate, and `renderHtmx` still adds its representation Vary fields. Applications own their public/private page policy; no controller-name inference or global successful-response policy is introduced. Explicit redirects and arbitrary native responses retain their existing contracts. Existing apps must adopt this generated shape after upgrading; installing packages alone does not rewrite auth modules.
-
-## Starter qualification boundaries
-
-The [2.2.45 starter sanity audit](STARTER-SANITY-AUDIT.md) records structural and real fresh-install/client checks, reproduced defects and missing acceptance boundaries. A passing backend journey or generated-app typecheck is not proof that every selected frontend, auth stack and supporting-service combination works. Preserve existing assertions and close the reported runtime gaps with independent generated-app regressions.
-
-Generated Compose services include real readiness probes: TCP SQL queries for MySQL/Postgres, authenticated Redis PING, Mailpit readiness and Adminer's HTTP endpoint. Generated startup commands use `--wait --wait-timeout 180`; wait for success before running migrations. Failure is explicit: inspect `docker compose ps` and `docker compose logs`; a slow first initialization can use a larger wait timeout. Adminer depends on a healthy database and remains in the optional debug profile. No application migrations or runtime SQL retries are added to Compose readiness.
-
-
-## React account transport
-
-The generated React client matches the chosen authentication stack. Cookie modes (including cookie/token combinations) use the HttpOnly browser session and `/api/v1/auth/me`. Pure token mode retains the login response token in memory and authenticates subsequent API requests with Bearer. Pure JWT mode uses `/api/auth/token` and `/api/user`; its profile contains ID and role, so the UI does not invent name/email fields. Bearer credentials never enter localStorage or sessionStorage; reload requires signing in again. Signing out discards the local bearer credential; account revocation/expiry remains enforced by the server, independently of the browser.
-
-Header auth generates a clearly labelled development identity screen instead of a password form. It selects local user-ID/role request headers, does not pretend to create an account, and never calls absent account or CSRF endpoints. The backend must permit development headers in a local environment. Production/staging guards are unchanged.
-
-Account writes retain the official CSRF flow. MFA-enabled cookie apps accept authenticator/recovery codes in the login form; a rejected or expired credential clears the local identity on a 401. The native dev proxy preserves the browser-facing Host and Origin together, keeping same-origin cookie checks effective; it does not rewrite Origin or relax CSRF/CORS.
-
-## SPA namespace and native Bun frontend commands
-
-For React and hybrid apps, `--spa-prefix=/team/portal` selects the backend mount, router basename, production asset paths and native Bun dev/preview routes together. `SPA_PREFIX` is public URL configuration. Generated frontend scripts pass only `BUN_PUBLIC_SPA_PREFIX` to Bun's HTML bundler; server secrets stay out of browser bundles. Root app scripts read the app environment. Direct frontend commands fall back to the generated prefix.
-
-Use `bun run frontend:install`, then `bun run frontend:build` to serve the built SPA from the backend. `bun run frontend:dev` retains Bun's native HMR; `cd frontend && bun run preview` builds and serves a preview with the same API proxy. Keep the backend running for `/api/*`. Nested history URLs serve the document within the selected namespace, while API misses remain API misses.
-
-Changing `SPA_PREFIX` requires rebuilding the frontend. Docker builds accept `--build-arg SPA_PREFIX=/team/portal`; set the same runtime `SPA_PREFIX`. API, static assets and platform probe paths are reserved. Invalid namespaces fail before generation can replace a target directory.
-
-The React welcome page's notes-module example is generated for the selected schema. Tenant-enabled examples explicitly constrain `tenant_id` with `currentTenantId()` through the typed ORM; no-tenancy examples omit that column. Lists are bounded to 100 rows. Column-mode context does not silently add SQL predicates: application resources must apply their authorization and tenant filters. Browser acceptance compiles and executes the displayed code with a second tenant's data to verify that the example keeps those rows isolated.
-
-
-## Generated module routes and views
-
-`strata make:module target` keeps its API collection at `/targets` and detail at `/targets/:id`. With `--with-web`, the API uses the public `apiPrefix()` value instead: `/api/v1/targets` by default, or the configured `API_PREFIX`. The companion HTML collection remains `/targets`. This keeps the web route from replacing the API method map when the starter combines routes. OpenAPI describes only the API routes.
-
-The web controller resolves `CORE_VIEW_RENDERER_TOKEN`, selects the explicit `targets` namespace, and calls `renderHtmx("index.eta", { layout: { title: "Targets" }, records, meta }, { request })`. A normal request renders the layout; an ordinary HTMX request renders the fragment, while boosted navigation and history restoration retain the full page. The app still owns its view data, schema and authorization grants. No controller-name inference or implicit response conversion is involved.
-
-Generated services use `findByIdOrThrow`, `updateByIdOrThrow` and `deleteById` with explicit HTTP not-found mapping. Create the module table with an app migration before accessing it. A generated module does not grant write abilities to accounts or tokens automatically; configure application permissions deliberately.
-
-Existing generated applications must adopt these routes, service calls and controller shapes in their source. Installing a newer CLI does not rewrite an existing module. The auth-provider registration described in [AUTH.md](AUTH.md) is also required for applications created before the all-auth ability-checker correction.
+Declare model fields once, register the class, implement its migration and connect
+controller actions with explicit validation and authorization. Ordinary CRUD needs
+no repository declaration or forwarding service. Larger features can use
+`make:module` and optional `--with-web` scaffolding. See
+[application workflow](BUILDING-APPS.md), [database](DATABASE.md), and
+[uploads/images](MEDIA.md).
+
+## Accounts, migrations and workers
+
+- Every app has a Note model/schema; scaffolding does not grant arbitrary CRUD access.
+- User-auth layers add the relevant models and account routes. API/SPA account flows
+  use JSON; HTMX/hybrid cookie modes also provide editable HTML views and CSS.
+- Login forms are empty by default. `bun run db:seed:demo` is explicit and permitted
+  only in development/test. Migrations and resets do not implicitly seed accounts.
+- Use `auth:provision-admin` for the generated one-time administrator setup instead
+  of production demo seeding. See [initial admin](INITIAL-ADMIN.md).
+- File migrations live in `src/db/migrations/`; migration history is separate from
+  application data. Do not modify already applied migrations.
+- Run Redis jobs with `queue:work` and SQL durable listeners with `outbox:work` in
+  separate processes using the same application configuration. HTTP startup does not
+  start these workers. See [queues](QUEUES.md) and [scheduling](SCHEDULER.md).
+- `/health` checks dependency and schema readiness; `/ready` checks dependencies.
+  Neither endpoint returns application data. Run migrations before expecting health.
+
+Keep authentication, resource permissions and tenant filters explicit. Development
+header auth is not a production login method. See [auth](AUTH.md) and
+[tenancy](TENANCY.md).
+
+## React and hybrid applications
+
+`SPA_PREFIX` controls the backend mount, router basename and built asset paths.
+Changing it requires rebuilding the frontend; Docker build and runtime values must
+agree. Only public configuration reaches the browser bundle.
+
+```sh
+bun run frontend:install
+bun run frontend:build
+bun run frontend:dev
+```
+
+Use the generated README for backend/frontend startup and preview commands. Bun's
+native frontend development server supplies HMR and proxies API calls to the backend.
+The SPA lives under its configured prefix; API misses remain API misses.
+
+Cookie modes use HttpOnly sessions. Pure token/JWT modes keep bearer credentials in
+memory, not localStorage/sessionStorage, and require sign-in after a reload. Account
+writes keep the CSRF handshake; header-auth demos expose development identity
+controls rather than pretending to offer password registration.

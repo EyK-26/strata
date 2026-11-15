@@ -24,10 +24,6 @@ The Postgres RLS acceptance profile sets `TENANCY_DRIVER=rls`. The generated sch
 
 The retained example layer presets `hiroapp-hobby` and `hiroapp-team` set `TENANCY_DRIVER=none`. A SQLite or MySQL app that wants tenant rows should pass `--tenancy=column`.
 
-## Fixture schema (framework tests)
-
-Core tests still isolate a leftover fixture schema (users, audit, webhooks, and similar) with `app_bypass_rls()` or `tenant_id = app_current_tenant_id()`. That fixture is not a second product. Do not copy those fixture tables into a generated app.
-
 ## Auth lookups before tenant GUC
 
 Auth middleware runs before tenant middleware. Lookups that must succeed before `app.tenant_id` is set either bypass RLS or stay off RLS.

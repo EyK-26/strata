@@ -1,6 +1,6 @@
 # Initial-admin provisioning
 
-User-auth starters (cookie, token, JWT and their combinations) generate `auth:provision-admin`. Header-auth apps have no persisted user identity and do not get this command. This contract was merged after 2.2.0: use a published release containing the CLI helper and generated output. Existing applications must deliberately adopt the command, registration and migration; upgrading packages alone changes none of those application files.
+User-auth starters (cookie, token, JWT and their combinations) generate `auth:provision-admin`. Header-auth apps have no persisted user identity and do not get this command. Existing applications must deliberately adopt the command, registration and migration; upgrading packages alone changes none of those application files.
 
 ## Operator procedure
 
