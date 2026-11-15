@@ -1,4 +1,6 @@
 import { BadRequestError, PayloadTooLargeError } from "@getstrata/core/errors/http";
+import { parseMultipartUploadStream } from "./streamingUpload";
+import { assertUploadContentType, uploadTextDecoder, validateUploadText } from "./uploadContent";
 import { DEFAULT_UPLOAD_POLICY, isAllowedMimeType, type UploadPolicy } from "./uploads";
 
 function normalizeMimeType(mimeType: string): string {
@@ -26,6 +28,8 @@ async function validateUploadFile(
 ): Promise<ParsedUpload> {
   if (!Number.isSafeInteger(policy.maxBytes) || policy.maxBytes <= 0)
     throw new RangeError("Upload limit must be a positive safe integer.");
+  if (typeof policy.allowUnknownMime !== "boolean")
+    throw new TypeError("Upload allowUnknownMime must be a boolean.");
   if (!(file instanceof File)) {
     throw new BadRequestError(`Missing upload field "${fieldName}".`);
   }
@@ -46,11 +50,17 @@ async function validateUploadFile(
     throw new BadRequestError(`File type "${mimeType}" is not allowed.`);
   }
 
+  const contents = new Uint8Array(await file.arrayBuffer());
+  assertUploadContentType(contents.subarray(0, 12), mimeType);
+  const decoder = uploadTextDecoder(mimeType);
+  validateUploadText(decoder, contents);
+  validateUploadText(decoder);
+
   return {
     fileName: sanitizeUploadFileName(file.name),
     mimeType,
     size: file.size,
-    contents: new Uint8Array(await file.arrayBuffer()),
+    contents,
   };
 }
 
@@ -59,21 +69,11 @@ async function parseMultipartUpload(
   fieldName = "file",
   policy: UploadPolicy = DEFAULT_UPLOAD_POLICY,
 ): Promise<ParsedUpload> {
-  const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
-
-  if (!contentType.includes("multipart/form-data")) {
-    throw new BadRequestError("Expected multipart form data.");
-  }
-
-  const formData = await request.formData();
-  const value = formData.get(fieldName);
-
-  if (!(value instanceof File)) {
-    throw new BadRequestError(`Missing upload field "${fieldName}".`);
-  }
-
-  return validateUploadFile(value, fieldName, policy);
+  const file = await parseMultipartUploadStream(request, fieldName, policy);
+  const contents = await file.bytes();
+  return { fileName: file.fileName, mimeType: file.mimeType, size: contents.byteLength, contents };
 }
 
+export { parseMultipartUploadStream, UploadedFile } from "./streamingUpload";
 export type { ParsedUpload };
 export { parseMultipartUpload, sanitizeUploadFileName, validateUploadFile };

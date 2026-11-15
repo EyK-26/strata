@@ -131,6 +131,14 @@ export {
   UnprocessableEntityError,
   ValidationError,
 } from "@getstrata/core/errors/http";
+export {
+  type ParsedUpload,
+  parseMultipartUpload,
+  parseMultipartUploadStream,
+  sanitizeUploadFileName,
+  UploadedFile,
+  validateUploadFile,
+} from "@getstrata/core/http/parseMultipartUpload";
 export type {
   RouteModelAuthorization,
   RouteModelBindingPorts,
@@ -539,12 +547,6 @@ export type {
 export { createMemoryThrottleMiddleware } from "../core/http/memoryThrottleMiddleware.ts";
 export { createMetricsMiddleware } from "../core/http/metricsMiddleware.ts";
 export type { Middleware, RouteHandler } from "../core/http/middleware.ts";
-export {
-  type ParsedUpload,
-  parseMultipartUpload,
-  sanitizeUploadFileName,
-  validateUploadFile,
-} from "../core/http/parseMultipartUpload.ts";
 export type { RequestMeta } from "../core/http/requestMetaContext.ts";
 export {
   currentRequestMeta,

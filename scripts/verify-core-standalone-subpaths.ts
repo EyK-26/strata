@@ -70,6 +70,12 @@ for (const subpath of canonical) {
     // normalizes node:crypto to crypto in the emitted standalone bundle.
     if (subpath === "queue/queueHandoff" && ["crypto", "node:crypto"].includes(dependency.path))
       continue;
+    // Multipart framing uses Bun's native Buffer implementation, not another framework owner.
+    if (
+      subpath === "http/parseMultipartUpload" &&
+      ["buffer", "node:buffer"].includes(dependency.path)
+    )
+      continue;
     assert(
       dependency.path.startsWith(prefix),
       `${subpath} depends on a root shim or noncanonical module: ${dependency.path}`,

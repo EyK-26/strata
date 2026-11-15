@@ -144,6 +144,10 @@ middleware. Select models through the action's owned database session. A reposit
 or forwarding service is not a prerequisite for ordinary CRUD. Schema changes and
 route authorization are explicit choices; scaffolding does not guess either.
 
+For file-handling controllers, see [Uploads and images](MEDIA.md). The framework
+provides bounded upload streams, explicit storage and native Bun image transforms;
+scaffolding does not create an unauthenticated upload endpoint automatically.
+
 Run `bunx strata help` in an app to discover its registered commands. Worker descriptions distinguish Redis queued jobs (`queue:work`) from SQL durable listener deliveries (`outbox:work`). `dev` and `start` start HTTP only. Run workers in separate terminals when the app uses those mechanisms; synchronous queues and apps without durable events do not need background workers. Use the same application configuration across HTTP and workers, including the database, Redis URL and `APP_KEY_PREFIX`. Explicitly configured durable cache invalidation needs its outbox worker too.
 
 Both worker helpers announce polling after application boot and report when polling stops. Idle polling is normal. The startup message is not a Redis/SQL health probe or proof of successful delivery; boot/runtime/cleanup errors still reject the command. No credentials, payloads or connection URLs are printed by these messages, and there is no repeating idle log. Stop HTTP and workers before resetting a development database. Production keeps independently supervised workers and the existing stop/drain/flush/close lifecycle.
