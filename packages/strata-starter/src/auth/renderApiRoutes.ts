@@ -176,7 +176,7 @@ ${renderMfaChallengeRoutes(actions)}
           POST: kernel.wrap("api", ${cookie ? "kernel.wrapIdentity(" : ""}${renderAction(
             actions,
             "logoutBearer",
-            `async (request, _ports) => {
+            `async (${cookie ? "request" : "_request"}, _ports) => {
             const payload = privateJsonResponse({ ok: true });
             ${
               cookie

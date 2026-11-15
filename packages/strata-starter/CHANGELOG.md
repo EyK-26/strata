@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## Unreleased
+
+- Generate only the auth imports and controller service aliases required by the selected features. Remove unused helper declarations and mark intentionally unused route parameters. Validate unused imports, locals and parameters across generated backend/frontend files and CLI scaffolds, including PostgreSQL cookie-token apps with MFA and email verification.
+
 ## 3.1.2
 
 - Align both generator package descriptions with Laravel-inspired Bun and TypeScript development. Keep simple generator commands in quick starts and document optional cache troubleshooting. Clarify that `bun install` installs the generated application CLI dependency.

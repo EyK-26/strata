@@ -701,7 +701,7 @@ describe("create-strata generate", () => {
       seedFn.indexOf('policy.run(database, {kind:"bypass"}, writeSeed)'),
     );
     const authModule = await generatedAuthSource(app);
-    expect(authModule).toContain("completePasswordLogin");
+    expect(authModule).toContain("authenticatePasswordAccount(user, password, mfaCode");
     expect(authModule).toMatch(/"\/api\/v1\/auth\/login":[\s\S]*?wrapLogin\(/);
     expect(authModule).toMatch(/"\/api\/auth\/token":[\s\S]*?wrapLogin\(/);
     expect(authModule).toContain("withAuthIdentifier");
@@ -862,7 +862,7 @@ describe("create-strata generate", () => {
     expect(auth).toContain("ports.database.model(AuthOneTimeToken).create({");
     expect(auth).toContain("JSON.stringify([])");
     expect(auth).toContain("parseJsonBody(request, parseRegisterCredentials)");
-    expect(auth).toContain("validateObject");
+    expect(auth).toContain("parseJsonBody(request, parseLoginCredentials)");
     expect(auth).toContain("parseLoginCredentials");
     expect(auth).toContain("parseRegisterCredentials");
     expect(auth).toContain("kernel.wrapWebPasswordConfirm(");
@@ -937,7 +937,7 @@ describe("create-strata generate", () => {
     expect(auth).toContain("/api/v1/auth/register");
     expect(auth).toContain("/api/v1/auth/forgot-password");
     expect(auth).toContain("parseJsonBody(request, parseRegisterCredentials)");
-    expect(auth).toContain("validateObject");
+    expect(auth).toContain("parseJsonBody(request, parseLoginCredentials)");
     expect(auth).toMatch(/"\/api\/v1\/auth\/reset-password":[\s\S]*?wrapSigned\(/);
     expect(existsSync(join(app, "views/auth/login.eta"))).toBe(false);
   });

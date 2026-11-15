@@ -1,5 +1,6 @@
 import { renderApiAuthRoutes } from "./auth/renderApiRoutes.ts";
 import { renderBrowserAuthRoutes } from "./auth/renderBrowserRoutes.ts";
+import { renderAuthHttpImports } from "./auth/renderHttpImports.ts";
 import { renderAuthImports } from "./auth/renderImports.ts";
 import { createAuthRenderingContext } from "./auth/renderingContext.ts";
 import { renderAuthHelpers, renderMfaEnrollment } from "./auth/renderWorkflows.ts";
@@ -68,7 +69,7 @@ export { renderAuthModule, renderPendingMfaTs, renderSiteModule };
 export function renderAuthHttp(plan: StarterFeaturePlan): RenderedHttpFeature | null {
   if (!plan.decisions.users) return null;
   const context = createAuthRenderingContext(plan);
-  const imports = renderAuthImports(context).join("\n");
+  const imports = renderAuthHttpImports(context, "account");
   const helperNames = [
     "runWithLockedAccount",
     "authTimestamp",
@@ -89,24 +90,6 @@ ${renderAuthHelpers(context)}
 ${renderMfaEnrollment(context.mfa)}
 export { ${helperNames.join(", ")} };
 `;
-  const controllerDependencies = renderAuthImports(context)
-    .filter(
-      (line) =>
-        !line.includes("AppModule") &&
-        !line.includes("CORE_VIEW_RENDERER_TOKEN") &&
-        !line.includes("wrapWebLogin"),
-    )
-    .map((line) =>
-      line.includes("STARTER_AUTH_SERVICES")
-        ? 'import type { StarterAuthServices } from "../../bootstrap/auth.ts";'
-        : line,
-    )
-    .join("\n");
-  const controllerImports = `${controllerDependencies}
-${context.cookie ? 'import type { NamespacedViewRenderer } from "@getstrata/core/view";\n' : ""}
-import type { BusinessRouteHandler } from "@getstrata/bootstrap/persistenceContracts";
-import { ${helperNames.join(", ")} } from "../auth/account.ts";
-`;
   const apiActions = new ControllerActions("AuthController");
   const api = renderApiAuthRoutes(context, apiActions);
   const apiScope = ["authServices", ...(plan.decisions.mfaViews ? ["views"] : [])];
@@ -115,13 +98,15 @@ import { ${helperNames.join(", ")} } from "../auth/account.ts";
   const files: Record<string, string> = {
     "http/auth/account.ts": helpers,
     "http/controllers/AuthController.ts":
-      controllerImports + apiActions.render(construction(plan.decisions.mfaViews), apiScope),
+      renderAuthHttpImports(context, "api") +
+      apiActions.render(construction(plan.decisions.mfaViews), apiScope),
   };
   const webActions = new ControllerActions("AuthWebController");
   const web = renderBrowserAuthRoutes(context, webActions);
   if (web)
     files["http/controllers/AuthWebController.ts"] =
-      controllerImports + webActions.render(construction(true), ["authServices", "views"]);
+      renderAuthHttpImports(context, "web") +
+      webActions.render(construction(true), ["authServices", "views"]);
   return {
     files,
     api: { name: "authApiRoutes", source: api },

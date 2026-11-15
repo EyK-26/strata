@@ -36,6 +36,22 @@ const PACKAGE_DIRS = [
 /** One case per code path the generator can emit. Keep MySQL and every auth kit covered. */
 const CASES: Array<{ name: string; flags: string[] }> = [
   {
+    name: "htmx-postgres-cookie-token-redis-smtp",
+    flags: [
+      "--frontend=server-htmx",
+      "--database=postgres",
+      "--auth=cookie-token",
+      "--tenancy=none",
+      "--cache=redis",
+      "--queue=redis",
+      "--mail=smtp",
+      "--mfa",
+      "--email-verification",
+      "--docker",
+      "--docker-services=postgres,redis,mailpit,adminer",
+    ],
+  },
+  {
     name: "api-mysql-cookie-security-extras",
     flags: [
       "--frontend=api",
@@ -81,6 +97,10 @@ const CASES: Array<{ name: string; flags: string[] }> = [
       "--email-verification",
       "--scim",
       "--metrics",
+      "--oauth-github",
+      "--oidc",
+      "--billing",
+      "--webhooks",
     ],
   },
   {
@@ -224,6 +244,19 @@ try {
 
     const appDir = join(workspace, testCase.name);
     await useTarballs(appDir, tarballs);
+    await writeFile(
+      join(appDir, "tsconfig.generated.json"),
+      JSON.stringify(
+        {
+          extends: "./tsconfig.json",
+          compilerOptions: { noUnusedLocals: true, noUnusedParameters: true },
+          // Type-contract probes below intentionally contain unused declarations.
+          exclude: ["src/*.contract.ts"],
+        },
+        null,
+        2,
+      ),
+    );
     // Exercise the emitted public DI declarations, including rejected mismatches,
     // outside the monorepo's source-path aliases on every supported compiler.
     // Every emitted driver consumes the same explicit selected-session SQL surface.
@@ -362,7 +395,7 @@ export function commitContract(database: DatabaseSession, transaction: Transacti
       join(appDir, "src/class-model-authoring.contract.ts"),
       await readFile(join(ROOT, "tests/types/classModelAuthoring.contract.ts"), "utf8"),
     );
-    let migrationScaffolded = false;
+    let scaffolded = false;
     for (const version of compilers) {
       const manifestPath = join(appDir, "package.json");
       const manifest = await Bun.file(manifestPath).json();
@@ -395,19 +428,30 @@ export function commitContract(database: DatabaseSession, transaction: Transacti
         );
       }
 
-      if (!migrationScaffolded) {
-        const scaffold = await run(
-          ["bun", "x", "--no-install", "strata", "make:migration", "schema_contract_probe"],
-          appDir,
-        );
-        if (scaffold.exitCode !== 0) {
-          failures.push(
-            `${testCase.name}: published CLI migration scaffold failed\n${scaffold.output}`,
-          );
-          continue;
+      if (!scaffolded) {
+        for (const [command, name] of [
+          ["make:model", "AuthoringProbe"],
+          ["make:controller", "AuthoringProbeController"],
+          ["make:request", "StoreAuthoringProbeRequest"],
+          ["make:policy", "AuthoringProbePolicy"],
+          ["make:migration", "schema_contract_probe"],
+        ] as const) {
+          const scaffold = await run(["bun", "x", "--no-install", "strata", command, name], appDir);
+          if (scaffold.exitCode !== 0)
+            failures.push(
+              `${testCase.name}: published CLI ${command} scaffold failed\n${scaffold.output}`,
+            );
         }
-        migrationScaffolded = true;
+        scaffolded = true;
       }
+      const clean = await run(
+        ["bun", "x", "--no-install", "tsc", "-p", "tsconfig.generated.json"],
+        appDir,
+      );
+      if (clean.exitCode !== 0)
+        failures.push(
+          `${testCase.name} (TS ${version}): generated app has unused declarations\n${clean.output}`,
+        );
       const checked = await run(["bun", "run", "check"], appDir);
       if (checked.exitCode === 0) {
         if (testCase === CASES[0]) {
@@ -532,7 +576,7 @@ export function commitContract(database: DatabaseSession, transaction: Transacti
     if (existsSync(join(frontendDir, "package.json"))) {
       for (const command of [
         ["bun", "install"],
-        ["bun", "x", "--no-install", "tsc", "--noEmit"],
+        ["bun", "x", "--no-install", "tsc", "--noEmit", "--noUnusedLocals", "--noUnusedParameters"],
         ["bun", "run", "build"],
       ]) {
         const result = await run(command, frontendDir);
