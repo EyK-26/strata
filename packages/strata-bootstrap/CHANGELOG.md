@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 3.1.2
+
+- Describe application startup, routing, middleware and service configuration in npm metadata. Align the core peer dependency with 3.1.2.
+
 ## 3.1.1
 
 - Synchronize the package version and core peer range for the 3.1.1 application-agent guide release.

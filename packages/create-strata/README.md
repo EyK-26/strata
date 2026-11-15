@@ -1,6 +1,6 @@
 # create-strata
 
-Create a [Strata](https://github.com/EyK-26/strata/blob/main/README.md) application with Bun and TypeScript. Requires Bun >=1.4.4; tested on Bun 1.4.4.
+Create a Laravel-inspired Bun and TypeScript application with [Strata](https://github.com/EyK-26/strata/blob/main/README.md). Requires Bun >=1.4.4; tested on Bun 1.4.4.
 
 ```bash
 bunx create-strata my-app
@@ -38,7 +38,7 @@ bun run dev
 
 Other choices may need database services or a frontend build; follow the generated README. Apps use model classes in `src/models`, named actions in `src/http/controllers`, and route declarations in `src/routes/web.ts` and `src/routes/api.ts`.
 
-The generator installs the application-local `strata` CLI. Run the generated `bun run` scripts or `bunx strata <command>` from inside the app directory.
+The generated package.json includes the application-local `strata` CLI; `bun install` installs it. Run the generated `bun run` scripts or `bunx strata <command>` from inside the app directory.
 
 `create-strata` and [`@getstrata/starter`](https://www.npmjs.com/package/@getstrata/starter) provide the same generator.
 

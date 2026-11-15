@@ -1,6 +1,6 @@
 # @getstrata/starter
 
-The application generator for [Strata](https://github.com/EyK-26/strata/blob/main/README.md). Requires Bun >=1.4.4; tested on Bun 1.4.4.
+The application generator for [Strata](https://github.com/EyK-26/strata/blob/main/README.md), a Laravel-inspired Bun and TypeScript framework. Requires Bun >=1.4.4; tested on Bun 1.4.4.
 
 Use the short package name:
 

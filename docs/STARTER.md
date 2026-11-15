@@ -4,6 +4,8 @@
 arrow keys and Enter in the wizard; Space toggles compatible extras. For automated
 or repeatable generation, pass `--yes` and explicit options.
 
+If Bun reuses an older cached generator, try `bunx create-strata@latest my-app` from outside an existing project. The explicit tag is optional for normal use.
+
 ## Quick start
 
 ```sh

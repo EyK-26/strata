@@ -1,5 +1,10 @@
 # create-strata changelog
 
+## 3.1.2
+
+- Align both generator package descriptions with Laravel-inspired Bun and TypeScript development. Keep simple generator commands in quick starts and document optional cache troubleshooting. Clarify that `bun install` installs the generated application CLI dependency.
+- Generate application dependencies targeting the coordinated 3.1.2 release; application runtime behavior is unchanged.
+
 ## 3.1.1
 
 - Generate an application-specific AGENTS.md with the selected stack, conventional feature workflow, public API guidance, access-control rules and available commands. Link it from the generated README; framework contributor instructions are not copied into apps.
