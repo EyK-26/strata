@@ -54,7 +54,6 @@ function starterSchemaStatements(plan: StarterFeaturePlan): string[] {
   const layers = plan.layers;
   const d = dialectFragments(layers.database);
   const statements: string[] = [];
-  const tenancyOn = plan.decisions.tenantTable;
   const mfaOn = plan.decisions.mfa;
   const payloadType = layers.database === "postgres" ? "JSONB NOT NULL" : `${d.text} NOT NULL`;
 
@@ -74,13 +73,6 @@ function starterSchemaStatements(plan: StarterFeaturePlan): string[] {
     slug ${d.keyText} NOT NULL UNIQUE
   )`);
   }
-
-  const notesTenantColumn = tenancyOn ? `\n    tenant_id INTEGER NOT NULL DEFAULT 1,` : "";
-  statements.push(`CREATE TABLE IF NOT EXISTS notes (
-    id ${d.id},
-    body ${d.text} NOT NULL,${notesTenantColumn}
-    created_at ${d.timestamp}
-  )`);
 
   if (plan.decisions.users) {
     const tenantColumn = plan.decisions.schemaTenants
@@ -145,7 +137,7 @@ function starterSchemaStatements(plan: StarterFeaturePlan): string[] {
 
   const rlsOn = plan.decisions.rls;
   if (rlsOn) {
-    const rlsTables = plan.decisions.users ? ["notes", "users"] : ["notes"];
+    const rlsTables = plan.decisions.users ? ["users"] : [];
     const userOwnedTables: string[] = [];
     if (plan.decisions.users) {
       userOwnedTables.push("auth_one_time_tokens");
@@ -208,12 +200,11 @@ export function withMigrationDatabase<T>(operation: (db: MigrationDatabase) => P
 }
 
 function renderMigrateTs(plan: StarterFeaturePlan): string {
-  const tenancyOn = plan.decisions.tenantTable;
   const usersOn = plan.decisions.users;
   const verifyOn = plan.decisions.emailVerification;
   const rlsOn = plan.decisions.rls;
   const imports = usersOn
-    ? `import { hashPassword } from "@getstrata/core/auth/password";
+    ? `import { createUserFactory } from "./factories/UserFactory.ts";
 import { User } from "../models/User.ts";
 `
     : "";
@@ -226,9 +217,9 @@ import { User } from "../models/User.ts";
     ? `
     const users = selected.model(User);
     if ((await users.query().value("id")) === null) {
-      const password = await hashPassword("StrataDemo!ChangeMe");
-      await users.create({name:"Demo User",email:"demo@example.com",password,is_admin:false${verifyOn ? ",email_verified_at:selected.dialect.timestampValue(new Date())" : ""}});
-      await users.create({name:"Admin User",email:"admin@example.test",password,is_admin:true${verifyOn ? ",email_verified_at:selected.dialect.timestampValue(new Date())" : ""}});
+      const factory = await createUserFactory("StrataDemo!ChangeMe", ${plan.decisions.schemaTenants ? "1, " : ""}async values => (await users.create(values)).toObject());
+      await factory.create({name:"Demo User",email:"demo@example.com",is_admin:false${verifyOn ? ",email_verified_at:selected.dialect.timestampValue(new Date())" : ""}});
+      await factory.create({name:"Admin User",email:"admin@example.test",is_admin:true${verifyOn ? ",email_verified_at:selected.dialect.timestampValue(new Date())" : ""}});
     }`
     : "";
   const run = rlsOn
@@ -241,7 +232,6 @@ import { createPersistenceInvocation } from "@getstrata/bootstrap/persistenceInv
 import { migrateDatabase } from "@getstrata/core/database/migrations";
 import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { databaseOptions, databaseEnvironment } from "../bootstrap/database.ts";
-import { Note } from "../models/Note.ts";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 
 /** An explicit development-only command owns its own canonical Application. */
@@ -249,14 +239,12 @@ export async function seed(input: Readonly<Record<string, string | undefined>> =
   const environment = databaseEnvironment(input);
   if (isProductionEnv(environment)) throw new Error("Demo seeding is disabled in production and staging.");
 ${ensureCall(plan)}  const connection = databaseOptions(environment);
-  const application = createApplication({providers:[],services:createDatabaseBindings({default:"main",connections:{main:connection},models:[Note${usersOn ? ",User" : ""}]})});
+  const application = createApplication({providers:[],services:createDatabaseBindings({default:"main",connections:{main:connection},models:[${usersOn ? "User" : ""}]})});
   await application.start();
   try {
     const invoke = createPersistenceInvocation(application, "main");
     await invoke({kind:"command",actor:{kind:"system",policy:"starter-demo-seed"}}, ({database${rlsOn ? ",policy" : ""}}) => {
-      const writeSeed = async (selected: DatabaseSession | TransactionSession) => {${tenant}
-        const notes = selected.model(Note);
-        if ((await notes.query().value("id")) === null) await notes.create({body:"Welcome to Strata!"${tenancyOn ? ",tenant_id:1" : ""}});${users}
+      const writeSeed = async (${usersOn || plan.decisions.schemaTenants ? "selected" : "_selected"}: DatabaseSession | TransactionSession) => {${tenant}${users}
       };
       return ${run};
     });
@@ -292,7 +280,6 @@ function dropTables(plan: StarterFeaturePlan): string[] {
     ordered.push("auth_one_time_tokens");
     ordered.push("users");
   }
-  ordered.push("notes");
   if (plan.decisions.schemaTenants) {
     ordered.push("tenant");
   }

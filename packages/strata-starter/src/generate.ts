@@ -58,7 +58,7 @@ import {
   renderApplyStripeWebhook,
   renderBillingMigration,
   renderDispatchOutboundWebhookJob,
-  renderNoteCreatedWebhookListener,
+  renderDispatchWebhook,
   renderWebhooksMigration,
   webhookMigrationName,
 } from "./renderIntegrations.ts";
@@ -77,7 +77,7 @@ import {
   renderApiTokenModel,
   renderAuthOneTimeTokenModel,
   renderModelsRegister,
-  renderNoteModel,
+  renderUserFactory,
   renderUserModel,
 } from "./renderModels.ts";
 import {
@@ -253,12 +253,13 @@ export const TENANCY_ENABLED = ${decisions.tenantTable};
   }
   writeText(join(src, "outbox/registry.ts"), renderOutboxRegistryTs(plan));
   writeText(join(src, "bootstrap/auth.ts"), renderAuthProvider(plan));
-  writeText(join(src, "models/Note.ts"), renderNoteModel(plan));
   if (decisions.users) {
     writeText(join(src, "models/User.ts"), renderUserModel(plan));
+    writeText(join(src, "db/factories/UserFactory.ts"), renderUserFactory(plan));
     writeText(join(src, "models/AuthOneTimeToken.ts"), renderAuthOneTimeTokenModel());
   } else {
     removeIfExists(join(src, "models/User.ts"));
+    removeIfExists(join(src, "db/factories/UserFactory.ts"));
     removeIfExists(join(src, "models/AuthOneTimeToken.ts"));
   }
   if (decisions.token) {
@@ -313,13 +314,10 @@ export const TENANCY_ENABLED = ${decisions.tenantTable};
       join(src, "jobs/dispatchOutboundWebhookJob.ts"),
       renderDispatchOutboundWebhookJob(plan),
     );
-    writeText(
-      join(src, "listeners/noteCreatedWebhookListener.ts"),
-      renderNoteCreatedWebhookListener(),
-    );
+    writeText(join(src, "webhooks/dispatchWebhook.ts"), renderDispatchWebhook());
   } else {
     removeIfExists(join(src, "jobs/dispatchOutboundWebhookJob.ts"));
-    removeIfExists(join(src, "listeners/noteCreatedWebhookListener.ts"));
+    removeIfExists(join(src, "webhooks/dispatchWebhook.ts"));
   }
 
   if (decisions.pendingMfa) {

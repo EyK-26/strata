@@ -82,7 +82,7 @@ ${imports[kind].join("\n")}
 
 ${routes.map((route) => route.source).join("\n")}
 /** Register ${kind === "api" ? "API" : "browser"} endpoints and their middleware here. */
-export function ${kind}Routes(context: ModuleRouteContext): AppRouteMap {
+export function ${kind}Routes(${routes.length ? "context" : "_context"}: ModuleRouteContext): AppRouteMap {
   return composeRouteMaps(${routes.map((route) => `${route.name}(context)`).join(", ")});
 }
 `;

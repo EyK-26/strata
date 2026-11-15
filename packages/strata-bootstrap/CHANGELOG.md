@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 3.1.3
+
+- Accept class models directly in `defineModelListener` while preserving explicit repository listeners and after-commit behavior.
+
 ## 3.1.2
 
 - Describe application startup, routing, middleware and service configuration in npm metadata. Align the core peer dependency with 3.1.2.

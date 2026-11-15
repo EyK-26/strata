@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { copyFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp.ts";
+import { installQualificationNotes } from "../tests/helpers/qualificationNotes.ts";
 
 const mode = process.argv[2] ?? "sso";
 const engine = process.argv[3] ?? "sqlite";
@@ -86,6 +87,8 @@ async function run(command: string[], env: Record<string, string | undefined>): 
 }
 
 try {
+  if (mode === "webhook")
+    await installQualificationNotes(fixture.app, engine, "none", { webhook: true });
   if (mode === "orm")
     await copyFile(
       join(import.meta.dir, "../tests/fixtures/starter-combinations/ormMigration.ts"),

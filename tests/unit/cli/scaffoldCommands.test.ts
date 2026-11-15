@@ -126,7 +126,7 @@ export const repositoryDefinitions = [NoteRepository];
       expect(repository).not.toContain("Repository");
       expect(repository).not.toContain("registerModelClass");
       expect(output.logs).toContain(
-        "Register the generated model class in createDatabaseBindings({ models: [...] }).",
+        "Add the generated model class to src/models/register.ts modelDefinitions (passed to defineApp({ models })).",
       );
     });
   });
@@ -253,7 +253,7 @@ describe("makeJobCommand", () => {
       expect(await Bun.file(jobPath).exists()).toBe(true);
       const jobSource = await Bun.file(jobPath).text();
       expect(jobSource).toContain('from "@getstrata/core/queue"');
-      expect(jobSource).toContain('static readonly jobName = "send-invoice"');
+      expect(jobSource).toContain('static override readonly jobName = "send-invoice"');
       expect(output.logs[0]).toBe(`Created job in: ${jobPath}`);
     });
   });
@@ -375,4 +375,71 @@ test("make:model emits an executable class usable through session registration a
       },
     );
   });
+});
+
+test("job names with a Job suffix do not repeat it", async () => {
+  await withTempWorkspace(async (workspace) => {
+    const { makeJobCommand } = await import("../../../src/cli/commands/makeJob");
+    await makeJobCommand("SendInvoiceJob");
+    const source = await Bun.file(join(workspace, "src/jobs/send-invoiceJob.ts")).text();
+    expect(source).toContain("class SendInvoiceJob extends Job<SendInvoicePayload>");
+    expect(source).toContain('jobName = "send-invoice"');
+    expect(source).not.toContain("JobJob");
+  });
+});
+
+test("model listeners reference existing standalone and module model classes", async () => {
+  await withTempWorkspace(async (workspace) => {
+    const { makeModelCommand } = await import(
+      "../../../packages/strata-cli/src/scaffold/makeModel"
+    );
+    const { makeModuleCommand } = await import("../../../src/cli/commands/makeModule");
+    const { makeListenerCommand } = await import("../../../src/cli/commands/makeListener");
+    await expect(makeListenerCommand("missing", "contacts.created")).rejects.toThrow(
+      "Model Contact was not found",
+    );
+    expect(await Bun.file(join(workspace, "src/listeners/missing.ts")).exists()).toBe(false);
+    await makeModelCommand("Contact");
+    await makeListenerCommand("welcome", "contacts.created");
+    const source = await Bun.file(join(workspace, "src/listeners/welcome.ts")).text();
+    expect(source).toContain('import { Contact } from "../models/Contact.ts"');
+    expect(source).toContain('defineModelListener(Contact, "created"');
+    expect(source).not.toContain("Repository");
+    await makeModuleCommand("invoice");
+    await makeListenerCommand("invoice created", "invoices.created");
+    expect(await Bun.file(join(workspace, "src/listeners/invoice-created.ts")).text()).toContain(
+      'import { Invoice } from "../modules/invoice/models/Invoice.ts"',
+    );
+  });
+});
+
+test("module compatibility checks selected app choices before writes or boot", async () => {
+  for (const choices of [
+    { views: false, tenancy: "none" },
+    { views: true, tenancy: "column" },
+    { views: true, tenancy: "rls" },
+  ]) {
+    await withTempWorkspace(async (workspace) => {
+      await ensureDirectory(join(workspace, "src/config"));
+      await writeFile(
+        join(workspace, "src/config/app.ts"),
+        `export default ${JSON.stringify(choices)};`,
+      );
+      await ensureDirectory(join(workspace, "src/bootstrap"));
+      await writeFile(
+        join(workspace, "src/bootstrap/createApp.ts"),
+        'throw new Error("Must not boot while scaffolding");',
+      );
+      const { makeModuleCommand } = await import("../../../src/cli/commands/makeModule");
+      await expect(makeModuleCommand("Product", "--with-web")).rejects.toThrow(
+        choices.views ? "tenancy" : "server view renderer",
+      );
+      expect(await Bun.file(join(workspace, "src/modules/product/index.ts")).exists()).toBe(false);
+      expect(await Bun.file(join(workspace, "resources/views/products/index.eta")).exists()).toBe(
+        false,
+      );
+      if (choices.tenancy !== "none")
+        await expect(makeModuleCommand("Product")).rejects.toThrow("tenant scoping");
+    });
+  }
 });

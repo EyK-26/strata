@@ -252,7 +252,6 @@ export function compileStarterFeatures(
     "src/routes/api.ts",
     "src/routes/web.ts",
     "src/routes/index.ts",
-    "src/models/Note.ts",
     "src/models/register.ts",
     "src/db/migrations/0001_starter_schema.ts",
   ];
@@ -261,6 +260,7 @@ export function compileStarterFeatures(
       "src/http/controllers/AuthController.ts",
       "src/http/auth/account.ts",
       "src/models/User.ts",
+      "src/db/factories/UserFactory.ts",
       "src/models/AuthOneTimeToken.ts",
       "src/db/migrations/0006_account_state.ts",
     );
@@ -292,10 +292,7 @@ export function compileStarterFeatures(
       "src/http/controllers/BillingController.ts",
     );
   if (layers.extras.webhooks)
-    artifacts.push(
-      "src/jobs/dispatchOutboundWebhookJob.ts",
-      "src/listeners/noteCreatedWebhookListener.ts",
-    );
+    artifacts.push("src/jobs/dispatchOutboundWebhookJob.ts", "src/webhooks/dispatchWebhook.ts");
   if (decisions.workTracker)
     artifacts.push(
       "docs/WORK_TRACKER.md",

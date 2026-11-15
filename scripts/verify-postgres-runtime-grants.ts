@@ -3,6 +3,7 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { SQL } from "bun";
 import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp";
+import { installQualificationNotes } from "../tests/helpers/qualificationNotes";
 
 const fixture = await createGeneratedSecurityApp("postgres", [
   "--frontend=hybrid",
@@ -276,6 +277,7 @@ try {
   admin = new SQL({ url: fixture.migrationUrl, max: 1 });
   assert.equal(decodeURIComponent(runtime.username), "strata_app");
   const cli = join(fixture.app, "node_modules/.bin/strata");
+  await installQualificationNotes(fixture.app, "postgres", "rls");
   provisioningStarted = true;
   await run([cli, "migrate"]);
   await run([cli, "make:migration", "create_acl_future_notes"]);

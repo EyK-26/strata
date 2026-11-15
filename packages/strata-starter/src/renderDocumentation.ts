@@ -12,7 +12,7 @@ function renderApiDocs(projectName: string, plan: StarterFeaturePlan): string {
   const layers = plan.layers;
   const rows = ["| Method | Path | Notes |", "| --- | --- | --- |"];
   rows.push(
-    "| `GET` | `/health` | Plain text `ok` (200) when configured database/Redis checks succeed and `notes` is readable (zero rows is still 200). This infrastructure probe runs outside API auth/tenancy admission, never selects a tenant or bypasses RLS, and returns no rows. `degraded` (503) when a dependency or schema check fails. Docker HEALTHCHECK uses this path. |",
+    "| `GET` | `/health` | Plain text `ok` (200) when configured database/Redis checks succeed and the starter schema migration is recorded in `framework_migrations`. This infrastructure probe runs outside API auth/tenancy admission, never selects a tenant or bypasses RLS, and returns no rows. `degraded` (503) when a dependency or schema check fails. Docker HEALTHCHECK uses this path. |",
     '| `GET` | `/ready` | JSON from the framework: `{"status":"ready","checks":{"database":"ok","redis":"skipped"}}` (200) or `not_ready` (503). `redis` is `ok` or `error` when `REDIS_URL` is set and `skipped` otherwise. It does not check the schema, so use `/health` as the deploy gate. |',
   );
 
@@ -113,7 +113,7 @@ function renderApiDocs(projectName: string, plan: StarterFeaturePlan): string {
 
 ${rows.join("\n")}
 
-There is no CRUD endpoint for the seeded \`notes\` table. Adding your own routes is the first thing you do.
+Add application resources with the CLI commands below. The starter contains only the models required by your selected features.
 
 ## Auth
 
@@ -123,26 +123,14 @@ ${authNote}
 
 Put HTTP actions in \`src/http/controllers/\` and register their paths and middleware in \`src/routes/api.ts\` or \`src/routes/web.ts\`. The bootstrap loads these route files once. Controller methods receive Bun's native \`Request\` and explicit request ports.
 
-\`\`\`typescript
-// src/http/controllers/NoteController.ts
-import type { BusinessRouteHandler } from "@getstrata/bootstrap/persistenceContracts";
-import { Note } from "../../models/Note.ts";
-
-export class NoteController {
-  index: BusinessRouteHandler = async (_request, { database }) => {
-    const notes = await database.model(Note).query().orderBy({ id: "desc" }).get();
-    return Response.json({ data: notes.map(note => note.toJSON()) });
-  };
-}
+\`\`\`sh
+bun run strata make:model Product
+bun run strata make:controller ProductController
+bun run strata make:request StoreProductRequest
+bun run strata make:migration create_products
 \`\`\`
 
-In \`src/routes/api.ts\`, import \`NoteController\` from \`../http/controllers/NoteController.ts\`, construct it in \`apiRoutes(context)\`, and add this map to that function's \`composeRouteMaps(...)\` arguments:
-
-\`\`\`typescript
-{ "/api/v1/notes": { GET: context.kernel.wrapApi(notes.index) } }
-\`\`\`
-
-Here \`notes\` is \`const notes = new NoteController();\`. Keep existing route maps and middleware. Use the handler's \`database\` port to bind the model class to the current application and execution. Use \`src/http/requests/\` for application request validation; account credential validation and account workflows are provided by the framework.
+Add model fields and fillable attributes, register the model in \`src/models/register.ts\`, and define its table in the migration. Register controller actions through \`context.kernel.wrapApi(...)\` in the API route map. This preserves authentication and the selected tenant policy. Use the handler's \`database\` port to bind your model to the current request. Account credential validation and workflows are provided by the framework.
 
 Optional modules in \`src/modules/\` remain available for feature composition. They use the same kernel and execution ports.
 
@@ -163,7 +151,7 @@ function renderIntegrationsReadme(plan: StarterFeaturePlan): string {
       ? "Stripe billing stub (`POST /billing/webhooks/stripe`, `GET /api/v1/billing/subscription`)"
       : null,
     layers.extras.webhooks
-      ? "Outbound webhooks (`notes.created` listener + `webhook.dispatch` job)"
+      ? "Outbound webhooks (explicit event dispatcher + `webhook.dispatch` job)"
       : null,
   ].filter((row): row is string => row !== null);
 
@@ -172,7 +160,7 @@ function renderIntegrationsReadme(plan: StarterFeaturePlan): string {
     "",
     "OAuth, billing, outbound webhooks, SIEM, and SAML are **off by default**. Commented placeholders live in `.env.example`. Framework map: [INTEGRATIONS.md](https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md).",
     "",
-    "Wizard flags (any stack unless noted): `--oauth-github` and `--oidc` (cookie HTML), `--billing`, `--webhooks`. They emit controllers, routes, migrations, jobs, or listeners. `createApp` still calls `await discoverListeners()` and `await discoverJobs()`.",
+    "Wizard flags (any stack unless noted): `--oauth-github` and `--oidc` (cookie HTML), `--billing`, `--webhooks`. They emit controllers, routes, migrations, jobs, or listeners. Startup discovers the application’s declared listeners and jobs.",
     "",
   ];
   if (enabled.length > 0) {
@@ -183,6 +171,11 @@ function renderIntegrationsReadme(plan: StarterFeaturePlan): string {
       "",
     );
   }
+  if (layers.extras.webhooks)
+    lines.push(
+      "Call `dispatchWebhook({ database, queue, options }, event, data)` from `src/webhooks/dispatchWebhook.ts` after your domain transaction commits. Supply an explicit public payload; never send account credentials. Compose the queue and options using `APPLICATION_QUEUE` and `APPLICATION_WEBHOOKS`. The dispatcher delivers to active subscriptions matching the event name or `*`; use a commit-aware model listener or outbox handler for transactional changes.",
+      "",
+    );
   return `${lines.join("\n")}\n`;
 }
 
@@ -443,7 +436,7 @@ ${plan.decisions.dedicatedSigningSecret ? "- Set `SIGNED_URL_SECRET` to 32+ char
     : ""
 }
 ${layers.database === "mysql" ? "- Keep the MySQL runtime account limited to application reads/writes. Set `MIGRATION_DATABASE_URL` for the same database only in the administrative migration process; provisioning and migration callbacks use that connection and close it afterward. If unset, explicit migration commands require DDL privileges on the configured account.\n" : ""}
-\`strata start\` does not migrate when \`APP_ENV=production\`. Run \`bun run db:migrate\` as a deploy step. \`GET /health\` is 200 when \`notes\` is readable (including zero rows) and configured dependencies are available; it returns only \`ok\` or \`degraded\` without authentication or tenant selection, and 503 when a dependency or schema check fails. Use it for readiness, not process liveness. Redis jobs need a worker: \`bun run queue:work\` (requires \`REDIS_URL\`).
+\`strata start\` does not migrate when \`APP_ENV=production\`. Run \`bun run db:migrate\` as a deploy step. \`GET /health\` is 200 when the starter schema migration is recorded in \`framework_migrations\` and configured dependencies are available; it returns only \`ok\` or \`degraded\` without authentication or tenant selection, and 503 when a dependency or schema check fails. Use it for readiness, not process liveness. Redis jobs need a worker: \`bun run queue:work\` (requires \`REDIS_URL\`).
 `;
 }
 

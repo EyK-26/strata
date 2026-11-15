@@ -11,9 +11,11 @@ async function makeJobCommand(...args: string[]): Promise<void> {
     throw new Error("make:job requires a job name.");
   }
 
-  const jobSlug = toKebabCase(name);
-  const jobClass = `${toPascalCase(name)}Job`;
-  const payloadType = `${toPascalCase(name)}Payload`;
+  const baseName = toPascalCase(name).replace(/Job$/, "");
+  if (!baseName) throw new Error("make:job requires a specific job name, such as SendInvoiceJob.");
+  const jobSlug = toKebabCase(baseName);
+  const jobClass = `${baseName}Job`;
+  const payloadType = `${baseName}Payload`;
   const directory = join(process.cwd(), "src", "jobs");
   const jobPath = join(directory, `${jobSlug}Job.ts`);
 
@@ -32,7 +34,7 @@ interface ${payloadType} {
 }
 
 class ${jobClass} extends Job<${payloadType}> {
-  static readonly jobName = "${jobSlug}";
+  static override readonly jobName = "${jobSlug}";
 
   override async handle(payload: ${payloadType}): Promise<void> {
     void payload;
@@ -49,7 +51,7 @@ export type { ${payloadType} };
   console.log(
     `Dispatch it via queue.dispatch(new ${jobClass}(), payload) from your controller or listener.`,
   );
-  console.log(`Workers discover it from src/jobs/ as "${jobSlug}".`);
+  console.log(`Application startup discovers it from src/jobs/ as "${jobSlug}".`);
 }
 
 export { makeJobCommand };

@@ -166,7 +166,7 @@ describe("create-strata integration extras", () => {
     expect(existsSync(join(app, "src/bootstrap/providers/queue.ts"))).toBe(false);
   });
 
-  test("--webhooks writes webhook.dispatch and a notes.created listener", async () => {
+  test("--webhooks writes webhook.dispatch and an explicit event dispatcher", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["hook-app", "--webhooks", "--yes"]);
     const job = await readFile(join(app, "src/jobs/dispatchOutboundWebhookJob.ts"), "utf8");
@@ -181,22 +181,16 @@ describe("create-strata integration extras", () => {
     expect(job).toContain("Webhook delivery requires an owned queue invocation.");
     expect(job).not.toContain("runWithMigrationBypass(");
     expect(job).not.toContain('"notes.created"');
-    const listener = await readFile(
-      join(app, "src/listeners/noteCreatedWebhookListener.ts"),
-      "utf8",
-    );
-    expect(listener).toContain('const event = "notes.created"');
-    expect(listener).toContain("modelEffects(Note");
-    expect(listener).toContain('{action: "created", afterCommit: noteCreated}');
-    expect(listener).toContain(
-      "dependencies: [STARTER_QUEUE_TOKEN, STARTER_WEBHOOK_OPTIONS_TOKEN]",
-    );
-    expect(listener).toContain("event,");
+    expect(existsSync(join(app, "src/listeners/noteCreatedWebhookListener.ts"))).toBe(false);
+    const dispatcher = await readFile(join(app, "src/webhooks/dispatchWebhook.ts"), "utf8");
+    expect(dispatcher).toContain("dispatchWebhook");
+    expect(dispatcher).toContain("event");
+    expect(dispatcher).toContain("data");
+    expect(dispatcher).not.toContain("Note");
     expect(existsSync(join(app, "src/db/migrations/0002_webhooks_schema.ts"))).toBe(true);
     const composition = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(composition).toContain("defineApp({");
-    expect(listener).toContain('from "@getstrata/bootstrap/application"');
-    expect(listener).not.toContain("setActiveApplicationContext");
+    expect(dispatcher).not.toContain("setActiveApplicationContext");
   });
 
   test("postgres webhooks and billing use $1 placeholders", async () => {

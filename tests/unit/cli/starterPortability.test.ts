@@ -669,12 +669,13 @@ describe("generated deploy files", () => {
 
   test("README production list covers APP_URL, proxies, CORS, and the health gate", async () => {
     const root = await tempDir();
-    const app = generateFromArgs(root, ["prod-notes", "--frontend=api", "--auth=token", "--yes"]);
+    const app = generateFromArgs(root, ["prod-health", "--frontend=api", "--auth=token", "--yes"]);
     const readme = await readFile(join(app, "README.md"), "utf8");
     expect(readme).toContain("Set `APP_URL` to the public origin");
     expect(readme).toContain("TRUST_FORWARDED_FOR=true");
     expect(readme).toContain("Cross-origin browser calls are off in production");
-    expect(readme).toContain("`GET /health` is 200 when `notes` is readable (including zero rows)");
+    expect(readme).toContain("framework_migrations");
+    expect(readme).toContain("starter schema migration is recorded");
     const env = await readFile(join(app, ".env.example"), "utf8");
     expect(env).toContain("# TRUST_FORWARDED_FOR=true");
   });

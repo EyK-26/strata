@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 3.1.3
+
+- Coordinate package versions at 3.1.3; core runtime behavior is unchanged.
+
 ## 3.1.2
 
 - Clarify the npm description around Laravel-inspired Bun and TypeScript application development. Synchronize packages at 3.1.2.

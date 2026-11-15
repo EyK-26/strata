@@ -304,7 +304,7 @@ describe("Generated application security", () => {
     );
   });
 
-  test("health is ok after migrate even with notes RLS", async () => {
+  test("health is ok after migrate with tenant RLS enabled", async () => {
     const response = await fetch(`${origin}/health`, { redirect: "manual" });
     if (response.status !== 200)
       console.error(
@@ -406,30 +406,28 @@ describe("Generated application security", () => {
     expect(rows[0]?.rolbypassrls).toBe(false);
   });
 
-  test("empty notes for the current tenant stay 200 and unreadable notes are not 200", async () => {
-    const previous = (await sql.unsafe("SELECT body, tenant_id FROM notes")) as Array<{
-      body: string;
-      tenant_id: number;
-    }>;
+  test("health requires the starter migration marker and read permission", async () => {
     try {
-      await sql.unsafe("DELETE FROM notes");
-      const empty = await fetch(`${origin}/health`);
-      expect(empty.status).toBe(200);
-      expect(await empty.text()).toBe("ok");
-
-      await sql.unsafe("REVOKE SELECT ON notes FROM strata_app");
-      const broken = await fetch(`${origin}/health`);
-      expect(broken.status).not.toBe(200);
+      await sql.unsafe(
+        "UPDATE framework_migrations SET name = 'e2e_hidden_starter_schema' WHERE name = '0001_starter_schema'",
+      );
+      const missing = await fetch(`${origin}/health`);
+      expect(missing.status).toBe(503);
     } finally {
-      await sql.unsafe("GRANT ALL PRIVILEGES ON notes TO strata_app");
-      await sql.unsafe("DELETE FROM notes");
-      for (const row of previous) {
-        await sql.unsafe("INSERT INTO notes (body, tenant_id) VALUES ($1, $2)", [
-          row.body,
-          row.tenant_id,
-        ]);
-      }
+      await sql.unsafe(
+        "UPDATE framework_migrations SET name = '0001_starter_schema' WHERE name = 'e2e_hidden_starter_schema'",
+      );
     }
+    try {
+      await sql.unsafe("REVOKE SELECT ON framework_migrations FROM strata_app");
+      const unreadable = await fetch(`${origin}/health`);
+      expect(unreadable.status).toBe(503);
+    } finally {
+      await sql.unsafe("GRANT SELECT ON framework_migrations TO strata_app");
+    }
+    const restored = await fetch(`${origin}/health`);
+    expect(restored.status).toBe(200);
+    expect(await restored.text()).toBe("ok");
   });
 
   test("cookie login requires CSRF and rejects supplied invalid Bearer without downgrade", async () => {
@@ -1466,7 +1464,7 @@ describe("Generated application security", () => {
       roleCreated = true;
       await sql.unsafe(`GRANT CONNECT ON DATABASE ${database} TO ${role}`);
       await sql.unsafe(`GRANT USAGE ON SCHEMA public TO ${role}`);
-      await sql.unsafe(`GRANT SELECT ON notes, users, sessions, api_tokens TO ${role}`);
+      await sql.unsafe(`GRANT SELECT ON users, sessions, api_tokens TO ${role}`);
 
       const attrs = (await sql.unsafe(
         "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = $1",
@@ -1482,10 +1480,6 @@ describe("Generated application security", () => {
         "rls-probe",
       ])) as Array<{ id: number }>;
       const otherTenantId = tenants[0]?.id;
-      await sql.unsafe("INSERT INTO notes (body, tenant_id) VALUES ($1, $2)", [
-        "other-tenant-note",
-        otherTenantId,
-      ]);
       const demo = (await sql.unsafe("SELECT id, password FROM users WHERE email = $1", [
         "demo@example.com",
       ])) as Array<{ id: number; password: string }>;
@@ -1523,10 +1517,6 @@ describe("Generated application security", () => {
         [sameUserId, "rls-same-token", "rls-same-token-hash"],
       );
 
-      const asSuperuserNotes = (await sql.unsafe("SELECT body FROM notes WHERE body = $1", [
-        "other-tenant-note",
-      ])) as Array<{ body: string }>;
-      expect(asSuperuserNotes.some((row) => row.body === "other-tenant-note")).toBe(true);
       const asSuperuserUsers = (await sql.unsafe("SELECT email FROM users WHERE email = $1", [
         "rls-other@example.test",
       ])) as Array<{ email: string }>;
@@ -1553,16 +1543,6 @@ describe("Generated application security", () => {
       await probe.begin(async (appSql) => {
         await appSql.unsafe("SELECT set_config('app.tenant_id', $1, false)", ["1"]);
         await appSql.unsafe("SELECT set_config('app.bypass_rls', $1, false)", ["false"]);
-        expect(
-          (await appSql.unsafe("SELECT body FROM notes WHERE body = $1", [
-            "other-tenant-note",
-          ])) as unknown[],
-        ).toHaveLength(0);
-        expect(
-          (await appSql.unsafe("SELECT body FROM notes WHERE body = $1", [
-            "Welcome to Strata!",
-          ])) as Array<{ body: string }>,
-        ).toEqual(expect.arrayContaining([{ body: "Welcome to Strata!" }]));
         expect(
           (await appSql.unsafe("SELECT email FROM users WHERE email = $1", [
             "rls-other@example.test",

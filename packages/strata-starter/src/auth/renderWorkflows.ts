@@ -65,7 +65,7 @@ async function issueSignedAuthMail(ports: BusinessRequestPorts, services: Starte
   await deferAuthEffect(ports, () => services.mail.send(message));
 }
 
-async function createRegistration(ports: BusinessRequestPorts, services: StarterAuthServices, credentials: { name: string; email: string; password: string }${verify ? ", verificationPath: string" : ""}) {
+async function createRegistration(ports: BusinessRequestPorts, ${verify ? "services" : "_services"}: StarterAuthServices, credentials: { name: string; email: string; password: string }${verify ? ", verificationPath: string" : ""}) {
   const { email } = credentials;
   return registerAccount(ports, email, {
     write: runAuthWrite, transaction: runAuthTransaction,
@@ -89,10 +89,14 @@ async function consumeSignedAuthToken(ports: BusinessRequestPorts, request: Requ
   return await runAuthWrite(ports, hashOneTimeToken(token), async (ports) => consumeOneTimeToken(ports.database, purpose, token));
 }
 
-async function revokeUserSessions(ports: BusinessRequestPorts, userId: number) {
+${
+  mfa
+    ? `async function revokeUserSessions(ports: BusinessRequestPorts, userId: number) {
   await runAuthWrite(ports, userId, async (ports) => {
     await revokeStoredUserSessions(ports.database, userId, { incrementAuthVersion: true });
   });
+}`
+    : ""
 }
 
 ${

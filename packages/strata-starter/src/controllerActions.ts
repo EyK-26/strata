@@ -25,7 +25,8 @@ export class ControllerActions {
       const formatted = lines
         .map((line) => (line.trim() ? `    ${line.slice(indentation)}` : ""))
         .join("\n");
-      return `  ${name}: BusinessRouteHandler = ${signature} => {${scope.length ? `\n    const { ${scope.join(", ")} } = this;` : ""}\n${formatted}\n  };`;
+      const usedScope = scope.filter((binding) => new RegExp(`\\b${binding}\\b`).test(handler));
+      return `  ${name}: BusinessRouteHandler = ${signature} => {${usedScope.length ? `\n    const { ${usedScope.join(", ")} } = this;` : ""}\n${formatted}\n  };`;
     });
     return `export class ${this.className} {\n${construction}\n${methods.join("\n\n")}\n}\n`;
   }

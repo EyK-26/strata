@@ -3,6 +3,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { runWithSqlDialect } from "@getstrata/core/database/dialect";
+import { migrateDatabase } from "@getstrata/core/database/migrations";
 import { SQL } from "bun";
 import {
   generateProject,
@@ -13,8 +15,8 @@ import {
   layersFromFlags,
   parseCreateStrataArgs,
 } from "../../packages/strata-starter/src/parseArgs.ts";
-
 import { candidatePackage } from "../../scripts/candidate-packages.ts";
+import { installQualificationNotes } from "../helpers/qualificationNotes";
 import { installGeneratedAppDependencies } from "../unit/cli/helpers";
 
 for (const [frontend, auth] of [
@@ -97,7 +99,12 @@ for (const [frontend, auth] of [
         }
         const schema = (await import(join(app, "src/db/migrations/0001_starter_schema.ts")))
           .default;
-        await schema.up(owner);
+        const qualificationMigration = await installQualificationNotes(app, "postgres", "rls");
+        const qualification = (await import(qualificationMigration)).default;
+        const migrationDatabase = owner;
+        await runWithSqlDialect("pgsql", () =>
+          migrateDatabase(migrationDatabase, [schema, qualification]),
+        );
         await owner.unsafe("INSERT INTO notes (body, tenant_id) VALUES ($1, 1), ($2, 2)", [
           "private tenant one",
           "private tenant two",
@@ -178,7 +185,7 @@ try {
             env.DATABASE_URL = missing.href;
           }
           for (const denied of [false, true]) {
-            if (denied) await owner.unsafe(`REVOKE SELECT ON notes FROM ${role}`);
+            if (denied) await owner.unsafe(`REVOKE SELECT ON framework_migrations FROM ${role}`);
             env.PROBE_SCHEMA_DENIED = String(denied);
             const child = Bun.spawn(["bun", join(app, "probe.ts")], {
               cwd: app,
@@ -193,7 +200,7 @@ try {
               new Response(child.stderr).text(),
             ]);
             expect({ exit, stderr }).toEqual({ exit: 0, stderr: "" });
-            if (denied) await owner.unsafe(`GRANT SELECT ON notes TO ${role}`);
+            if (denied) await owner.unsafe(`GRANT SELECT ON framework_migrations TO ${role}`);
           }
           const runtime = new SQL(url.href);
           try {

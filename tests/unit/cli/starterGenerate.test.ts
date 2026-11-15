@@ -339,6 +339,28 @@ describe("create-strata args", () => {
 });
 
 describe("create-strata generate", () => {
+  test("all auth choices omit bundled Notes and retain only selected auth models", async () => {
+    const root = await tempDir();
+    for (const auth of ["headers", "cookie", "token", "jwt", "cookie-token", "cookie-token-jwt"]) {
+      const app = generateFromArgs(root, [`minimal-${auth}`, `--auth=${auth}`, "--yes"]);
+      for (const path of [
+        "src/models/Note.ts",
+        "src/db/factories/NoteFactory.ts",
+        "src/http/controllers/NoteController.ts",
+        "src/listeners/noteCreatedWebhookListener.ts",
+      ]) {
+        expect(existsSync(join(app, path))).toBe(false);
+      }
+      const register = await readFile(join(app, "src/models/register.ts"), "utf8");
+      const schema = await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8");
+      expect(register).not.toContain("Note");
+      expect(schema).not.toContain("notes");
+      expect(existsSync(join(app, "src/models/User.ts"))).toBe(auth !== "headers");
+      expect(schema.includes("CREATE TABLE IF NOT EXISTS sessions")).toBe(auth.includes("cookie"));
+      expect(existsSync(join(app, "src/models/ApiToken.ts"))).toBe(auth.includes("token"));
+    }
+  });
+
   test("default app is sqlite headers API without docker compose", async () => {
     const root = await tempDir();
     const app = generateFromArgs(root, ["hobby-app", "--yes"]);
@@ -365,16 +387,11 @@ describe("create-strata generate", () => {
     expect(readme).toContain("openapi:check");
 
     const modelsRegister = await readFile(join(app, "src/models/register.ts"), "utf8");
-    expect(modelsRegister).toContain("export const modelDefinitions = Object.freeze([Note])");
+    expect(modelsRegister).toContain("export const modelDefinitions = Object.freeze([])");
     expect(modelsRegister).not.toContain("repositoryDefinitions");
     expect(modelsRegister).not.toContain("\nimport { registerModelClass }");
     expect(modelsRegister).not.toContain("void registerModelClass;");
-    const noteModel = await readFile(join(app, "src/models/Note.ts"), "utf8");
-    expect(noteModel).toContain("type NoteRecord = ModelAttributes<Note>");
-    expect(noteModel).toContain("class Note extends defineModel({");
-    expect(noteModel).not.toContain("registerModelRepository");
-    expect(noteModel).not.toContain("NoteRepository");
-    expect(noteModel).not.toContain("class NoteRepository");
+    expect(existsSync(join(app, "src/models/Note.ts"))).toBe(false);
     const bootstrap = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
     expect(bootstrap).toContain('from "@getstrata/bootstrap/application"');
     expect(bootstrap).toContain("defineApp({");
@@ -399,7 +416,7 @@ describe("create-strata generate", () => {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
-    expect(pkg.dependencies["@getstrata/core"]).toBe("^3.1.2");
+    expect(pkg.dependencies["@getstrata/core"]).toBe("^3.1.3");
     expect(pkg.dependencies.eta).toBeUndefined();
     expect(pkg.dependencies.mysql2).toBeUndefined();
     expect(pkg.scripts.dev).toBe("strata dev");
@@ -411,38 +428,30 @@ describe("create-strata generate", () => {
     expect(readme).not.toContain("end-to-end");
     expect(readme).not.toContain("apps/hiroapp");
 
-    expect(existsSync(join(app, "src/models/Note.ts"))).toBe(true);
+    expect(existsSync(join(app, "src/models/Note.ts"))).toBe(false);
     expect(existsSync(join(app, "src/models/register.ts"))).toBe(true);
     expect(existsSync(join(app, "src/models/User.ts"))).toBe(false);
     expect(existsSync(join(app, "src/models/ApiToken.ts"))).toBe(false);
-    const note = await readFile(join(app, "src/models/Note.ts"), "utf8");
-    expect(note).toContain("class Note extends defineModel({");
-    expect(note).toContain('static $fillable = ["body"]');
-    expect(note).not.toContain('from "@getstrata/core"');
-
     const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
-    expect(migrate).toContain('notes.query().value("id")');
-    expect(migrate).toContain('notes.create({body:"Welcome to Strata!"})');
     expect(migrate).not.toContain("INSERT INTO notes");
     expect(migrate).toContain("migrateDatabase");
     expect(migrate).toContain("loadStarterMigrations");
     expect(migrate).toContain('from "@getstrata/core/database/migrations"');
     expect(migrate).not.toContain("@getstrata/core/database/migrations/runner");
     const schema = await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8");
-    expect(schema).toContain("CREATE TABLE IF NOT EXISTS notes");
+    expect(schema).not.toContain("CREATE TABLE IF NOT EXISTS notes");
     expect(schema).toContain("CREATE TABLE IF NOT EXISTS failed_job");
 
     expect(existsSync(join(app, "src/modules/site/index.ts"))).toBe(false);
     const healthBootstrap = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
-    expect(healthBootstrap).toContain('database.model(Note).query().limit(1).select("id").get()');
+    expect(healthBootstrap).toContain("framework_migrations");
+    expect(healthBootstrap).toContain("0001_starter_schema");
     expect(healthBootstrap).not.toContain("runWithMigrationBypass");
 
     const api = await readFile(join(app, "docs/API.md"), "utf8");
-    expect(api).toContain('database.model(Note).query().orderBy({ id: "desc" }).get()');
-    expect(api).toContain("src/http/controllers/NoteController.ts");
     expect(api).toContain("src/routes/api.ts");
-    expect(api).toContain("context.kernel.wrapApi(notes.index)");
-    expect(api).toContain("zero rows is still 200");
+    expect(api).not.toContain("NoteController");
+    expect(api).toContain("framework_migrations");
     expect(api).not.toContain("SELECT id, body FROM notes");
     expect(api).not.toContain("/webhooks");
     expect(api).not.toContain("/billing");
@@ -686,7 +695,7 @@ describe("create-strata generate", () => {
     ]);
     const schema = await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8");
     expect(schema).toContain("CREATE TABLE IF NOT EXISTS tenant");
-    expect(schema).toContain("ALTER TABLE notes FORCE ROW LEVEL SECURITY");
+    expect(schema).not.toContain("ALTER TABLE notes FORCE ROW LEVEL SECURITY");
     expect(schema).toContain("ALTER TABLE users FORCE ROW LEVEL SECURITY");
     expect(schema).toContain("ALTER TABLE sessions FORCE ROW LEVEL SECURITY");
     expect(schema).toContain("ALTER TABLE api_tokens FORCE ROW LEVEL SECURITY");
@@ -701,7 +710,7 @@ describe("create-strata generate", () => {
       seedFn.indexOf('policy.run(database, {kind:"bypass"}, writeSeed)'),
     );
     const authModule = await generatedAuthSource(app);
-    expect(authModule).toContain("completePasswordLogin");
+    expect(authModule).toContain("authenticatePasswordAccount(user, password, mfaCode");
     expect(authModule).toMatch(/"\/api\/v1\/auth\/login":[\s\S]*?wrapLogin\(/);
     expect(authModule).toMatch(/"\/api\/auth\/token":[\s\S]*?wrapLogin\(/);
     expect(authModule).toContain("withAuthIdentifier");
@@ -776,7 +785,8 @@ describe("create-strata generate", () => {
     const site = await readFile(join(app, "src/http/controllers/HomeController.ts"), "utf8");
     expect(site).not.toContain("/health");
     const healthBootstrap = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
-    expect(healthBootstrap).toContain('database.model(Note).query().limit(1).select("id").get()');
+    expect(healthBootstrap).toContain("framework_migrations");
+    expect(healthBootstrap).toContain("0001_starter_schema");
     expect(healthBootstrap).not.toContain("runWithMigrationBypass");
     expect(site).not.toContain("runWithMigrationBypass");
   });
@@ -862,7 +872,7 @@ describe("create-strata generate", () => {
     expect(auth).toContain("ports.database.model(AuthOneTimeToken).create({");
     expect(auth).toContain("JSON.stringify([])");
     expect(auth).toContain("parseJsonBody(request, parseRegisterCredentials)");
-    expect(auth).toContain("validateObject");
+    expect(auth).toContain("parseJsonBody(request, parseLoginCredentials)");
     expect(auth).toContain("parseLoginCredentials");
     expect(auth).toContain("parseRegisterCredentials");
     expect(auth).toContain("kernel.wrapWebPasswordConfirm(");
@@ -902,7 +912,8 @@ describe("create-strata generate", () => {
     expect(directory).toContain('asNullableString(user.get("mfa_secret"))');
 
     const migrate = await readFile(join(app, "src/db/migrate.ts"), "utf8");
-    expect(migrate).toContain("await users.create({");
+    expect(migrate).toContain("await factory.create({");
+    expect(migrate).toContain("createUserFactory");
     expect(migrate).toContain('users.query().value("id")');
     expect(migrate).not.toContain("INSERT INTO users");
     expect(migrate).not.toContain("INSERT INTO notes");
@@ -937,7 +948,7 @@ describe("create-strata generate", () => {
     expect(auth).toContain("/api/v1/auth/register");
     expect(auth).toContain("/api/v1/auth/forgot-password");
     expect(auth).toContain("parseJsonBody(request, parseRegisterCredentials)");
-    expect(auth).toContain("validateObject");
+    expect(auth).toContain("parseJsonBody(request, parseLoginCredentials)");
     expect(auth).toMatch(/"\/api\/v1\/auth\/reset-password":[\s\S]*?wrapSigned\(/);
     expect(existsSync(join(app, "views/auth/login.eta"))).toBe(false);
   });
@@ -1487,6 +1498,10 @@ export default probeModule;
         const response = await fetch(`http://127.0.0.1:${server.port}/health`);
         expect(response.status).toBe(200);
         expect(await response.text()).toBe("ok");
+        await (await import(join(app, "src/db/rollback.ts"))).rollback();
+        const rolledBack = await fetch(`http://127.0.0.1:${server.port}/health`);
+        expect(rolledBack.status).toBe(503);
+        expect(await rolledBack.text()).toBe("degraded");
       } finally {
         await boot.context.dispose();
       }

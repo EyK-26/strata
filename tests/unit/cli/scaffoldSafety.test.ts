@@ -6,6 +6,7 @@ import {
   makeControllerCommand,
   makeFactoryCommand,
   makeJobCommand,
+  makeListenerCommand,
   makeModelCommand,
   makeModuleCommand,
   makePolicyCommand,
@@ -114,7 +115,9 @@ test("model, factory and module journey preserves factory and typechecks emitted
   await makeFactoryCommand("Product");
   const factory = join(workspace, "src/db/factories/ProductFactory.ts");
   const before = await Bun.file(factory).text();
-  await makeModuleCommand("Product");
+  await makeModuleCommand("Product", "--with-web");
+  await makeListenerCommand("ProductCreated", "products.created");
+  await makeJobCommand("SendProductJob");
   await makeControllerCommand("ProductController");
   await makeRequestCommand("StoreProductRequest");
   await makePolicyCommand("ProductPolicy");

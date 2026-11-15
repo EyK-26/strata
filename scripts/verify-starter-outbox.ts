@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp";
+import { installQualificationNotes } from "../tests/helpers/qualificationNotes";
 
 const fixture = await createGeneratedSecurityApp("postgres", [
   "--frontend=api",
@@ -528,6 +529,7 @@ try {
       "MIGRATION_DATABASE_URL=",
     ),
   );
+  await installQualificationNotes(fixture.app, "postgres", "rls");
   await writeFile(join(fixture.app, "src/outbox/registry.ts"), registry);
   await writeFile(join(fixture.app, "src/outbox-publisher.contract.ts"), typeContract);
   await writeFile(join(fixture.app, "src/outbox-data.ts"), data);
