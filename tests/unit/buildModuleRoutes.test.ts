@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { buildApplicationRoutes } from "@getstrata/bootstrap/application";
 import { buildModuleRoutes } from "@getstrata/bootstrap/buildModuleRoutes";
 import {
   CORE_AUTH_TOKEN,
@@ -7,7 +8,8 @@ import {
 } from "@getstrata/bootstrap/config";
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { getRouteInventory } from "@getstrata/bootstrap/routePlan";
+import { composeRouteMaps, getRouteInventory } from "@getstrata/bootstrap/routePlan";
+import { registerAppOpenApiRoutes } from "@getstrata/cli/openapi";
 import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
 import { PolicyGate } from "@getstrata/core/auth/policy";
 import { CacheRepository } from "@getstrata/core/cache/repository";
@@ -73,6 +75,26 @@ const loginModule: AppModule = {
 };
 
 describe("buildModuleRoutes", () => {
+  test("composed application browser routes stay outside API-only OpenAPI", async () => {
+    const routes = buildApplicationRoutes(
+      createTestDependencies(),
+      [
+        {
+          name: "application",
+          routes: () => composeRouteMaps({ "/api/items": { GET: () => Response.json([]) } }),
+          webRoutes: () => composeRouteMaps({ "/login": { GET: () => new Response("login") } }),
+        },
+      ],
+      { frontend: "hybrid" },
+    );
+    expect(getRouteInventory(routes).filter((route) => route.path === "/login")).toEqual([
+      { method: "GET", path: "/login", middleware: ["global", "web"] },
+      { method: "HEAD", path: "/login", middleware: ["global", "web"] },
+    ]);
+    expect(
+      (await registerAppOpenApiRoutes(async () => ({ routes }))).map((route) => route.path),
+    ).toEqual(["/api/items", "/api/items"]);
+  });
   test("maps guest CSRF failures on wrap(api) routes to JSON 403", async () => {
     const previousTenancy = process.env.TENANCY_DRIVER;
     process.env.TENANCY_DRIVER = "none";

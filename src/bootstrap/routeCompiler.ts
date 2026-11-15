@@ -165,7 +165,7 @@ function compileRoutePlan(sources: readonly RouteSource[], prefix = ""): Compile
           throw new Error(`OpenAPI metadata has no API handler: ${method} ${rawPath}`);
         }
       }
-      // Preserve per-route middleware/contracts when an already compiled map is composed.
+      // Preserve contracts and explicit middleware; unclassified compositions inherit their boundary.
       const inherited = readRouteInventory(source.routes)?.filter(
         (entry) => entry.path === rawPath,
       );
@@ -176,7 +176,11 @@ function compileRoutePlan(sources: readonly RouteSource[], prefix = ""): Compile
               (entry) =>
                 entry.method !== "HEAD" || !methods.includes("GET") || methods.includes("HEAD"),
             )
-            .map((entry) => ({ ...entry, path })),
+            .map((entry) => ({
+              ...entry,
+              path,
+              middleware: entry.middleware.length ? entry.middleware : (source.middleware ?? []),
+            })),
         );
       } else {
         for (const method of methods) {
@@ -202,13 +206,11 @@ function compileRoutePlan(sources: readonly RouteSource[], prefix = ""): Compile
       if (methods.includes("GET") && !methods.includes("HEAD")) {
         const openApi =
           metadata?.HEAD ?? inherited?.find((entry) => entry.method === "HEAD")?.openApi;
+        const inheritedMiddleware = inherited?.find((entry) => entry.method === "GET")?.middleware;
         implicitHeads.set(path, {
           method: "HEAD",
           path,
-          middleware:
-            inherited?.find((entry) => entry.method === "GET")?.middleware ??
-            source.middleware ??
-            [],
+          middleware: inheritedMiddleware?.length ? inheritedMiddleware : (source.middleware ?? []),
           ...(openApi ? { openApi } : {}),
         });
       }

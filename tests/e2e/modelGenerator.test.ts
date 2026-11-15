@@ -18,6 +18,6 @@ test("installed CLI models register explicitly and persist through selected repo
   ]);
   expect({ stdout, stderr, exit }).toMatchObject({ exit: 0 });
   expect(stdout).toContain('"installedModelGenerator":true');
-  expect(stdout).toContain('"explicitRepositories":true');
+  expect(stdout).toContain('"derivedRepositories":true');
   expect(stdout).toContain('"dialects":["sqlite","postgres","mysql"]');
 }, 185000);
