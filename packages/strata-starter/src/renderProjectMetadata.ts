@@ -26,9 +26,9 @@ function renderPackageJson(
         "@getstrata/core": "workspace:*",
       }
     : {
-        "@getstrata/bootstrap": "^3.1.4",
-        "@getstrata/cli": "^3.1.4",
-        "@getstrata/core": "^3.1.4",
+        "@getstrata/bootstrap": "^3.1.5",
+        "@getstrata/cli": "^3.1.5",
+        "@getstrata/core": "^3.1.5",
       };
   if (!options.plan || options.plan.decisions.serverViews || options.plan.decisions.mfaViews)
     coreDeps.eta = "^4.6.0";

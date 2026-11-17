@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 3.1.5
+
+Coordinate with the corrected core class-model type declarations in 3.1.5. Bootstrap runtime behavior is unchanged.
+
 ## 3.1.4
 
 - Synchronize package versions and dependency pins at 3.1.4 for the corrected starter release validation. No additional runtime changes in this package.

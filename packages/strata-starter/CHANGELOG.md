@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 3.1.5
+
+Generate applications with the corrected 3.1.5 core class-model type declarations. Existing generated source files are not rewritten by a package upgrade.
+
 ## 3.1.4
 
 - Update generated React browser acceptance to verify the authenticated account dashboard after removing the Notes example. Preserve credential, CSRF, tenant-isolation and business-write checks in test-owned fixtures.
