@@ -106,14 +106,6 @@ export type {
   StatelessFactoryConstruction,
 } from "@getstrata/core/database/factory";
 export { defineFactory, Factory } from "@getstrata/core/database/factory";
-export type {
-  AnyModelClass,
-  AuthoredModelClass,
-  InferModelFields,
-  ModelClassOptions,
-  ModelField,
-  ModelFields,
-} from "@getstrata/core/database/model";
 export { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
 export {
   BadRequestError,
@@ -319,6 +311,16 @@ export {
   filterMassAssignable,
   hydrateValue,
 } from "../core/database/modelAttributes.ts";
+// The public model subpath re-exports this barrel in packed declarations.
+// Resolve its authoring types directly to avoid a circular type alias.
+export type {
+  AnyModelClass,
+  AuthoredModelClass,
+  InferModelFields,
+  ModelClassOptions,
+  ModelField,
+  ModelFields,
+} from "../core/database/modelAuthoring";
 export type {
   MysqlConnection,
   MysqlExecutable,

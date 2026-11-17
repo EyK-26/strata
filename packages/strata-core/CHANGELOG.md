@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 3.1.5
+
+Fix published class-model type exports so inferred fields and strict model/repository contracts remain intact in installed applications.
+
 ## 3.1.4
 
 - Synchronize package versions and dependency pins at 3.1.4 for the corrected starter release validation. No additional runtime changes in this package.
