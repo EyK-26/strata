@@ -6,7 +6,7 @@ import {
 } from "@getstrata/core/queue/queueHandoff";
 import type { ExecutionEnvelope } from "../contracts/application";
 import type { DatabaseSession } from "../database/session";
-import { queueAttempt } from "../runtime/executionContext";
+import { queueAttempt } from "../runtime/queueAttempt";
 import type FailedJobService from "./failedJobService";
 import { FailedJobService as LiveFailedJobService } from "./failedJobService";
 import type { JobContext } from "./index";

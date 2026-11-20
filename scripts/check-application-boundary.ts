@@ -23,6 +23,7 @@ const neutralEdges: Readonly<
       "runtime/resourceJournal",
       "runtime/executionContext",
       "runtime/executionTasks",
+      "runtime/queueAttempt",
       "config/configSnapshot",
     ],
     types: ["contracts/application", "contracts/services", "contracts/token"],
@@ -42,7 +43,11 @@ const neutralEdges: Readonly<
     ],
   },
   [PATH("runtime/executionContext")]: {
-    values: ["config/configSnapshot", "runtime/asyncContextStore"],
+    values: ["config/configSnapshot"],
+    types: ["contracts/application"],
+  },
+  [PATH("runtime/queueAttempt")]: {
+    values: ["runtime/asyncContextStore"],
     types: ["contracts/application"],
   },
   [PATH("contracts/executionContext")]: {

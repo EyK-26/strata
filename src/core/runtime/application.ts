@@ -34,13 +34,14 @@ import type {
   StopResult,
 } from "../contracts/application";
 import type { ServiceToken } from "../contracts/token";
-import { normalizeExecutionEnvelope, ownExecutionContext, queueAttempt } from "./executionContext";
+import { normalizeExecutionEnvelope, ownExecutionContext } from "./executionContext";
 import {
   completeExecution,
   type Settlement,
   settleExecutionTasks,
   type TaskResources,
 } from "./executionTasks";
+import { queueAttempt } from "./queueAttempt";
 import { type ResourceGroup, ResourceJournal } from "./resourceJournal";
 import { compileServiceGraph, type ServiceGraph } from "./serviceGraph";
 

@@ -5,9 +5,6 @@ import type {
   ExecutionContext,
   ExecutionEnvelope,
 } from "../contracts/application";
-import { createAsyncContextStore } from "./asyncContextStore";
-
-const queueAttempt = createAsyncContextStore<ExecutionEnvelope>("@getstrata/queueAttempt");
 
 // Capture platform operations once: envelope signals may override their public members.
 function signalAccessor(name: "aborted" | "reason"): (this: AbortSignal) => unknown {
@@ -201,4 +198,4 @@ function ownExecutionContext(
   }
 }
 
-export { normalizeExecutionEnvelope, ownExecutionContext, queueAttempt };
+export { normalizeExecutionEnvelope, ownExecutionContext };
