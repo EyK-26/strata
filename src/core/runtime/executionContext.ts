@@ -132,11 +132,13 @@ function ownExecutionContext(
     if (!disposed && aborted(signal) && !controller.signal.aborted)
       controller.abort(reason(signal));
   };
-  const subscribe = (signal: AbortSignal): void => {
+  const subscribe = (signal: AbortSignal) => {
     const listener = () => cancel(signal);
     addListener.call(signal, "abort", listener);
-    subscriptions.push({ signal, listener });
+    const subscription = { signal, listener };
+    subscriptions.push(subscription);
     cancel(signal);
+    return subscription;
   };
   const dispose = (): void => {
     disposed = true;
@@ -148,7 +150,7 @@ function ownExecutionContext(
   try {
     // At admission an already cancelled external signal precedes the deadline.
     if (envelope.signal !== undefined) subscribe(envelope.signal);
-    subscribe(appSignal);
+    const admission = subscribe(appSignal);
     const deadline = envelope.deadlineAtMs;
     // Timers can be delayed behind synchronous work and promise microtasks. Check
     // wall time at each admission/publication boundary without scheduling more timers.
@@ -178,7 +180,22 @@ function ownExecutionContext(
       executionId,
       signal: controller.signal,
     }) as ExecutionContext;
-    return { context, dispose, check };
+    return {
+      context,
+      dispose,
+      check,
+      admit(drainSignal: AbortSignal): void {
+        check();
+        subscribe(drainSignal);
+        check();
+        // Producer/startup cancellation closes admission. An actual admitted
+        // request drains until its own cancellation or the cleanup hard deadline.
+        // Remove only our admission subscription, even if the caller explicitly
+        // supplied the same signal as its independent external cancellation.
+        removeListener.call(admission.signal, "abort", admission.listener);
+        subscriptions.splice(subscriptions.indexOf(admission), 1);
+      },
+    };
   } catch (error) {
     dispose();
     throw error;
