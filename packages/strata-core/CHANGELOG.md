@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 3.1.9
+
+Fix graceful shutdown during the first SQL outbox poll.
+
 ## 3.1.8
 
 Fix graceful shutdown for admitted outbox completions
