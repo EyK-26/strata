@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 3.1.6
+
+fix: drain admitted request bookkeeping during shutdown
+
 ## 3.1.5
 
 Coordinate with the corrected core class-model type declarations in 3.1.5. Bootstrap runtime behavior is unchanged.

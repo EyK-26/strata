@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 3.1.6
+
+fix: drain admitted request bookkeeping during shutdown
+
 ## 3.1.5
 
 Coordinate the CLI dependency pins with the corrected core class-model type declarations in 3.1.5. CLI runtime behavior is unchanged.

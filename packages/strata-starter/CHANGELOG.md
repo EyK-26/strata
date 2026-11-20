@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 3.1.6
+
+fix: drain admitted request bookkeeping during shutdown
+
 ## 3.1.5
 
 Generate applications with the corrected 3.1.5 core class-model type declarations. Existing generated source files are not rewritten by a package upgrade.

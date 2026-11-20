@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 3.1.6
+
+fix: drain admitted request bookkeeping during shutdown
+
 ## 3.1.5
 
 Fix published class-model type exports so inferred fields and strict model/repository contracts remain intact in installed applications.
