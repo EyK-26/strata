@@ -6,6 +6,7 @@ import {
 } from "@getstrata/core/queue/queueHandoff";
 import type { ExecutionEnvelope } from "../contracts/application";
 import type { DatabaseSession } from "../database/session";
+import { queueAttempt } from "../runtime/executionContext";
 import type FailedJobService from "./failedJobService";
 import { FailedJobService as LiveFailedJobService } from "./failedJobService";
 import type { JobContext } from "./index";
@@ -62,15 +63,17 @@ function createQueueServices(config: QueueInvocationConfig): QueueServices {
       work: (context: JobContext) => Promise<void>,
     ) => {
       const envelope = attemptEnvelope(job, context);
-      return invoke(envelope, ({ database, policy }) =>
-        work({
-          ...context,
-          ...jobContext,
-          database,
-          policy,
-          actor: envelope.actor,
-          tenant: envelope.tenant,
-        }),
+      return queueAttempt.run(envelope, () =>
+        invoke(envelope, ({ database, policy }) =>
+          work({
+            ...context,
+            ...jobContext,
+            database,
+            policy,
+            actor: envelope.actor,
+            tenant: envelope.tenant,
+          }),
+        ),
       );
     },
   });

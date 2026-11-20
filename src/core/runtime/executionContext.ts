@@ -5,6 +5,9 @@ import type {
   ExecutionContext,
   ExecutionEnvelope,
 } from "../contracts/application";
+import { createAsyncContextStore } from "./asyncContextStore";
+
+const queueAttempt = createAsyncContextStore<ExecutionEnvelope>("@getstrata/queueAttempt");
 
 // Capture platform operations once: envelope signals may override their public members.
 function signalAccessor(name: "aborted" | "reason"): (this: AbortSignal) => unknown {
@@ -188,10 +191,6 @@ function ownExecutionContext(
         check();
         subscribe(drainSignal);
         check();
-        // Producer/startup cancellation closes admission. An actual admitted
-        // request drains until its own cancellation or the cleanup hard deadline.
-        // Remove only our admission subscription, even if the caller explicitly
-        // supplied the same signal as its independent external cancellation.
         removeListener.call(admission.signal, "abort", admission.listener);
         subscriptions.splice(subscriptions.indexOf(admission), 1);
       },
@@ -202,4 +201,4 @@ function ownExecutionContext(
   }
 }
 
-export { normalizeExecutionEnvelope, ownExecutionContext };
+export { normalizeExecutionEnvelope, ownExecutionContext, queueAttempt };

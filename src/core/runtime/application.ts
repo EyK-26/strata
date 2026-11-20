@@ -34,7 +34,7 @@ import type {
   StopResult,
 } from "../contracts/application";
 import type { ServiceToken } from "../contracts/token";
-import { normalizeExecutionEnvelope, ownExecutionContext } from "./executionContext";
+import { normalizeExecutionEnvelope, ownExecutionContext, queueAttempt } from "./executionContext";
 import {
   completeExecution,
   type Settlement,
@@ -360,7 +360,10 @@ class OwnedApplication implements Application {
         () => this.commandSettled(result.promise),
         () => this.commandSettled(result.promise),
       );
-      void this.execute(envelope, work).then(result.resolve, result.reject);
+      const drainOnStop =
+        envelope.kind === "request" ||
+        (envelope.kind === "job" && queueAttempt.getStore() === input);
+      void this.execute(envelope, work, drainOnStop).then(result.resolve, result.reject);
       return result.promise;
     });
   }
@@ -368,6 +371,7 @@ class OwnedApplication implements Application {
   private async execute<T>(
     envelope: ExecutionEnvelope,
     work: (scope: CommandScope) => T | Promise<T>,
+    drainOnStop: boolean,
   ): Promise<T> {
     const owner = ownExecutionContext(envelope, this.id, this.cancellation.signal);
     try {
@@ -466,7 +470,7 @@ class OwnedApplication implements Application {
       const callbacks: Settlement<T> = initialization.ok
         ? await settleExecutionTasks(
             (scope) => {
-              if (scope.context.kind === "request") owner.admit(this.cleanupCancellation.signal);
+              if (drainOnStop) owner.admit(this.cleanupCancellation.signal);
               return work(scope);
             },
             owner.check,

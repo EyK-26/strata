@@ -44,17 +44,17 @@ export async function modelFieldTypeContracts(database: DatabaseSession): Promis
   const state: State | undefined = projected[0]?.state;
   await database.model(Invoice).repository().query().update({ state: "paid" });
 
-  // @ts-expect-error A field declaration cannot be an arbitrary scalar.
+  // @ts-expect-error
   const invalidField: ModelField<string> = 123;
-  // @ts-expect-error The root export preserves the same field declaration contract.
+  // @ts-expect-error
   const invalidRootField: RootModelField<string> = 123;
-  // @ts-expect-error A class identity cannot be an arbitrary object.
+  // @ts-expect-error
   const invalidClass: AnyModelClass = {};
-  // @ts-expect-error Inferred attributes preserve the declared state union.
+  // @ts-expect-error
   const invalidRow: ModelAttributes<Invoice> = { ...row, state: "refunded" };
-  // @ts-expect-error Conditional writes preserve the declared state union.
+  // @ts-expect-error
   await database.model(Invoice).repository().query().update({ state: "refunded" });
-  // @ts-expect-error Projected rows cannot expose unselected columns.
+  // @ts-expect-error
   projected[0]?.reference;
   void [state, invalidField, invalidRootField, invalidClass, invalidRow];
 }

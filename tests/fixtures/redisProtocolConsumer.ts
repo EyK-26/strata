@@ -5,7 +5,8 @@ import type { InitializedAppContext } from "@getstrata/bootstrap/context";
 import { createCacheStore } from "@getstrata/core/cache/createCacheStore";
 import { CacheRepository } from "@getstrata/core/cache/repository";
 import type { Application, TransportDefinition } from "@getstrata/core/contracts/application";
-import { Job } from "@getstrata/core/queue";
+import { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
+import { Job, type JobContext } from "@getstrata/core/queue";
 import type { QueueServices } from "@getstrata/core/queue/createAppQueue";
 import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
 import { resolveQueueRuntimeConfig } from "@getstrata/core/queue/queueConfig";
@@ -257,6 +258,73 @@ try {
   assert.equal(await leases.renew(owner, 60_000), true);
   assert.equal(await leases.complete(owner, 60_000), true);
   assert.equal(await leases.acquire(owner, 60_000), false);
+
+  await app.application.run((scope) =>
+    scope.resolve(DATABASE_SESSION_TOKEN).execute({
+      text: "CREATE TABLE queue_drain_effects (transport TEXT PRIMARY KEY)",
+      params: [],
+    }),
+  );
+  const admitted = {
+    lists: Promise.withResolvers<void>(),
+    streams: Promise.withResolvers<void>(),
+  };
+  const release = Promise.withResolvers<void>();
+  const committed = new Set<string>();
+  class DrainJob extends Job<{ transport: keyof typeof admitted }> {
+    override async handle(
+      { transport }: { transport: keyof typeof admitted },
+      context?: JobContext,
+    ) {
+      assert.ok(context?.database);
+      admitted[transport].resolve();
+      await release.promise;
+      await context.database.transaction((database) =>
+        database.execute({
+          text: "INSERT INTO queue_drain_effects (transport) VALUES (?)",
+          params: [transport],
+        }),
+      );
+      committed.add(transport);
+    }
+  }
+  const drainJob = new DrainJob();
+  const drainName = "qualification.protocol.drain";
+  jobRegistry.register(drainName, () => drainJob);
+  jobRegistry.track(drainName, drainJob);
+  const polls: Promise<boolean>[] = [];
+  const enter = async (
+    transport: keyof typeof admitted,
+    queue: RedisQueue | RedisStreamsQueue,
+    worker: QueueWorkerTransport,
+  ) => {
+    await queue.dispatch(drainJob, { transport });
+    const poll = worker.processNext();
+    polls.push(poll);
+    await Promise.race([
+      admitted[transport].promise,
+      poll.then(() => assert.fail(`${transport} must enter before shutdown`)),
+    ]);
+  };
+  try {
+    await enter("streams", streams, streamWorker);
+    await enter("lists", list, listWorker);
+    const stopping = app.application.stop();
+    assert.equal(app.application.state.phase, "stopping");
+    await assert.rejects(
+      app.application.run(() => {}),
+      /APPLICATION_NOT_READY/,
+    );
+    release.resolve();
+    assert.deepEqual(await Promise.all(polls), [true, true]);
+    assert.equal((await stopping).successful, true);
+    assert.deepEqual([...committed].sort(), ["lists", "streams"]);
+    assert.equal(await observer.llen(queueProcessingKey(queueKey)), 0);
+    assert.equal(Number(await observer.send("XLEN", [streamQueueKey(queueKey)])), 0);
+  } finally {
+    release.resolve();
+    await Promise.allSettled(polls);
+  }
 } catch (error) {
   failed = true;
   failure = error;

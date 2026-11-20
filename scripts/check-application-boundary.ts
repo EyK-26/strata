@@ -42,7 +42,7 @@ const neutralEdges: Readonly<
     ],
   },
   [PATH("runtime/executionContext")]: {
-    values: ["config/configSnapshot"],
+    values: ["config/configSnapshot", "runtime/asyncContextStore"],
     types: ["contracts/application"],
   },
   [PATH("contracts/executionContext")]: {

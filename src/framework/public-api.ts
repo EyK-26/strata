@@ -311,8 +311,6 @@ export {
   filterMassAssignable,
   hydrateValue,
 } from "../core/database/modelAttributes.ts";
-// The public model subpath re-exports this barrel in packed declarations.
-// Resolve its authoring types directly to avoid a circular type alias.
 export type {
   AnyModelClass,
   AuthoredModelClass,
