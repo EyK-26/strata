@@ -556,6 +556,115 @@ describe.skipIf(!adminUrl || !restrictedUrl)("Postgres outbox with restricted-ro
     ).toEqual([]);
   });
 
+  test.each([
+    ["native transaction entry", false],
+    ["independent SQL failure", true],
+  ] as const)("stop during the first outbox claim: %s", async (_stage, failQuery) => {
+    const entered = deferred();
+    const resume = deferred();
+    let polls = 0;
+    let nativePool: RawPool | undefined;
+    const bindings = createSqlOutboxBindings({
+      connection: "main",
+      tenancy: "rls",
+      listeners: [],
+      invoke: (input, work, options) => {
+        if (input.actor?.kind === "system" && input.actor.policy === "outbox.claim") polls++;
+        return invokeManaged(input, work, options);
+      },
+    });
+    const worker = createOutboxWorkerTransport(bindings.token);
+    const services = createDatabaseBindings({
+      default: "main",
+      connections: { main: { driver: "pgsql", url: workerUrl } },
+      preparation: [bindings.token],
+    });
+    const pool = services.find((service) => service.kind === "resource");
+    if (!pool) throw new Error("Outbox claim requires a native pool.");
+    const managed = createApplication({
+      providers: [],
+      services: [...services, ...bindings.services],
+      transports: [worker.transport],
+      overrides: [
+        resourceService(pool.token as ServiceToken<RawPool>, {
+          lifetime: "application",
+          dependencies: pool.dependencies,
+          create: (...dependencies) => {
+            const resource = pool.create(...(dependencies as never[])) as ResourceSpec<RawPool>;
+            return {
+              ...resource,
+              async open(signal) {
+                const opened = await resource.open(signal);
+                if (!opened.ok) return opened;
+                const raw = opened.value;
+                nativePool = raw;
+                return {
+                  ok: true,
+                  value: {
+                    dialect: raw.dialect,
+                    capabilities: raw.capabilities,
+                    execute: (statement) => raw.execute(statement),
+                    close: () => raw.close(),
+                    async checkout(options) {
+                      const acquired = await raw.checkout(options);
+                      if (!acquired.ok) return acquired;
+                      const pin = acquired.value;
+                      return {
+                        ok: true,
+                        value: {
+                          begin: (work) =>
+                            pin.begin(async (tx) => {
+                              if (!failQuery) {
+                                entered.resolve();
+                                await resume.promise;
+                                return work(tx);
+                              }
+                              return work({
+                                async execute<R>(statement: SqlStatement) {
+                                  if (!statement.text.includes(" AS now_ms"))
+                                    return tx.execute<R>(statement);
+                                  entered.resolve();
+                                  await resume.promise;
+                                  return tx.execute<R>({ text: "SELECT 1 / 0", params: [] });
+                                },
+                                savepoint: (nested) => tx.savepoint(nested),
+                              });
+                            }),
+                          release: () => pin.release(),
+                          discard: () => pin.discard(),
+                        },
+                      };
+                    },
+                  },
+                };
+              },
+            };
+          },
+        }),
+      ],
+    });
+    const invokeManaged = createPersistenceInvocation(managed, "main");
+    try {
+      await managed.start();
+      const running = worker.start();
+      await bounded(entered.promise, "native outbox claim transaction");
+      const stopping = managed.stop({ reason: "OUTBOX_SHUTDOWN" });
+      await pending(stopping);
+      resume.resolve();
+      if (failQuery) {
+        await expect(causalFailure(running)).rejects.toThrow("division by zero");
+      } else {
+        await expect(running).resolves.toBeUndefined();
+        await expect(worker.completion).resolves.toBeUndefined();
+      }
+      expect((await stopping).successful).toBe(!failQuery);
+      expect(polls).toBe(1);
+    } finally {
+      resume.resolve();
+      if (!(await managed.stop()).successful) await nativePool?.close();
+    }
+  });
+
   test("managed configured worker preserves tenant extensions and restricted-role RLS", async () => {
     const id = "managed-configured";
     let observed: unknown;

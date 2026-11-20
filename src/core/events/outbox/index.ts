@@ -397,8 +397,9 @@ class SqlOutbox {
     return id;
   }
 
-  private async claim(): Promise<Claim | "exhausted" | null> {
-    return this.privileged("claim", async (db) => {
+  private async claim(applicationShutdown?: AbortSignal): Promise<Claim | "exhausted" | null> {
+    const acquire = async (db: TransactionSession) => {
+      if (applicationShutdown?.aborted) return null;
       const now = await clock(db);
       const p = placeholders(db, 2);
       // Separate indexed scans avoid locking the entire due set during a filesort.
@@ -437,6 +438,7 @@ class SqlOutbox {
         [delivery.event_id],
       );
       if (!event) throw new Error("Outbox event missing for delivery.");
+      if (applicationShutdown?.aborted) return null;
       const candidate = { ...event, ...delivery };
       const token = crypto.randomUUID();
       const exhausted = Number(candidate.attempts) >= Number(candidate.max_attempts);
@@ -464,9 +466,16 @@ class SqlOutbox {
         [candidate.id, candidate.listener_name],
       );
       if (owner?.lease_token !== token) return null;
-      if (exhausted) return "exhausted";
+      if (exhausted) return "exhausted" as const;
       return { ...candidate, attempts: Number(candidate.attempts) + 1, lease_token: token };
-    });
+    };
+    return this.privileged(
+      "claim",
+      acquire,
+      applicationShutdown
+        ? { execution: { drainOnStop: true }, retrySignal: applicationShutdown }
+        : undefined,
+    );
   }
 
   private async renew(claim: Claim): Promise<boolean> {
@@ -566,7 +575,8 @@ class SqlOutbox {
     applicationShutdown?: AbortSignal,
   ): Promise<boolean> {
     options.signal?.throwIfAborted();
-    const claim = await this.claim();
+    const claim = await this.claim(applicationShutdown);
+    applicationShutdown?.throwIfAborted();
     if (!claim) return false;
     if (claim === "exhausted") return true;
     const controller = new AbortController();
