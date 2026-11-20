@@ -266,9 +266,9 @@ export function defineApp<A extends ApplicationAuthServices>(input: AppDefinitio
     const catalog = [cacheEffects, ...listenerDeclarations];
     let invoke: PersistenceInvocation | undefined;
     let auditExport: (() => Promise<number>) | undefined;
-    const run: PersistenceInvocation = (envelope, work) => {
+    const run: PersistenceInvocation = (...args) => {
       if (!invoke) throw new Error("Application owner has not been constructed.");
-      return invoke(envelope, work);
+      return invoke(...args);
     };
     let readyQueueServices: QueueServices | undefined;
     let readyRegistry: JobRegistry | undefined;

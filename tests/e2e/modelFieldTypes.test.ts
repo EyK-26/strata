@@ -73,7 +73,6 @@ test("installed model field exports retain strict authoring and repository types
     const checked = await run(command);
     assert.equal(checked.exit, 0, checked.output);
 
-    // A compiler that accepts this negative control cannot prove these contracts.
     const contract = await readFile(join(directory, "consumer.ts"), "utf8");
     await writeFile(
       join(directory, "consumer.ts"),

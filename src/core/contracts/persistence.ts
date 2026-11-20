@@ -1,5 +1,5 @@
 import type { DatabaseSession, TransactionSession } from "../database/session";
-import type { ExecutionEnvelope } from "./application";
+import type { ExecutionEnvelope, ExecutionOptions } from "./application";
 export type SelectedSession = DatabaseSession | TransactionSession;
 export interface ExecutionPersistence {
   readonly database: DatabaseSession;
@@ -8,6 +8,7 @@ export interface ExecutionPersistence {
 export type PersistenceInvocation = <T>(
   envelope: ExecutionEnvelope,
   work: (ports: ExecutionPersistence) => T | Promise<T>,
+  options?: ExecutionOptions,
 ) => Promise<T>;
 
 export type EstablishedDatabasePolicy =

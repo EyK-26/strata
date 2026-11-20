@@ -278,6 +278,17 @@ test("malformed envelopes and callbacks reject before effects without changing r
     }
     assert.ok((await rejected(app.run(undefined as never))) instanceof TypeError);
     assert.ok((await rejected(app.run({ kind: "command" }, 0 as never))) instanceof TypeError);
+    const optionAccessor = Object.defineProperty({}, "drainOnStop", {
+      enumerable: true,
+      get() {
+        getters++;
+        return true;
+      },
+    });
+    for (const options of [null, { drainOnStop: "true" }, { unknown: true }, optionAccessor]) {
+      const error = await rejected(app.run({ kind: "command" }, () => effects++, options as never));
+      assert.ok(error instanceof TypeError);
+    }
     assert.equal(getters, 0);
     assert.equal(effects, 0, "invalid admission must invoke no factory or callback");
     assert.equal(app.state.boot, "ready");

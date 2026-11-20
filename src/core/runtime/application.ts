@@ -28,13 +28,18 @@ import type {
   CompletionResult,
   ExecutionContext,
   ExecutionEnvelope,
+  ExecutionOptions,
   ProviderDefinition,
   ProviderScope,
   ResourceSpec,
   StopResult,
 } from "../contracts/application";
 import type { ServiceToken } from "../contracts/token";
-import { normalizeExecutionEnvelope, ownExecutionContext } from "./executionContext";
+import {
+  normalizeExecutionEnvelope,
+  ownExecutionContext,
+  readDrainOnStop,
+} from "./executionContext";
 import {
   completeExecution,
   type Settlement,
@@ -324,10 +329,15 @@ class OwnedApplication implements Application {
   }
 
   run<T>(work: (scope: CommandScope) => T | Promise<T>): Promise<T>;
-  run<T>(envelope: ExecutionEnvelope, work: (scope: CommandScope) => T | Promise<T>): Promise<T>;
+  run<T>(
+    envelope: ExecutionEnvelope,
+    work: (scope: CommandScope) => T | Promise<T>,
+    options?: ExecutionOptions,
+  ): Promise<T>;
   run<T>(
     input: ExecutionEnvelope | ((scope: CommandScope) => T | Promise<T>),
     callback?: (scope: CommandScope) => T | Promise<T>,
+    options?: ExecutionOptions,
   ): Promise<T> {
     return this.taskStorage.run(undefined, () => {
       if (this.phase !== "ready") {
@@ -337,6 +347,7 @@ class OwnedApplication implements Application {
       }
       let envelope: ExecutionEnvelope;
       let work: (scope: CommandScope) => T | Promise<T>;
+      let drainOnStop: boolean;
       try {
         const candidate = typeof input === "function" && callback === undefined ? input : callback;
         if (typeof candidate !== "function")
@@ -345,6 +356,7 @@ class OwnedApplication implements Application {
         envelope = normalizeExecutionEnvelope(
           typeof input === "function" && callback === undefined ? { kind: "command" } : input,
         );
+        drainOnStop = readDrainOnStop(options) || envelope.kind === "request";
         // Reflection during normalization can synchronously reenter application.stop().
         if (this.phase !== "ready" || this.cancellation.signal.aborted) {
           throw new ApplicationStateError("APPLICATION_NOT_READY", this.id);
@@ -360,7 +372,7 @@ class OwnedApplication implements Application {
         () => this.commandSettled(result.promise),
         () => this.commandSettled(result.promise),
       );
-      void this.execute(envelope, work).then(result.resolve, result.reject);
+      void this.execute(envelope, work, drainOnStop).then(result.resolve, result.reject);
       return result.promise;
     });
   }
@@ -368,6 +380,7 @@ class OwnedApplication implements Application {
   private async execute<T>(
     envelope: ExecutionEnvelope,
     work: (scope: CommandScope) => T | Promise<T>,
+    drainOnStop: boolean,
   ): Promise<T> {
     const owner = ownExecutionContext(envelope, this.id, this.cancellation.signal);
     try {
@@ -466,7 +479,7 @@ class OwnedApplication implements Application {
       const callbacks: Settlement<T> = initialization.ok
         ? await settleExecutionTasks(
             (scope) => {
-              if (scope.context.kind === "request") owner.admit(this.cleanupCancellation.signal);
+              if (drainOnStop) owner.admit(this.cleanupCancellation.signal);
               return work(scope);
             },
             owner.check,

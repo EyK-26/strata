@@ -10,14 +10,18 @@ export function createPersistenceInvocation(
   connection: string,
 ): PersistenceInvocation {
   if (!connection.trim()) throw new TypeError("A configured persistence connection is required.");
-  return (envelope, work) =>
-    application.run(envelope, (scope) => {
-      const database = scope.resolve(DATABASE_SESSION_TOKEN).connection(connection);
-      const policy = createScopedPolicy(
-        scope.resolve(CORE_EXECUTION_OWNERSHIP_TOKEN),
-        scope.context,
-        database,
-      );
-      return work(Object.freeze({ database, policy }));
-    });
+  return (envelope, work, options) =>
+    application.run(
+      envelope,
+      (scope) => {
+        const database = scope.resolve(DATABASE_SESSION_TOKEN).connection(connection);
+        const policy = createScopedPolicy(
+          scope.resolve(CORE_EXECUTION_OWNERSHIP_TOKEN),
+          scope.context,
+          database,
+        );
+        return work(Object.freeze({ database, policy }));
+      },
+      options,
+    );
 }

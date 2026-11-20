@@ -46,6 +46,14 @@ function record(input: unknown, keys: readonly string[]): Record<string, unknown
   return result;
 }
 
+function readDrainOnStop(options: unknown): boolean {
+  if (options === undefined) return false;
+  const { drainOnStop } = record(options, ["drainOnStop"]);
+  if (drainOnStop !== undefined && typeof drainOnStop !== "boolean")
+    throw new TypeError("Execution drainOnStop must be boolean.");
+  return drainOnStop === true;
+}
+
 function metadata(value: unknown): ApplicationConfig {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError("Execution metadata must be a plain record.");
@@ -188,10 +196,6 @@ function ownExecutionContext(
         check();
         subscribe(drainSignal);
         check();
-        // Producer/startup cancellation closes admission. An actual admitted
-        // request drains until its own cancellation or the cleanup hard deadline.
-        // Remove only our admission subscription, even if the caller explicitly
-        // supplied the same signal as its independent external cancellation.
         removeListener.call(admission.signal, "abort", admission.listener);
         subscriptions.splice(subscriptions.indexOf(admission), 1);
       },
@@ -202,4 +206,4 @@ function ownExecutionContext(
   }
 }
 
-export { normalizeExecutionEnvelope, ownExecutionContext };
+export { normalizeExecutionEnvelope, ownExecutionContext, readDrainOnStop };

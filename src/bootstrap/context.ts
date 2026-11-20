@@ -88,8 +88,8 @@ export function createApplicationContext(
   };
   // These closures are used only after application is assigned, during start/run.
   let application: Application;
-  const invoke: PersistenceInvocation = (envelope, work) =>
-    createPersistenceInvocation(application, options.connection)(envelope, work);
+  const invoke: PersistenceInvocation = (...args) =>
+    createPersistenceInvocation(application, options.connection)(...args);
   const dependencies: MutableAppDependencies = { container, invoke };
   const context: ProviderContext = {
     container,
