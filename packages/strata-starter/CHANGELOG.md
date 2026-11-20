@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 3.1.8
+
+Fix graceful shutdown for admitted outbox completions
+
 ## 3.1.7
 
 Fix graceful shutdown for admitted queue jobs

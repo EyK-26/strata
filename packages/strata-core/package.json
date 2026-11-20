@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/core",
-  "version": "3.1.7",
+  "version": "3.1.8",
   "description": "Laravel-inspired framework for Bun and TypeScript: models, authentication, queues, mail, and storage.",
   "type": "module",
   "license": "MIT",

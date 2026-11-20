@@ -1,6 +1,6 @@
 {
   "name": "@getstrata/bootstrap",
-  "version": "3.1.7",
+  "version": "3.1.8",
   "description": "Application startup, routing, middleware, and service configuration for Strata.",
   "type": "module",
   "license": "MIT",
@@ -246,7 +246,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@getstrata/core": "^3.1.7",
+    "@getstrata/core": "^3.1.8",
     "typescript": "^5.9.0 || ^6.0.0 || ^7.0.0"
   },
   "engines": {
