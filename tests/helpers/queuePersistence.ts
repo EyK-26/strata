@@ -23,8 +23,16 @@ async function createQueuePersistenceFixture() {
       params: [],
     }),
   );
-  const invoke: import("@getstrata/core/queue/queueServices").QueueInvocation = (envelope, work) =>
-    application.run(envelope, (scope) => work({ database: scope.resolve(DATABASE_SESSION_TOKEN) }));
+  const invoke: import("@getstrata/core/queue/queueServices").QueueInvocation = (
+    envelope,
+    work,
+    options,
+  ) =>
+    application.run(
+      envelope,
+      (scope) => work({ database: scope.resolve(DATABASE_SESSION_TOKEN) }),
+      options,
+    );
   const services = createSystemQueueServices(invoke);
   return { application, run, services, invoke };
 }

@@ -46,6 +46,14 @@ function record(input: unknown, keys: readonly string[]): Record<string, unknown
   return result;
 }
 
+function readDrainOnStop(options: unknown): boolean {
+  if (options === undefined) return false;
+  const { drainOnStop } = record(options, ["drainOnStop"]);
+  if (drainOnStop !== undefined && typeof drainOnStop !== "boolean")
+    throw new TypeError("Execution drainOnStop must be boolean.");
+  return drainOnStop === true;
+}
+
 function metadata(value: unknown): ApplicationConfig {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError("Execution metadata must be a plain record.");
@@ -198,4 +206,4 @@ function ownExecutionContext(
   }
 }
 
-export { normalizeExecutionEnvelope, ownExecutionContext };
+export { normalizeExecutionEnvelope, ownExecutionContext, readDrainOnStop };

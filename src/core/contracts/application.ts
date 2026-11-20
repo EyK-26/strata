@@ -128,6 +128,10 @@ type ExecutionEnvelope = ExecutionEnvelopeFields &
     | { readonly kind: "job"; readonly actor: ExecutionActor }
   );
 
+interface ExecutionOptions {
+  readonly drainOnStop?: boolean;
+}
+
 type ExecutionContext = ExecutionEnvelope & {
   readonly applicationId: string;
   readonly executionId: string;
@@ -165,7 +169,11 @@ interface Application {
   /** Stable, never rejecting; remains pending while owned operations are actually still running. */
   readonly completion: Promise<CompletionResult>;
   run<T>(work: (scope: CommandScope) => T | Promise<T>): Promise<T>;
-  run<T>(envelope: ExecutionEnvelope, work: (scope: CommandScope) => T | Promise<T>): Promise<T>;
+  run<T>(
+    envelope: ExecutionEnvelope,
+    work: (scope: CommandScope) => T | Promise<T>,
+    options?: ExecutionOptions,
+  ): Promise<T>;
 }
 
 export type {
@@ -184,6 +192,7 @@ export type {
   ExecutionActor,
   ExecutionContext,
   ExecutionEnvelope,
+  ExecutionOptions,
   ExecutionTaskOutcome,
   OpenOutcome,
   ProviderDefinition,

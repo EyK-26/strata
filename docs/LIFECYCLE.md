@@ -4,7 +4,7 @@ Generated HTTP, queue worker and scheduler entrypoints use `LifecycleCoordinator
 
 The application owner performs shutdown in this order: stop admission, drain admitted work, flush telemetry, close infrastructure. Repeated application stop calls share shutdown work. The signal coordinator is a one-shot adapter around that owner; create another for another application lifetime. Its own callbacks run sequentially in registration order within each phase.
 
-Stopping closes root admission and cancels startup and unfinished execution initialization. Admitted requests and queue attempts can finish joined work and post-commit observers before resources close. Caller cancellation, execution deadlines and the application's hard cleanup deadline still apply. Commands and other jobs retain producer-stop cancellation.
+Stopping closes root admission and cancels startup and unfinished execution initialization. Admitted requests and queue attempts can finish joined work and post-commit observers before resources close. Caller cancellation, execution deadlines and the application's hard cleanup deadline still apply. Commands and other jobs retain producer-stop cancellation by default.
 
 ```ts
 import {
@@ -29,6 +29,8 @@ The generated `webServerResource` transport stops admission before awaiting Bun'
 Providers register `onCleanup(handler, "drain" | "flush" | "close")`; omitted phase means close. Each provider phase runs once in reverse resource acquisition order. Application stop owns these phases and database closure; do not separately call `context.dispose()` and manually close its database. A failed drain prevents resource closure. Flush failure is reported but remaining cleanup proceeds. Generated and default core provider lists create an application-owned tracing runtime, which flushes in this phase and shuts down in close. Applications with an explicit custom telemetry runtime register its flush in the flush phase and shutdown in close. See [TRACING.md](TRACING.md).
 
 The queue CLI stops reserving jobs and awaits the active handler and its acknowledgement before cleanup. Its application owns provider drain, flush and close phases. The async in-process queue owns scheduled callbacks and drains child jobs before its provider closes. It remains ephemeral: use Redis for recoverable delivery. Redis jobs and SQL outbox deliveries remain at least once; effects require replay-safe handlers. On forced worker termination, unacknowledged Redis reservations remain eligible for recovery.
+
+Queue services request bounded drain through the optional third argument of their injected runner. `createPersistenceInvocation` forwards it to `application.run`. Custom runners should also forward that argument to preserve graceful drain.
 
 Redis worker `run()` loops retire a native connection rejected with `ERR_REDIS_CONNECTION_CLOSED`, wait 250ms and resume normal polling with a fresh connection. Streams consumer-group initialization is repeated idempotently; reservation/retry records remain authoritative. The failed Redis command is never automatically replayed: loss around an acknowledgement may repeat the handler after normal ownership expiry. Direct `processNext()` calls still report the error to their caller. ACL, authentication, protocol and other errors remain fatal rather than being silently retried. Explicit worker closure is terminal, including during backoff. This does not guarantee Redis data durability, successful effects during an outage or recovery of a synchronously blocked event loop.
 

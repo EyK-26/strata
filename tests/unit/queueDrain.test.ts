@@ -1,9 +1,13 @@
 import { expect, test } from "bun:test";
+import { createSystemQueueServices } from "@getstrata/core/queue/queueServices";
 import { bounded, deferred } from "../fixtures/applicationOwnershipSupport";
 import { withQueuePersistence } from "../helpers/queuePersistence";
 
-test("application stop drains admitted queue SQL but cancels ordinary job executions", async () => {
-  await withQueuePersistence(async ({ application, services, run }) => {
+test("application stop drains queue SQL through a copying runner but cancels ordinary jobs", async () => {
+  await withQueuePersistence(async ({ application, invoke, run }) => {
+    const services = createSystemQueueServices((envelope, work, options) =>
+      invoke({ ...envelope }, work, options),
+    );
     await run((database) =>
       database.execute({ text: "CREATE TABLE drain_effects (id INTEGER PRIMARY KEY)", params: [] }),
     );

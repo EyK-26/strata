@@ -4,9 +4,8 @@ import {
   QueueHandoffError,
   type QueueIdentity,
 } from "@getstrata/core/queue/queueHandoff";
-import type { ExecutionEnvelope } from "../contracts/application";
+import type { ExecutionEnvelope, ExecutionOptions } from "../contracts/application";
 import type { DatabaseSession } from "../database/session";
-import { queueAttempt } from "../runtime/queueAttempt";
 import type FailedJobService from "./failedJobService";
 import { FailedJobService as LiveFailedJobService } from "./failedJobService";
 import type { JobContext } from "./index";
@@ -19,6 +18,7 @@ type QueueInvocation = <T>(
     readonly database: DatabaseSession;
     readonly policy?: import("../contracts/persistence").ScopedPolicy;
   }) => T | Promise<T>,
+  options?: ExecutionOptions,
 ) => Promise<T>;
 type FailureInput = Parameters<FailedJobService["recordFailure"]>[0];
 interface QueueServices
@@ -63,8 +63,9 @@ function createQueueServices(config: QueueInvocationConfig): QueueServices {
       work: (context: JobContext) => Promise<void>,
     ) => {
       const envelope = attemptEnvelope(job, context);
-      return queueAttempt.run(envelope, () =>
-        invoke(envelope, ({ database, policy }) =>
+      return invoke(
+        envelope,
+        ({ database, policy }) =>
           work({
             ...context,
             ...jobContext,
@@ -73,7 +74,7 @@ function createQueueServices(config: QueueInvocationConfig): QueueServices {
             actor: envelope.actor,
             tenant: envelope.tenant,
           }),
-        ),
+        { drainOnStop: true },
       );
     },
   });
