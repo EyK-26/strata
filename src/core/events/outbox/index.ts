@@ -9,7 +9,7 @@ import {
   type SessionOwnerIdentity,
 } from "#strata-orm-internal";
 import { copyApplicationConfig } from "../../config/configSnapshot";
-import type { ApplicationConfig } from "../../contracts/application";
+import type { ApplicationConfig, ExecutionOptions } from "../../contracts/application";
 import type { PersistenceInvocation, SelectedSession } from "../../contracts/persistence";
 import type { TransactionSession } from "../../database/session";
 import { resolveTenant } from "../../tenant/resolveTenant";
@@ -246,6 +246,7 @@ class SqlOutbox {
   private async privileged<T>(
     phase: string,
     work: (selected: TransactionSession) => Promise<T>,
+    options?: Readonly<{ execution?: ExecutionOptions; retrySignal?: AbortSignal }>,
   ): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       try {
@@ -257,10 +258,12 @@ class SqlOutbox {
               ? ports.policy.run(ports.database, { kind: "bypass" }, work)
               : ports.database.transaction(work);
           },
+          options?.execution,
         );
       } catch (error) {
-        if (attempt >= 4 || !retryable(error)) throw error;
+        if (options?.retrySignal?.aborted || attempt >= 4 || !retryable(error)) throw error;
         await Bun.sleep(10 * (attempt + 1));
+        if (options?.retrySignal?.aborted) throw error;
       }
     }
   }
@@ -486,34 +489,49 @@ class SqlOutbox {
     });
   }
 
-  private async finish(claim: Claim, success: boolean): Promise<void> {
-    await this.privileged("finish", async (db) => {
-      const now = await clock(db);
-      const status = success
-        ? "completed"
-        : claim.attempts >= Number(claim.max_attempts)
-          ? "failed"
-          : "pending";
-      const delay = Math.min(this.retryDelayMs * 2 ** Math.min(claim.attempts - 1, 16), 300_000);
-      const p = placeholders(db, 9);
-      await sql(
-        db,
-        `UPDATE strata_outbox_delivery SET status = ${p[0]}, available_at = ${p[1]}, completed_at = ${p[2]},
+  private async finish(claim: Claim, success: boolean, signal: AbortSignal): Promise<void> {
+    await this.privileged(
+      "finish",
+      async (db) => {
+        if (success && signal.aborted) return;
+        const lease = placeholders(db, 4);
+        const [owner] = await sql<{ lease_until: number | null }>(
+          db,
+          `SELECT lease_until FROM strata_outbox_delivery WHERE event_id = ${lease[0]}
+        AND listener_name = ${lease[1]} AND lease_token = ${lease[2]} AND attempts = ${lease[3]}
+        AND status = 'processing'${db.dialect.rowLockClause()}`,
+          [claim.id, claim.listener_name, claim.lease_token, claim.attempts],
+        );
+        if (!owner) return;
+        const now = await clock(db);
+        if (Number(owner.lease_until) <= now) return;
+        const status = success
+          ? "completed"
+          : claim.attempts >= Number(claim.max_attempts)
+            ? "failed"
+            : "pending";
+        const delay = Math.min(this.retryDelayMs * 2 ** Math.min(claim.attempts - 1, 16), 300_000);
+        const p = placeholders(db, 9);
+        await sql(
+          db,
+          `UPDATE strata_outbox_delivery SET status = ${p[0]}, available_at = ${p[1]}, completed_at = ${p[2]},
         error_code = ${p[3]}, lease_until = NULL WHERE event_id = ${p[4]} AND listener_name = ${p[5]}
         AND lease_token = ${p[6]} AND status = 'processing' AND lease_until > ${p[7]} AND attempts = ${p[8]}`,
-        [
-          status,
-          now + delay,
-          success ? now : null,
-          success ? null : "listener_failed",
-          claim.id,
-          claim.listener_name,
-          claim.lease_token,
-          now,
-          claim.attempts,
-        ],
-      );
-    });
+          [
+            status,
+            now + delay,
+            success ? now : null,
+            success ? null : "listener_failed",
+            claim.id,
+            claim.listener_name,
+            claim.lease_token,
+            now,
+            claim.attempts,
+          ],
+        );
+      },
+      { execution: success ? { drainOnStop: true } : undefined, retrySignal: signal },
+    );
   }
 
   processNext(options: { signal?: AbortSignal } = {}): Promise<boolean> {
@@ -655,7 +673,7 @@ class SqlOutbox {
       // An original transport setup signal proves this application's admission is
       // closing. Leave the lease recoverable; never attempt or reopen fresh finish SQL.
       if (!applicationShutdown?.aborted)
-        await this.finish(claim, success && !controller.signal.aborted);
+        await this.finish(claim, success && !controller.signal.aborted, options.signal);
     } catch (error) {
       if (failures.length)
         throw new AggregateError([...failures, error], "Outbox cancellation and finish failed.");

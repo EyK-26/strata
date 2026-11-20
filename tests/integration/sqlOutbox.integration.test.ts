@@ -891,12 +891,16 @@ describe.skipIf(!mysqlUrl)("outbox on dedicated MySQL fixture", () => {
   });
 });
 
-for (const fault of [false, true]) {
+for (const boundary of ["drain", "failure", "expired lease", "shutdown deadline"] as const) {
   test.skipIf(!adminUrl || !restrictedUrl)(
-    `native admitted outbox finish remains joined during application stop; trigger failure=${fault}`,
+    `native admitted outbox finish during application stop: ${boundary}`,
     async () => {
       if (!adminUrl || !restrictedUrl)
         throw new Error("Dedicated PostgreSQL credentials required.");
+      const fault = boundary === "failure";
+      const expires = boundary === "expired lease";
+      const timesOut = boundary === "shutdown deadline";
+      const updateGate = 741232;
       const name = `finish_${crypto.randomUUID().replaceAll("-", "")}`;
       const control = new SQL(adminUrl);
       let admin: SQL | undefined;
@@ -917,7 +921,7 @@ for (const fault of [false, true]) {
       const marker = "OUTBOX_FINISH_NATIVE_SENTINEL";
       const eventId = "a-admitted-finish";
       const successorId = "z-unadmitted-successor";
-      const observations: Record<string, unknown> = { fault };
+      const observations: Record<string, unknown> = { boundary };
       const finishTerminals: Terminal<unknown>[] = [];
       const finishSql: Array<{ ok: boolean; error?: unknown }> = [];
       const finishDisposals: Array<{ operation: string; ok: boolean }> = [];
@@ -934,10 +938,10 @@ for (const fault of [false, true]) {
         const bindings = createSqlOutboxBindings({
           connection: "main",
           tenancy: "rls",
-          leaseMs: 60_000,
-          invoke: (input, work) => {
+          leaseMs: expires ? 1_500 : 60_000,
+          invoke: (...args) => {
             if (!application) throw new Error("Missing original application.");
-            return createPersistenceInvocation(application, "main")(input, work);
+            return createPersistenceInvocation(application, "main")(...args);
           },
           resolveTenant: async () => tenant,
           listeners: [
@@ -965,6 +969,7 @@ for (const fault of [false, true]) {
         if (pool?.kind !== "resource") throw new Error("Missing original native pool resource.");
         application = createApplication({
           providers: [],
+          shutdownTimeoutMs: timesOut ? 1_000 : undefined,
           services: [...database, ...bindings.services],
           transports: [worker.transport],
           overrides: [
@@ -1000,7 +1005,14 @@ for (const fault of [false, true]) {
                                 statement.text.startsWith(
                                   "UPDATE strata_outbox_delivery SET status =",
                                 ) && statement.text.includes("completed_at");
-                              if (isFinish) finishing = true;
+                              if (
+                                isFinish ||
+                                (statement.text.startsWith(
+                                  "SELECT lease_until FROM strata_outbox_delivery",
+                                ) &&
+                                  statement.text.includes("AND attempts ="))
+                              )
+                                finishing = true;
                               try {
                                 const rows = await transaction.execute<Row>(statement);
                                 if (isFinish) finishSql.push({ ok: true });
@@ -1072,11 +1084,13 @@ for (const fault of [false, true]) {
         await admin.unsafe(
           `GRANT SELECT,INSERT,UPDATE ON strata_outbox_event,strata_outbox_delivery TO "${role.role}"`,
         );
-        if (fault)
-          await admin.unsafe(`CREATE FUNCTION finish_fault() RETURNS trigger LANGUAGE plpgsql AS $$
+        if (!expires)
+          await admin.unsafe(`CREATE FUNCTION hold_finish() RETURNS trigger LANGUAGE plpgsql AS $$
         BEGIN IF NEW.status='completed' AND NEW.event_id='${eventId}' THEN
-          RAISE EXCEPTION '${marker}' USING ERRCODE='P0001'; END IF; RETURN NEW; END $$;
-        CREATE TRIGGER finish_fault BEFORE UPDATE ON strata_outbox_delivery FOR EACH ROW EXECUTE FUNCTION finish_fault()`);
+          PERFORM pg_advisory_xact_lock(${updateGate});
+          ${fault ? `RAISE EXCEPTION '${marker}' USING ERRCODE='P0001';` : ""}
+        END IF; RETURN NEW; END $$;
+        CREATE TRIGGER hold_finish BEFORE UPDATE ON strata_outbox_delivery FOR EACH ROW EXECUTE FUNCTION hold_finish()`);
         const outbox = await application.run((scope) => scope.resolve(bindings.token));
         for (const id of [eventId, successorId])
           await invoke({ kind: "command", tenant }, ({ database, policy }) =>
@@ -1101,11 +1115,19 @@ for (const fault of [false, true]) {
         ).toEqual({ status: "processing", attempts: 1, maxAttempts: 5 });
         const inspection = admin;
         locking = inspection.begin(async (transaction) => {
+          if (expires) {
+            const rows = await transaction.unsafe(
+              "SELECT event_id FROM strata_outbox_delivery WHERE event_id=$1 FOR UPDATE",
+              [eventId],
+            );
+            expect(rows).toHaveLength(1);
+          } else {
+            await transaction.unsafe("SELECT pg_advisory_xact_lock($1)", [updateGate]);
+          }
           const [row] = await transaction.unsafe<{ pid: number }[]>(
-            "SELECT pg_backend_pid() AS pid FROM strata_outbox_delivery WHERE event_id=$1 FOR UPDATE",
-            [eventId],
+            "SELECT pg_backend_pid() AS pid",
           );
-          if (!row) throw new Error("Missing claimed delivery row to lock.");
+          if (!row) throw new Error("Missing native blocker identity.");
           locked.resolve(row.pid);
           await releaseLock.promise;
         });
@@ -1123,15 +1145,21 @@ for (const fault of [false, true]) {
         const deadline = performance.now() + 3000;
         while (!blocked && performance.now() < deadline) {
           const rows = await inspection.unsafe<Blocked[]>(
-            "SELECT pid,datname,usename,wait_event_type,query,pg_blocking_pids(pid) AS blockers FROM pg_stat_activity WHERE datname=$1 AND usename=$2 AND state='active' AND wait_event_type='Lock' AND query LIKE 'UPDATE strata_outbox_delivery SET status =%completed_at%'",
-            [name, role.role],
+            "SELECT pid,datname,usename,wait_event_type,query,pg_blocking_pids(pid) AS blockers FROM pg_stat_activity WHERE datname=$1 AND usename=$2 AND state='active' AND wait_event_type='Lock' AND query LIKE $3",
+            [
+              name,
+              role.role,
+              expires
+                ? "SELECT lease_until FROM strata_outbox_delivery%AND attempts =%FOR UPDATE"
+                : "UPDATE strata_outbox_delivery SET status =%completed_at%",
+            ],
           );
           blocked = rows.find((row) => row.blockers.includes(holderPid));
           if (!blocked) await Bun.sleep(5);
         }
         expect(blocked).toBeDefined();
         if (!blocked)
-          throw new Error("Actual finish UPDATE never blocked on the owned delivery row.");
+          throw new Error("The native completion transaction did not reach its lock barrier.");
         expect(blocked.pid).not.toBe(holderPid);
         expect(blocked.datname).toBe(name);
         expect(blocked.usename).toBe(role.role);
@@ -1169,6 +1197,31 @@ for (const fault of [false, true]) {
             )
           )[0],
         ).toEqual({ status: "pending", attempts: 0 });
+        if (expires) {
+          await bounded(
+            (async () => {
+              const expiryDeadline = performance.now() + 4_000;
+              while (performance.now() < expiryDeadline) {
+                const [lease] = await inspection.unsafe<{ expired: boolean }[]>(
+                  "SELECT lease_until <= (EXTRACT(EPOCH FROM clock_timestamp())*1000)::bigint AS expired FROM strata_outbox_delivery WHERE event_id=$1",
+                  [eventId],
+                );
+                if (lease?.expired) return;
+                await Bun.sleep(20);
+              }
+              throw new Error("The native delivery lease did not expire.");
+            })(),
+            "native lease expiry",
+            4000,
+          );
+        }
+        if (timesOut) {
+          const deadlineResult = await bounded(stopping, "native completion shutdown deadline");
+          expect(deadlineResult.timedOut).toBe(true);
+          expect(deadlineResult.successful).toBe(false);
+          expect(poolCloses).toBe(0);
+          await pending(completion);
+        }
         releaseLock.resolve();
         await bounded(locking, "native lock transaction release", 3000);
         const stopped = await bounded(
@@ -1183,7 +1236,7 @@ for (const fault of [false, true]) {
           3000,
         );
         const [delivery] = await inspection.unsafe<
-          { status: string; attempts: number; completed_at: number | null }[]
+          { status: string; attempts: number; completed_at: string | number | null }[]
         >("SELECT status,attempts,completed_at FROM strata_outbox_delivery WHERE event_id=$1", [
           eventId,
         ]);
@@ -1198,15 +1251,18 @@ for (const fault of [false, true]) {
           poolCloses,
         };
         expect(finishTerminals).toHaveLength(1);
-        expect(finishTerminals[0]?.data).toBe("rolled-back");
+        const rolledBack = fault || timesOut;
+        expect(finishTerminals[0]?.data).toBe(rolledBack ? "rolled-back" : "committed");
         expect(finishTerminals[0]?.nativeState).toBe("idle");
         expect(
           finishTerminals[0]?.phases.some(
-            (phase) => phase.phase === "rollback" && phase.acknowledgement === "confirmed-reply",
+            (phase) =>
+              phase.phase === (rolledBack ? "rollback" : "commit") &&
+              phase.acknowledgement === "confirmed-reply",
           ),
         ).toBe(true);
         expect(finishDisposals).toEqual([{ operation: "release", ok: true }]);
-        expect(finishSql).toHaveLength(1);
+        expect(finishSql).toHaveLength(expires ? 0 : 1);
         observations.native = {
           terminals: finishTerminals.map((terminal) => ({
             data: terminal.data,
@@ -1248,14 +1304,24 @@ for (const fault of [false, true]) {
           expect(stopped.snapshot.retainedResources.length).toBeGreaterThan(0);
           expect(poolCloses).toBe(0);
           expect(delivery).toEqual({ status: "processing", attempts: 1, completed_at: null });
+        } else if (timesOut) {
+          expect(stopped.timedOut).toBe(true);
+          expect(delivery).toEqual({ status: "processing", attempts: 1, completed_at: null });
         } else {
           expect(outcome.ok).toBe(true);
           expect(completed.ok).toBe(true);
           expect(stopped.successful).toBe(true);
           expect(stopped.snapshot.retainedResources).toEqual([]);
           expect(poolCloses).toBe(1);
-          expect(finishSql[0]?.ok).toBe(true);
-          expect(delivery).toEqual({ status: "processing", attempts: 1, completed_at: null });
+          if (expires) {
+            expect(delivery).toEqual({ status: "processing", attempts: 1, completed_at: null });
+          } else {
+            expect(finishSql[0]?.ok).toBe(true);
+            expect(delivery).toMatchObject({ status: "completed", attempts: 1 });
+            const completedAt = Number(delivery?.completed_at);
+            expect(Number.isSafeInteger(completedAt)).toBe(true);
+            expect(completedAt).toBeGreaterThan(0);
+          }
         }
         expect(
           (
