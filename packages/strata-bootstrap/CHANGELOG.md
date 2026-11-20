@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 3.1.7
+
+Fix graceful shutdown for admitted queue jobs
+
 ## 3.1.6
 
 fix: drain admitted request bookkeeping during shutdown

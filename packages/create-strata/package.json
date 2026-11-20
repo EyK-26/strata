@@ -1,6 +1,6 @@
 {
   "name": "create-strata",
-  "version": "3.1.6",
+  "version": "3.1.7",
   "description": "Create Laravel-inspired applications with Bun and TypeScript.",
   "type": "module",
   "license": "MIT",
