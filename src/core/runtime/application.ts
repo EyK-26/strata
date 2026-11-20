@@ -465,7 +465,10 @@ class OwnedApplication implements Application {
       };
       const callbacks: Settlement<T> = initialization.ok
         ? await settleExecutionTasks(
-            work,
+            (scope) => {
+              if (scope.context.kind === "request") owner.admit(this.cleanupCancellation.signal);
+              return work(scope);
+            },
             owner.check,
             (body, spawn, resources, dispatch) => {
               const lease = { active: true };

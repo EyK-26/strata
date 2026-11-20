@@ -4,6 +4,8 @@ Generated HTTP, queue worker and scheduler entrypoints use `LifecycleCoordinator
 
 The application owner performs shutdown in this order: stop admission, drain admitted work, flush telemetry, close infrastructure. Repeated application stop calls share shutdown work. The signal coordinator is a one-shot adapter around that owner; create another for another application lifetime. Its own callbacks run sequentially in registration order within each phase.
 
+Stopping still cancels startup and unfinished execution initialization. Once the actual request body is admitted, ordinary producer shutdown does not cancel that request's joined work or post-commit observers. Its caller signal, execution deadline and the application's hard cleanup deadline remain cancellation sources. Command and job executions retain their existing producer-stop cancellation. This lets an acknowledged request COMMIT finish its existing bookkeeping before resources close; it does not admit another root execution during shutdown.
+
 ```ts
 import {
   LifecycleCoordinator,
