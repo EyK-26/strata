@@ -64,97 +64,130 @@ async function expectCancellation(promise: Promise<unknown>, signal: AbortSignal
 
 describe('durable SQL outbox on SQLite', () => {
 	test('outbox rejects a nonarray listener catalog before opening storage', () => {
-		expect(() => createSqlOutboxBindings({
-			connection: 'main',
-			tenancy: 'none',
-			invoke: async () => {
-				throw new Error('Malformed bindings must not invoke storage');
-			},
-			listeners: {} as never,
-		})).toThrow('Durable listeners must be an array.');
+		expect(() =>
+			createSqlOutboxBindings({
+				connection: 'main',
+				tenancy: 'none',
+				invoke: async () => {
+					throw new Error('Malformed bindings must not invoke storage');
+				},
+				listeners: {} as never,
+			}),
+		).toThrow('Durable listeners must be an array.');
 	});
 
 	test('invalid clock and orphaned delivery observations fail before advancing a lease', async () => {
-		await withOutboxes([{ listeners: [listener(() => {
-			throw new Error('Malformed input must not reach a listener');
-		})] }], async (fixture) => {
-			const [outbox] = fixture.outboxes;
+		await withOutboxes(
+			[
+				{
+					listeners: [
+						listener(() => {
+							throw new Error('Malformed input must not reach a listener');
+						}),
+					],
+				},
+			],
+			async (fixture) => {
+				const [outbox] = fixture.outboxes;
 
-			if (!outbox) {
-				throw new Error('Missing fixture outbox');
-			}
+				if (!outbox) {
+					throw new Error('Missing fixture outbox');
+				}
 
-			await fixture.publish(outbox);
-			const original = await fixture.delivery();
+				await fixture.publish(outbox);
+				const original = await fixture.delivery();
 
-			for (const [query, rows, expected] of [
-				['AS now_ms', [{ now_ms: NaN }], 'Database did not return a valid outbox clock.'],
-				['SELECT * FROM strata_outbox_event', [], 'Outbox event missing for delivery.'],
-			] as const) {
-				fixture.faults.afterExecute = (policy, { text }, actual) =>
-					policy === 'outbox.claim' && text.includes(query) ? rows : actual;
-				await expect(outbox.processNext()).rejects.toThrow(expected);
-				expect(await fixture.delivery()).toEqual(original);
-			}
-		});
+				for (const [query, rows, expected] of [
+					['AS now_ms', [{ now_ms: NaN }], 'Database did not return a valid outbox clock.'],
+					['SELECT * FROM strata_outbox_event', [], 'Outbox event missing for delivery.'],
+				] as const) {
+					fixture.faults.afterExecute = (policy, { text }, actual) =>
+						policy === 'outbox.claim' && text.includes(query) ? rows : actual;
+					await expect(outbox.processNext()).rejects.toThrow(expected);
+					expect(await fixture.delivery()).toEqual(original);
+				}
+			},
+		);
 	});
 
 	test('a conditional claim that never acquired its lease never invokes a listener', async () => {
 		let deliveries = 0;
 
-		await withOutboxes([{ listeners: [listener(async () => { deliveries++; })] }], async (fixture) => {
-			const [outbox] = fixture.outboxes;
+		await withOutboxes(
+			[
+				{
+					listeners: [
+						listener(async () => {
+							deliveries++;
+						}),
+					],
+				},
+			],
+			async (fixture) => {
+				const [outbox] = fixture.outboxes;
 
-			if (!outbox) {
-				throw new Error('Missing fixture outbox');
-			}
+				if (!outbox) {
+					throw new Error('Missing fixture outbox');
+				}
 
-			await fixture.publish(outbox);
-			await fixture.db.unsafe(`CREATE TRIGGER reject_fixture_claim
+				await fixture.publish(outbox);
+				await fixture.db.unsafe(`CREATE TRIGGER reject_fixture_claim
 				BEFORE UPDATE OF lease_token ON strata_outbox_delivery
 				WHEN NEW.status = 'processing' BEGIN SELECT RAISE(IGNORE); END`);
-			const pending = await fixture.delivery();
+				const pending = await fixture.delivery();
 
-			expect(await outbox.processNext()).toBe(false);
-			expect(await fixture.delivery()).toEqual(pending);
-			expect(deliveries).toBe(0);
-		});
+				expect(await outbox.processNext()).toBe(false);
+				expect(await fixture.delivery()).toEqual(pending);
+				expect(deliveries).toBe(0);
+			},
+		);
 	});
 
 	test('shutdown after finding a delivery and its event leaves the pending row unchanged', async () => {
 		let deliveries = 0;
 
-		await withOutboxes([{ listeners: [listener(async () => { deliveries++; })] }], async (fixture) => {
-			const [outbox] = fixture.outboxes;
+		await withOutboxes(
+			[
+				{
+					listeners: [
+						listener(async () => {
+							deliveries++;
+						}),
+					],
+				},
+			],
+			async (fixture) => {
+				const [outbox] = fixture.outboxes;
 
-			if (!outbox) {
-				throw new Error('Missing fixture outbox');
-			}
-
-			await fixture.publish(outbox);
-			const before = await fixture.delivery();
-
-			const shutdown = new AbortController();
-
-			const reason = new Error('Application admission closed after event read');
-
-			fixture.faults.afterExecute = (policy, { text }, rows) => {
-				if (policy === 'outbox.claim' && text.startsWith('SELECT * FROM strata_outbox_event')) {
-					shutdown.abort(reason);
+				if (!outbox) {
+					throw new Error('Missing fixture outbox');
 				}
 
-				return rows;
-			};
-			const workerOptions = {
-				signal: new AbortController().signal,
-				[workerApplicationShutdown]: shutdown.signal,
-			};
+				await fixture.publish(outbox);
+				const before = await fixture.delivery();
 
-			await expect(outbox.work(workerOptions)).rejects.toBe(reason);
-			expect(shutdown.signal.aborted).toBe(true);
-			expect(await fixture.delivery()).toEqual(before);
-			expect(deliveries).toBe(0);
-		});
+				const shutdown = new AbortController();
+
+				const reason = new Error('Application admission closed after event read');
+
+				fixture.faults.afterExecute = (policy, { text }, rows) => {
+					if (policy === 'outbox.claim' && text.startsWith('SELECT * FROM strata_outbox_event')) {
+						shutdown.abort(reason);
+					}
+
+					return rows;
+				};
+				const workerOptions = {
+					signal: new AbortController().signal,
+					[workerApplicationShutdown]: shutdown.signal,
+				};
+
+				await expect(outbox.work(workerOptions)).rejects.toBe(reason);
+				expect(shutdown.signal.aborted).toBe(true);
+				expect(await fixture.delivery()).toEqual(before);
+				expect(deliveries).toBe(0);
+			},
+		);
 	});
 
 	test('a caller cancelling during the claim cannot invoke a claimed listener', async () => {
@@ -162,28 +195,40 @@ describe('durable SQL outbox on SQLite', () => {
 
 		const cancellation = new AbortController();
 
-		await withOutboxes([{ listeners: [listener(async () => {
-			deliveries++;
-		})] }], async (fixture) => {
-			const [outbox] = fixture.outboxes;
+		await withOutboxes(
+			[
+				{
+					listeners: [
+						listener(async () => {
+							deliveries++;
+						}),
+					],
+				},
+			],
+			async (fixture) => {
+				const [outbox] = fixture.outboxes;
 
-			if (!outbox) {
-				throw new Error('Missing fixture outbox');
-			}
-
-			await fixture.publish(outbox);
-			fixture.faults.afterExecute = (policy, { text }, rows) => {
-				if (policy === 'outbox.claim' && text.startsWith('SELECT lease_token')) {
-					cancellation.abort(new Error('Cancellation observed as the claim settles'));
+				if (!outbox) {
+					throw new Error('Missing fixture outbox');
 				}
 
-				return rows;
-			};
-			await expectCancellation(outbox.processNext({ signal: cancellation.signal }), cancellation.signal);
-			expect(cancellation.signal.aborted).toBe(true);
-			expect(deliveries).toBe(0);
-			expect((await fixture.delivery())[0]?.status).not.toBe('completed');
-		});
+				await fixture.publish(outbox);
+				fixture.faults.afterExecute = (policy, { text }, rows) => {
+					if (policy === 'outbox.claim' && text.startsWith('SELECT lease_token')) {
+						cancellation.abort(new Error('Cancellation observed as the claim settles'));
+					}
+
+					return rows;
+				};
+				await expectCancellation(
+					outbox.processNext({ signal: cancellation.signal }),
+					cancellation.signal,
+				);
+				expect(cancellation.signal.aborted).toBe(true);
+				expect(deliveries).toBe(0);
+				expect((await fixture.delivery())[0]?.status).not.toBe('completed');
+			},
+		);
 	});
 
 	test('late cancellation suppresses success publication for a completed listener', async () => {
@@ -191,26 +236,38 @@ describe('durable SQL outbox on SQLite', () => {
 
 		const cancellation = new AbortController();
 
-		await withOutboxes([{ listeners: [listener(async () => {
-			deliveries++;
-		})] }], async (fixture) => {
-			const [outbox] = fixture.outboxes;
+		await withOutboxes(
+			[
+				{
+					listeners: [
+						listener(async () => {
+							deliveries++;
+						}),
+					],
+				},
+			],
+			async (fixture) => {
+				const [outbox] = fixture.outboxes;
 
-			if (!outbox) {
-				throw new Error('Missing fixture outbox');
-			}
-
-			await fixture.publish(outbox);
-			fixture.faults.beforeInvoke = (envelope) => {
-				if (envelope.actor?.kind === 'system' && envelope.actor.policy === 'outbox.finish') {
-					cancellation.abort(new Error('Cancellation before success bookkeeping'));
+				if (!outbox) {
+					throw new Error('Missing fixture outbox');
 				}
-			};
-			await expectCancellation(outbox.processNext({ signal: cancellation.signal }), cancellation.signal);
-			expect(cancellation.signal.aborted).toBe(true);
-			expect(deliveries).toBe(1);
-			expect((await fixture.delivery())[0]?.status).toBe('processing');
-		});
+
+				await fixture.publish(outbox);
+				fixture.faults.beforeInvoke = (envelope) => {
+					if (envelope.actor?.kind === 'system' && envelope.actor.policy === 'outbox.finish') {
+						cancellation.abort(new Error('Cancellation before success bookkeeping'));
+					}
+				};
+				await expectCancellation(
+					outbox.processNext({ signal: cancellation.signal }),
+					cancellation.signal,
+				);
+				expect(cancellation.signal.aborted).toBe(true);
+				expect(deliveries).toBe(1);
+				expect((await fixture.delivery())[0]?.status).toBe('processing');
+			},
+		);
 	});
 
 	test('metrics reject private in-memory SQLite rather than returning a healthy zero', async () =>
@@ -1120,56 +1177,72 @@ describe('durable SQL outbox on SQLite', () => {
 	test('cancelling during finish backoff retains the lease without a second finish attempt', async () => {
 		let effects = 0;
 
-		await withOutboxes([{
-			listeners: [listener(async () => { effects++; })],
-		}], async ({ faults, outboxes, publish, delivery }) => {
-			const [outbox] = outboxes;
+		await withOutboxes(
+			[
+				{
+					listeners: [
+						listener(async () => {
+							effects++;
+						}),
+					],
+				},
+			],
+			async ({ faults, outboxes, publish, delivery }) => {
+				const [outbox] = outboxes;
 
-			if (!outbox) {
-				throw new Error('Missing fixture coordinator');
-			}
-
-			await publish(outbox);
-			const stop = new AbortController();
-
-			const reason = new Error('Finish cancelled while waiting to retry');
-
-			let attempts = 0;
-
-			faults.beforeBegin = (policy) => {
-				if (policy !== 'outbox.finish') {
-					return undefined;
+				if (!outbox) {
+					throw new Error('Missing fixture coordinator');
 				}
 
-				attempts++;
+				await publish(outbox);
+				const stop = new AbortController();
 
-				return Object.assign(new Error('Finish transaction serialization abort'), { code: '40001' });
-			};
-			const sleep = Bun.sleep.bind(Bun);
+				const reason = new Error('Finish cancelled while waiting to retry');
 
-			const backoff = spyOn(Bun, 'sleep').mockImplementation(async (duration) => {
-				if (attempts === 1 && duration === 10) {
-					stop.abort(reason);
-				}
+				let attempts = 0;
 
-				await sleep(duration);
-			});
+				faults.beforeBegin = (policy) => {
+					if (policy !== 'outbox.finish') {
+						return undefined;
+					}
 
-			try {
-				await expectNativeFailure(outbox.processNext({ signal: stop.signal }), 'serialization abort');
-				expect(stop.signal.reason).toBe(reason);
-				expect(attempts).toBe(1);
-				expect(effects).toBe(1);
-				const deliveries = await delivery();
+					attempts++;
 
-				expect(deliveries).toHaveLength(1);
-				expect(deliveries[0]).toMatchObject({
-					status: 'processing', attempts: 1, lease_token: expect.any(String),
+					return Object.assign(new Error('Finish transaction serialization abort'), {
+						code: '40001',
+					});
+				};
+				const sleep = Bun.sleep.bind(Bun);
+
+				const backoff = spyOn(Bun, 'sleep').mockImplementation(async (duration) => {
+					if (attempts === 1 && duration === 10) {
+						stop.abort(reason);
+					}
+
+					await sleep(duration);
 				});
-			} finally {
-				backoff.mockRestore();
-			}
-		});
+
+				try {
+					await expectNativeFailure(
+						outbox.processNext({ signal: stop.signal }),
+						'serialization abort',
+					);
+					expect(stop.signal.reason).toBe(reason);
+					expect(attempts).toBe(1);
+					expect(effects).toBe(1);
+					const deliveries = await delivery();
+
+					expect(deliveries).toHaveLength(1);
+					expect(deliveries[0]).toMatchObject({
+						status: 'processing',
+						attempts: 1,
+						lease_token: expect.any(String),
+					});
+				} finally {
+					backoff.mockRestore();
+				}
+			},
+		);
 	});
 
 	test('non-error coordination failures propagate once without executing listener effects', async () => {

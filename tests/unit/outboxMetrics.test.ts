@@ -54,7 +54,9 @@ test('outbox metrics reject an overlapping collection and admit one after settle
 	const first = collector.collect();
 
 	try {
-		await expect(collector.collect()).rejects.toThrow('Outbox metrics collection is still settling.');
+		await expect(collector.collect()).rejects.toThrow(
+			'Outbox metrics collection is still settling.',
+		);
 	} finally {
 		gate.resolve();
 	}

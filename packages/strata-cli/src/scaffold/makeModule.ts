@@ -61,8 +61,7 @@ async function makeModuleCommand(...args: string[]): Promise<void> {
 
 	const choices = (await Bun.file(choicesPath).exists())
 		? ((await import(pathToFileURL(choicesPath).href)).default as
-				| { views?: boolean; tenancy?: string }
-				| undefined)
+				{ views?: boolean; tenancy?: string } | undefined)
 		: undefined;
 
 	if (withWeb && choices?.views === false) {
@@ -124,7 +123,9 @@ async function makeModuleCommand(...args: string[]): Promise<void> {
 		]);
 		console.log(`Created RLS module scaffold in: ${directory}`);
 		console.log(`Created migration: ${migrationFile}`);
-		console.log('Review the migration, register the model, and configure abilities and the resource policy.');
+		console.log(
+			'Review the migration, register the model, and configure abilities and the resource policy.',
+		);
 
 		return;
 	}

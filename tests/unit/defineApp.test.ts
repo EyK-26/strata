@@ -509,16 +509,20 @@ test('entrypoint reports an unsuccessful owner shutdown through its installed si
 	const released = new Error('Application fixture disposal failed');
 
 	const { app } = await fixture({
-		providers: [defineProvider({
-			name: 'disposal-fixture',
-			async setup(scope) {
-				await scope.acquire({
-					name: 'fixture resource',
-					open: () => ({ ok: true, value: 1 }),
-					close() { throw released; },
-				});
-			},
-		})],
+		providers: [
+			defineProvider({
+				name: 'disposal-fixture',
+				async setup(scope) {
+					await scope.acquire({
+						name: 'fixture resource',
+						open: () => ({ ok: true, value: 1 }),
+						close() {
+							throw released;
+						},
+					});
+				},
+			}),
+		],
 	});
 
 	const signals = ['SIGINT', 'SIGTERM'] as const;
@@ -534,10 +538,14 @@ test('entrypoint reports an unsuccessful owner shutdown through its installed si
 	});
 
 	try {
-		const boot = await serveApplication(() => app.createAppServer({
-			server: { port: 0, native: { hostname: '127.0.0.1' } },
-			onConstructed: (owner) => { owners.push(owner); },
-		}));
+		const boot = await serveApplication(() =>
+			app.createAppServer({
+				server: { port: 0, native: { hostname: '127.0.0.1' } },
+				onConstructed: (owner) => {
+					owners.push(owner);
+				},
+			}),
+		);
 
 		const listener = process
 			.listeners('SIGTERM')

@@ -1,9 +1,9 @@
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 
+import { CORE_EXECUTION_OWNERSHIP_TOKEN } from '@getstrata/core/contracts/executionOwnership';
 import { valueService } from '@getstrata/core/contracts/services';
 import { createServiceToken } from '@getstrata/core/contracts/token';
-import { CORE_EXECUTION_OWNERSHIP_TOKEN } from '@getstrata/core/contracts/executionOwnership';
 import { BaseRepository } from '@getstrata/core/database/baseRepository';
 import { createDatabaseBindings } from '@getstrata/core/database/bindings';
 import {
@@ -328,15 +328,19 @@ test('model binding rejects unattached handles and seals edits during pending mu
 
 			const admission = deferred();
 
-			const saved = ports.mutate(entity, async (work) => {
-				await admission.promise;
+			const saved = ports.mutate(
+				entity,
+				async (work) => {
+					await admission.promise;
 
-				return work();
-			}, () => {
-				ports.assertEditable(entity);
+					return work();
+				},
+				() => {
+					ports.assertEditable(entity);
 
-				return 'owner edit';
-			});
+					return 'owner edit';
+				},
+			);
 
 			try {
 				assert.throws(() => ports.assertEditable(entity), /Model mutation is pending/);

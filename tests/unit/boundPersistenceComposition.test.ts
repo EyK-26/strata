@@ -2,12 +2,12 @@ import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 
 import { createDatabaseBindings } from '@getstrata/core/database/bindings';
-import { DatabaseManager } from '../../src/core/database/manager';
 import type { DatabaseSession } from '@getstrata/core/database/session';
 import { DATABASE_SESSION_TOKEN } from '@getstrata/core/database/tokens';
 import { createApplication } from '@getstrata/core/runtime/application';
 
 import { createPersistenceInvocation } from '../../src/bootstrap/persistenceInvocation';
+import { DatabaseManager } from '../../src/core/database/manager';
 import { bounded, deferred } from '../fixtures/applicationOwnershipSupport';
 
 test('persistence bindings reject malformed connection and preparation metadata before startup', () => {
@@ -23,11 +23,16 @@ test('persistence bindings reject malformed connection and preparation metadata 
 		{ ...definition, extra: true },
 		hidden,
 		{ ...definition, [Symbol('foreign')]: true },
-		{ ...definition, connections: { main: { driver: 'mysql', url: 'mysql://localhost/db', extra: true } } },
+		{
+			...definition,
+			connections: { main: { driver: 'mysql', url: 'mysql://localhost/db', extra: true } },
+		},
 		{ ...definition, preparation: {} },
 		{ ...definition, preparation: new Array(1) },
 	]) {
-		assert.throws(() => createDatabaseBindings(input as never), { code: 'DATABASE_CONFIG_INVALID' });
+		assert.throws(() => createDatabaseBindings(input as never), {
+			code: 'DATABASE_CONFIG_INVALID',
+		});
 	}
 });
 
@@ -38,10 +43,9 @@ test('persistence invocation rejects a blank named connection before running the
 });
 
 test('database manager requires its default connection to be configured', () => {
-	assert.throws(
-		() => new DatabaseManager('main', [], { app: {}, connections: {} }),
-		{ code: 'DATABASE_CONFIG_INVALID' },
-	);
+	assert.throws(() => new DatabaseManager('main', [], { app: {}, connections: {} }), {
+		code: 'DATABASE_CONFIG_INVALID',
+	});
 });
 
 // This proves actual invocation selection; transport/worker/CLI witnesses remain separate.

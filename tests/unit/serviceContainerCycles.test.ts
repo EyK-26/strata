@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
 import { ServiceContainer } from '@getstrata/core/contracts/container';
-import { isServiceDeclaration, resourceService, valueService } from '@getstrata/core/contracts/services';
+import {
+	isServiceDeclaration,
+	resourceService,
+	valueService,
+} from '@getstrata/core/contracts/services';
 import { createServiceToken } from '@getstrata/core/contracts/token';
 
 import { compileServiceGraph } from '../../src/core/runtime/serviceGraph';
@@ -17,9 +21,13 @@ test('concurrent initialization of one token shares its factory and published va
 
 	const initial = container.initialize(token, () => value, signal);
 
-	const duplicate = container.initialize(token, () => {
-		throw new Error('The pending factory already owns initialization');
-	}, signal);
+	const duplicate = container.initialize(
+		token,
+		() => {
+			throw new Error('The pending factory already owns initialization');
+		},
+		signal,
+	);
 
 	expect(duplicate).toBe(initial);
 	expect(await duplicate).toBe(value);
@@ -42,21 +50,28 @@ test('aborted initialization never publishes a service at any admission checkpoi
 			cancellation.abort(reason);
 		}
 
-		const outcome = container.initialize(token, () => {
-			calls++;
+		const outcome = container.initialize(
+			token,
+			() => {
+				calls++;
 
-			if (phase === 'after-factory') {
-				cancellation.abort(reason);
-			}
-
-			return new Proxy({}, {
-				getOwnPropertyDescriptor(target, property) {
+				if (phase === 'after-factory') {
 					cancellation.abort(reason);
+				}
 
-					return Reflect.getOwnPropertyDescriptor(target, property);
-				},
-			});
-		}, cancellation.signal);
+				return new Proxy(
+					{},
+					{
+						getOwnPropertyDescriptor(target, property) {
+							cancellation.abort(reason);
+
+							return Reflect.getOwnPropertyDescriptor(target, property);
+						},
+					},
+				);
+			},
+			cancellation.signal,
+		);
 
 		await expect(outcome).rejects.toBe(reason);
 		expect(container.has(token)).toBe(false);
@@ -97,8 +112,9 @@ test('an execution graph observes cancellation before publishing services or acq
 	const alreadyCancelled = new AbortController();
 
 	alreadyCancelled.abort(reason);
-	await expect(compileServiceGraph().startExecution(new ServiceContainer(), alreadyCancelled.signal))
-		.rejects.toBe(reason);
+	await expect(
+		compileServiceGraph().startExecution(new ServiceContainer(), alreadyCancelled.signal),
+	).rejects.toBe(reason);
 
 	const cancellation = new AbortController();
 
@@ -117,8 +133,9 @@ test('an execution graph observes cancellation before publishing services or acq
 	const container = new ServiceContainer();
 
 	await expect(graph.startExecution(container, alreadyCancelled.signal)).rejects.toBe(reason);
-	await expect(graph.startExecution(container, cancellation.signal, undefined, { acquire: notAcquired }))
-		.rejects.toBe(reason);
+	await expect(
+		graph.startExecution(container, cancellation.signal, undefined, { acquire: notAcquired }),
+	).rejects.toBe(reason);
 	expect(container.has(token)).toBe(false);
 });
 

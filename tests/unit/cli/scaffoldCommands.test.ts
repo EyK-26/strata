@@ -178,7 +178,9 @@ export const repositoryDefinitions = [NoteRepository];
 			const files = await Array.fromAsync(new Bun.Glob('*_create_ticket.ts').scan(migrations));
 
 			expect(files).toHaveLength(1);
-			expect(await Bun.file(join(migrations, files[0] ?? '')).text()).toContain('enableTenantRlsSql');
+			expect(await Bun.file(join(migrations, files[0] ?? '')).text()).toContain(
+				'enableTenantRlsSql',
+			);
 		});
 	});
 
@@ -188,7 +190,10 @@ export const repositoryDefinitions = [NoteRepository];
 
 			await expect(makeModuleCommand('Ticket', '--rls')).rejects.toThrow('PostgreSQL RLS');
 			await ensureDirectory(join(workspace, 'src/config'));
-			await writeFile(join(workspace, 'src/config/app.ts'), 'export default { tenancy: "column" };');
+			await writeFile(
+				join(workspace, 'src/config/app.ts'),
+				'export default { tenancy: "column" };',
+			);
 			await expect(makeModuleCommand('Ticket', '--rls')).rejects.toThrow('PostgreSQL RLS');
 			expect(await Bun.file(join(workspace, 'src/modules/ticket/index.ts')).exists()).toBe(false);
 		});

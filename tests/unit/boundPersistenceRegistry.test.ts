@@ -525,7 +525,9 @@ test('public declarations reject inert metadata violations before getters, const
 		[
 			'nonarray columns',
 			() => ({
-				repositories: [defineRepository({ ...base, table: { ...base.table, columns: 1 as never } })],
+				repositories: [
+					defineRepository({ ...base, table: { ...base.table, columns: 1 as never } }),
+				],
 			}),
 		],
 		[

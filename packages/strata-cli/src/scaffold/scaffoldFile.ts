@@ -128,9 +128,13 @@ async function writeScaffoldFiles(outputs: readonly ScaffoldOutput[]): Promise<v
 		}
 
 		if (cleanupErrors.length > 0) {
-			throw new AggregateError([error, ...cleanupErrors], 'Unable to clean up partial scaffold output.', {
-				cause: error,
-			});
+			throw new AggregateError(
+				[error, ...cleanupErrors],
+				'Unable to clean up partial scaffold output.',
+				{
+					cause: error,
+				},
+			);
 		}
 
 		throw error;

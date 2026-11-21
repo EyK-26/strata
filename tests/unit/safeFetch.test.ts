@@ -224,15 +224,18 @@ describe('safeFetch lifecycle', () => {
 
 		let producer!: ReadableStreamDefaultController<Uint8Array>;
 
-		const source = new ReadableStream<Uint8Array>({
-			start(controller) {
-				producer = controller;
+		const source = new ReadableStream<Uint8Array>(
+			{
+				start(controller) {
+					producer = controller;
+				},
+				pull() {
+					pulled.resolve();
+				},
+				cancel: cancelled,
 			},
-			pull() {
-				pulled.resolve();
-			},
-			cancel: cancelled,
-		}, { highWaterMark: 0 });
+			{ highWaterMark: 0 },
+		);
 
 		globalThis.fetch = mock(async () => new Response(source)) as unknown as typeof fetch;
 		const response = await safeFetch('https://example.test/stream');

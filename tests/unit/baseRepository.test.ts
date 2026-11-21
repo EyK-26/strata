@@ -824,24 +824,35 @@ test('row-locked chunk scans retain their query contract when there are no match
 });
 
 test('chunk scans recognize explicit primary-key orders without using offsets', async () => {
-	for (const orderBy of [[{ column: 'id', direction: 'asc' }], { id: 'asc', name: undefined }] as const) {
+	for (const orderBy of [
+		[{ column: 'id', direction: 'asc' }],
+		{ id: 'asc', name: undefined },
+	] as const) {
 		const connection = new FakeConnection();
 
 		const rows = [10, 11].map((id) => ({ id, name: 'member', squad_id: 1, is_active: true }));
 
 		connection.queue(rows);
 		connection.queue(rows.slice(1));
-		await withRepositories(connection, [CrewRepositoryDefinition] as const, async ([repository]) => {
-			const seen: number[] = [];
+		await withRepositories(
+			connection,
+			[CrewRepositoryDefinition] as const,
+			async ([repository]) => {
+				const seen: number[] = [];
 
-			await repository.chunk(1, async (rows) => {
-				seen.push(...rows.map((row) => row.id));
-			}, { orderBy: orderBy as never });
-			expect(seen).toEqual([10, 11]);
-			expect(connection.calls).toHaveLength(2);
-			expect(connection.calls[1]?.query).not.toContain('OFFSET');
-			expect(connection.calls[1]?.params).toContain(10);
-		});
+				await repository.chunk(
+					1,
+					async (rows) => {
+						seen.push(...rows.map((row) => row.id));
+					},
+					{ orderBy: orderBy as never },
+				);
+				expect(seen).toEqual([10, 11]);
+				expect(connection.calls).toHaveLength(2);
+				expect(connection.calls[1]?.query).not.toContain('OFFSET');
+				expect(connection.calls[1]?.params).toContain(10);
+			},
+		);
 	}
 });
 

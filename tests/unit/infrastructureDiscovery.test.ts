@@ -321,7 +321,10 @@ test('job discovery surfaces a disappearing subdirectory instead of treating the
 
 	const readdir = fs.readdir;
 
-	const scanner = spyOn(fs, 'readdir').mockImplementation((async (path: string, options: { withFileTypes: true }) => {
+	const scanner = spyOn(fs, 'readdir').mockImplementation((async (
+		path: string,
+		options: { withFileTypes: true },
+	) => {
 		const entries = await readdir(path, options);
 
 		if (path === root) {

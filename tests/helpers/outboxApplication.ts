@@ -206,7 +206,10 @@ async function withOutboxes<T>(
 													async execute<Row>(statement: SqlStatement) {
 														const rows = await transaction.execute<Row>(statement);
 
-														return (observe(actor, statement, rows) as readonly Row[] | undefined) ?? rows;
+														return (
+															(observe(actor, statement, rows) as readonly Row[] | undefined) ??
+															rows
+														);
 													},
 												}),
 											)

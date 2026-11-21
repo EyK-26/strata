@@ -303,7 +303,13 @@ describe('gracefulShutdown', () => {
 		let drains = 0;
 
 		lifecycle.register('stop', () => stop.promise, 'stop');
-		lifecycle.register('drain', () => { drains++; }, 'drain');
+		lifecycle.register(
+			'drain',
+			() => {
+				drains++;
+			},
+			'drain',
+		);
 
 		try {
 			const result = await lifecycle.shutdown();
@@ -327,16 +333,30 @@ describe('gracefulShutdown', () => {
 
 		let closed = 0;
 
-		lifecycle.register('drain', async () => {
-			await drain.promise;
+		lifecycle.register(
+			'drain',
+			async () => {
+				await drain.promise;
 
-			throw new Error('Drain failed after the deadline.');
-		}, 'drain');
-		lifecycle.register('force', ({ signal }) => {
-			forced++;
-			Object.defineProperty(signal, 'aborted', { value: false });
-		}, 'force');
-		lifecycle.register('close', () => { closed++; }, 'close');
+				throw new Error('Drain failed after the deadline.');
+			},
+			'drain',
+		);
+		lifecycle.register(
+			'force',
+			({ signal }) => {
+				forced++;
+				Object.defineProperty(signal, 'aborted', { value: false });
+			},
+			'force',
+		);
+		lifecycle.register(
+			'close',
+			() => {
+				closed++;
+			},
+			'close',
+		);
 
 		try {
 			const result = await lifecycle.shutdown();

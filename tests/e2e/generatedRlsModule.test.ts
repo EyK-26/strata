@@ -97,9 +97,11 @@ test('installed RLS module scopes generated CRUD and requires app authorization'
 		expect(collision.code, collision.output).not.toBe(0);
 		expect(collision.output).toContain('already exists');
 		expect(await admin`SELECT marker FROM module_ticket`).toEqual([{ marker: 'existing table' }]);
-		expect(await admin`
+		expect(
+			await admin`
 			SELECT relrowsecurity FROM pg_class WHERE oid = 'module_ticket'::regclass
-		`).toEqual([{ relrowsecurity: false }]);
+		`,
+		).toEqual([{ relrowsecurity: false }]);
 		await admin`DROP TABLE module_ticket`;
 
 		await admin`ALTER FUNCTION app_current_tenant_id() RENAME TO module_fixture_tenant_id`;
@@ -116,16 +118,24 @@ test('installed RLS module scopes generated CRUD and requires app authorization'
 		}
 
 		await pass([cli, 'migrate'], migrateEnv);
-		expect(await runtime`
+		expect(
+			await runtime`
 			SELECT current_user, rolsuper, rolbypassrls
 			FROM pg_roles WHERE rolname = current_user
-		`).toEqual([{ current_user: new URL(fixture.runtimeUrl).username, rolsuper: false, rolbypassrls: false }]);
-		expect(await admin`
+		`,
+		).toEqual([
+			{ current_user: new URL(fixture.runtimeUrl).username, rolsuper: false, rolbypassrls: false },
+		]);
+		expect(
+			await admin`
 			SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid = 'module_ticket'::regclass
-		`).toEqual([{ relrowsecurity: true, relforcerowsecurity: true }]);
+		`,
+		).toEqual([{ relrowsecurity: true, relforcerowsecurity: true }]);
 		await admin`INSERT INTO tenant (id, slug) VALUES (1, 'default'), (2, 'second')`;
 
-		const abilities = ['list', 'view', 'create', 'update', 'delete'].map((action) => `tickets:${action}`);
+		const abilities = ['list', 'view', 'create', 'update', 'delete'].map(
+			(action) => `tickets:${action}`,
+		);
 
 		async function issue(tenant: number, permitted: string[]) {
 			const token = crypto.randomUUID();
@@ -156,7 +166,10 @@ test('installed RLS module scopes generated CRUD and requires app authorization'
 
 		await writeFile(
 			probe,
-			await readFile(new URL('../fixtures/generated-rls-module.ts.template', import.meta.url), 'utf8'),
+			await readFile(
+				new URL('../fixtures/generated-rls-module.ts.template', import.meta.url),
+				'utf8',
+			),
 		);
 		await pass(['run', 'check']);
 		const [blocked] = await admin<{ id: number }[]>`
@@ -164,7 +177,14 @@ test('installed RLS module scopes generated CRUD and requires app authorization'
 		`;
 
 		ok(blocked);
-		await pass(['src/rlsModuleProbe.ts', 'default', firstToken, secondToken, ungrantedToken, String(blocked.id)]);
+		await pass([
+			'src/rlsModuleProbe.ts',
+			'default',
+			firstToken,
+			secondToken,
+			ungrantedToken,
+			String(blocked.id),
+		]);
 		expect(await admin`SELECT name FROM module_ticket WHERE id = ${blocked.id}`).toEqual([
 			{ name: 'Protected' },
 		]);
@@ -199,9 +219,11 @@ export class TicketPolicy extends Policy {
 		]);
 		await admin`DELETE FROM module_ticket WHERE tenant_id = 2`;
 		await pass([cli, 'migrate:rollback'], migrateEnv);
-		expect(await admin`
+		expect(
+			await admin`
 			SELECT to_regclass('module_ticket') AS module_table, to_regclass('tenant')::text AS tenant_table
-		`).toEqual([{ module_table: null, tenant_table: 'tenant' }]);
+		`,
+		).toEqual([{ module_table: null, tenant_table: 'tenant' }]);
 		await pass([cli, 'make:module', 'Form', '--rls']);
 		await pass([cli, 'make:module', 'Not Found Error', '--rls']);
 		await pass(['run', 'check']);
