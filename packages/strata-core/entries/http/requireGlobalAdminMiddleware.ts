@@ -1,1 +1,1 @@
-export * from "../../../../src/core/http/requireGlobalAdminMiddleware.ts";
+export * from '../../../../src/core/http/requireGlobalAdminMiddleware.ts';

@@ -21,26 +21,26 @@ Module discovery requires an explicit `ensureModulesLoaded({ modulesDir: directo
 ## Awaited startup
 
 ```ts
-import { registerDefaultJobs } from "@getstrata/bootstrap";
-import { discoverJobs } from "@getstrata/bootstrap/discoverJobs";
-import { discoverListeners } from "@getstrata/bootstrap/discoverListeners";
-import { createAppQueue, type QueueServices } from "@getstrata/core/queue/createAppQueue";
-import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { registerDefaultJobs } from '@getstrata/bootstrap';
+import { discoverJobs } from '@getstrata/bootstrap/discoverJobs';
+import { discoverListeners } from '@getstrata/bootstrap/discoverListeners';
+import { createAppQueue, type QueueServices } from '@getstrata/core/queue/createAppQueue';
+import { JobRegistry } from '@getstrata/core/queue/jobRegistry';
 
 async function assembleQueue(
-  driver: "sync" | "async" | "redis",
-  redisUrl: string | undefined,
-  failedJobs: QueueServices,
+	driver: 'sync' | 'async' | 'redis',
+	redisUrl: string | undefined,
+	failedJobs: QueueServices,
 ) {
-  const registry = new JobRegistry();
-  registerDefaultJobs(registry);
-  await discoverJobs(registry);
-  return { registry, queue: createAppQueue(driver, redisUrl, failedJobs, registry) };
+	const registry = new JobRegistry();
+	registerDefaultJobs(registry);
+	await discoverJobs(registry);
+	return { registry, queue: createAppQueue(driver, redisUrl, failedJobs, registry) };
 }
 
 const declarations = await discoverListeners();
-const listenerServices = declarations.flatMap(entry => entry.services);
-const listenerEffects = declarations.flatMap(entry => entry.repositoryEffects);
+const listenerServices = declarations.flatMap((entry) => entry.services);
+const listenerEffects = declarations.flatMap((entry) => entry.repositoryEffects);
 // Include these in the application's database bindings before runtime construction.
 ```
 
@@ -51,18 +51,19 @@ Job discovery shares pending/successful loads only within the supplied registry;
 ## Explicit manifests and bundles
 
 ```ts
-import { discoverJobs } from "@getstrata/bootstrap/discoverJobs";
-import { discoverListeners } from "@getstrata/bootstrap/discoverListeners";
-import { ensureModulesLoaded } from "@getstrata/bootstrap/discoverModules";
-import NotificationJob from "./jobs/NotificationJob.ts";
-import notificationDeclarations from "./listeners/notifications.ts";
-import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
-import commerceModule from "./modules/commerce/index.ts";
+import { discoverJobs } from '@getstrata/bootstrap/discoverJobs';
+import { discoverListeners } from '@getstrata/bootstrap/discoverListeners';
+import { ensureModulesLoaded } from '@getstrata/bootstrap/discoverModules';
+import { JobRegistry } from '@getstrata/core/queue/jobRegistry';
+
+import NotificationJob from './jobs/NotificationJob.ts';
+import notificationDeclarations from './listeners/notifications.ts';
+import commerceModule from './modules/commerce/index.ts';
 
 const modules = await ensureModulesLoaded({ manifest: [commerceModule] });
 const registry = new JobRegistry();
 await discoverJobs(registry, {
-  manifest: [NotificationJob],
+	manifest: [NotificationJob],
 });
 const declarations = await discoverListeners({ manifest: [notificationDeclarations] });
 ```

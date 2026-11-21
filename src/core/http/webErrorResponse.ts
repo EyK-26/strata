@@ -1,120 +1,124 @@
 import {
-  type HttpError,
-  InvalidCredentialsError,
-  toHttpError,
-  ValidationError,
-} from "@getstrata/core/errors/http";
-import { appLogger } from "@getstrata/core/logging/logger";
-import { htmlErrorResponse, type WebErrorView } from "../view/webErrorView";
-import { requestPrefersJson } from "./contentNegotiation";
-import { mapDatabaseHttpError } from "./databaseError";
-import { currentRequestMeta } from "./requestMetaContext";
-import { loginRedirectLocation } from "./safeInternalPath";
+	type HttpError,
+	InvalidCredentialsError,
+	toHttpError,
+	ValidationError,
+} from '@getstrata/core/errors/http';
+import { appLogger } from '@getstrata/core/logging/logger';
+
+import { htmlErrorResponse, type WebErrorView } from '../view/webErrorView';
+
+import { requestPrefersJson } from './contentNegotiation';
+import { mapDatabaseHttpError } from './databaseError';
+import { currentRequestMeta } from './requestMetaContext';
+import { loginRedirectLocation } from './safeInternalPath';
 
 interface WebErrorResponseOptions {
-  enabled?: boolean;
-  production?: boolean;
-  render?: WebErrorView;
+	enabled?: boolean;
+	production?: boolean;
+	render?: WebErrorView;
 }
 
 type FieldErrors = Record<string, string[]>;
 
 function normalizeFieldErrors(details: unknown): FieldErrors {
-  if (!details || typeof details !== "object" || Array.isArray(details)) {
-    return {};
-  }
+	if (!details || typeof details !== 'object' || Array.isArray(details)) {
+		return {};
+	}
 
-  const errors: FieldErrors = {};
+	const errors: FieldErrors = {};
 
-  for (const [field, messages] of Object.entries(details as Record<string, unknown>)) {
-    if (Array.isArray(messages)) {
-      errors[field] = messages.map(String);
-      continue;
-    }
+	for (const [field, messages] of Object.entries(details as Record<string, unknown>)) {
+		if (Array.isArray(messages)) {
+			errors[field] = messages.map(String);
+			continue;
+		}
 
-    if (typeof messages === "string") {
-      errors[field] = [messages];
-    }
-  }
+		if (typeof messages === 'string') {
+			errors[field] = [messages];
+		}
+	}
 
-  return errors;
+	return errors;
 }
 
 function errorPageTitle(status: number, message: string): string {
-  if (status === 404) {
-    return "Not Found";
-  }
+	if (status === 404) {
+		return 'Not Found';
+	}
 
-  if (status === 403) {
-    return "Forbidden";
-  }
+	if (status === 403) {
+		return 'Forbidden';
+	}
 
-  if (status >= 500) {
-    return "Server Error";
-  }
+	if (status >= 500) {
+		return 'Server Error';
+	}
 
-  return message;
+	return message;
 }
 
 function publicErrorMessage(status: number, message: string, production: boolean): string {
-  if (status >= 500 && production) {
-    return "Something went wrong.";
-  }
+	if (status >= 500 && production) {
+		return 'Something went wrong.';
+	}
 
-  return message;
+	return message;
 }
 
 function logServerError(error: unknown, mappedError: HttpError): void {
-  if (mappedError.status < 500) {
-    return;
-  }
-  appLogger.error("Unhandled request error", {
-    status: mappedError.status,
-    error: error instanceof Error ? error.message : String(error),
-    stack: error instanceof Error ? error.stack : undefined,
-  });
+	if (mappedError.status < 500) {
+		return;
+	}
+
+	appLogger.error('Unhandled request error', {
+		status: mappedError.status,
+		error: error instanceof Error ? error.message : String(error),
+		stack: error instanceof Error ? error.stack : undefined,
+	});
 }
 
 async function webErrorResponse(
-  error: unknown,
-  request?: Request,
-  options: WebErrorResponseOptions = {},
+	error: unknown,
+	request?: Request,
+	options: WebErrorResponseOptions = {},
 ): Promise<Response | null> {
-  if (
-    currentRequestMeta().errorFormat === "json" ||
-    !request ||
-    !(options.enabled ?? currentRequestMeta().viewsEnabled ?? false) ||
-    requestPrefersJson(request)
-  ) {
-    return null;
-  }
+	if (
+		currentRequestMeta().errorFormat === 'json' ||
+		!request ||
+		!(options.enabled ?? currentRequestMeta().viewsEnabled ?? false) ||
+		requestPrefersJson(request)
+	) {
+		return null;
+	}
 
-  const mappedError = toHttpError(error) ?? mapDatabaseHttpError(error);
-  logServerError(error, mappedError);
+	const mappedError = toHttpError(error) ?? mapDatabaseHttpError(error);
 
-  if (mappedError.status === 401 && !(mappedError instanceof InvalidCredentialsError)) {
-    return Response.redirect(loginRedirectLocation(request), 302);
-  }
+	logServerError(error, mappedError);
 
-  const errors =
-    mappedError instanceof ValidationError || mappedError.name === "ValidationError"
-      ? normalizeFieldErrors(mappedError.details)
-      : undefined;
+	if (mappedError.status === 401 && !(mappedError instanceof InvalidCredentialsError)) {
+		return Response.redirect(loginRedirectLocation(request), 302);
+	}
 
-  return htmlErrorResponse(
-    {
-      status: mappedError.status,
-      title: errorPageTitle(mappedError.status, mappedError.message),
-      message: publicErrorMessage(
-        mappedError.status,
-        mappedError.message,
-        options.production ?? currentRequestMeta().webErrorsProduction ?? true,
-      ),
-      errors,
-      request,
-    },
-    options.render,
-  );
+	const errors =
+		mappedError instanceof ValidationError || mappedError.name === 'ValidationError'
+			? normalizeFieldErrors(mappedError.details)
+			: undefined;
+
+	return htmlErrorResponse(
+		{
+			status: mappedError.status,
+			title: errorPageTitle(mappedError.status, mappedError.message),
+			message: publicErrorMessage(
+				mappedError.status,
+				mappedError.message,
+				options.production ?? currentRequestMeta().webErrorsProduction ?? true,
+			),
+			errors,
+			request,
+		},
+		options.render,
+	);
 }
 
 export type { FieldErrors, WebErrorResponseOptions };

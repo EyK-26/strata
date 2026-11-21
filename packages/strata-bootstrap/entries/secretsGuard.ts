@@ -1,1 +1,1 @@
-export * from "../../../src/bootstrap/secretsGuard.ts";
+export * from '../../../src/bootstrap/secretsGuard.ts';

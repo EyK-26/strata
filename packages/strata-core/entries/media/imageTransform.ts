@@ -1,1 +1,1 @@
-export * from "../../../../src/core/media/imageTransform.ts";
+export * from '../../../../src/core/media/imageTransform.ts';

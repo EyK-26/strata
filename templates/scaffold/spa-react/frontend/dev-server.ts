@@ -4,13 +4,18 @@ import index from "./index.html";
 import { SPA_PREFIX } from "./src/config.ts";
 
 const API_ORIGIN = process.env.API_ORIGIN ?? "http://localhost:3000";
+
 const PORT = Number(process.env.FRONTEND_PORT ?? "5173");
+
 const PREVIEW = process.argv.includes("--preview");
+
 const DIST_DIRECTORY = join(import.meta.dir, "dist");
 
 async function proxyToApi(request: Request): Promise<Response> {
   const incoming = new URL(request.url);
+
   const target = new URL(`${incoming.pathname}${incoming.search}`, API_ORIGIN);
+
   const headers = new Headers(request.headers);
   // Preserve the browser-facing host so Request URL and Origin remain consistent.
   // The upstream network target still comes exclusively from API_ORIGIN.
@@ -26,11 +31,14 @@ async function proxyToApi(request: Request): Promise<Response> {
 
 async function servePreview(request: Request): Promise<Response> {
   const pathname = new URL(request.url).pathname;
+
   const relativePath =
     pathname === SPA_PREFIX || pathname === `${SPA_PREFIX}/`
       ? ""
       : pathname.slice(SPA_PREFIX.length + 1);
+
   let asset: ReturnType<typeof Bun.file>;
+
   try {
     asset = Bun.file(assertPathUnderRoot(DIST_DIRECTORY, relativePath || "index.html"));
   } catch {

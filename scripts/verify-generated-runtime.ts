@@ -1,148 +1,195 @@
 /** Actual generated CLI, route inventory, API-only OpenAPI and HTTP smoke acceptance. */
-import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
-import { join } from "node:path";
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+
 import {
-  verifyGeneratedAuthHttp,
-  verifyGeneratedScimHttp,
-} from "../tests/helpers/generatedAuthHttp.ts";
-import { createGeneratedSecurityApp } from "../tests/helpers/generatedSecurityApp.ts";
+	verifyGeneratedAuthHttp,
+	verifyGeneratedScimHttp,
+} from '../tests/helpers/generatedAuthHttp.ts';
+import { createGeneratedSecurityApp } from '../tests/helpers/generatedSecurityApp.ts';
 
-const repoRoot = join(import.meta.dir, "..");
+const repoRoot = join(import.meta.dir, '..');
+
 const args = process.argv.slice(2);
-assert.ok(
-  args.every((arg) => ["--http", "--openapi", "--sqlite", "--mysql"].includes(arg)),
-  "Unknown generated-runtime verification option.",
-);
-const selectedChecks = args.includes("--openapi") || args.includes("--http");
-const checkOpenApi = !selectedChecks || args.includes("--openapi");
-const checkHttp = !selectedChecks || args.includes("--http");
-if (checkHttp)
-  assert.ok(
-    process.env.REDIS_URL?.trim(),
-    "HTTP runtime acceptance requires explicit Redis infrastructure.",
-  );
-const sqlite = args.includes("--sqlite");
-const mysql = args.includes("--mysql");
-assert.ok(!(sqlite && mysql), "Select only one generated database engine.");
-const columnTenancy = sqlite || mysql;
-const fixture = await createGeneratedSecurityApp(sqlite ? "sqlite" : mysql ? "mysql" : "postgres");
-const failures: unknown[] = [];
-let server: ReturnType<typeof Bun.spawn<"ignore", "pipe", "pipe">> | undefined;
-let serverObservation: Promise<PromiseSettledResult<unknown>[]> | undefined;
-let diagnostic = "";
-function throwFailures(errors: unknown[], message: string): void {
-  if (errors.length === 1) throw errors[0];
-  if (errors.length > 1) throw new AggregateError(errors, message);
-}
-try {
-  const cli = join(fixture.app, "node_modules/@getstrata/cli/cli.ts");
-  const env: Record<string, string | undefined> = {
-    ...process.env,
-    DATABASE_URL: fixture.runtimeUrl,
-    APP_DATABASE_URL: fixture.runtimeUrl,
-    MIGRATION_DATABASE_URL: fixture.migrationUrl,
-    APP_ENV: mysql ? "production" : "local",
-    APP_DEBUG: "false",
-    APP_NAME: "HiroApp",
-    APP_KEY_PREFIX: `runtime_${crypto.randomUUID()}`,
-    APP_URL: mysql ? "https://q01.example.test" : "http://localhost:3000",
-    API_PREFIX: "/api",
-    FRONTEND_MODE: "server-htmx",
-    TENANCY_DRIVER: columnTenancy ? "column" : "rls",
-    AUTH_DEV_HEADERS: "false",
-    FEATURE_API_TOKENS: "true",
-    FEATURE_MFA: "true",
-    FEATURE_EMAIL_VERIFICATION: "true",
-    FEATURE_SCIM: "true",
-    SCIM_BEARER_TOKEN: mysql ? "q01-scim-tenant-1" : "",
-    SCIM_TENANT_TOKENS: "1:q01-scim-tenant-1,2:q01-scim-tenant-2",
-    FEATURE_SAML: "false",
-    FEATURE_OAUTH: "false",
-    FEATURE_REGISTRATION: "true",
-    FEATURE_PUBLIC_READS: "false",
-    CACHE_DRIVER: checkHttp ? "redis" : (process.env.CACHE_DRIVER ?? "array"),
-    QUEUE_DRIVER: "sync",
-    MAIL_DRIVER: "log",
-    SESSION_SECRET: "generated-runtime-fixture-session-secret-32-characters",
-    JWT_SECRET: "generated-runtime-fixture-jwt-secret-32-characters",
-    TOKEN_HASH_PEPPER: "generated-runtime-fixture-pepper",
-    API_TOKEN_DEFAULT_EXPIRY_DAYS: "30",
-    KMS_ENCRYPTION_KEY: Buffer.alloc(32, 17).toString("base64"),
-    METRICS_TOKEN: crypto.randomUUID(),
-    PORT: "0",
-    HOST: "127.0.0.1",
-  };
-  delete env.DOGFOOD_APP;
-  delete env.HIROAPP_TEST;
-  delete env.STRATA_SCHEMA;
-  if (mysql) {
-    for (const name of [
-      "MIGRATION_DATABASE_URL",
-      "MYSQL_OBSERVABILITY_ADMIN_URL",
-      "MYSQL_URL",
-      "RLS_TEST_DATABASE_URL",
-      "POSTGRES_PASSWORD",
-      "STRATA_APP_PASSWORD",
-      "ADMIN_API_TOKEN",
-      "MEMBER_API_TOKEN",
-    ])
-      delete env[name];
-  }
 
-  async function run(
-    args: string[],
-    options: { cwd?: string; env?: Record<string, string | undefined>; success?: boolean } = {},
-  ) {
-    const child = Bun.spawn([process.execPath, ...args], {
-      cwd: options.cwd ?? fixture.app,
-      env: { ...(options.env ?? env) },
-      stdout: "pipe",
-      stderr: "pipe",
-      timeout: 60000,
-      killSignal: "SIGKILL",
-    });
-    const results = await Promise.allSettled([
-      child.exited,
-      new Response(child.stdout).text(),
-      new Response(child.stderr).text(),
-    ] as const);
-    const errors = results.flatMap((result) =>
-      result.status === "rejected" ? [result.reason] : [],
-    );
-    const [terminal, out, err] = results;
-    const output = `${out.status === "fulfilled" ? out.value : ""}${err.status === "fulfilled" ? err.value : ""}`;
-    if (options.success !== false && terminal.status === "fulfilled") {
-      try {
-        assert.equal(terminal.value, 0, `Generated CLI ${args[0]} failed:\n${output.slice(-8192)}`);
-      } catch (error) {
-        errors.push(error);
-      }
-    }
-    throwFailures(errors, "Generated CLI exit/output collection failed.");
-    if (terminal.status !== "fulfilled" || out.status !== "fulfilled" || err.status !== "fulfilled")
-      throw new Error("Generated CLI channels did not settle successfully.");
-    return { code: terminal.value, output };
-  }
-  async function capture(stream: ReadableStream<Uint8Array>) {
-    const reader = stream.getReader(),
-      decoder = new TextDecoder();
-    try {
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        diagnostic = (diagnostic + decoder.decode(value, { stream: true })).slice(-32768);
-      }
-    } finally {
-      reader.releaseLock();
-    }
-  }
-  // Execute public APIs from the installed package outside this repo's TS path aliases.
-  const outboundProbe = join(fixture.app, "acceptance-outbound.ts");
-  await Bun.write(
-    outboundProbe,
-    `import assert from 'node:assert/strict';
+assert.ok(
+	args.every((arg) => ['--http', '--openapi', '--sqlite', '--mysql'].includes(arg)),
+	'Unknown generated-runtime verification option.',
+);
+const selectedChecks = args.includes('--openapi') || args.includes('--http');
+
+const checkOpenApi = !selectedChecks || args.includes('--openapi');
+
+const checkHttp = !selectedChecks || args.includes('--http');
+
+if (checkHttp) {
+	assert.ok(
+		process.env.REDIS_URL?.trim(),
+		'HTTP runtime acceptance requires explicit Redis infrastructure.',
+	);
+}
+
+const sqlite = args.includes('--sqlite');
+
+const mysql = args.includes('--mysql');
+
+assert.ok(!(sqlite && mysql), 'Select only one generated database engine.');
+const columnTenancy = sqlite || mysql;
+
+const fixture = await createGeneratedSecurityApp(sqlite ? 'sqlite' : mysql ? 'mysql' : 'postgres');
+
+const failures: unknown[] = [];
+
+let server: ReturnType<typeof Bun.spawn<'ignore', 'pipe', 'pipe'>> | undefined;
+
+let serverObservation: Promise<PromiseSettledResult<unknown>[]> | undefined;
+
+let diagnostic = '';
+
+function throwFailures(errors: unknown[], message: string): void {
+	if (errors.length === 1) {
+		throw errors[0];
+	}
+
+	if (errors.length > 1) {
+		throw new AggregateError(errors, message);
+	}
+}
+
+try {
+	const cli = join(fixture.app, 'node_modules/@getstrata/cli/cli.ts');
+
+	const env: Record<string, string | undefined> = {
+		...process.env,
+		DATABASE_URL: fixture.runtimeUrl,
+		APP_DATABASE_URL: fixture.runtimeUrl,
+		MIGRATION_DATABASE_URL: fixture.migrationUrl,
+		APP_ENV: mysql ? 'production' : 'local',
+		APP_DEBUG: 'false',
+		APP_NAME: 'HiroApp',
+		APP_KEY_PREFIX: `runtime_${crypto.randomUUID()}`,
+		APP_URL: mysql ? 'https://q01.example.test' : 'http://localhost:3000',
+		API_PREFIX: '/api',
+		FRONTEND_MODE: 'server-htmx',
+		TENANCY_DRIVER: columnTenancy ? 'column' : 'rls',
+		AUTH_DEV_HEADERS: 'false',
+		FEATURE_API_TOKENS: 'true',
+		FEATURE_MFA: 'true',
+		FEATURE_EMAIL_VERIFICATION: 'true',
+		FEATURE_SCIM: 'true',
+		SCIM_BEARER_TOKEN: mysql ? 'q01-scim-tenant-1' : '',
+		SCIM_TENANT_TOKENS: '1:q01-scim-tenant-1,2:q01-scim-tenant-2',
+		FEATURE_SAML: 'false',
+		FEATURE_OAUTH: 'false',
+		FEATURE_REGISTRATION: 'true',
+		FEATURE_PUBLIC_READS: 'false',
+		CACHE_DRIVER: checkHttp ? 'redis' : (process.env.CACHE_DRIVER ?? 'array'),
+		QUEUE_DRIVER: 'sync',
+		MAIL_DRIVER: 'log',
+		SESSION_SECRET: 'generated-runtime-fixture-session-secret-32-characters',
+		JWT_SECRET: 'generated-runtime-fixture-jwt-secret-32-characters',
+		TOKEN_HASH_PEPPER: 'generated-runtime-fixture-pepper',
+		API_TOKEN_DEFAULT_EXPIRY_DAYS: '30',
+		KMS_ENCRYPTION_KEY: Buffer.alloc(32, 17).toString('base64'),
+		METRICS_TOKEN: crypto.randomUUID(),
+		PORT: '0',
+		HOST: '127.0.0.1',
+	};
+
+	delete env.DOGFOOD_APP;
+	delete env.HIROAPP_TEST;
+	delete env.STRATA_SCHEMA;
+
+	if (mysql) {
+		for (const name of [
+			'MIGRATION_DATABASE_URL',
+			'MYSQL_OBSERVABILITY_ADMIN_URL',
+			'MYSQL_URL',
+			'RLS_TEST_DATABASE_URL',
+			'POSTGRES_PASSWORD',
+			'STRATA_APP_PASSWORD',
+			'ADMIN_API_TOKEN',
+			'MEMBER_API_TOKEN',
+		]) {
+			delete env[name];
+		}
+	}
+
+	async function run(
+		args: string[],
+		options: { cwd?: string; env?: Record<string, string | undefined>; success?: boolean } = {},
+	) {
+		const child = Bun.spawn([process.execPath, ...args], {
+			cwd: options.cwd ?? fixture.app,
+			env: { ...(options.env ?? env) },
+			stdout: 'pipe',
+			stderr: 'pipe',
+			timeout: 60000,
+			killSignal: 'SIGKILL',
+		});
+
+		const results = await Promise.allSettled([
+			child.exited,
+			new Response(child.stdout).text(),
+			new Response(child.stderr).text(),
+		] as const);
+
+		const errors = results.flatMap((result) =>
+			result.status === 'rejected' ? [result.reason] : [],
+		);
+
+		const [terminal, out, err] = results;
+
+		const output = `${out.status === 'fulfilled' ? out.value : ''}${err.status === 'fulfilled' ? err.value : ''}`;
+
+		if (options.success !== false && terminal.status === 'fulfilled') {
+			try {
+				assert.equal(terminal.value, 0, `Generated CLI ${args[0]} failed:\n${output.slice(-8192)}`);
+			} catch (error) {
+				errors.push(error);
+			}
+		}
+
+		throwFailures(errors, 'Generated CLI exit/output collection failed.');
+
+		if (
+			terminal.status !== 'fulfilled' ||
+			out.status !== 'fulfilled' ||
+			err.status !== 'fulfilled'
+		) {
+			throw new Error('Generated CLI channels did not settle successfully.');
+		}
+
+		return { code: terminal.value, output };
+	}
+
+	async function capture(stream: ReadableStream<Uint8Array>) {
+		const reader = stream.getReader(),
+			decoder = new TextDecoder();
+
+		try {
+			for (;;) {
+				const { value, done } = await reader.read();
+
+				if (done) {
+					break;
+				}
+
+				diagnostic = (diagnostic + decoder.decode(value, { stream: true })).slice(-32768);
+			}
+		} finally {
+			reader.releaseLock();
+		}
+	}
+
+	// Execute public APIs from the installed package outside this repo's TS path aliases.
+	const outboundProbe = join(fixture.app, 'acceptance-outbound.ts');
+
+	await Bun.write(
+		outboundProbe,
+		`import assert from 'node:assert/strict';
 import { setDnsLookupForTests, resetDnsLookupForTests } from "@getstrata/core/testing";
 import {safeFetch} from '@getstrata/core/security/safeFetch';
 import {GitHubOAuthProvider} from '@getstrata/core/auth/oauth/providers';
@@ -181,12 +228,13 @@ try{
 }finally{globalThis.fetch=original;resetDnsLookupForTests();}
 console.log('Packed outbound consumers share resolver state, address pinning and private-target refusal.');
 `,
-  );
-  await run([outboundProbe]);
-  const membershipProbe = join(fixture.app, "acceptance-membership.ts");
-  await Bun.write(
-    membershipProbe,
-    `import assert from 'node:assert/strict';
+	);
+	await run([outboundProbe]);
+	const membershipProbe = join(fixture.app, 'acceptance-membership.ts');
+
+	await Bun.write(
+		membershipProbe,
+		`import assert from 'node:assert/strict';
 import {loadMembershipSnapshot,runWithMembershipContext,runWithMembershipSnapshot,currentOrganizationIds,currentOrgRole} from '@getstrata/core/auth/membershipContext';
 import {createMembershipMiddleware} from '@getstrata/core/auth/membershipMiddleware';
 import MembershipService from '@getstrata/core/auth/membershipService';
@@ -235,12 +283,13 @@ for(const reason of [new Error('lookup unavailable'),false]){
 }
 console.log('Packed explicit lookup/service injection and immutable pre-established membership snapshots passed overlapping users, restoration and exact failures (not Application ownership).');
 `,
-  );
-  await run([membershipProbe]);
-  const errorViewProbe = join(fixture.app, "acceptance-error-view.ts");
-  await Bun.write(
-    errorViewProbe,
-    `import assert from 'node:assert/strict';
+	);
+	await run([membershipProbe]);
+	const errorViewProbe = join(fixture.app, 'acceptance-error-view.ts');
+
+	await Bun.write(
+		errorViewProbe,
+		`import assert from 'node:assert/strict';
 import {createWebErrorView,htmlErrorResponse,notFoundHtmlResponse} from '@getstrata/core/view';
 import {webErrorResponse} from '@getstrata/core/http/webErrorResponse';
 import {runWithRequestMeta} from '@getstrata/core/http/requestMetaContext';
@@ -282,12 +331,13 @@ assert.ok(html.includes('fallback'));
 assert.ok(!html.includes(marker));
 console.log('Packed error wrapper respects configured HTML, concurrent inputs, API JSON precedence and safe ownerless fallback.');
 `,
-  );
-  await run([errorViewProbe]);
-  const privateResponseProbe = join(fixture.app, "acceptance-private-responses.ts");
-  await Bun.write(
-    privateResponseProbe,
-    `import assert from 'node:assert/strict';
+	);
+	await run([errorViewProbe]);
+	const privateResponseProbe = join(fixture.app, 'acceptance-private-responses.ts');
+
+	await Bun.write(
+		privateResponseProbe,
+		`import assert from 'node:assert/strict';
 import {privateJsonResponse,jsonResponse} from '@getstrata/core/http/response';
 import {ViewRenderer} from '@getstrata/core/view';
 const headers=new Headers({'Cache-Control':'public','X-Custom':'retained'});
@@ -320,12 +370,13 @@ assert.equal(await fragment.text(),'auth/form:false');
 assert.equal(publicResponse.headers.get('cache-control'),null);
 console.log('Packed explicit private JSON and namespaced HTML defaults preserve response and HTMX contracts.');
 `,
-  );
-  await run([privateResponseProbe]);
-  const admissionProbe = join(fixture.app, "acceptance-admission.ts");
-  await Bun.write(
-    admissionProbe,
-    `import assert from 'node:assert/strict';
+	);
+	await run([privateResponseProbe]);
+	const admissionProbe = join(fixture.app, 'acceptance-admission.ts');
+
+	await Bun.write(
+		admissionProbe,
+		`import assert from 'node:assert/strict';
 import {runWithAuthUser,currentAuthUser} from '@getstrata/core/auth/authContext';
 import {AuthManager,absentAuth} from '@getstrata/core/auth/guard';
 import {PolicyGate} from '@getstrata/core/auth/policy';
@@ -378,27 +429,28 @@ const ability=createRequireAbilityMiddleware({tokenCan:()=>false,requireAbility(
 }
 console.log('Packed admission errors preserve exact contracts, no-store, denial boundaries and successful/HTML behavior.');
 `,
-  );
-  await run([admissionProbe]);
-  await run(
-    [cli, "migrate", "--seed"],
-    mysql
-      ? {
-          env: {
-            ...env,
-            APP_ENV: "local",
-            DATABASE_URL: fixture.migrationUrl,
-            APP_DATABASE_URL: fixture.migrationUrl,
-          },
-        }
-      : {},
-  );
-  // Independent runtime inventory from the owned executable route map.
-  // Keep the route baseline assertion separate from OpenAPI rendering below.
-  const probe = join(fixture.app, "acceptance-routes.ts");
-  await Bun.write(
-    probe,
-    `import assert from 'node:assert/strict';
+	);
+	await run([admissionProbe]);
+	await run(
+		[cli, 'migrate', '--seed'],
+		mysql
+			? {
+					env: {
+						...env,
+						APP_ENV: 'local',
+						DATABASE_URL: fixture.migrationUrl,
+						APP_DATABASE_URL: fixture.migrationUrl,
+					},
+				}
+			: {},
+	);
+	// Independent runtime inventory from the owned executable route map.
+	// Keep the route baseline assertion separate from OpenAPI rendering below.
+	const probe = join(fixture.app, 'acceptance-routes.ts');
+
+	await Bun.write(
+		probe,
+		`import assert from 'node:assert/strict';
 import {bootstrapApp} from './src/bootstrap/createApp.ts';
 import {compileRouteMap,getRouteInventory} from '@getstrata/bootstrap/routePlan';
 let app:Awaited<ReturnType<typeof bootstrapApp>>|undefined;const failures:unknown[]=[];
@@ -410,13 +462,15 @@ try{
 }catch(error){failures.push(error);}
 if(app)try{const stopped=await app.application.stop({reason:'runtime inventory complete'});if(!stopped.successful)throw new Error('Runtime inventory owner did not stop cleanly',{cause:stopped});}catch(error){failures.push(error);}
 if(failures.length===1)throw failures[0];if(failures.length>1)throw new AggregateError(failures,'Runtime inventory and cleanup failed.');`,
-  );
-  await run([probe]);
-  if (columnTenancy) {
-    const data = join(fixture.app, "acceptance-tenants.ts");
-    await Bun.write(
-      data,
-      `import assert from 'node:assert/strict';
+	);
+	await run([probe]);
+
+	if (columnTenancy) {
+		const data = join(fixture.app, 'acceptance-tenants.ts');
+
+		await Bun.write(
+			data,
+			`import assert from 'node:assert/strict';
 import {bootstrapApp} from './src/bootstrap/createApp.ts';
 import DefaultRepository,{BaseRepository} from '@getstrata/core/database/baseRepository';
 import {defineRepository} from '@getstrata/core/database/definitions';
@@ -434,10 +488,10 @@ try{
   assert.equal(DefaultRepository,BaseRepository);
   const invoke=app.invoke;const envelope={kind:'command' as const,actor:{kind:'system' as const,policy:'fixture.runtime-data'}};
 ${
-  mysql
-    ? `await invoke(envelope,async({database})=>{const [identity]=await database.execute<{account:string}>({text:'SELECT CURRENT_USER() AS account',params:[]});assert.match(identity.account,/^q01_[a-f0-9]+@/);});
+	mysql
+		? `await invoke(envelope,async({database})=>{const [identity]=await database.execute<{account:string}>({text:'SELECT CURRENT_USER() AS account',params:[]});assert.match(identity.account,/^q01_[a-f0-9]+@/);});
 await assert.rejects(()=>invoke(envelope,({database})=>database.execute({text:'CREATE TABLE q01_forbidden_ddl (id INTEGER)',params:[]})),nativeDdlDenial);`
-    : ""
+		: ''
 }
   await invoke(envelope,async({database})=>{
     const repository=database.repository(tenants);const row=await repository.create({slug:'q01-other'});assert.equal(row.id,2);
@@ -446,157 +500,198 @@ await assert.rejects(()=>invoke(envelope,({database})=>database.execute({text:'C
 }catch(error){failures.push(error);}
 if(app)try{const stopped=await app.application.stop({reason:'runtime tenant data complete'});if(!stopped.successful)throw new Error('Runtime data owner did not stop cleanly',{cause:stopped});}catch(error){failures.push(error);}
 if(failures.length===1)throw failures[0];if(failures.length>1)throw new AggregateError(failures,'Runtime data and cleanup failed.');`,
-    );
-    await run([data]);
-  }
+		);
+		await run([data]);
+	}
 
-  const baseline = JSON.parse(
-    await readFile(join(repoRoot, "tests/fixtures/generated-runtime-routes.json"), "utf8"),
-  );
-  const routes = JSON.parse(await readFile(join(fixture.app, "acceptance-routes.json"), "utf8"));
-  assert.deepEqual(routes, baseline, "Generated runtime lost or changed a preserved route.");
-  if (checkOpenApi) {
-    await run([cli, "openapi:generate"]);
-    await run([cli, "openapi:validate"]);
-    const specPath = join(fixture.app, "docs/openapi.json");
-    const snapshot = await readFile(join(repoRoot, "docs/openapi.json"), "utf8");
-    const actual = await readFile(specPath, "utf8");
-    // Production rejects localhost APP_URL. Compare every byte after changing
-    // only the independently asserted server origins in the expected fixture.
-    const expected = JSON.parse(snapshot);
-    if (mysql) {
-      const servers = [
-        { url: `${env.APP_URL}/api`, description: "HiroApp API" },
-        { url: env.APP_URL, description: "Root (health, metrics, SCIM)" },
-      ];
-      assert.deepEqual(JSON.parse(actual).servers, servers);
-      expected.servers = servers;
-    }
-    assert.equal(
-      actual,
-      mysql ? `${JSON.stringify(expected, null, 2)}\n` : snapshot,
-      "Generated API-only OpenAPI differs from the committed snapshot.",
-    );
-    await run([cli, "openapi:check"]);
-    if (mysql) {
-      const listed = await run([cli, "queue:failed"]);
-      assert.match(listed.output, /No failed jobs/);
-      const flushed = await run([cli, "queue:flush-failed"]);
-      assert.match(flushed.output, /Removed 0 failed job/);
-      const retry = await run([cli, "queue:retry", "999999"], { success: false });
-      assert.equal(retry.code, 1);
-      assert.match(retry.output, /not found/i);
-    }
-    await Bun.write(specPath, '{"openapi":"3.1.0"}');
-    const drift = await run([cli, "openapi:check"], { success: false });
-    assert.equal(drift.code, 1);
-    assert.match(drift.output, /OpenAPI spec drift detected/);
-    await Bun.write(specPath, actual);
-    await run([cli, "openapi:check"]);
-    const spec = JSON.parse(actual);
-    // Resolve the candidate package installed into this fixture, not a monorepo alias.
-    const require = createRequire(join(fixture.app, "package.json"));
-    const { renderTypeScriptSdk, resolveOpenApiConfig } = await import(
-      require.resolve("@getstrata/core/openapi/generator")
-    );
-    const sdkConfig = resolveOpenApiConfig({ ...env, APP_SDK_CLASS: undefined });
-    const sdkSnapshot = await readFile(join(repoRoot, "sdk/typescript/client.ts"), "utf8");
-    const defaultOrigin = 'private readonly baseUrl = "http://localhost:3000/api"';
-    if (mysql) assert.equal(sdkSnapshot.split(defaultOrigin).length, 2);
-    assert.equal(
-      renderTypeScriptSdk(spec, "/api", sdkConfig.sdkClassName),
-      mysql
-        ? sdkSnapshot.replace(
-            defaultOrigin,
-            `private readonly baseUrl = ${JSON.stringify(`${env.APP_URL}/api`)}`,
-          )
-        : sdkSnapshot,
-      "Generated API-only SDK differs from the committed snapshot.",
-    );
+	const baseline = JSON.parse(
+		await readFile(join(repoRoot, 'tests/fixtures/generated-runtime-routes.json'), 'utf8'),
+	);
 
-    for (const path of Object.keys(spec.paths)) {
-      assert.ok(
-        !/^(?:\/$|\/login(?:\/|$)|\/register$|\/logout$|\/account\/|\/confirm-password$|\/forgot-password$|\/reset-password$|\/email\/|\/app(?:\/|$)|\/assets\/)/.test(
-          path,
-        ),
-        `HTML/SPA path leaked into OpenAPI: ${path}`,
-      );
-    }
-    console.log(
-      `Generated CLI OpenAPI passed (${Object.values(spec.paths).reduce((n: number, ops) => n + Object.keys(ops as object).length, 0)} API operations, ${routes.length} preserved runtime operations, drift rejection).`,
-    );
-  }
-  if (checkHttp) {
-    server = Bun.spawn([process.execPath, cli, "start"], {
-      cwd: fixture.app,
-      // Only this owned diagnostic fixture exposes dependency observations.
-      env: { ...env, APP_DEBUG: "true" },
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    serverObservation = Promise.allSettled([
-      server.exited,
-      capture(server.stdout),
-      capture(server.stderr),
-    ]);
-    const deadline = Date.now() + 30000;
-    let origin: string | undefined;
-    while (Date.now() < deadline) {
-      if (server.exitCode !== null)
-        throw new Error(
-          `Generated CLI exited before admission (${server.exitCode}): ${diagnostic}`,
-        );
-      const match = /Listening on (http:\/\/127\.0\.0\.1:\d+)/.exec(diagnostic);
-      if (match) {
-        origin = match[1];
-        break;
-      }
-      await Bun.sleep(25);
-    }
-    assert.ok(origin, `Generated CLI did not start: ${diagnostic}`);
-    const readiness = await fetch(`${origin}/ready`, { signal: AbortSignal.timeout(5000) });
-    assert.equal(readiness.status, 200);
-    const readinessBody: unknown = await readiness.json();
-    assert.ok(readinessBody && typeof readinessBody === "object" && "checks" in readinessBody);
-    assert.deepEqual(
-      readinessBody.checks,
-      { database: "ok", redis: "ok" },
-      "Readiness must actually observe both dependencies, without skipped Redis.",
-    );
-    // Owned loopback transport sends the configured public virtual host. This
-    // exercises production host selection; it does not qualify deployed TLS.
-    const requestHost = mysql ? new URL(env.APP_URL ?? "").host : undefined;
-    if (mysql) {
-      const unknownHost = await fetch(`${origin}/api/v1/auth/csrf`);
-      assert.equal(unknownHost.status, 403);
-      assert.deepEqual(await unknownHost.json(), { error: "Tenant host not found." });
-    }
-    const login = await fetch(`${origin}/login`, {
-      headers: requestHost ? { host: requestHost } : {},
-      signal: AbortSignal.timeout(5000),
-    });
-    assert.equal(login.status, 200);
-    await login.text();
-    const observed = await fetch(`${origin}/metrics`, {
-      headers: { authorization: `Bearer ${env.METRICS_TOKEN}` },
-      signal: AbortSignal.timeout(5000),
-    });
-    assert.equal(observed.status, 200);
-    assert.equal(observed.headers.get("cache-control"), "no-store");
-    const metrics = await observed.text();
-    assert.match(
-      metrics,
-      /^http_requests_total\{method="GET",path="\/login",status="200"\} 1$/m,
-      "Installed HTTP middleware and exporter must share the real request counter.",
-    );
-    assert.match(
-      metrics,
-      /^http_request_duration_ms_count\{method="GET",path="\/login",status="200"\} 1$/m,
-    );
-    await run([
-      "-e",
-      `
+	const routes = JSON.parse(await readFile(join(fixture.app, 'acceptance-routes.json'), 'utf8'));
+
+	assert.deepEqual(routes, baseline, 'Generated runtime lost or changed a preserved route.');
+
+	if (checkOpenApi) {
+		await run([cli, 'openapi:generate']);
+		await run([cli, 'openapi:validate']);
+		const specPath = join(fixture.app, 'docs/openapi.json');
+
+		const snapshot = await readFile(join(repoRoot, 'docs/openapi.json'), 'utf8');
+
+		const actual = await readFile(specPath, 'utf8');
+
+		// Production rejects localhost APP_URL. Compare every byte after changing
+		// only the independently asserted server origins in the expected fixture.
+		const expected = JSON.parse(snapshot);
+
+		if (mysql) {
+			const servers = [
+				{ url: `${env.APP_URL}/api`, description: 'HiroApp API' },
+				{ url: env.APP_URL, description: 'Root (health, metrics, SCIM)' },
+			];
+
+			assert.deepEqual(JSON.parse(actual).servers, servers);
+			expected.servers = servers;
+		}
+
+		assert.equal(
+			actual,
+			mysql ? `${JSON.stringify(expected, null, 2)}\n` : snapshot,
+			'Generated API-only OpenAPI differs from the committed snapshot.',
+		);
+		await run([cli, 'openapi:check']);
+
+		if (mysql) {
+			const listed = await run([cli, 'queue:failed']);
+
+			assert.match(listed.output, /No failed jobs/);
+			const flushed = await run([cli, 'queue:flush-failed']);
+
+			assert.match(flushed.output, /Removed 0 failed job/);
+			const retry = await run([cli, 'queue:retry', '999999'], { success: false });
+
+			assert.equal(retry.code, 1);
+			assert.match(retry.output, /not found/i);
+		}
+
+		await Bun.write(specPath, '{"openapi":"3.1.0"}');
+		const drift = await run([cli, 'openapi:check'], { success: false });
+
+		assert.equal(drift.code, 1);
+		assert.match(drift.output, /OpenAPI spec drift detected/);
+		await Bun.write(specPath, actual);
+		await run([cli, 'openapi:check']);
+		const spec = JSON.parse(actual);
+
+		// Resolve the candidate package installed into this fixture, not a monorepo alias.
+		const require = createRequire(join(fixture.app, 'package.json'));
+
+		const { renderTypeScriptSdk, resolveOpenApiConfig } = await import(
+			require.resolve('@getstrata/core/openapi/generator')
+		);
+
+		const sdkConfig = resolveOpenApiConfig({ ...env, APP_SDK_CLASS: undefined });
+
+		const sdkSnapshot = await readFile(join(repoRoot, 'sdk/typescript/client.ts'), 'utf8');
+
+		const defaultOrigin = 'private readonly baseUrl = "http://localhost:3000/api"';
+
+		if (mysql) {
+			assert.equal(sdkSnapshot.split(defaultOrigin).length, 2);
+		}
+
+		assert.equal(
+			renderTypeScriptSdk(spec, '/api', sdkConfig.sdkClassName),
+			mysql
+				? sdkSnapshot.replace(
+						defaultOrigin,
+						`private readonly baseUrl = ${JSON.stringify(`${env.APP_URL}/api`)}`,
+					)
+				: sdkSnapshot,
+			'Generated API-only SDK differs from the committed snapshot.',
+		);
+
+		for (const path of Object.keys(spec.paths)) {
+			assert.ok(
+				!/^(?:\/$|\/login(?:\/|$)|\/register$|\/logout$|\/account\/|\/confirm-password$|\/forgot-password$|\/reset-password$|\/email\/|\/app(?:\/|$)|\/assets\/)/.test(
+					path,
+				),
+				`HTML/SPA path leaked into OpenAPI: ${path}`,
+			);
+		}
+
+		console.log(
+			`Generated CLI OpenAPI passed (${Object.values(spec.paths).reduce((n: number, ops) => n + Object.keys(ops as object).length, 0)} API operations, ${routes.length} preserved runtime operations, drift rejection).`,
+		);
+	}
+
+	if (checkHttp) {
+		server = Bun.spawn([process.execPath, cli, 'start'], {
+			cwd: fixture.app,
+			// Only this owned diagnostic fixture exposes dependency observations.
+			env: { ...env, APP_DEBUG: 'true' },
+			stdin: 'ignore',
+			stdout: 'pipe',
+			stderr: 'pipe',
+		});
+		serverObservation = Promise.allSettled([
+			server.exited,
+			capture(server.stdout),
+			capture(server.stderr),
+		]);
+		const deadline = Date.now() + 30000;
+
+		let origin: string | undefined;
+
+		while (Date.now() < deadline) {
+			if (server.exitCode !== null) {
+				throw new Error(
+					`Generated CLI exited before admission (${server.exitCode}): ${diagnostic}`,
+				);
+			}
+
+			const match = /Listening on (http:\/\/127\.0\.0\.1:\d+)/.exec(diagnostic);
+
+			if (match) {
+				origin = match[1];
+				break;
+			}
+
+			await Bun.sleep(25);
+		}
+
+		assert.ok(origin, `Generated CLI did not start: ${diagnostic}`);
+		const readiness = await fetch(`${origin}/ready`, { signal: AbortSignal.timeout(5000) });
+
+		assert.equal(readiness.status, 200);
+		const readinessBody: unknown = await readiness.json();
+
+		assert.ok(readinessBody && typeof readinessBody === 'object' && 'checks' in readinessBody);
+		assert.deepEqual(
+			readinessBody.checks,
+			{ database: 'ok', redis: 'ok' },
+			'Readiness must actually observe both dependencies, without skipped Redis.',
+		);
+		// Owned loopback transport sends the configured public virtual host. This
+		// exercises production host selection; it does not qualify deployed TLS.
+		const requestHost = mysql ? new URL(env.APP_URL ?? '').host : undefined;
+
+		if (mysql) {
+			const unknownHost = await fetch(`${origin}/api/v1/auth/csrf`);
+
+			assert.equal(unknownHost.status, 403);
+			assert.deepEqual(await unknownHost.json(), { error: 'Tenant host not found.' });
+		}
+
+		const login = await fetch(`${origin}/login`, {
+			headers: requestHost ? { host: requestHost } : {},
+			signal: AbortSignal.timeout(5000),
+		});
+
+		assert.equal(login.status, 200);
+		await login.text();
+		const observed = await fetch(`${origin}/metrics`, {
+			headers: { authorization: `Bearer ${env.METRICS_TOKEN}` },
+			signal: AbortSignal.timeout(5000),
+		});
+
+		assert.equal(observed.status, 200);
+		assert.equal(observed.headers.get('cache-control'), 'no-store');
+		const metrics = await observed.text();
+
+		assert.match(
+			metrics,
+			/^http_requests_total\{method="GET",path="\/login",status="200"\} 1$/m,
+			'Installed HTTP middleware and exporter must share the real request counter.',
+		);
+		assert.match(
+			metrics,
+			/^http_request_duration_ms_count\{method="GET",path="\/login",status="200"\} 1$/m,
+		);
+		await run([
+			'-e',
+			`
 import assert from 'node:assert/strict';
 import * as root from '@getstrata/core';
 import {prometheusRegistry,PrometheusRegistry,HTTP_DURATION_BUCKETS_MS} from '@getstrata/core/metrics/prometheus';
@@ -608,66 +703,93 @@ prometheusRegistry.resetForTests();
 await createMetricsMiddleware()(new Request('http://localhost/fixture'),async()=>new Response('ok'));
 assert.equal(prometheusRegistry.getHttpRequestSummary().totalRequests,1);
 `,
-    ]);
-    await verifyGeneratedAuthHttp(origin, requestHost);
-    if (columnTenancy) await verifyGeneratedScimHttp(origin, requestHost);
-    console.log(
-      "Generated HTTP cookie/token/JWT admission, CSRF, provider gates and credential-specific logout passed.",
-    );
-    if (sqlite) console.log("SQLite SCIM repeated cross-tenant CRUD/read isolation passed.");
-    if (mysql)
-      console.log(
-        "MySQL SCIM repeated cross-tenant CRUD/read isolation passed (DML-only production runtime).",
-      );
-    const smokeEnv = { ...env, BASE_URL: origin, APP_URL: origin, SMOKE_HOST: requestHost };
-    await run([join(repoRoot, "scripts/smoke-test.ts")], { cwd: repoRoot, env: smokeEnv });
-    await run([join(repoRoot, "scripts/smoke-webview.ts")], { cwd: repoRoot, env: smokeEnv });
-    const denied = await fetch(`${origin}/metrics`, { signal: AbortSignal.timeout(5000) });
-    await denied.text();
-    assert.equal(denied.status, 404);
-    console.log(
-      "Generated CLI start, health/readiness, authenticated metrics, login and WebView smoke passed.",
-    );
-  }
+		]);
+		await verifyGeneratedAuthHttp(origin, requestHost);
+
+		if (columnTenancy) {
+			await verifyGeneratedScimHttp(origin, requestHost);
+		}
+
+		console.log(
+			'Generated HTTP cookie/token/JWT admission, CSRF, provider gates and credential-specific logout passed.',
+		);
+
+		if (sqlite) {
+			console.log('SQLite SCIM repeated cross-tenant CRUD/read isolation passed.');
+		}
+
+		if (mysql) {
+			console.log(
+				'MySQL SCIM repeated cross-tenant CRUD/read isolation passed (DML-only production runtime).',
+			);
+		}
+
+		const smokeEnv = { ...env, BASE_URL: origin, APP_URL: origin, SMOKE_HOST: requestHost };
+
+		await run([join(repoRoot, 'scripts/smoke-test.ts')], { cwd: repoRoot, env: smokeEnv });
+		await run([join(repoRoot, 'scripts/smoke-webview.ts')], { cwd: repoRoot, env: smokeEnv });
+		const denied = await fetch(`${origin}/metrics`, { signal: AbortSignal.timeout(5000) });
+
+		await denied.text();
+		assert.equal(denied.status, 404);
+		console.log(
+			'Generated CLI start, health/readiness, authenticated metrics, login and WebView smoke passed.',
+		);
+	}
 } catch (error) {
-  failures.push(error);
+	failures.push(error);
 } finally {
-  if (server) {
-    try {
-      if (server.exitCode === null) server.kill("SIGTERM");
-    } catch (error) {
-      failures.push(error);
-    }
-    const timer = setTimeout(() => {
-      try {
-        if (server?.exitCode === null) server.kill("SIGKILL");
-      } catch (error) {
-        failures.push(error);
-      }
-    }, 15000);
-    try {
-      if (!serverObservation)
-        failures.push(new Error("Generated server observation was not registered."));
-      const results = await (serverObservation ?? Promise.allSettled([server.exited]));
-      for (const result of results) if (result.status === "rejected") failures.push(result.reason);
-      const terminal = results[0];
-      if (terminal?.status === "fulfilled") {
-        try {
-          assert.equal(terminal.value, 0, `Generated CLI did not drain cleanly: ${diagnostic}`);
-        } catch (error) {
-          failures.push(error);
-        }
-      }
-    } catch (error) {
-      failures.push(error);
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-  try {
-    await fixture.close();
-  } catch (error) {
-    failures.push(error);
-  }
+	if (server) {
+		try {
+			if (server.exitCode === null) {
+				server.kill('SIGTERM');
+			}
+		} catch (error) {
+			failures.push(error);
+		}
+		const timer = setTimeout(() => {
+			try {
+				if (server?.exitCode === null) {
+					server.kill('SIGKILL');
+				}
+			} catch (error) {
+				failures.push(error);
+			}
+		}, 15000);
+
+		try {
+			if (!serverObservation) {
+				failures.push(new Error('Generated server observation was not registered.'));
+			}
+
+			const results = await (serverObservation ?? Promise.allSettled([server.exited]));
+
+			for (const result of results) {
+				if (result.status === 'rejected') {
+					failures.push(result.reason);
+				}
+			}
+
+			const terminal = results[0];
+
+			if (terminal?.status === 'fulfilled') {
+				try {
+					assert.equal(terminal.value, 0, `Generated CLI did not drain cleanly: ${diagnostic}`);
+				} catch (error) {
+					failures.push(error);
+				}
+			}
+		} catch (error) {
+			failures.push(error);
+		} finally {
+			clearTimeout(timer);
+		}
+	}
+
+	try {
+		await fixture.close();
+	} catch (error) {
+		failures.push(error);
+	}
 }
-throwFailures(failures, "Generated runtime verification and cleanup failed.");
+throwFailures(failures, 'Generated runtime verification and cleanup failed.');

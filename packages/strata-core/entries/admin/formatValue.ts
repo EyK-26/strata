@@ -1,1 +1,1 @@
-export * from "../../../../src/core/admin/formatValue.ts";
+export * from '../../../../src/core/admin/formatValue.ts';

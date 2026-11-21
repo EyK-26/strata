@@ -1,1 +1,1 @@
-export { createModuleDiscovery, ensureModulesLoaded } from "./discoverModules";
+export { createModuleDiscovery, ensureModulesLoaded } from './discoverModules';

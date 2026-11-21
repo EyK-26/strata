@@ -1,1 +1,1 @@
-export * from "../../../../src/core/http/memoryThrottleMiddleware.ts";
+export * from '../../../../src/core/http/memoryThrottleMiddleware.ts';

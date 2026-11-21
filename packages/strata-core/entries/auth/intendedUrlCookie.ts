@@ -1,1 +1,1 @@
-export * from "../../../../src/core/auth/intendedUrlCookie.ts";
+export * from '../../../../src/core/auth/intendedUrlCookie.ts';

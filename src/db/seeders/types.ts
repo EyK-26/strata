@@ -1,1 +1,1 @@
-export type { Seeder } from "../../core/database/seeders/types";
+export type { Seeder } from '../../core/database/seeders/types';

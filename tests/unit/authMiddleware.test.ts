@@ -1,82 +1,92 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { MEMBER_ABILITIES } from "@getstrata/core/auth/abilityCatalog";
-import { currentAuthUser, currentCredentialSource } from "@getstrata/core/auth/authContext";
-import { authenticatedAuth } from "@getstrata/core/auth/authOutcome";
-import { ApiTokenGuard, AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
-import { createAuthMiddleware } from "@getstrata/core/http/authMiddleware";
-import { composeMiddleware } from "@getstrata/core/http/middleware";
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+
+import { MEMBER_ABILITIES } from '@getstrata/core/auth/abilityCatalog';
+import { currentAuthUser, currentCredentialSource } from '@getstrata/core/auth/authContext';
+import { authenticatedAuth } from '@getstrata/core/auth/authOutcome';
+import { ApiTokenGuard, AuthManager, GuestGuard } from '@getstrata/core/auth/guard';
+import { createAuthMiddleware } from '@getstrata/core/http/authMiddleware';
+import { composeMiddleware } from '@getstrata/core/http/middleware';
+
 import {
-  enableDevAuthHeaders,
-  guestGuardOptions,
-  restoreDevAuthHeaders,
-} from "../helpers/devAuthHeaders";
+	enableDevAuthHeaders,
+	guestGuardOptions,
+	restoreDevAuthHeaders,
+} from '../helpers/devAuthHeaders';
 
-describe("GuestGuard", () => {
-  let previousHeaders: string | undefined;
-  beforeEach(() => {
-    previousHeaders = enableDevAuthHeaders();
-  });
-  afterEach(() => {
-    restoreDevAuthHeaders(previousHeaders);
-  });
-  test("resolves users from development auth headers", async () => {
-    const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
-    const user = await auth.resolve(
-      new Request("http://example.test/organizations", {
-        headers: {
-          "x-authenticated-user-id": "7",
-          "x-authenticated-user-role": "member",
-        },
-      }),
-    );
+describe('GuestGuard', () => {
+	let previousHeaders: string | undefined;
 
-    expect(user).toEqual({
-      id: "7",
-      role: "member",
-      abilities: [...MEMBER_ABILITIES],
-      emailVerifiedAt: null,
-    });
-  });
+	beforeEach(() => {
+		previousHeaders = enableDevAuthHeaders();
+	});
+	afterEach(() => {
+		restoreDevAuthHeaders(previousHeaders);
+	});
+	test('resolves users from development auth headers', async () => {
+		const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
+
+		const user = await auth.resolve(
+			new Request('http://example.test/organizations', {
+				headers: {
+					'x-authenticated-user-id': '7',
+					'x-authenticated-user-role': 'member',
+				},
+			}),
+		);
+
+		expect(user).toEqual({
+			id: '7',
+			role: 'member',
+			abilities: [...MEMBER_ABILITIES],
+			emailVerifiedAt: null,
+		});
+	});
 });
 
-describe("createAuthMiddleware", () => {
-  test("stores the authenticated user in ALS without identity response headers", async () => {
-    const auth = new AuthManager(
-      new ApiTokenGuard({
-        token: "secret-token",
-        user: { id: 42, role: "admin" },
-      }),
-    );
-    const handler = composeMiddleware(createAuthMiddleware(auth))(async () => {
-      return Response.json({
-        id: currentAuthUser()?.id,
-        source: currentCredentialSource(),
-      });
-    });
+describe('createAuthMiddleware', () => {
+	test('stores the authenticated user in ALS without identity response headers', async () => {
+		const auth = new AuthManager(
+			new ApiTokenGuard({
+				token: 'secret-token',
+				user: { id: 42, role: 'admin' },
+			}),
+		);
 
-    const response = await handler(
-      new Request("http://example.test/organizations", {
-        headers: { authorization: "Bearer secret-token" },
-      }),
-    );
+		const handler = composeMiddleware(createAuthMiddleware(auth))(async () => {
+			return Response.json({
+				id: currentAuthUser()?.id,
+				source: currentCredentialSource(),
+			});
+		});
 
-    expect(response.headers.get("x-authenticated-user-id")).toBeNull();
-    expect(await response.json()).toEqual({ id: 42, source: "bearer" });
-  });
+		const response = await handler(
+			new Request('http://example.test/organizations', {
+				headers: { authorization: 'Bearer secret-token' },
+			}),
+		);
+
+		expect(response.headers.get('x-authenticated-user-id')).toBeNull();
+		expect(await response.json()).toEqual({ id: 42, source: 'bearer' });
+	});
 });
 
-test("authentication middleware accepts an authenticate-only adapter", async () => {
-  const request = new Request("http://example.test");
-  const middleware = createAuthMiddleware({
-    authenticate: async (received) => {
-      expect(received).toBe(request);
-      return authenticatedAuth({ id: "custom" }, "session");
-    },
-  });
-  const response = await middleware(request, async () => {
-    expect(currentAuthUser()?.id).toBe("custom");
-    expect(currentCredentialSource()).toBe("session");
-    return new Response("ok");
-  });
-  expect(response.status).toBe(200);
+test('authentication middleware accepts an authenticate-only adapter', async () => {
+	const request = new Request('http://example.test');
+
+	const middleware = createAuthMiddleware({
+		authenticate: async (received) => {
+			expect(received).toBe(request);
+
+			return authenticatedAuth({ id: 'custom' }, 'session');
+		},
+	});
+
+	const response = await middleware(request, async () => {
+		expect(currentAuthUser()?.id).toBe('custom');
+		expect(currentCredentialSource()).toBe('session');
+
+		return new Response('ok');
+	});
+
+	expect(response.status).toBe(200);
 });

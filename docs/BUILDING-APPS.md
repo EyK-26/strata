@@ -64,14 +64,14 @@ use `--help` for each command's options.
 Edit `src/models/Task.ts`:
 
 ```ts
-import { defineModel, field } from "@getstrata/core/database/model";
+import { defineModel, field } from '@getstrata/core/database/model';
 
 export class Task extends defineModel({
-  table: "tasks",
-  fields: { id: field.number(), title: field.string() },
+	table: 'tasks',
+	fields: { id: field.number(), title: field.string() },
 }) {
-  static $fillable = ["title"] as const;
-  static $timestamps = false;
+	static $fillable = ['title'] as const;
+	static $timestamps = false;
 }
 ```
 
@@ -101,16 +101,16 @@ constraints and access rules before exposing endpoints; see [tenancy](TENANCY.md
 Edit `src/http/requests/StoreTaskRequest.ts`:
 
 ```ts
-import { FormRequest } from "@getstrata/core/http/formRequest";
-import { maxLength, required, stringRule, validateObject } from "@getstrata/core/validation/rules";
+import { FormRequest } from '@getstrata/core/http/formRequest';
+import { maxLength, required, stringRule, validateObject } from '@getstrata/core/validation/rules';
 
 export default class StoreTaskRequest extends FormRequest<{ title: string }> {
-  protected parse(payload: unknown): { title: string } {
-    const body = validateObject(payload, {
-      title: [required(), stringRule(), maxLength(120)],
-    });
-    return { title: body.title as string };
-  }
+	protected parse(payload: unknown): { title: string } {
+		const body = validateObject(payload, {
+			title: [required(), stringRule(), maxLength(120)],
+		});
+		return { title: body.title as string };
+	}
 }
 ```
 
@@ -124,22 +124,23 @@ multiplicity explicitly. Validation does not authorize a row or replace `$fillab
 Edit `src/http/controllers/TaskController.ts`:
 
 ```ts
-import type { BusinessRouteHandler } from "@getstrata/bootstrap/persistenceContracts";
-import { createdResponse, jsonResponse } from "@getstrata/core/http/response";
-import { Task } from "../../models/Task";
-import StoreTaskRequest from "../requests/StoreTaskRequest";
+import type { BusinessRouteHandler } from '@getstrata/bootstrap/persistenceContracts';
+import { createdResponse, jsonResponse } from '@getstrata/core/http/response';
+
+import { Task } from '../../models/Task';
+import StoreTaskRequest from '../requests/StoreTaskRequest';
 
 export class TaskController {
-  readonly index: BusinessRouteHandler = async (_request, { database }) => {
-    const tasks = await database.model(Task).query().orderBy({ id: "desc" }).limit(50).get();
-    return jsonResponse(tasks.map(task => task.toArray()));
-  };
+	readonly index: BusinessRouteHandler = async (_request, { database }) => {
+		const tasks = await database.model(Task).query().orderBy({ id: 'desc' }).limit(50).get();
+		return jsonResponse(tasks.map((task) => task.toArray()));
+	};
 
-  readonly store: BusinessRouteHandler = async (request, { database }) => {
-    const values = await new StoreTaskRequest().validate(request);
-    const task = await database.model(Task).create(values);
-    return createdResponse(task.toArray());
-  };
+	readonly store: BusinessRouteHandler = async (request, { database }) => {
+		const values = await new StoreTaskRequest().validate(request);
+		const task = await database.model(Task).create(values);
+		return createdResponse(task.toArray());
+	};
 }
 ```
 
@@ -147,18 +148,19 @@ Add these entries to the existing route map in `src/routes/api.ts`, keeping its
 other routes and imports:
 
 ```ts
-import type { AppRouteMap, ModuleRouteContext } from "@getstrata/bootstrap/contracts";
-import { TaskController } from "../http/controllers/TaskController";
+import type { AppRouteMap, ModuleRouteContext } from '@getstrata/bootstrap/contracts';
+
+import { TaskController } from '../http/controllers/TaskController';
 
 export function apiRoutes(context: ModuleRouteContext): AppRouteMap {
-  const tasks = new TaskController();
-  return {
-    // Keep the application's other route entries here too.
-    "/api/v1/tasks": {
-      GET: context.kernel.wrapAuthenticated(tasks.index),
-      POST: context.kernel.wrapAbility("tasks:create", tasks.store),
-    },
-  };
+	const tasks = new TaskController();
+	return {
+		// Keep the application's other route entries here too.
+		'/api/v1/tasks': {
+			GET: context.kernel.wrapAuthenticated(tasks.index),
+			POST: context.kernel.wrapAbility('tasks:create', tasks.store),
+		},
+	};
 }
 ```
 

@@ -1,1 +1,1 @@
-export * from "../../../src/bootstrap/health.ts";
+export * from '../../../src/bootstrap/health.ts';

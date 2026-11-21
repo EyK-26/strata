@@ -1,1 +1,1 @@
-export * from "../../../../src/core/security/stripeWebhook.ts";
+export * from '../../../../src/core/security/stripeWebhook.ts';

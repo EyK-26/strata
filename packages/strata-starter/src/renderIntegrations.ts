@@ -1,59 +1,71 @@
-import { ControllerActions, type RenderedHttpFeature, renderAction } from "./controllerActions.ts";
-import type { StarterFeaturePlan } from "./featurePlan.ts";
-import { dialectFragments } from "./renderMigrations.ts";
-import type { DatabaseLayer, StarterLayers } from "./types.ts";
+import { ControllerActions, renderAction, type RenderedHttpFeature } from './controllerActions.ts';
+import type { StarterFeaturePlan } from './featurePlan.ts';
+import { dialectFragments } from './renderMigrations.ts';
+import type { DatabaseLayer, StarterLayers } from './types.ts';
 
 function activeBoolColumn(database: DatabaseLayer): string {
-  if (database === "postgres") {
-    return "BOOLEAN NOT NULL DEFAULT TRUE";
-  }
-  if (database === "mysql") {
-    return "TINYINT(1) NOT NULL DEFAULT 1";
-  }
-  return "INTEGER NOT NULL DEFAULT 1";
+	if (database === 'postgres') {
+		return 'BOOLEAN NOT NULL DEFAULT TRUE';
+	}
+
+	if (database === 'mysql') {
+		return 'TINYINT(1) NOT NULL DEFAULT 1';
+	}
+
+	return 'INTEGER NOT NULL DEFAULT 1';
 }
 
 function webhookMigrationName(plan: StarterFeaturePlan): string | null {
-  const layers = plan.layers;
-  if (!layers.extras.webhooks) {
-    return null;
-  }
-  return "0002_webhooks_schema";
+	const layers = plan.layers;
+
+	if (!layers.extras.webhooks) {
+		return null;
+	}
+
+	return '0002_webhooks_schema';
 }
 
 function billingMigrationName(plan: StarterFeaturePlan): string | null {
-  const layers = plan.layers;
-  if (!layers.extras.billing) {
-    return null;
-  }
-  return layers.extras.webhooks ? "0003_billing_schema" : "0002_billing_schema";
+	const layers = plan.layers;
+
+	if (!layers.extras.billing) {
+		return null;
+	}
+
+	return layers.extras.webhooks ? '0003_billing_schema' : '0002_billing_schema';
 }
 
 function renderFileMigration(
-  name: string,
-  upSql: string[],
-  downSql: string[],
-  columnCleanup?: { database: StarterLayers["database"]; table: string; column: string },
+	name: string,
+	upSql: string[],
+	downSql: string[],
+	columnCleanup?: { database: StarterLayers['database']; table: string; column: string },
 ): string {
-  const upCalls = upSql.map((sql) => `    await db.unsafe(${JSON.stringify(sql)});`).join("\n");
-  const downCalls = downSql.map((sql) => `    await db.unsafe(${JSON.stringify(sql)});`).join("\n");
-  const schemaImport = columnCleanup
-    ? 'import { Schema } from "@getstrata/core/database/schema";\n'
-    : "";
-  const dropColumn = columnCleanup
-    ? `\n    await Schema.run(db, "${columnCleanup.database === "postgres" ? "pgsql" : columnCleanup.database}", schema => {
+	const upCalls = upSql.map((sql) => `    await db.unsafe(${JSON.stringify(sql)});`).join('\n');
+
+	const downCalls = downSql.map((sql) => `    await db.unsafe(${JSON.stringify(sql)});`).join('\n');
+
+	const schemaImport = columnCleanup
+		? 'import { Schema } from "@getstrata/core/database/schema";\n'
+		: '';
+
+	const dropColumn = columnCleanup
+		? `\n    await Schema.run(db, "${columnCleanup.database === 'postgres' ? 'pgsql' : columnCleanup.database}", schema => {
       schema.table(${JSON.stringify(columnCleanup.table)}, table => {
         table.dropColumn(${JSON.stringify(columnCleanup.column)});
       });
     });`
-    : "";
-  return `${schemaImport}import type { Migration } from "@getstrata/core/database/migrations/types";
+		: '';
+
+	return `${schemaImport}import type { Migration } from "@getstrata/core/database/migrations/types";
 
 const migration: Migration = {
   name: ${JSON.stringify(name)},
+
   async up(db) {
 ${upCalls}
   },
+
   async down(db) {
 ${downCalls}${dropColumn}
   },
@@ -64,18 +76,24 @@ export default migration;
 }
 
 function renderWebhooksMigration(plan: StarterFeaturePlan): string | null {
-  const layers = plan.layers;
-  const name = webhookMigrationName(plan);
-  if (!name) {
-    return null;
-  }
-  const d = dialectFragments(layers.database);
-  const payloadType = layers.database === "postgres" ? "JSONB NOT NULL" : `${d.text} NOT NULL`;
-  const cascade = layers.database === "sqlite" ? "" : " CASCADE";
-  return renderFileMigration(
-    name,
-    [
-      `CREATE TABLE IF NOT EXISTS webhooks (
+	const layers = plan.layers;
+
+	const name = webhookMigrationName(plan);
+
+	if (!name) {
+		return null;
+	}
+
+	const d = dialectFragments(layers.database);
+
+	const payloadType = layers.database === 'postgres' ? 'JSONB NOT NULL' : `${d.text} NOT NULL`;
+
+	const cascade = layers.database === 'sqlite' ? '' : ' CASCADE';
+
+	return renderFileMigration(
+		name,
+		[
+			`CREATE TABLE IF NOT EXISTS webhooks (
     id ${d.id},
     url ${d.text} NOT NULL,
     secret ${d.text} NOT NULL,
@@ -83,7 +101,7 @@ function renderWebhooksMigration(plan: StarterFeaturePlan): string | null {
     active ${activeBoolColumn(layers.database)},
     created_at ${d.timestamp}
   )`,
-      `CREATE TABLE IF NOT EXISTS webhook_deliveries (
+			`CREATE TABLE IF NOT EXISTS webhook_deliveries (
     id ${d.id},
     webhook_id INTEGER NOT NULL,
     event ${d.keyText} NOT NULL,
@@ -93,29 +111,38 @@ function renderWebhooksMigration(plan: StarterFeaturePlan): string | null {
     error ${d.text},
     created_at ${d.timestamp}
   )`,
-    ],
-    [
-      `DROP TABLE IF EXISTS webhook_deliveries${cascade}`,
-      `DROP TABLE IF EXISTS webhooks${cascade}`,
-    ],
-  );
+		],
+		[
+			`DROP TABLE IF EXISTS webhook_deliveries${cascade}`,
+			`DROP TABLE IF EXISTS webhooks${cascade}`,
+		],
+	);
 }
 
 function renderBillingMigration(plan: StarterFeaturePlan): string | null {
-  const layers = plan.layers;
-  const name = billingMigrationName(plan);
-  if (!name) {
-    return null;
-  }
-  const d = dialectFragments(layers.database);
-  const tenancyOn = plan.decisions.tenantTable;
-  const cascade = layers.database === "sqlite" ? "" : " CASCADE";
-  const up: string[] = [];
-  if (tenancyOn) {
-    up.push(`ALTER TABLE tenant ADD COLUMN stripe_customer_id ${d.keyText}`);
-  }
-  const tenantColumn = tenancyOn ? `\n    tenant_id INTEGER NOT NULL,` : "";
-  up.push(`CREATE TABLE IF NOT EXISTS subscription (
+	const layers = plan.layers;
+
+	const name = billingMigrationName(plan);
+
+	if (!name) {
+		return null;
+	}
+
+	const d = dialectFragments(layers.database);
+
+	const tenancyOn = plan.decisions.tenantTable;
+
+	const cascade = layers.database === 'sqlite' ? '' : ' CASCADE';
+
+	const up: string[] = [];
+
+	if (tenancyOn) {
+		up.push(`ALTER TABLE tenant ADD COLUMN stripe_customer_id ${d.keyText}`);
+	}
+
+	const tenantColumn = tenancyOn ? `\n    tenant_id INTEGER NOT NULL,` : '';
+
+	up.push(`CREATE TABLE IF NOT EXISTS subscription (
     id ${d.id},${tenantColumn}
     stripe_subscription_id ${d.keyText} UNIQUE,
     plan ${d.defaultText} NOT NULL DEFAULT 'free',
@@ -124,36 +151,40 @@ function renderBillingMigration(plan: StarterFeaturePlan): string | null {
     created_at ${d.timestamp},
     updated_at ${d.timestamp}
   )`);
-  const eventTenant = tenancyOn ? `\n    tenant_id INTEGER,` : "";
-  up.push(`CREATE TABLE IF NOT EXISTS stripe_webhook_event (
+	const eventTenant = tenancyOn ? `\n    tenant_id INTEGER,` : '';
+
+	up.push(`CREATE TABLE IF NOT EXISTS stripe_webhook_event (
     id ${d.keyText} PRIMARY KEY,
     event_type ${d.keyText} NOT NULL,${eventTenant}
     processed_at ${d.timestamp}
   )`);
-  const down = [
-    `DROP TABLE IF EXISTS stripe_webhook_event${cascade}`,
-    `DROP TABLE IF EXISTS subscription${cascade}`,
-  ];
-  return renderFileMigration(
-    name,
-    up,
-    down,
-    tenancyOn
-      ? { database: layers.database, table: "tenant", column: "stripe_customer_id" }
-      : undefined,
-  );
+	const down = [
+		`DROP TABLE IF EXISTS stripe_webhook_event${cascade}`,
+		`DROP TABLE IF EXISTS subscription${cascade}`,
+	];
+
+	return renderFileMigration(
+		name,
+		up,
+		down,
+		tenancyOn
+			? { database: layers.database, table: 'tenant', column: 'stripe_customer_id' }
+			: undefined,
+	);
 }
 
 function sqlParams(database: DatabaseLayer, count: number): string {
-  return Array.from({ length: count }, (_, index) =>
-    database === "postgres" ? `$${index + 1}` : "?",
-  ).join(", ");
+	return Array.from({ length: count }, (_, index) =>
+		database === 'postgres' ? `$${index + 1}` : '?',
+	).join(', ');
 }
 
 function renderDispatchOutboundWebhookJob(plan: StarterFeaturePlan): string {
-  const layers = plan.layers;
-  const values = sqlParams(layers.database, 6);
-  return `import { Job, type JobContext } from "@getstrata/core/queue";
+	const layers = plan.layers;
+
+	const values = sqlParams(layers.database, 6);
+
+	return `import { Job, type JobContext } from "@getstrata/core/queue";
 import { safeFetch } from "@getstrata/core/security/safeFetch";
 import { signWebhookBody } from "@getstrata/core/security/webhookSignature";
 
@@ -171,11 +202,18 @@ class DispatchOutboundWebhookJob extends Job<DispatchOutboundWebhookPayload> {
   static override readonly jobName = "webhook.dispatch";
 
   override async handle(payload: DispatchOutboundWebhookPayload, context?: JobContext): Promise<void> {
-    if (!context?.database) throw new Error("Webhook delivery requires an owned queue invocation.");
+    if (!context?.database) {
+      throw new Error("Webhook delivery requires an owned queue invocation.");
+    }
+
     const allowPrivate = payload.allowPrivate === true;
+
     let responseStatus: number | null = null;
+
     let error: string | null = null;
+
     let failure: Error | undefined;
+
     try {
       const response = await safeFetch(
         payload.url,
@@ -190,11 +228,14 @@ class DispatchOutboundWebhookJob extends Job<DispatchOutboundWebhookPayload> {
         },
         { timeoutMs: 10_000, maxRedirects: 0, allowPrivate, allowHttp: allowPrivate },
       );
+
       responseStatus = response.status;
+
       if (!response.ok) {
         error = \`HTTP \${response.status}\`;
         failure = new Error(error);
       }
+
       // Only the status is needed. Explicit cancellation releases safeFetch's
       // transport/body deadline even when the receiver sends an unread body.
       await response.body?.cancel();
@@ -209,12 +250,18 @@ class DispatchOutboundWebhookJob extends Job<DispatchOutboundWebhookPayload> {
         params: [payload.webhookId, payload.event, payload.body, responseStatus, context.attempt ?? 1, error],
       });
     } catch (recordingFailure) {
-      if (failure) throw new AggregateError([failure, recordingFailure], \`Webhook delivery failed: \${failure.message}; recording also failed.\`, { cause: failure });
+      if (failure) {
+        throw new AggregateError([failure, recordingFailure], \`Webhook delivery failed: \${failure.message}; recording also failed.\`, { cause: failure });
+      }
+
       throw recordingFailure;
     }
+
     // Every transport/non-2xx failure uses the selected queue's bounded retry
     // and terminal recovery policy. Delivery remains at-least-once.
-    if (failure) throw failure;
+    if (failure) {
+      throw failure;
+    }
   }
 }
 
@@ -224,7 +271,7 @@ export type { DispatchOutboundWebhookPayload };
 }
 
 function renderDispatchWebhook(): string {
-  return `import type { DatabaseSession, TransactionSession } from "@getstrata/core/database/session";
+	return `import type { DatabaseSession, TransactionSession } from "@getstrata/core/database/session";
 import type { QueueDispatcher } from "@getstrata/core/queue";
 import DispatchOutboundWebhookJob from "../jobs/dispatchOutboundWebhookJob.ts";
 
@@ -236,8 +283,12 @@ interface WebhookPorts {
 
 /** Call after commit; choose a public payload explicitly, excluding account credentials. */
 export async function dispatchWebhook({ database, queue, options }: WebhookPorts, event: string, data: unknown): Promise<void> {
-  if (!event.trim()) throw new Error("A webhook event name is required.");
+  if (!event.trim()) {
+    throw new Error("A webhook event name is required.");
+  }
+
   const body = JSON.stringify({ event, data });
+
   const hooks = await database.execute<{
     id: number;
     url: string;
@@ -245,8 +296,12 @@ export async function dispatchWebhook({ database, queue, options }: WebhookPorts
     active: number | boolean;
     events: string;
   }>({ text: "SELECT id, url, secret, active, events FROM webhooks", params: [] });
+
   for (const hook of hooks) {
-    if (!hook.active || (hook.events !== "*" && hook.events !== event)) continue;
+    if (!hook.active || (hook.events !== "*" && hook.events !== event)) {
+      continue;
+    }
+
     await queue.dispatch(new DispatchOutboundWebhookJob(), {
       webhookId: hook.id,
       event,
@@ -262,7 +317,7 @@ export async function dispatchWebhook({ database, queue, options }: WebhookPorts
 }
 
 function renderApplyStripeWebhook(): string {
-  return `import type { BusinessRequestPorts } from "@getstrata/bootstrap/persistenceContracts";
+	return `import type { BusinessRequestPorts } from "@getstrata/bootstrap/persistenceContracts";
 
 interface StripeWebhookEvent {
   id?: string;
@@ -285,74 +340,98 @@ export { applyStripeWebhook };
 }
 
 function renderBillingParts(plan: StarterFeaturePlan, actions?: ControllerActions) {
-  const layers = plan.layers;
-  const tenancyOn = plan.decisions.tenantTable;
-  const tenantPlaceholder = layers.database === "postgres" ? "$1" : "?";
-  const subscriptionQuery = tenancyOn
-    ? `        const tenant = ports.established.tenant;
+	const layers = plan.layers;
+
+	const tenancyOn = plan.decisions.tenantTable;
+
+	const tenantPlaceholder = layers.database === 'postgres' ? '$1' : '?';
+
+	const subscriptionQuery = tenancyOn
+		? `        const tenant = ports.established.tenant;
+
         if (!tenant) {
           return jsonResponse({ error: "Tenant context is required." }, { status: 500 });
         }
+
         const rows = await ports.database.execute<Record<string, unknown>>({
           text: "SELECT plan, status, stripe_subscription_id, current_period_end FROM subscription WHERE tenant_id = ${tenantPlaceholder} LIMIT 1",
           params: [tenant.id],
         });`
-    : `        const rows = await ports.database.execute<Record<string, unknown>>({
+		: `        const rows = await ports.database.execute<Record<string, unknown>>({
           text: "SELECT plan, status, stripe_subscription_id, current_period_end FROM subscription LIMIT 1",
           params: [],
         });`;
 
-  const support = `import type { AppModule, ModuleRouteContext } from "@getstrata/bootstrap/contracts";
+	const support = `import type { AppModule, ModuleRouteContext } from "@getstrata/bootstrap/contracts";
 import { jsonResponse } from "@getstrata/core/http/response";
 import { verifyStripeWebhookSignature } from "@getstrata/core/security/stripeWebhook";
 import { applyStripeWebhook } from "../../billing/applyStripeWebhook.ts";
 import { APPLICATION_BILLING as STARTER_BILLING_OPTIONS_TOKEN } from "@getstrata/bootstrap/application";
 
 `;
-  const routes = `${
-    actions
-      ? `export function billingApiRoutes(context: ModuleRouteContext): AppRouteMap {
+
+	const routes = `${
+		actions
+			? `export function billingApiRoutes(context: ModuleRouteContext): AppRouteMap {
     const { kernel, dependencies } = context;
+
     const { enabled, stripeSecret } = dependencies.container.get(STARTER_BILLING_OPTIONS_TOKEN);
+
     const controller = new BillingController(enabled, stripeSecret);`
-      : `const billingModule: AppModule = {
+			: `const billingModule: AppModule = {
   name: "billing",
   order: 40,
   routes({ kernel, dependencies }) {
     const {enabled:billingEnabled,stripeSecret:secret} = dependencies.container.get(STARTER_BILLING_OPTIONS_TOKEN);`
-  }
+	}
+
     return {
       "/billing/webhooks/stripe": {
         POST: kernel.wrap("api", kernel.wrapIdentity(${renderAction(
-          actions,
-          "stripeWebhook",
-          `async (request, ports) => {
-          if (!billingEnabled) return new Response("Not found", { status: 404 });
+					actions,
+					'stripeWebhook',
+					`async (request, ports) => {
+          if (!billingEnabled) {
+            return new Response("Not found", { status: 404 });
+          }
+
           if (!secret) {
             return jsonResponse({ error: "STRIPE_WEBHOOK_SECRET is not set." }, { status: 503 });
           }
+
           const rawBody = await request.text();
+
           verifyStripeWebhookSignature(rawBody, request.headers.get("stripe-signature"), secret);
           let event: { id?: string; type?: string; data?: { object?: Record<string, unknown> } };
+
           try {
             event = JSON.parse(rawBody) as typeof event;
           } catch {
             return jsonResponse({ error: "Invalid JSON." }, { status: 400 });
           }
           await applyStripeWebhook(event, ports);
+
           return jsonResponse({ received: true, id: event.id ?? null, type: event.type ?? null });
         }`,
-        )})),
+				)})),
       },
       "/api/v1/billing/subscription": {
         GET: kernel.wrapApi(${renderAction(
-          actions,
-          "subscription",
-          `async (_request, ports) => {
-          if (!billingEnabled) return new Response("Not found", { status: 404 });
+					actions,
+					'subscription',
+					`async (_request, ports) => {
+          if (!billingEnabled) {
+            return new Response("Not found", { status: 404 });
+          }
+
 ${subscriptionQuery}
+
           const row = rows[0];
-          if (!row) return jsonResponse({ plan: "free", status: "none" });
+
+          if (!row) {
+            return jsonResponse({ plan: "free", status: "none" });
+          }
+
           return jsonResponse({
             plan: row.plan ?? "free",
             status: row.status ?? "none",
@@ -360,56 +439,65 @@ ${subscriptionQuery}
             current_period_end: row.current_period_end ?? null,
           });
         }`,
-        )}),
+				)}),
       },
     };
-  }${actions ? "" : ",\n};\n\nexport default billingModule;"}
+  }${actions ? '' : ',\n};\n\nexport default billingModule;'}
 `;
-  return { support, routes };
+
+	return { support, routes };
 }
 
 function renderBillingModule(plan: StarterFeaturePlan): string {
-  const parts = renderBillingParts(plan);
-  return parts.support + parts.routes;
+	const parts = renderBillingParts(plan);
+
+	return parts.support + parts.routes;
 }
 
 export function renderBillingHttp(plan: StarterFeaturePlan): RenderedHttpFeature | null {
-  if (!plan.layers.extras.billing) return null;
-  const actions = new ControllerActions("BillingController");
-  const parts = renderBillingParts(plan, actions);
-  const construction = `  constructor(private readonly billingEnabled: boolean, private readonly secret: string | undefined) {}`;
-  const support = parts.support
-    .replace(
-      'import type { AppModule, ModuleRouteContext } from "@getstrata/bootstrap/contracts";\n',
-      "",
-    )
-    .replace(
-      'import { APPLICATION_BILLING as STARTER_BILLING_OPTIONS_TOKEN } from "@getstrata/bootstrap/application";\n',
-      "",
-    );
-  return {
-    files: {
-      "http/controllers/BillingController.ts":
-        support +
-        'import type { BusinessRouteHandler } from "@getstrata/bootstrap/persistenceContracts";\n' +
-        actions.render(construction, ["billingEnabled", "secret"]),
-    },
-    api: { name: "billingApiRoutes", source: parts.routes },
-  };
+	if (!plan.layers.extras.billing) {
+		return null;
+	}
+
+	const actions = new ControllerActions('BillingController');
+
+	const parts = renderBillingParts(plan, actions);
+
+	const construction = `  constructor(private readonly billingEnabled: boolean, private readonly secret: string | undefined) {}`;
+
+	const support = parts.support
+		.replace(
+			'import type { AppModule, ModuleRouteContext } from "@getstrata/bootstrap/contracts";\n',
+			'',
+		)
+		.replace(
+			'import { APPLICATION_BILLING as STARTER_BILLING_OPTIONS_TOKEN } from "@getstrata/bootstrap/application";\n',
+			'',
+		);
+
+	return {
+		files: {
+			'http/controllers/BillingController.ts':
+				support +
+				'import type { BusinessRouteHandler } from "@getstrata/bootstrap/persistenceContracts";\n\n' +
+				actions.render(construction, ['billingEnabled', 'secret']),
+		},
+		api: { name: 'billingApiRoutes', source: parts.routes },
+	};
 }
 
 function githubOAuthEnabled(plan: StarterFeaturePlan): boolean {
-  return Boolean(plan.decisions.github);
+	return Boolean(plan.decisions.github);
 }
 
 export {
-  billingMigrationName,
-  githubOAuthEnabled,
-  renderApplyStripeWebhook,
-  renderBillingMigration,
-  renderBillingModule,
-  renderDispatchOutboundWebhookJob,
-  renderDispatchWebhook,
-  renderWebhooksMigration,
-  webhookMigrationName,
+	billingMigrationName,
+	githubOAuthEnabled,
+	renderApplyStripeWebhook,
+	renderBillingMigration,
+	renderBillingModule,
+	renderDispatchOutboundWebhookJob,
+	renderDispatchWebhook,
+	renderWebhooksMigration,
+	webhookMigrationName,
 };

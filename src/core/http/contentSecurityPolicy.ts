@@ -1,196 +1,204 @@
-import type { FrontendMode } from "../runtime/frontendMode";
+import type { FrontendMode } from '../runtime/frontendMode';
 
 type CspDirectiveValue = string | string[] | false;
 
 interface ContentSecurityPolicyDirectives {
-  [directive: string]: CspDirectiveValue;
+	[directive: string]: CspDirectiveValue;
 }
 
 interface ContentSecurityPolicyOptions {
-  readonly frontendMode?: FrontendMode;
-  readonly production?: boolean;
-  /** Full HTML Content-Security-Policy. Replaces the HTMX/SPA baseline. */
-  csp?: string;
-  /** Alias for `csp`. */
-  htmlCsp?: string;
-  /** Merge extra sources into the HTML baseline. `false` removes a directive. */
-  directives?: ContentSecurityPolicyDirectives;
+	readonly frontendMode?: FrontendMode;
+	readonly production?: boolean;
+	/** Full HTML Content-Security-Policy. Replaces the HTMX/SPA baseline. */
+	csp?: string;
+	/** Alias for `csp`. */
+	htmlCsp?: string;
+	/** Merge extra sources into the HTML baseline. `false` removes a directive. */
+	directives?: ContentSecurityPolicyDirectives;
 }
 
 interface ResolveContentSecurityPolicyOptions extends ContentSecurityPolicyOptions {
-  nonce?: string;
+	nonce?: string;
 }
 
 /** HTMX 2.0.4 default indicator CSS (line-continued string inside insertIndicatorStyles). */
 const HTMX_2_0_4_INDICATOR_STYLE_HASH = "'sha256-bsV5JivYxvGywDAZ22EZJKBFip65Ng9xoJVLbBg7bdo='";
 
 const API_DIRECTIVES: Record<string, string[]> = {
-  "default-src": ["'none'"],
-  "frame-ancestors": ["'none'"],
-  "base-uri": ["'none'"],
+	'default-src': ["'none'"],
+	'frame-ancestors': ["'none'"],
+	'base-uri': ["'none'"],
 };
 
 const HTMX_HTML_DIRECTIVES: Record<string, string[]> = {
-  "default-src": ["'self'"],
-  "script-src": ["'self'"],
-  "style-src": ["'self'", HTMX_2_0_4_INDICATOR_STYLE_HASH],
-  "connect-src": ["'self'"],
-  "img-src": ["'self'", "data:", "https:"],
-  "font-src": ["'self'"],
-  "media-src": ["'self'", "https:"],
-  "frame-src": [
-    "https://www.youtube.com",
-    "https://www.youtube-nocookie.com",
-    "https://player.vimeo.com",
-  ],
-  "form-action": ["'self'"],
-  "frame-ancestors": ["'none'"],
-  "base-uri": ["'self'"],
+	'default-src': ["'self'"],
+	'script-src': ["'self'"],
+	'style-src': ["'self'", HTMX_2_0_4_INDICATOR_STYLE_HASH],
+	'connect-src': ["'self'"],
+	'img-src': ["'self'", 'data:', 'https:'],
+	'font-src': ["'self'"],
+	'media-src': ["'self'", 'https:'],
+	'frame-src': [
+		'https://www.youtube.com',
+		'https://www.youtube-nocookie.com',
+		'https://player.vimeo.com',
+	],
+	'form-action': ["'self'"],
+	'frame-ancestors': ["'none'"],
+	'base-uri': ["'self'"],
 };
 
 const SPA_HTML_DIRECTIVES: Record<string, string[]> = {
-  "default-src": ["'self'"],
-  "script-src": ["'self'"],
-  "style-src": ["'self'"],
-  "connect-src": ["'self'"],
-  "img-src": ["'self'", "data:", "https:"],
-  "font-src": ["'self'"],
-  "frame-ancestors": ["'none'"],
-  "base-uri": ["'self'"],
+	'default-src': ["'self'"],
+	'script-src': ["'self'"],
+	'style-src': ["'self'"],
+	'connect-src': ["'self'"],
+	'img-src': ["'self'", 'data:', 'https:'],
+	'font-src': ["'self'"],
+	'frame-ancestors': ["'none'"],
+	'base-uri': ["'self'"],
 };
 
 function generateCspNonce(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Buffer.from(bytes).toString("base64");
+	const bytes = new Uint8Array(16);
+
+	crypto.getRandomValues(bytes);
+
+	return Buffer.from(bytes).toString('base64');
 }
 
 function cloneDirectives(source: Record<string, string[]>): Record<string, string[]> {
-  const copy: Record<string, string[]> = {};
-  for (const [directive, values] of Object.entries(source)) {
-    copy[directive] = [...values];
-  }
-  return copy;
+	const copy: Record<string, string[]> = {};
+
+	for (const [directive, values] of Object.entries(source)) {
+		copy[directive] = [...values];
+	}
+
+	return copy;
 }
 
 function normalizeSources(value: string | string[]): string[] {
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => item.split(/\s+/).filter(Boolean));
-  }
+	if (Array.isArray(value)) {
+		return value.flatMap((item) => item.split(/\s+/).filter(Boolean));
+	}
 
-  return value.split(/\s+/).filter(Boolean);
+	return value.split(/\s+/).filter(Boolean);
 }
 
 function mergeDirectives(
-  base: Record<string, string[]>,
-  extra?: ContentSecurityPolicyDirectives,
+	base: Record<string, string[]>,
+	extra?: ContentSecurityPolicyDirectives,
 ): Record<string, string[]> {
-  const merged = cloneDirectives(base);
+	const merged = cloneDirectives(base);
 
-  for (const [directive, value] of Object.entries(extra ?? {})) {
-    if (value === false) {
-      delete merged[directive];
-      continue;
-    }
+	for (const [directive, value] of Object.entries(extra ?? {})) {
+		if (value === false) {
+			delete merged[directive];
+			continue;
+		}
 
-    const sources = normalizeSources(value);
-    const existing = merged[directive] ?? [];
-    merged[directive] = [...existing, ...sources.filter((source) => !existing.includes(source))];
-  }
+		const sources = normalizeSources(value);
 
-  return merged;
+		const existing = merged[directive] ?? [];
+
+		merged[directive] = [...existing, ...sources.filter((source) => !existing.includes(source))];
+	}
+
+	return merged;
 }
 
 function serializeDirectives(directives: Record<string, string[]>): string {
-  return Object.entries(directives)
-    .map(([directive, values]) =>
-      values.length > 0 ? `${directive} ${values.join(" ")}` : directive,
-    )
-    .join("; ");
+	return Object.entries(directives)
+		.map(([directive, values]) =>
+			values.length > 0 ? `${directive} ${values.join(' ')}` : directive,
+		)
+		.join('; ');
 }
 
 function applyNonce(
-  directives: Record<string, string[]>,
-  nonce?: string,
+	directives: Record<string, string[]>,
+	nonce?: string,
 ): Record<string, string[]> {
-  if (!nonce) {
-    return directives;
-  }
+	if (!nonce) {
+		return directives;
+	}
 
-  const token = `'nonce-${nonce}'`;
-  const next = cloneDirectives(directives);
+	const token = `'nonce-${nonce}'`;
 
-  for (const directive of ["script-src", "style-src"]) {
-    const values = next[directive] ?? ["'self'"];
-    if (!values.includes(token)) {
-      next[directive] = [...values, token];
-    }
-  }
+	const next = cloneDirectives(directives);
 
-  return next;
+	for (const directive of ['script-src', 'style-src']) {
+		const values = next[directive] ?? ["'self'"];
+
+		if (!values.includes(token)) {
+			next[directive] = [...values, token];
+		}
+	}
+
+	return next;
 }
 
-function htmlBaselineDirectives(mode: FrontendMode = "api"): Record<string, string[]> {
-  if (mode === "server-htmx" || mode === "hybrid") {
-    return cloneDirectives(HTMX_HTML_DIRECTIVES);
-  }
+function htmlBaselineDirectives(mode: FrontendMode = 'api'): Record<string, string[]> {
+	if (mode === 'server-htmx' || mode === 'hybrid') {
+		return cloneDirectives(HTMX_HTML_DIRECTIVES);
+	}
 
-  if (mode === "spa-react") {
-    return cloneDirectives(SPA_HTML_DIRECTIVES);
-  }
+	if (mode === 'spa-react') {
+		return cloneDirectives(SPA_HTML_DIRECTIVES);
+	}
 
-  return cloneDirectives(API_DIRECTIVES);
+	return cloneDirectives(API_DIRECTIVES);
 }
 
 function strictApiContentSecurityPolicy(): string {
-  return serializeDirectives(API_DIRECTIVES);
+	return serializeDirectives(API_DIRECTIVES);
 }
 
 function serverHtmxContentSecurityPolicy(nonce?: string): string {
-  return serializeDirectives(applyNonce(cloneDirectives(HTMX_HTML_DIRECTIVES), nonce));
+	return serializeDirectives(applyNonce(cloneDirectives(HTMX_HTML_DIRECTIVES), nonce));
 }
 
 function spaContentSecurityPolicy(nonce?: string): string {
-  return serializeDirectives(applyNonce(cloneDirectives(SPA_HTML_DIRECTIVES), nonce));
+	return serializeDirectives(applyNonce(cloneDirectives(SPA_HTML_DIRECTIVES), nonce));
 }
 
 function resolveHtmlContentSecurityPolicy(
-  options: ResolveContentSecurityPolicyOptions = {},
+	options: ResolveContentSecurityPolicyOptions = {},
 ): string {
-  const override = options.htmlCsp ?? options.csp;
+	const override = options.htmlCsp ?? options.csp;
 
-  if (override) {
-    return override;
-  }
+	if (override) {
+		return override;
+	}
 
-  return serializeDirectives(
-    applyNonce(
-      mergeDirectives(htmlBaselineDirectives(options.frontendMode), options.directives),
-      options.nonce,
-    ),
-  );
+	return serializeDirectives(
+		applyNonce(
+			mergeDirectives(htmlBaselineDirectives(options.frontendMode), options.directives),
+			options.nonce,
+		),
+	);
 }
 
 function resolveContentSecurityPolicy(
-  response: Response,
-  options: ResolveContentSecurityPolicyOptions = {},
+	response: Response,
+	options: ResolveContentSecurityPolicyOptions = {},
 ): string {
-  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+	const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
 
-  if (!contentType.includes("text/html")) {
-    return strictApiContentSecurityPolicy();
-  }
+	if (!contentType.includes('text/html')) {
+		return strictApiContentSecurityPolicy();
+	}
 
-  return resolveHtmlContentSecurityPolicy(options);
+	return resolveHtmlContentSecurityPolicy(options);
 }
 
 export type { ContentSecurityPolicyDirectives, ContentSecurityPolicyOptions };
 export {
-  generateCspNonce,
-  HTMX_2_0_4_INDICATOR_STYLE_HASH,
-  resolveContentSecurityPolicy,
-  resolveHtmlContentSecurityPolicy,
-  serverHtmxContentSecurityPolicy,
-  spaContentSecurityPolicy,
-  strictApiContentSecurityPolicy,
+	generateCspNonce,
+	HTMX_2_0_4_INDICATOR_STYLE_HASH,
+	resolveContentSecurityPolicy,
+	resolveHtmlContentSecurityPolicy,
+	serverHtmxContentSecurityPolicy,
+	spaContentSecurityPolicy,
+	strictApiContentSecurityPolicy,
 };

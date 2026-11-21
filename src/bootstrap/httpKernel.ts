@@ -1,691 +1,771 @@
-import type { AuthUser } from "@getstrata/core/auth/authContext";
-import { type AuthReader, establishedAuthReader } from "@getstrata/core/auth/authReader";
-import { hasVerifiedEmail } from "@getstrata/core/auth/emailVerification";
-import type { Policy } from "@getstrata/core/auth/policy";
-import { resolveAbilityChecker } from "@getstrata/core/contracts/serviceTokens";
-import { createAuthorizeMiddleware } from "@getstrata/core/http/authorizeMiddleware";
-import { createFlashMiddleware } from "@getstrata/core/http/flashMiddleware";
-import { createLoginThrottleMiddleware } from "@getstrata/core/http/loginThrottleMiddleware";
-import { createMemoryThrottleMiddleware } from "@getstrata/core/http/memoryThrottleMiddleware";
-import type { Middleware, RouteHandler } from "@getstrata/core/http/middleware";
-import { createRequireAbilityMiddleware } from "@getstrata/core/http/requireAbilityMiddleware";
-import { createRequireAuthMiddleware } from "@getstrata/core/http/requireAuthMiddleware";
-import { createRequireGlobalAdminMiddleware } from "@getstrata/core/http/requireGlobalAdminMiddleware";
-import { createRequirePasswordConfirmMiddleware } from "@getstrata/core/http/requirePasswordConfirmMiddleware";
-import { createRequireVerifiedMiddleware } from "@getstrata/core/http/requireVerifiedMiddleware";
-import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebAuthMiddleware";
-import { withMiddleware } from "@getstrata/core/http/routeMiddleware";
-import type { RouteModelBindingPorts } from "@getstrata/core/http/securedRouteModelBinding";
-import { createValidateSignatureMiddleware } from "@getstrata/core/http/signedUrl";
-import { createThrottleMiddleware } from "@getstrata/core/http/throttleMiddleware";
-import type { ComposedRouteHandler } from "#strata-http-route";
-import {
-  assertHttpHandler,
-  identityModes,
-  ownedHttpRoute,
-  ownedPublicHttpRoute,
-  scimMiddleware,
-} from "#strata-http-route";
-import {
-  CORE_CONFIG_TOKEN,
-  CORE_HTTP_CLEANUP_TOKEN,
-  CORE_POLICY_GATE_TOKEN,
-  CORE_THROTTLE_QUOTA_POLICY_TOKEN,
-  REDIS_URL_CONFIG_KEY,
-} from "./config";
-import type { AppDependencies } from "./contracts";
-import { createHttpPersistence, HTTP_PERSISTENCE_OPTIONS } from "./httpPersistence";
-import {
-  createHttpResponseMiddleware,
-  resolveHttpResponseSettings,
-} from "./httpResponseComposition";
-import { enterModuleRoutes } from "./moduleRouteMiddleware";
-import type {
-  BusinessRouteHandler,
-  HttpPersistenceOptions,
-  IdentityPolicyMode,
-} from "./persistenceContracts";
-import { resolveLoginRateLimit, resolveRegisterRateLimit } from "./rateLimit";
+import type { AuthUser } from '@getstrata/core/auth/authContext';
+import { type AuthReader, establishedAuthReader } from '@getstrata/core/auth/authReader';
+import { hasVerifiedEmail } from '@getstrata/core/auth/emailVerification';
+import type { Policy } from '@getstrata/core/auth/policy';
+import { resolveAbilityChecker } from '@getstrata/core/contracts/serviceTokens';
+import { createAuthorizeMiddleware } from '@getstrata/core/http/authorizeMiddleware';
+import { createFlashMiddleware } from '@getstrata/core/http/flashMiddleware';
+import { createLoginThrottleMiddleware } from '@getstrata/core/http/loginThrottleMiddleware';
+import { createMemoryThrottleMiddleware } from '@getstrata/core/http/memoryThrottleMiddleware';
+import type { Middleware, RouteHandler } from '@getstrata/core/http/middleware';
+import { createRequireAbilityMiddleware } from '@getstrata/core/http/requireAbilityMiddleware';
+import { createRequireAuthMiddleware } from '@getstrata/core/http/requireAuthMiddleware';
+import { createRequireGlobalAdminMiddleware } from '@getstrata/core/http/requireGlobalAdminMiddleware';
+import { createRequirePasswordConfirmMiddleware } from '@getstrata/core/http/requirePasswordConfirmMiddleware';
+import { createRequireVerifiedMiddleware } from '@getstrata/core/http/requireVerifiedMiddleware';
+import { createRequireWebAuthMiddleware } from '@getstrata/core/http/requireWebAuthMiddleware';
+import { withMiddleware } from '@getstrata/core/http/routeMiddleware';
+import type { RouteModelBindingPorts } from '@getstrata/core/http/securedRouteModelBinding';
+import { createValidateSignatureMiddleware } from '@getstrata/core/http/signedUrl';
+import { createThrottleMiddleware } from '@getstrata/core/http/throttleMiddleware';
 
-type MiddlewareGroupName = "api" | "authenticated" | "web";
+import type { ComposedRouteHandler } from '#strata-http-route';
+import {
+	assertHttpHandler,
+	identityModes,
+	ownedHttpRoute,
+	ownedPublicHttpRoute,
+	scimMiddleware,
+} from '#strata-http-route';
+
+import {
+	CORE_CONFIG_TOKEN,
+	CORE_HTTP_CLEANUP_TOKEN,
+	CORE_POLICY_GATE_TOKEN,
+	CORE_THROTTLE_QUOTA_POLICY_TOKEN,
+	REDIS_URL_CONFIG_KEY,
+} from './config';
+import type { AppDependencies } from './contracts';
+import { createHttpPersistence, HTTP_PERSISTENCE_OPTIONS } from './httpPersistence';
+import {
+	createHttpResponseMiddleware,
+	resolveHttpResponseSettings,
+} from './httpResponseComposition';
+import { enterModuleRoutes } from './moduleRouteMiddleware';
+import type {
+	BusinessRouteHandler,
+	HttpPersistenceOptions,
+	IdentityPolicyMode,
+} from './persistenceContracts';
+import { resolveLoginRateLimit, resolveRegisterRateLimit } from './rateLimit';
+
+type MiddlewareGroupName = 'api' | 'authenticated' | 'web';
+
 type WebGuestHome = string | ((user: AuthUser) => string | Promise<string>);
 
 class HttpKernel {
-  private readonly ownedThrottles = new Set<Middleware & { dispose(): void }>();
-  private disposed = false;
-  private readonly emailVerificationRequired: boolean;
-  private readonly viewsEnabled: boolean;
-  private readonly publicReadsEnabled: boolean;
-  private readonly etagEnabled: boolean;
-  private readonly httpOptions: HttpPersistenceOptions | undefined;
-  private readonly responsePolicy: NonNullable<HttpPersistenceOptions["responsePolicy"]>;
-  private readonly configuredCsrfMiddleware: Middleware;
-  private readonly responses: Readonly<Record<"json" | "web", readonly Middleware[]>>;
-  private readonly persistence: ReturnType<typeof createHttpPersistence> | undefined;
-  constructor(private readonly dependencies: AppDependencies) {
-    const http = dependencies.container.has(HTTP_PERSISTENCE_OPTIONS)
-      ? dependencies.container.resolve<HttpPersistenceOptions>(HTTP_PERSISTENCE_OPTIONS)
-      : undefined;
-    this.httpOptions = http;
-    const settings = resolveHttpResponseSettings(dependencies, http);
-    this.emailVerificationRequired = settings.emailVerificationRequired;
-    this.viewsEnabled = settings.viewsEnabled;
-    this.publicReadsEnabled = settings.publicReadsEnabled;
-    this.etagEnabled = settings.etagEnabled;
-    this.responsePolicy = settings.responsePolicy;
-    this.configuredCsrfMiddleware = settings.configuredCsrfMiddleware;
-    this.responses = Object.freeze({
-      json: Object.freeze(createHttpResponseMiddleware(dependencies, settings, "json")),
-      web: Object.freeze(createHttpResponseMiddleware(dependencies, settings, "web")),
-    });
-    this.persistence = dependencies.container.has(HTTP_PERSISTENCE_OPTIONS)
-      ? createHttpPersistence(
-          dependencies.invoke,
-          dependencies.container.resolve<HttpPersistenceOptions>(HTTP_PERSISTENCE_OPTIONS),
-        )
-      : undefined;
-    if (dependencies.container.has(CORE_HTTP_CLEANUP_TOKEN)) {
-      dependencies.container.resolve(CORE_HTTP_CLEANUP_TOKEN)(() => this.dispose());
-    }
-  }
+	private readonly ownedThrottles = new Set<Middleware & { dispose(): void }>();
+	private disposed = false;
+	private readonly emailVerificationRequired: boolean;
+	private readonly viewsEnabled: boolean;
+	private readonly publicReadsEnabled: boolean;
+	private readonly etagEnabled: boolean;
+	private readonly httpOptions: HttpPersistenceOptions | undefined;
+	private readonly responsePolicy: NonNullable<HttpPersistenceOptions['responsePolicy']>;
+	private readonly configuredCsrfMiddleware: Middleware;
+	private readonly responses: Readonly<Record<'json' | 'web', readonly Middleware[]>>;
+	private readonly persistence: ReturnType<typeof createHttpPersistence> | undefined;
+	constructor(private readonly dependencies: AppDependencies) {
+		const http = dependencies.container.has(HTTP_PERSISTENCE_OPTIONS)
+			? dependencies.container.resolve<HttpPersistenceOptions>(HTTP_PERSISTENCE_OPTIONS)
+			: undefined;
 
-  private requireFlashOptions() {
-    const options = this.httpOptions?.flash;
-    if (!options) throw new TypeError("Explicit flash configuration is required for web routes.");
-    return options;
-  }
-  private requireIntendedOptions() {
-    const options = this.httpOptions?.intendedUrl;
-    if (!options)
-      throw new TypeError(
-        "Explicit intended URL cookie configuration is required for web authentication.",
-      );
-    return options;
-  }
-  routeModelBindingPorts(auth: Pick<AuthReader, "resolve">): RouteModelBindingPorts {
-    const gate = this.dependencies.container.resolve(CORE_POLICY_GATE_TOKEN);
-    const authorize = gate.authorize;
-    return Object.freeze({
-      auth,
-      authorize: (...args: Parameters<RouteModelBindingPorts["authorize"]>) =>
-        authorize.call(gate, ...args),
-      etagEnabled: this.etagEnabled,
-    });
-  }
+		this.httpOptions = http;
+		const settings = resolveHttpResponseSettings(dependencies, http);
 
-  dispose(): void {
-    this.disposed = true;
-    const owned = [...this.ownedThrottles];
-    this.ownedThrottles.clear();
-    const errors: unknown[] = [];
-    for (const throttle of owned.reverse()) {
-      try {
-        throttle.dispose();
-      } catch (error) {
-        errors.push(error);
-      }
-    }
-    if (errors.length) throw new AggregateError(errors, "HTTP throttle cleanup failed.");
-  }
+		this.emailVerificationRequired = settings.emailVerificationRequired;
+		this.viewsEnabled = settings.viewsEnabled;
+		this.publicReadsEnabled = settings.publicReadsEnabled;
+		this.etagEnabled = settings.etagEnabled;
+		this.responsePolicy = settings.responsePolicy;
+		this.configuredCsrfMiddleware = settings.configuredCsrfMiddleware;
+		this.responses = Object.freeze({
+			json: Object.freeze(createHttpResponseMiddleware(dependencies, settings, 'json')),
+			web: Object.freeze(createHttpResponseMiddleware(dependencies, settings, 'web')),
+		});
+		this.persistence = dependencies.container.has(HTTP_PERSISTENCE_OPTIONS)
+			? createHttpPersistence(
+					dependencies.invoke,
+					dependencies.container.resolve<HttpPersistenceOptions>(HTTP_PERSISTENCE_OPTIONS),
+				)
+			: undefined;
 
-  /** Own custom disposable throttle middleware until this application closes. */
-  ownThrottle<T extends Middleware>(throttle: T): T {
-    if (this.disposed) {
-      if ("dispose" in throttle && typeof throttle.dispose === "function") throttle.dispose();
-      throw new Error("HTTP kernel is disposed.");
-    }
-    if ("dispose" in throttle && typeof throttle.dispose === "function") {
-      this.ownedThrottles.add(throttle as T & { dispose(): void });
-    }
-    return throttle;
-  }
+		if (dependencies.container.has(CORE_HTTP_CLEANUP_TOKEN)) {
+			dependencies.container.resolve(CORE_HTTP_CLEANUP_TOKEN)(() => this.dispose());
+		}
+	}
 
-  globalMiddleware(errorFormat: "json" | "web" = "json"): Middleware[] {
-    return [...this.responses[errorFormat]];
-  }
+	private requireFlashOptions() {
+		const options = this.httpOptions?.flash;
 
-  run<TRequest extends Request>(
-    request: TRequest,
-    handler: BusinessRouteHandler<TRequest>,
-    format: "json" | "web" = "json",
-    identity?: readonly IdentityPolicyMode[],
-    scim?: readonly Middleware[],
-  ): Promise<Response> {
-    assertHttpHandler(handler);
-    const execute = this.persistence;
-    if (!execute) throw new Error("Explicit HTTP persistence composition is required.");
-    const outer = withMiddleware(...this.responses[format])((req: TRequest) =>
-      withMiddleware(...(scim ?? []))((req: TRequest) =>
-        execute(req, handler, identity, scim !== undefined),
-      )(req),
-    );
-    return Promise.resolve(outer(request));
-  }
+		if (!options) {
+			throw new TypeError('Explicit flash configuration is required for web routes.');
+		}
 
-  composed<TRequest extends Request>(
-    handler: BusinessRouteHandler<TRequest>,
-    format: "json" | "web",
-    identity = identityModes(handler),
-    scim = scimMiddleware(handler),
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    if (identity !== undefined && scim !== undefined)
-      throw new TypeError("SCIM and identity operation declarations cannot be combined.");
-    return ownedHttpRoute(
-      handler,
-      (request, work) => this.run(request, work, format, identity, scim),
-      identity,
-      scim,
-    );
-  }
+		return options;
+	}
+	private requireIntendedOptions() {
+		const options = this.httpOptions?.intendedUrl;
 
-  wrapIdentity<TRequest extends Request>(
-    handler: BusinessRouteHandler<TRequest>,
-    modes: readonly IdentityPolicyMode[] = ["identifier"],
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    if (scimMiddleware(handler) !== undefined)
-      throw new TypeError("SCIM and identity operation declarations cannot be combined.");
-    if (!Array.isArray(modes) || modes.some((mode) => mode !== "identifier" && mode !== "bypass"))
-      throw new TypeError("Invalid identity route policy modes.");
-    return this.composed(handler, "web", Object.freeze([...modes]));
-  }
+		if (!options) {
+			throw new TypeError(
+				'Explicit intended URL cookie configuration is required for web authentication.',
+			);
+		}
 
-  wrapPasswordConfirm<TRequest extends Request>(
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    const options =
-      this.dependencies.container.resolve<HttpPersistenceOptions>(
-        HTTP_PERSISTENCE_OPTIONS,
-      ).passwordConfirmation;
-    if (!options) throw new Error("Explicit password confirmation configuration is required.");
-    return this.composed(
-      withMiddleware(createRequirePasswordConfirmMiddleware(options))(handler),
-      "json",
-      identityModes(handler),
-      scimMiddleware(handler),
-    );
-  }
-  wrapRouteMap(
-    routes: Record<string, unknown>,
-    middleware: readonly Middleware[],
-  ): Record<string, unknown> {
-    return enterModuleRoutes(routes, (callback) =>
-      this.composed(
-        withMiddleware(...middleware)(callback as BusinessRouteHandler),
-        "json",
-        identityModes(callback),
-        scimMiddleware(callback),
-      ),
-    );
-  }
+		return options;
+	}
+	routeModelBindingPorts(auth: Pick<AuthReader, 'resolve'>): RouteModelBindingPorts {
+		const gate = this.dependencies.container.resolve(CORE_POLICY_GATE_TOKEN);
 
-  wrapScim<TRequest extends Request>(
-    handler: BusinessRouteHandler<TRequest>,
-    before: readonly Middleware[] = [],
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    if (identityModes(handler) !== undefined)
-      throw new TypeError("SCIM and identity operation declarations cannot be combined.");
-    return this.composed(handler, "json", undefined, Object.freeze([...before]));
-  }
+		const authorize = gate.authorize;
 
-  /** Public application documents still own response policy and observation. */
-  wrapPublicDocument<TRequest extends Request = Request>(
-    handler: RouteHandler<TRequest>,
-  ): RouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    return ownedPublicHttpRoute(handler, (request, work) =>
-      Promise.resolve(withMiddleware(...this.responses.web)(work)(request)),
-    );
-  }
+		return Object.freeze({
+			auth,
+			authorize: (...args: Parameters<RouteModelBindingPorts['authorize']>) =>
+				authorize.call(gate, ...args),
+			etagEnabled: this.etagEnabled,
+		});
+	}
 
-  group(name: MiddlewareGroupName): Middleware[] {
-    const auth = establishedAuthReader;
+	dispose(): void {
+		this.disposed = true;
+		const owned = [...this.ownedThrottles];
 
-    switch (name) {
-      case "authenticated":
-        return [createRequireAuthMiddleware(auth)];
-      case "web":
-        return this.viewsEnabled
-          ? [createFlashMiddleware(this.requireFlashOptions()), this.configuredCsrfMiddleware]
-          : [];
-      case "api": {
-        const csrf = this.configuredCsrfMiddleware;
+		this.ownedThrottles.clear();
+		const errors: unknown[] = [];
 
-        if (!this.dependencies.container.has(CORE_CONFIG_TOKEN)) {
-          return [csrf];
-        }
+		for (const throttle of owned.reverse()) {
+			try {
+				throttle.dispose();
+			} catch (error) {
+				errors.push(error);
+			}
+		}
 
-        const quotaPolicy = this.dependencies.container.has(CORE_THROTTLE_QUOTA_POLICY_TOKEN)
-          ? this.dependencies.container.resolve(CORE_THROTTLE_QUOTA_POLICY_TOKEN)
-          : undefined;
-        const config = this.dependencies.container.resolve(CORE_CONFIG_TOKEN);
-        const redisUrl = config.get<string>(REDIS_URL_CONFIG_KEY)?.trim() ?? "";
+		if (errors.length) {
+			throw new AggregateError(errors, 'HTTP throttle cleanup failed.');
+		}
+	}
 
-        if (!redisUrl) {
-          const maxAttempts = this.responsePolicy.rateLimitPerMinute ?? 120;
+	/** Own custom disposable throttle middleware until this application closes. */
+	ownThrottle<T extends Middleware>(throttle: T): T {
+		if (this.disposed) {
+			if ('dispose' in throttle && typeof throttle.dispose === 'function') {
+				throttle.dispose();
+			}
 
-          return [
-            this.ownThrottle(
-              createMemoryThrottleMiddleware({
-                namespace: this.responsePolicy.namespace,
-                trustForwardedFor: this.responsePolicy.trustForwardedFor,
-                maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
-                decaySeconds: 60,
-                quotaPolicy,
-              }),
-            ),
-            csrf,
-          ];
-        }
+			throw new Error('HTTP kernel is disposed.');
+		}
 
-        const maxAttempts = this.responsePolicy.rateLimitPerMinute ?? 120;
+		if ('dispose' in throttle && typeof throttle.dispose === 'function') {
+			this.ownedThrottles.add(throttle as T & { dispose(): void });
+		}
 
-        return [
-          this.ownThrottle(
-            createThrottleMiddleware({
-              namespace: this.responsePolicy.namespace,
-              trustForwardedFor: this.responsePolicy.trustForwardedFor,
-              redisUrl,
-              maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
-              decaySeconds: 60,
-              quotaPolicy,
-            }),
-          ),
-          csrf,
-        ];
-      }
-      default:
-        throw new Error(`Unknown middleware group "${name}".`);
-    }
-  }
+		return throttle;
+	}
 
-  wrap<TRequest extends Request = Request>(
-    groups: MiddlewareGroupName | MiddlewareGroupName[],
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    const names = Array.isArray(groups) ? groups : [groups];
-    const middleware = names.flatMap((name) => this.group(name));
-    const wrapped = middleware.length === 0 ? handler : withMiddleware(...middleware)(handler);
+	globalMiddleware(errorFormat: 'json' | 'web' = 'json'): Middleware[] {
+		return [...this.responses[errorFormat]];
+	}
 
-    if (names.includes("api")) {
-      return this.composed(wrapped, "json", identityModes(handler), scimMiddleware(handler));
-    }
+	run<TRequest extends Request>(
+		request: TRequest,
+		handler: BusinessRouteHandler<TRequest>,
+		format: 'json' | 'web' = 'json',
+		identity?: readonly IdentityPolicyMode[],
+		scim?: readonly Middleware[],
+	): Promise<Response> {
+		assertHttpHandler(handler);
+		const execute = this.persistence;
 
-    return this.composed(wrapped, "web", identityModes(handler), scimMiddleware(handler));
-  }
+		if (!execute) {
+			throw new Error('Explicit HTTP persistence composition is required.');
+		}
 
-  wrapApi<TRequest extends Request = Request>(
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    return this.wrap(["api", "authenticated"], handler);
-  }
+		const outer = withMiddleware(...this.responses[format])((req: TRequest) =>
+			withMiddleware(...(scim ?? []))((req: TRequest) =>
+				execute(req, handler, identity, scim !== undefined),
+			)(req),
+		);
 
-  wrapWeb<TRequest extends Request = Request>(
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    return this.wrap("web", handler);
-  }
+		return Promise.resolve(outer(request));
+	}
 
-  /** Signed-in HTML users redirect to `home` instead of seeing guest pages. */
-  wrapWebGuest<TRequest extends Request = Request>(
-    handler: BusinessRouteHandler<TRequest>,
-    home: WebGuestHome = "/",
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    const auth = establishedAuthReader;
+	composed<TRequest extends Request>(
+		handler: BusinessRouteHandler<TRequest>,
+		format: 'json' | 'web',
+		identity = identityModes(handler),
+		scim = scimMiddleware(handler),
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
 
-    const guest = this.wrapWeb<TRequest>(async (request, ports) => {
-      const user = await auth.resolve(request);
+		if (identity !== undefined && scim !== undefined) {
+			throw new TypeError('SCIM and identity operation declarations cannot be combined.');
+		}
 
-      if (user) {
-        if (this.emailVerificationRequired && !hasVerifiedEmail(user)) {
-          return Response.redirect("/email/verify", 302);
-        }
+		return ownedHttpRoute(
+			handler,
+			(request, work) => this.run(request, work, format, identity, scim),
+			identity,
+			scim,
+		);
+	}
 
-        const location = typeof home === "function" ? await home(user) : home;
-        return Response.redirect(location, 302);
-      }
+	wrapIdentity<TRequest extends Request>(
+		handler: BusinessRouteHandler<TRequest>,
+		modes: readonly IdentityPolicyMode[] = ['identifier'],
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
 
-      return handler(request, ports);
-    });
-    return this.composed(guest, "web", identityModes(handler), scimMiddleware(handler));
-  }
+		if (scimMiddleware(handler) !== undefined) {
+			throw new TypeError('SCIM and identity operation declarations cannot be combined.');
+		}
 
-  wrapWebPublicRead<TRequest extends Request = Request>(
-    handler: BusinessRouteHandler<TRequest>,
-    options: { allowAnonymous?: boolean } = {},
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    if (options.allowAnonymous ?? this.publicReadsEnabled) {
-      return this.wrapWeb(handler);
-    }
+		if (!Array.isArray(modes) || modes.some((mode) => mode !== 'identifier' && mode !== 'bypass')) {
+			throw new TypeError('Invalid identity route policy modes.');
+		}
 
-    return this.wrapWebAuthenticated(handler);
-  }
+		return this.composed(handler, 'web', Object.freeze([...modes]));
+	}
 
-  wrapWebAuthenticated<TRequest extends Request = Request>(
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    return this.wrapWebAuth(handler, { verified: true });
-  }
+	wrapPasswordConfirm<TRequest extends Request>(
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+		const options =
+			this.dependencies.container.resolve<HttpPersistenceOptions>(
+				HTTP_PERSISTENCE_OPTIONS,
+			).passwordConfirmation;
 
-  /** Signed-in HTML without the email-verified gate (logout, verification notice). */
-  wrapWebAuthenticatedAllowUnverified<TRequest extends Request = Request>(
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    return this.wrapWebAuth(handler, { verified: false });
-  }
+		if (!options) {
+			throw new Error('Explicit password confirmation configuration is required.');
+		}
 
-  wrapWebVerified<TRequest extends Request = Request>(
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    return this.wrapWebAuth(handler, { verified: true });
-  }
+		return this.composed(
+			withMiddleware(createRequirePasswordConfirmMiddleware(options))(handler),
+			'json',
+			identityModes(handler),
+			scimMiddleware(handler),
+		);
+	}
+	wrapRouteMap(
+		routes: Record<string, unknown>,
+		middleware: readonly Middleware[],
+	): Record<string, unknown> {
+		return enterModuleRoutes(routes, (callback) =>
+			this.composed(
+				withMiddleware(...middleware)(callback as BusinessRouteHandler),
+				'json',
+				identityModes(callback),
+				scimMiddleware(callback),
+			),
+		);
+	}
 
-  /** Requires a fresh signed password-confirmation cookie. */
-  wrapWebPasswordConfirm<TRequest extends Request = Request>(
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    const options =
-      this.dependencies.container.resolve<HttpPersistenceOptions>(
-        HTTP_PERSISTENCE_OPTIONS,
-      ).passwordConfirmation;
-    if (!options) throw new Error("Explicit password confirmation configuration is required.");
-    return this.wrapWebAuth(
-      this.composed(
-        withMiddleware(createRequirePasswordConfirmMiddleware(options))(handler),
-        "web",
-        identityModes(handler),
-        scimMiddleware(handler),
-      ),
-      {
-        verified: true,
-      },
-    );
-  }
+	wrapScim<TRequest extends Request>(
+		handler: BusinessRouteHandler<TRequest>,
+		before: readonly Middleware[] = [],
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
 
-  wrapWebAbility<TRequest extends Request = Request>(
-    ability: string,
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    const auth = establishedAuthReader;
-    const abilityChecker = resolveAbilityChecker(this.dependencies.container);
-    const requireAbility = createRequireAbilityMiddleware(abilityChecker, this.viewsEnabled);
-    const middleware = [
-      createRequireWebAuthMiddleware(auth, this.requireIntendedOptions()),
-      ...this.verifiedMiddleware(),
-      requireAbility(ability),
-    ];
+		if (identityModes(handler) !== undefined) {
+			throw new TypeError('SCIM and identity operation declarations cannot be combined.');
+		}
 
-    return this.wrapWeb(
-      this.composed(
-        withMiddleware(...middleware)(handler),
-        "web",
-        identityModes(handler),
-        scimMiddleware(handler),
-      ),
-    );
-  }
+		return this.composed(handler, 'json', undefined, Object.freeze([...before]));
+	}
 
-  wrapWebGlobalAdmin<TRequest extends Request = Request>(
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    const auth = establishedAuthReader;
-    const middleware = [
-      createRequireWebAuthMiddleware(auth, this.requireIntendedOptions()),
-      ...this.verifiedMiddleware(),
-      createRequireGlobalAdminMiddleware(),
-    ];
+	/** Public application documents still own response policy and observation. */
+	wrapPublicDocument<TRequest extends Request = Request>(
+		handler: RouteHandler<TRequest>,
+	): RouteHandler<TRequest> {
+		assertHttpHandler(handler);
 
-    return this.wrapWeb(
-      this.composed(
-        withMiddleware(...middleware)(handler),
-        "web",
-        identityModes(handler),
-        scimMiddleware(handler),
-      ),
-    );
-  }
+		return ownedPublicHttpRoute(handler, (request, work) =>
+			Promise.resolve(withMiddleware(...this.responses.web)(work)(request)),
+		);
+	}
 
-  wrapAuthenticated<TRequest extends Request = Request>(
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    return this.wrap("authenticated", handler);
-  }
+	group(name: MiddlewareGroupName): Middleware[] {
+		const auth = establishedAuthReader;
 
-  /** JSON routes that require a verified email. No-op when `FEATURE_EMAIL_VERIFICATION` is off. */
-  wrapVerified<TRequest extends Request = Request>(
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    const middleware = [...this.group("authenticated"), ...this.verifiedMiddleware()];
+		switch (name) {
+			case 'authenticated':
+				return [createRequireAuthMiddleware(auth)];
+			case 'web':
+				return this.viewsEnabled
+					? [createFlashMiddleware(this.requireFlashOptions()), this.configuredCsrfMiddleware]
+					: [];
+			case 'api': {
+				const csrf = this.configuredCsrfMiddleware;
 
-    return this.composed(
-      withMiddleware(...middleware)(handler),
-      "json",
-      identityModes(handler),
-      scimMiddleware(handler),
-    );
-  }
+				if (!this.dependencies.container.has(CORE_CONFIG_TOKEN)) {
+					return [csrf];
+				}
 
-  wrapPublicRead<TRequest extends Request = Request>(
-    handler: BusinessRouteHandler<TRequest>,
-    options: { allowAnonymous?: boolean } = {},
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    if (options.allowAnonymous ?? this.publicReadsEnabled) {
-      return this.composed(handler, "json");
-    }
+				const quotaPolicy = this.dependencies.container.has(CORE_THROTTLE_QUOTA_POLICY_TOKEN)
+					? this.dependencies.container.resolve(CORE_THROTTLE_QUOTA_POLICY_TOKEN)
+					: undefined;
 
-    return this.wrapAuthenticated(handler);
-  }
+				const config = this.dependencies.container.resolve(CORE_CONFIG_TOKEN);
 
-  wrapGlobalAdmin<TRequest extends Request = Request>(
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    const middleware = [...this.group("authenticated"), createRequireGlobalAdminMiddleware()];
+				const redisUrl = config.get<string>(REDIS_URL_CONFIG_KEY)?.trim() ?? '';
 
-    return this.composed(
-      withMiddleware(...middleware)(handler),
-      "json",
-      identityModes(handler),
-      scimMiddleware(handler),
-    );
-  }
+				if (!redisUrl) {
+					const maxAttempts = this.responsePolicy.rateLimitPerMinute ?? 120;
 
-  wrapAbility<TRequest extends Request = Request>(
-    ability: string,
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    const abilityChecker = resolveAbilityChecker(this.dependencies.container);
-    const requireAbility = createRequireAbilityMiddleware(abilityChecker, this.viewsEnabled);
-    const middleware = [...this.group("authenticated"), requireAbility(ability)];
+					return [
+						this.ownThrottle(
+							createMemoryThrottleMiddleware({
+								namespace: this.responsePolicy.namespace,
+								trustForwardedFor: this.responsePolicy.trustForwardedFor,
+								maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
+								decaySeconds: 60,
+								quotaPolicy,
+							}),
+						),
+						csrf,
+					];
+				}
 
-    return this.composed(
-      withMiddleware(...middleware)(handler),
-      "json",
-      identityModes(handler),
-      scimMiddleware(handler),
-    );
-  }
+				const maxAttempts = this.responsePolicy.rateLimitPerMinute ?? 120;
 
-  wrapPolicy<TRequest extends Request = Request>(
-    resource: string,
-    action: keyof Policy,
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    const auth = establishedAuthReader;
-    const gate = this.dependencies.container.resolve(CORE_POLICY_GATE_TOKEN);
+				return [
+					this.ownThrottle(
+						createThrottleMiddleware({
+							namespace: this.responsePolicy.namespace,
+							trustForwardedFor: this.responsePolicy.trustForwardedFor,
+							redisUrl,
+							maxAttempts: Number.isFinite(maxAttempts) ? maxAttempts : 120,
+							decaySeconds: 60,
+							quotaPolicy,
+						}),
+					),
+					csrf,
+				];
+			}
+			default:
+				throw new Error(`Unknown middleware group "${name}".`);
+		}
+	}
 
-    return this.composed(
-      withMiddleware(createAuthorizeMiddleware(gate, auth, resource, action))(handler),
-      "json",
-      identityModes(handler),
-      scimMiddleware(handler),
-    );
-  }
+	wrap<TRequest extends Request = Request>(
+		groups: MiddlewareGroupName | MiddlewareGroupName[],
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+		const names = Array.isArray(groups) ? groups : [groups];
 
-  wrapLogin<TRequest extends Request = Request>(
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    return this.wrapThrottle(
-      "login",
-      this.responsePolicy.loginRateLimit ?? resolveLoginRateLimit(),
-      handler,
-    );
-  }
+		const middleware = names.flatMap((name) => this.group(name));
 
-  wrapSigned<TRequest extends Request = Request>(
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    const secret =
-      this.dependencies.container.resolve<HttpPersistenceOptions>(
-        HTTP_PERSISTENCE_OPTIONS,
-      ).signatureSecret;
-    if (!secret) throw new Error("Explicit signed URL configuration is required.");
-    return this.composed(
-      withMiddleware(createValidateSignatureMiddleware({ secret }))(handler),
-      "json",
-      identityModes(handler),
-      scimMiddleware(handler),
-    );
-  }
+		const wrapped = middleware.length === 0 ? handler : withMiddleware(...middleware)(handler);
 
-  wrapRegister<TRequest extends Request = Request>(
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    return this.wrapThrottle(
-      "register",
-      this.responsePolicy.registerRateLimit ?? resolveRegisterRateLimit(),
-      handler,
-    );
-  }
+		if (names.includes('api')) {
+			return this.composed(wrapped, 'json', identityModes(handler), scimMiddleware(handler));
+		}
 
-  private wrapWebAuth<TRequest extends Request = Request>(
-    handler: BusinessRouteHandler<TRequest>,
-    options: { verified: boolean },
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    const auth = establishedAuthReader;
-    const middleware = [
-      createRequireWebAuthMiddleware(auth, this.requireIntendedOptions()),
-      ...(options.verified ? this.verifiedMiddleware() : []),
-    ];
+		return this.composed(wrapped, 'web', identityModes(handler), scimMiddleware(handler));
+	}
 
-    return this.wrapWeb(
-      this.composed(
-        withMiddleware(...middleware)(handler),
-        "web",
-        identityModes(handler),
-        scimMiddleware(handler),
-      ),
-    );
-  }
+	wrapApi<TRequest extends Request = Request>(
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
 
-  private verifiedMiddleware(): Middleware[] {
-    const auth = establishedAuthReader;
-    return [
-      createRequireVerifiedMiddleware(
-        auth,
-        this.emailVerificationRequired,
-        this.requireIntendedOptions(),
-      ),
-    ];
-  }
+		return this.wrap(['api', 'authenticated'], handler);
+	}
 
-  private wrapThrottle<TRequest extends Request = Request>(
-    scope: "login" | "register",
-    rateLimit: { maxAttempts: number; decaySeconds: number },
-    handler: BusinessRouteHandler<TRequest>,
-  ): ComposedRouteHandler<TRequest> {
-    assertHttpHandler(handler);
-    const memoryKeyPrefix = scope === "login" ? "login-throttle:" : "register-throttle:";
-    const redisUrl = this.dependencies.container.has(CORE_CONFIG_TOKEN)
-      ? (this.dependencies.container
-          .resolve(CORE_CONFIG_TOKEN)
-          .get<string>(REDIS_URL_CONFIG_KEY)
-          ?.trim() ?? "")
-      : "";
+	wrapWeb<TRequest extends Request = Request>(
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
 
-    if (scope === "login") {
-      return this.composed(
-        withMiddleware(
-          this.ownThrottle(
-            createLoginThrottleMiddleware({
-              namespace: this.responsePolicy.namespace,
-              trustForwardedFor: this.responsePolicy.trustForwardedFor,
-              ...(redisUrl ? { redisUrl } : {}),
-              maxAttempts: rateLimit.maxAttempts,
-              decaySeconds: rateLimit.decaySeconds,
-            }),
-          ),
-        )(handler),
-        "json",
-        identityModes(handler),
-        scimMiddleware(handler),
-      );
-    }
+		return this.wrap('web', handler);
+	}
 
-    if (redisUrl) {
-      return this.composed(
-        withMiddleware(
-          this.ownThrottle(
-            createThrottleMiddleware({
-              namespace: this.responsePolicy.namespace,
-              trustForwardedFor: this.responsePolicy.trustForwardedFor,
-              redisUrl,
-              maxAttempts: rateLimit.maxAttempts,
-              decaySeconds: rateLimit.decaySeconds,
-              keyPrefix: memoryKeyPrefix,
-            }),
-          ),
-        )(handler),
-        "json",
-        identityModes(handler),
-        scimMiddleware(handler),
-      );
-    }
+	/** Signed-in HTML users redirect to `home` instead of seeing guest pages. */
+	wrapWebGuest<TRequest extends Request = Request>(
+		handler: BusinessRouteHandler<TRequest>,
+		home: WebGuestHome = '/',
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+		const auth = establishedAuthReader;
 
-    return this.composed(
-      withMiddleware(
-        this.ownThrottle(
-          createMemoryThrottleMiddleware({
-            namespace: this.responsePolicy.namespace,
-            trustForwardedFor: this.responsePolicy.trustForwardedFor,
-            maxAttempts: rateLimit.maxAttempts,
-            decaySeconds: rateLimit.decaySeconds,
-            keyPrefix: memoryKeyPrefix,
-          }),
-        ),
-      )(handler),
-      "json",
-      identityModes(handler),
-      scimMiddleware(handler),
-    );
-  }
+		const guest = this.wrapWeb<TRequest>(async (request, ports) => {
+			const user = await auth.resolve(request);
+
+			if (user) {
+				if (this.emailVerificationRequired && !hasVerifiedEmail(user)) {
+					return Response.redirect('/email/verify', 302);
+				}
+
+				const location = typeof home === 'function' ? await home(user) : home;
+
+				return Response.redirect(location, 302);
+			}
+
+			return handler(request, ports);
+		});
+
+		return this.composed(guest, 'web', identityModes(handler), scimMiddleware(handler));
+	}
+
+	wrapWebPublicRead<TRequest extends Request = Request>(
+		handler: BusinessRouteHandler<TRequest>,
+		options: { allowAnonymous?: boolean } = {},
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+
+		if (options.allowAnonymous ?? this.publicReadsEnabled) {
+			return this.wrapWeb(handler);
+		}
+
+		return this.wrapWebAuthenticated(handler);
+	}
+
+	wrapWebAuthenticated<TRequest extends Request = Request>(
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+
+		return this.wrapWebAuth(handler, { verified: true });
+	}
+
+	/** Signed-in HTML without the email-verified gate (logout, verification notice). */
+	wrapWebAuthenticatedAllowUnverified<TRequest extends Request = Request>(
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+
+		return this.wrapWebAuth(handler, { verified: false });
+	}
+
+	wrapWebVerified<TRequest extends Request = Request>(
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+
+		return this.wrapWebAuth(handler, { verified: true });
+	}
+
+	/** Requires a fresh signed password-confirmation cookie. */
+	wrapWebPasswordConfirm<TRequest extends Request = Request>(
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+		const options =
+			this.dependencies.container.resolve<HttpPersistenceOptions>(
+				HTTP_PERSISTENCE_OPTIONS,
+			).passwordConfirmation;
+
+		if (!options) {
+			throw new Error('Explicit password confirmation configuration is required.');
+		}
+
+		return this.wrapWebAuth(
+			this.composed(
+				withMiddleware(createRequirePasswordConfirmMiddleware(options))(handler),
+				'web',
+				identityModes(handler),
+				scimMiddleware(handler),
+			),
+			{
+				verified: true,
+			},
+		);
+	}
+
+	wrapWebAbility<TRequest extends Request = Request>(
+		ability: string,
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+		const auth = establishedAuthReader;
+
+		const abilityChecker = resolveAbilityChecker(this.dependencies.container);
+
+		const requireAbility = createRequireAbilityMiddleware(abilityChecker, this.viewsEnabled);
+
+		const middleware = [
+			createRequireWebAuthMiddleware(auth, this.requireIntendedOptions()),
+			...this.verifiedMiddleware(),
+			requireAbility(ability),
+		];
+
+		return this.wrapWeb(
+			this.composed(
+				withMiddleware(...middleware)(handler),
+				'web',
+				identityModes(handler),
+				scimMiddleware(handler),
+			),
+		);
+	}
+
+	wrapWebGlobalAdmin<TRequest extends Request = Request>(
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+		const auth = establishedAuthReader;
+
+		const middleware = [
+			createRequireWebAuthMiddleware(auth, this.requireIntendedOptions()),
+			...this.verifiedMiddleware(),
+			createRequireGlobalAdminMiddleware(),
+		];
+
+		return this.wrapWeb(
+			this.composed(
+				withMiddleware(...middleware)(handler),
+				'web',
+				identityModes(handler),
+				scimMiddleware(handler),
+			),
+		);
+	}
+
+	wrapAuthenticated<TRequest extends Request = Request>(
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+
+		return this.wrap('authenticated', handler);
+	}
+
+	/** JSON routes that require a verified email. No-op when `FEATURE_EMAIL_VERIFICATION` is off. */
+	wrapVerified<TRequest extends Request = Request>(
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+		const middleware = [...this.group('authenticated'), ...this.verifiedMiddleware()];
+
+		return this.composed(
+			withMiddleware(...middleware)(handler),
+			'json',
+			identityModes(handler),
+			scimMiddleware(handler),
+		);
+	}
+
+	wrapPublicRead<TRequest extends Request = Request>(
+		handler: BusinessRouteHandler<TRequest>,
+		options: { allowAnonymous?: boolean } = {},
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+
+		if (options.allowAnonymous ?? this.publicReadsEnabled) {
+			return this.composed(handler, 'json');
+		}
+
+		return this.wrapAuthenticated(handler);
+	}
+
+	wrapGlobalAdmin<TRequest extends Request = Request>(
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+		const middleware = [...this.group('authenticated'), createRequireGlobalAdminMiddleware()];
+
+		return this.composed(
+			withMiddleware(...middleware)(handler),
+			'json',
+			identityModes(handler),
+			scimMiddleware(handler),
+		);
+	}
+
+	wrapAbility<TRequest extends Request = Request>(
+		ability: string,
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+		const abilityChecker = resolveAbilityChecker(this.dependencies.container);
+
+		const requireAbility = createRequireAbilityMiddleware(abilityChecker, this.viewsEnabled);
+
+		const middleware = [...this.group('authenticated'), requireAbility(ability)];
+
+		return this.composed(
+			withMiddleware(...middleware)(handler),
+			'json',
+			identityModes(handler),
+			scimMiddleware(handler),
+		);
+	}
+
+	wrapPolicy<TRequest extends Request = Request>(
+		resource: string,
+		action: keyof Policy,
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+		const auth = establishedAuthReader;
+
+		const gate = this.dependencies.container.resolve(CORE_POLICY_GATE_TOKEN);
+
+		return this.composed(
+			withMiddleware(createAuthorizeMiddleware(gate, auth, resource, action))(handler),
+			'json',
+			identityModes(handler),
+			scimMiddleware(handler),
+		);
+	}
+
+	wrapLogin<TRequest extends Request = Request>(
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+
+		return this.wrapThrottle(
+			'login',
+			this.responsePolicy.loginRateLimit ?? resolveLoginRateLimit(),
+			handler,
+		);
+	}
+
+	wrapSigned<TRequest extends Request = Request>(
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+		const secret =
+			this.dependencies.container.resolve<HttpPersistenceOptions>(
+				HTTP_PERSISTENCE_OPTIONS,
+			).signatureSecret;
+
+		if (!secret) {
+			throw new Error('Explicit signed URL configuration is required.');
+		}
+
+		return this.composed(
+			withMiddleware(createValidateSignatureMiddleware({ secret }))(handler),
+			'json',
+			identityModes(handler),
+			scimMiddleware(handler),
+		);
+	}
+
+	wrapRegister<TRequest extends Request = Request>(
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+
+		return this.wrapThrottle(
+			'register',
+			this.responsePolicy.registerRateLimit ?? resolveRegisterRateLimit(),
+			handler,
+		);
+	}
+
+	private wrapWebAuth<TRequest extends Request = Request>(
+		handler: BusinessRouteHandler<TRequest>,
+		options: { verified: boolean },
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+		const auth = establishedAuthReader;
+
+		const middleware = [
+			createRequireWebAuthMiddleware(auth, this.requireIntendedOptions()),
+			...(options.verified ? this.verifiedMiddleware() : []),
+		];
+
+		return this.wrapWeb(
+			this.composed(
+				withMiddleware(...middleware)(handler),
+				'web',
+				identityModes(handler),
+				scimMiddleware(handler),
+			),
+		);
+	}
+
+	private verifiedMiddleware(): Middleware[] {
+		const auth = establishedAuthReader;
+
+		return [
+			createRequireVerifiedMiddleware(
+				auth,
+				this.emailVerificationRequired,
+				this.requireIntendedOptions(),
+			),
+		];
+	}
+
+	private wrapThrottle<TRequest extends Request = Request>(
+		scope: 'login' | 'register',
+		rateLimit: { maxAttempts: number; decaySeconds: number },
+		handler: BusinessRouteHandler<TRequest>,
+	): ComposedRouteHandler<TRequest> {
+		assertHttpHandler(handler);
+		const memoryKeyPrefix = scope === 'login' ? 'login-throttle:' : 'register-throttle:';
+
+		const redisUrl = this.dependencies.container.has(CORE_CONFIG_TOKEN)
+			? (this.dependencies.container
+					.resolve(CORE_CONFIG_TOKEN)
+					.get<string>(REDIS_URL_CONFIG_KEY)
+					?.trim() ?? '')
+			: '';
+
+		if (scope === 'login') {
+			return this.composed(
+				withMiddleware(
+					this.ownThrottle(
+						createLoginThrottleMiddleware({
+							namespace: this.responsePolicy.namespace,
+							trustForwardedFor: this.responsePolicy.trustForwardedFor,
+							...(redisUrl ? { redisUrl } : {}),
+							maxAttempts: rateLimit.maxAttempts,
+							decaySeconds: rateLimit.decaySeconds,
+						}),
+					),
+				)(handler),
+				'json',
+				identityModes(handler),
+				scimMiddleware(handler),
+			);
+		}
+
+		if (redisUrl) {
+			return this.composed(
+				withMiddleware(
+					this.ownThrottle(
+						createThrottleMiddleware({
+							namespace: this.responsePolicy.namespace,
+							trustForwardedFor: this.responsePolicy.trustForwardedFor,
+							redisUrl,
+							maxAttempts: rateLimit.maxAttempts,
+							decaySeconds: rateLimit.decaySeconds,
+							keyPrefix: memoryKeyPrefix,
+						}),
+					),
+				)(handler),
+				'json',
+				identityModes(handler),
+				scimMiddleware(handler),
+			);
+		}
+
+		return this.composed(
+			withMiddleware(
+				this.ownThrottle(
+					createMemoryThrottleMiddleware({
+						namespace: this.responsePolicy.namespace,
+						trustForwardedFor: this.responsePolicy.trustForwardedFor,
+						maxAttempts: rateLimit.maxAttempts,
+						decaySeconds: rateLimit.decaySeconds,
+						keyPrefix: memoryKeyPrefix,
+					}),
+				),
+			)(handler),
+			'json',
+			identityModes(handler),
+			scimMiddleware(handler),
+		);
+	}
 }
 
 function createHttpKernel(dependencies: AppDependencies): HttpKernel {
-  return new HttpKernel(dependencies);
+	return new HttpKernel(dependencies);
 }
 
 export type { MiddlewareGroupName, WebGuestHome };

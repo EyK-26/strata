@@ -1,169 +1,187 @@
-import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { generateOpenApiSpec, renderOpenApiDocument } from "@getstrata/core/openapi/generator";
+import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from 'bun:test';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { generateOpenApiSpec, renderOpenApiDocument } from '@getstrata/core/openapi/generator';
+
 import {
-  createOpenApiCheckCommand,
-  createOpenApiValidateCommand,
-  registerAppOpenApiRoutes,
-} from "../../../packages/strata-cli/src/openapi";
-import { captureConsole, mockProcessExit, repoRoot } from "./helpers";
+	createOpenApiCheckCommand,
+	createOpenApiValidateCommand,
+	registerAppOpenApiRoutes,
+} from '../../../packages/strata-cli/src/openapi';
+
+import { captureConsole, mockProcessExit, repoRoot } from './helpers';
 
 const tempDirectories: string[] = [];
 
 // Exercise the public command factories without booting a checked-in application.
 const bootstrap = async () => ({
-  routes: { "/api/acceptance": { GET: async () => Response.json({ ok: true }) } },
+	routes: { '/api/acceptance': { GET: async () => Response.json({ ok: true }) } },
 });
+
 let cleanupRuns = 0;
+
 const close = () => {
-  cleanupRuns++;
+	cleanupRuns++;
 };
+
 const registerOpenApiRoutes = () => registerAppOpenApiRoutes(bootstrap);
+
 const openapiValidateCommand = createOpenApiValidateCommand(bootstrap, close);
+
 const openapiCheckCommand = createOpenApiCheckCommand(bootstrap, close);
 
 afterEach(async () => {
-  cleanupRuns = 0;
-  process.chdir(repoRoot);
+	cleanupRuns = 0;
+	process.chdir(repoRoot);
 
-  while (tempDirectories.length > 0) {
-    const directory = tempDirectories.pop();
-    if (directory) {
-      await rm(directory, { recursive: true, force: true });
-    }
-  }
+	while (tempDirectories.length > 0) {
+		const directory = tempDirectories.pop();
+
+		if (directory) {
+			await rm(directory, { recursive: true, force: true });
+		}
+	}
 });
 
 async function withOpenApiWorkspace(
-  openapiContents: string,
-  run: () => Promise<void>,
+	openapiContents: string,
+	run: () => Promise<void>,
 ): Promise<void> {
-  const tempDirectory = await mkdtemp(join(tmpdir(), "strata-openapi-check-"));
-  tempDirectories.push(tempDirectory);
+	const tempDirectory = await mkdtemp(join(tmpdir(), 'strata-openapi-check-'));
 
-  const docsDirectory = join(tempDirectory, "docs");
-  await mkdir(docsDirectory, { recursive: true });
-  await writeFile(join(docsDirectory, "openapi.json"), openapiContents, "utf8");
+	tempDirectories.push(tempDirectory);
 
-  process.chdir(tempDirectory);
-  await run();
+	const docsDirectory = join(tempDirectory, 'docs');
+
+	await mkdir(docsDirectory, { recursive: true });
+	await writeFile(join(docsDirectory, 'openapi.json'), openapiContents, 'utf8');
+
+	process.chdir(tempDirectory);
+	await run();
 }
 
-describe("openapiValidateCommand", () => {
-  test("validates the generated OpenAPI spec", async () => {
-    const output = captureConsole();
+describe('openapiValidateCommand', () => {
+	test('validates the generated OpenAPI spec', async () => {
+		const output = captureConsole();
 
-    try {
-      await openapiValidateCommand();
-    } finally {
-      output.restore();
-    }
+		try {
+			await openapiValidateCommand();
+		} finally {
+			output.restore();
+		}
 
-    expect(cleanupRuns).toBe(1);
-    expect(output.errors).toHaveLength(0);
-    expect(output.logs).toHaveLength(1);
-    expect(output.logs[0]).toMatch(/^OpenAPI spec valid \(\d+ routes\)\.$/);
-  });
+		expect(cleanupRuns).toBe(1);
+		expect(output.errors).toHaveLength(0);
+		expect(output.logs).toHaveLength(1);
+		expect(output.logs[0]).toMatch(/^OpenAPI spec valid \(\d+ routes\)\.$/);
+	});
 });
 
-describe("openapiCheckCommand", () => {
-  test("passes when committed OpenAPI file matches generated spec", async () => {
-    const inventory = await registerOpenApiRoutes();
-    const generated = renderOpenApiDocument(generateOpenApiSpec(inventory));
+describe('openapiCheckCommand', () => {
+	test('passes when committed OpenAPI file matches generated spec', async () => {
+		const inventory = await registerOpenApiRoutes();
 
-    const output = captureConsole();
+		const generated = renderOpenApiDocument(generateOpenApiSpec(inventory));
 
-    await withOpenApiWorkspace(generated, async () => {
-      await openapiCheckCommand();
-    });
+		const output = captureConsole();
 
-    output.restore();
+		await withOpenApiWorkspace(generated, async () => {
+			await openapiCheckCommand();
+		});
 
-    expect(cleanupRuns).toBe(1);
-    expect(output.errors).toHaveLength(0);
-    expect(output.logs).toHaveLength(1);
-    expect(output.logs[0]).toMatch(/^OpenAPI spec matches committed file \(\d+ routes\)\.$/);
-  });
+		output.restore();
 
-  test("fails when committed OpenAPI file drifts from generated spec", async () => {
-    const output = captureConsole();
-    const exit = mockProcessExit();
+		expect(cleanupRuns).toBe(1);
+		expect(output.errors).toHaveLength(0);
+		expect(output.logs).toHaveLength(1);
+		expect(output.logs[0]).toMatch(/^OpenAPI spec matches committed file \(\d+ routes\)\.$/);
+	});
 
-    try {
-      await withOpenApiWorkspace('{"openapi":"3.1.0"}', async () => {
-        await expect(openapiCheckCommand()).rejects.toThrow("process.exit");
-      });
-    } finally {
-      output.restore();
-      exit.restore();
-    }
+	test('fails when committed OpenAPI file drifts from generated spec', async () => {
+		const output = captureConsole();
 
-    expect(cleanupRuns).toBe(1);
-    expect(exit.getCode()).toBe(1);
-    expect(output.errors.some((line) => line.includes("OpenAPI spec drift detected."))).toBe(true);
-  });
+		const exit = mockProcessExit();
+
+		try {
+			await withOpenApiWorkspace('{"openapi":"3.1.0"}', async () => {
+				await expect(openapiCheckCommand()).rejects.toThrow('process.exit');
+			});
+		} finally {
+			output.restore();
+			exit.restore();
+		}
+
+		expect(cleanupRuns).toBe(1);
+		expect(exit.getCode()).toBe(1);
+		expect(output.errors.some((line) => line.includes('OpenAPI spec drift detected.'))).toBe(true);
+	});
 });
 
-describe("openapi CLI validation failures", () => {
-  let invalidOpenapiValidateCommand: typeof openapiValidateCommand;
-  let invalidOpenapiCheckCommand: typeof openapiCheckCommand;
+describe('openapi CLI validation failures', () => {
+	let invalidOpenapiValidateCommand: typeof openapiValidateCommand;
 
-  beforeAll(async () => {
-    mock.module("@getstrata/core/openapi/validate", () => ({
-      validateOpenApiSpec: () => ["Missing bearerAuth security scheme."],
-    }));
+	let invalidOpenapiCheckCommand: typeof openapiCheckCommand;
 
-    const commands = await import("../../../packages/strata-cli/src/openapi");
-    invalidOpenapiValidateCommand = commands.createOpenApiValidateCommand(bootstrap, close);
-    invalidOpenapiCheckCommand = commands.createOpenApiCheckCommand(bootstrap, close);
-  });
+	beforeAll(async () => {
+		mock.module('@getstrata/core/openapi/validate', () => ({
+			validateOpenApiSpec: () => ['Missing bearerAuth security scheme.'],
+		}));
 
-  afterAll(() => {
-    mock.restore();
-  });
+		const commands = await import('../../../packages/strata-cli/src/openapi');
 
-  test("openapiValidateCommand fails when generated OpenAPI spec is invalid", async () => {
-    const output = captureConsole();
-    const exit = mockProcessExit();
+		invalidOpenapiValidateCommand = commands.createOpenApiValidateCommand(bootstrap, close);
+		invalidOpenapiCheckCommand = commands.createOpenApiCheckCommand(bootstrap, close);
+	});
 
-    try {
-      await expect(invalidOpenapiValidateCommand()).rejects.toThrow("process.exit");
-    } finally {
-      output.restore();
-      exit.restore();
-    }
+	afterAll(() => {
+		mock.restore();
+	});
 
-    expect(cleanupRuns).toBe(1);
-    expect(exit.getCode()).toBe(1);
-    expect(output.errors.some((line) => line.includes("OpenAPI validation failed:"))).toBe(true);
-    expect(output.errors.some((line) => line.includes("Missing bearerAuth security scheme."))).toBe(
-      true,
-    );
-  });
+	test('openapiValidateCommand fails when generated OpenAPI spec is invalid', async () => {
+		const output = captureConsole();
 
-  test("openapiCheckCommand fails when generated OpenAPI spec is invalid", async () => {
-    const inventory = await registerOpenApiRoutes();
-    const generated = renderOpenApiDocument(generateOpenApiSpec(inventory));
+		const exit = mockProcessExit();
 
-    const output = captureConsole();
-    const exit = mockProcessExit();
+		try {
+			await expect(invalidOpenapiValidateCommand()).rejects.toThrow('process.exit');
+		} finally {
+			output.restore();
+			exit.restore();
+		}
 
-    try {
-      await withOpenApiWorkspace(generated, async () => {
-        await expect(invalidOpenapiCheckCommand()).rejects.toThrow("process.exit");
-      });
-    } finally {
-      output.restore();
-      exit.restore();
-    }
+		expect(cleanupRuns).toBe(1);
+		expect(exit.getCode()).toBe(1);
+		expect(output.errors.some((line) => line.includes('OpenAPI validation failed:'))).toBe(true);
+		expect(output.errors.some((line) => line.includes('Missing bearerAuth security scheme.'))).toBe(
+			true,
+		);
+	});
 
-    expect(cleanupRuns).toBe(1);
-    expect(exit.getCode()).toBe(1);
-    expect(output.errors.some((line) => line.includes("OpenAPI validation failed:"))).toBe(true);
-    expect(output.errors.some((line) => line.includes("Missing bearerAuth security scheme."))).toBe(
-      true,
-    );
-  });
+	test('openapiCheckCommand fails when generated OpenAPI spec is invalid', async () => {
+		const inventory = await registerOpenApiRoutes();
+
+		const generated = renderOpenApiDocument(generateOpenApiSpec(inventory));
+
+		const output = captureConsole();
+
+		const exit = mockProcessExit();
+
+		try {
+			await withOpenApiWorkspace(generated, async () => {
+				await expect(invalidOpenapiCheckCommand()).rejects.toThrow('process.exit');
+			});
+		} finally {
+			output.restore();
+			exit.restore();
+		}
+
+		expect(cleanupRuns).toBe(1);
+		expect(exit.getCode()).toBe(1);
+		expect(output.errors.some((line) => line.includes('OpenAPI validation failed:'))).toBe(true);
+		expect(output.errors.some((line) => line.includes('Missing bearerAuth security scheme.'))).toBe(
+			true,
+		);
+	});
 });

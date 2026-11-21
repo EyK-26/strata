@@ -1,1 +1,1 @@
-export * from "../../../../src/core/http/webErrorResponse.ts";
+export * from '../../../../src/core/http/webErrorResponse.ts';

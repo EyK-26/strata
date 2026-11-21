@@ -1,9 +1,9 @@
 function isPublicReadsEnabled(enabled = false): boolean {
-  return enabled;
+	return enabled;
 }
 
 function guestCanViewResource(enabled = false): boolean {
-  return isPublicReadsEnabled(enabled);
+	return isPublicReadsEnabled(enabled);
 }
 
 export { guestCanViewResource, isPublicReadsEnabled };

@@ -1,36 +1,41 @@
-import type { FieldEncryptionKeyring } from "@getstrata/core/crypto/fieldEncryption";
+import type { FieldEncryptionKeyring } from '@getstrata/core/crypto/fieldEncryption';
 import {
-  type FieldEncryptionRotationOptions,
-  runFieldEncryptionRotationBatch,
-} from "@getstrata/core/crypto/fieldEncryptionRotation";
-import type { BaseRepository } from "@getstrata/core/database/baseRepository";
-import type { RepositoryDefinition } from "@getstrata/core/database/definitions";
-import type { DatabaseSession } from "@getstrata/core/database/session";
+	type FieldEncryptionRotationOptions,
+	runFieldEncryptionRotationBatch,
+} from '@getstrata/core/crypto/fieldEncryptionRotation';
+import type { BaseRepository } from '@getstrata/core/database/baseRepository';
+import type { RepositoryDefinition } from '@getstrata/core/database/definitions';
+import type { DatabaseSession } from '@getstrata/core/database/session';
 
 type Account = { id: number; email: string; lookup: string; mfa: string | null };
+
 export async function rotationContract(
-  repository: RepositoryDefinition<Account, "id", BaseRepository<Account, "id">>,
-  session: DatabaseSession,
-  source: FieldEncryptionKeyring,
-  target: FieldEncryptionKeyring,
+	repository: RepositoryDefinition<Account, 'id', BaseRepository<Account, 'id'>>,
+	session: DatabaseSession,
+	source: FieldEncryptionKeyring,
+	target: FieldEncryptionKeyring,
 ) {
-  const options: FieldEncryptionRotationOptions<Account, "id"> = {
-    repository,
-    session,
-    tenantId: 1,
-    runId: "admin_run",
-    scopeId: "tenant_1",
-    maintenanceMode: true,
-    source,
-    target,
-    fields: [
-      { column: "email", purpose: "email", lookupColumn: "lookup" },
-      { column: "mfa", purpose: "mfa" },
-    ],
-  };
-  const result = await runFieldEncryptionRotationBatch(options);
-  const completed: boolean = result.completed;
-  // @ts-expect-error Primary-key fields cannot be re-encrypted.
-  options.fields = [{ column: "id", purpose: "email" }];
-  return completed;
+	const options: FieldEncryptionRotationOptions<Account, 'id'> = {
+		repository,
+		session,
+		tenantId: 1,
+		runId: 'admin_run',
+		scopeId: 'tenant_1',
+		maintenanceMode: true,
+		source,
+		target,
+		fields: [
+			{ column: 'email', purpose: 'email', lookupColumn: 'lookup' },
+			{ column: 'mfa', purpose: 'mfa' },
+		],
+	};
+
+	const result = await runFieldEncryptionRotationBatch(options);
+
+	const completed: boolean = result.completed;
+
+	// @ts-expect-error Primary-key fields cannot be re-encrypted.
+	options.fields = [{ column: 'id', purpose: 'email' }];
+
+	return completed;
 }

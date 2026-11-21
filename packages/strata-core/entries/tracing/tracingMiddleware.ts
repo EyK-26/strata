@@ -1,1 +1,1 @@
-export * from "../../../../src/core/tracing/tracingMiddleware.ts";
+export * from '../../../../src/core/tracing/tracingMiddleware.ts';

@@ -1,140 +1,147 @@
-import { test } from "bun:test";
-import { join } from "node:path";
+import { test } from 'bun:test';
+import { join } from 'node:path';
 
-const repoRoot = join(import.meta.dir, "../../..");
+const repoRoot = join(import.meta.dir, '../../..');
 
 function captureConsole(): {
-  logs: string[];
-  errors: string[];
-  restore: () => void;
+	logs: string[];
+	errors: string[];
+	restore: () => void;
 } {
-  const logs: string[] = [];
-  const errors: string[] = [];
-  const originalLog = console.log;
-  const originalError = console.error;
+	const logs: string[] = [];
 
-  console.log = (...args: unknown[]) => {
-    logs.push(args.map(String).join(" "));
-  };
-  console.error = (...args: unknown[]) => {
-    errors.push(args.map(String).join(" "));
-  };
+	const errors: string[] = [];
 
-  return {
-    logs,
-    errors,
-    restore: () => {
-      console.log = originalLog;
-      console.error = originalError;
-    },
-  };
+	const originalLog = console.log;
+
+	const originalError = console.error;
+
+	console.log = (...args: unknown[]) => {
+		logs.push(args.map(String).join(' '));
+	};
+	console.error = (...args: unknown[]) => {
+		errors.push(args.map(String).join(' '));
+	};
+
+	return {
+		logs,
+		errors,
+		restore: () => {
+			console.log = originalLog;
+			console.error = originalError;
+		},
+	};
 }
 
 function mockProcessExit(): {
-  getCode: () => number | null;
-  restore: () => void;
+	getCode: () => number | null;
+	restore: () => void;
 } {
-  let code: number | null = null;
-  const originalExit = process.exit;
+	let code: number | null = null;
 
-  process.exit = ((exitCode?: number) => {
-    code = exitCode ?? 0;
-    throw new Error("process.exit");
-  }) as typeof process.exit;
+	const originalExit = process.exit;
 
-  return {
-    getCode: () => code,
-    restore: () => {
-      process.exit = originalExit;
-    },
-  };
+	process.exit = ((exitCode?: number) => {
+		code = exitCode ?? 0;
+		throw new Error('process.exit');
+	}) as typeof process.exit;
+
+	return {
+		getCode: () => code,
+		restore: () => {
+			process.exit = originalExit;
+		},
+	};
 }
 
 function cliTestEnv(overrides: Record<string, string | undefined> = {}): Record<string, string> {
-  const env: Record<string, string> = {};
+	const env: Record<string, string> = {};
 
-  for (const [key, value] of Object.entries(process.env)) {
-    if (typeof value !== "string") {
-      continue;
-    }
-    if (key.startsWith("BUN_TEST") || key === "NODE_V8_COVERAGE") {
-      continue;
-    }
-    env[key] = value;
-  }
+	for (const [key, value] of Object.entries(process.env)) {
+		if (typeof value !== 'string') {
+			continue;
+		}
 
-  env.MAIL_DRIVER = "log";
-  env.CACHE_DRIVER ??= "array";
-  env.QUEUE_DRIVER ??= "sync";
+		if (key.startsWith('BUN_TEST') || key === 'NODE_V8_COVERAGE') {
+			continue;
+		}
 
-  for (const [key, value] of Object.entries(overrides)) {
-    if (value === undefined) {
-      delete env[key];
-    } else {
-      env[key] = value;
-    }
-  }
+		env[key] = value;
+	}
 
-  return env;
+	env.MAIL_DRIVER = 'log';
+	env.CACHE_DRIVER ??= 'array';
+	env.QUEUE_DRIVER ??= 'sync';
+
+	for (const [key, value] of Object.entries(overrides)) {
+		if (value === undefined) {
+			delete env[key];
+		} else {
+			env[key] = value;
+		}
+	}
+
+	return env;
 }
 
 function formatCliResult(result: { stdout: string; stderr: string; exitCode: number }): string {
-  return `exit=${result.exitCode}\n--- stdout ---\n${result.stdout}\n--- stderr ---\n${result.stderr}`;
+	return `exit=${result.exitCode}\n--- stdout ---\n${result.stdout}\n--- stderr ---\n${result.stderr}`;
 }
 
 async function runCli(
-  args: string[],
-  envOverrides?: Record<string, string | undefined>,
+	args: string[],
+	envOverrides?: Record<string, string | undefined>,
 ): Promise<{
-  stdout: string;
-  stderr: string;
-  exitCode: number;
+	stdout: string;
+	stderr: string;
+	exitCode: number;
 }> {
-  const proc = Bun.spawn(["bun", join(repoRoot, "src/cli/index.ts"), ...args], {
-    cwd: repoRoot,
-    env: cliTestEnv(envOverrides),
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+	const proc = Bun.spawn(['bun', join(repoRoot, 'src/cli/index.ts'), ...args], {
+		cwd: repoRoot,
+		env: cliTestEnv(envOverrides),
+		stdout: 'pipe',
+		stderr: 'pipe',
+	});
 
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
+	const [stdout, stderr, exitCode] = await Promise.all([
+		new Response(proc.stdout).text(),
+		new Response(proc.stderr).text(),
+		proc.exited,
+	]);
 
-  return { stdout, stderr, exitCode };
+	return { stdout, stderr, exitCode };
 }
 
 // These integration tests install generated apps before booting their runtime.
 // Bound setup separately so a test timeout cannot remove an app during installation.
 function appTest(name: string, run: () => Promise<void>): void {
-  test(name, run, 30_000);
+	test(name, run, 30_000);
 }
 
 function installGeneratedAppDependencies(app: string): void {
-  const result = Bun.spawnSync({
-    cmd: ["bun", "install", "--prefer-offline"],
-    cwd: app,
-    stdout: "pipe",
-    stderr: "pipe",
-    timeout: 20_000,
-    killSignal: "SIGKILL",
-  });
-  if (result.exitCode !== 0) {
-    throw new Error(
-      `Generated-app installation failed (${result.exitCode ?? result.signalCode ?? "timeout"}) in ${app}:\n${new TextDecoder().decode(result.stdout)}\n${new TextDecoder().decode(result.stderr)}`,
-    );
-  }
+	const result = Bun.spawnSync({
+		cmd: ['bun', 'install', '--prefer-offline'],
+		cwd: app,
+		stdout: 'pipe',
+		stderr: 'pipe',
+		timeout: 20_000,
+		killSignal: 'SIGKILL',
+	});
+
+	if (result.exitCode !== 0) {
+		throw new Error(
+			`Generated-app installation failed (${result.exitCode ?? result.signalCode ?? 'timeout'}) in ${app}:\n${new TextDecoder().decode(result.stdout)}\n${new TextDecoder().decode(result.stderr)}`,
+		);
+	}
 }
 
 export {
-  appTest,
-  captureConsole,
-  cliTestEnv,
-  formatCliResult,
-  installGeneratedAppDependencies,
-  mockProcessExit,
-  repoRoot,
-  runCli,
+	appTest,
+	captureConsole,
+	cliTestEnv,
+	formatCliResult,
+	installGeneratedAppDependencies,
+	mockProcessExit,
+	repoRoot,
+	runCli,
 };

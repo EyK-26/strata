@@ -1,78 +1,94 @@
-import { currentRequestMeta } from "@getstrata/core/http/requestMetaContext";
-import { sanitizeInternalPath } from "../http/safeInternalPath";
-import { htmlResponse } from "./htmlResponse";
+import { currentRequestMeta } from '@getstrata/core/http/requestMetaContext';
+
+import { sanitizeInternalPath } from '../http/safeInternalPath';
+
+import { htmlResponse } from './htmlResponse';
 
 interface WebErrorViewInput {
-  status: number;
-  title: string;
-  message: string;
-  request?: Request;
-  errors?: Record<string, string[]>;
+	status: number;
+	title: string;
+	message: string;
+	request?: Request;
+	errors?: Record<string, string[]>;
 }
 
 interface WebErrorViewOptions {
-  render?: (input: WebErrorViewInput) => Promise<string> | string;
+	render?: (input: WebErrorViewInput) => Promise<string> | string;
 }
 
 type WebErrorView = (input: WebErrorViewInput) => Promise<string>;
 
 /** Captures a renderer for one application, including its safe kernel fallback. */
 function createWebErrorView(options: WebErrorViewOptions = {}): WebErrorView {
-  const render = options.render;
-  return async (input) => {
-    const resolved = { ...input, request: input.request ?? currentRequestMeta().request };
-    if (render) {
-      try {
-        return await render(resolved);
-      } catch {
-        /* Missing/broken custom templates use safe chrome. */
-      }
-    }
-    return renderKernelErrorChrome(resolved);
-  };
+	const render = options.render;
+
+	return async (input) => {
+		const resolved = { ...input, request: input.request ?? currentRequestMeta().request };
+
+		if (render) {
+			try {
+				return await render(resolved);
+			} catch {
+				/* Missing/broken custom templates use safe chrome. */
+			}
+		}
+
+		return renderKernelErrorChrome(resolved);
+	};
 }
 
 function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+	return value
+		.replaceAll('&', '&amp;')
+		.replaceAll('<', '&lt;')
+		.replaceAll('>', '&gt;')
+		.replaceAll('"', '&quot;');
 }
 
 /** Native navigation works with strict CSP and without JavaScript. Never trust external referrers. */
 function errorReturnPath(request: Request | undefined): string {
-  if (!request) return "/";
-  try {
-    const current = new URL(request.url);
-    const previous = new URL(request.headers.get("referer") ?? "");
-    if (
-      previous.origin !== current.origin ||
-      ((request.method === "GET" || request.method === "HEAD") &&
-        previous.pathname === current.pathname)
-    )
-      return "/";
-    // Do not reflect credentials, capability query values or fragments into error pages.
-    return sanitizeInternalPath(previous.pathname, "/");
-  } catch {
-    return "/";
-  }
+	if (!request) {
+		return '/';
+	}
+
+	try {
+		const current = new URL(request.url);
+
+		const previous = new URL(request.headers.get('referer') ?? '');
+
+		if (
+			previous.origin !== current.origin ||
+			((request.method === 'GET' || request.method === 'HEAD') &&
+				previous.pathname === current.pathname)
+		) {
+			return '/';
+		}
+
+		// Do not reflect credentials, capability query values or fragments into error pages.
+		return sanitizeInternalPath(previous.pathname, '/');
+	} catch {
+		return '/';
+	}
 }
 
 function renderKernelErrorChrome(input: WebErrorViewInput): string {
-  const title = escapeHtml(input.title);
-  const message = escapeHtml(input.message);
-  const errorLines = Object.entries(input.errors ?? {})
-    .flatMap(([field, messages]) => messages.map((item) => `${field}: ${item}`))
-    .map((line) => `<li>${escapeHtml(line)}</li>`)
-    .join("");
-  const details = errorLines ? `<ul class="error-list">${errorLines}</ul>` : "";
-  const goBack =
-    input.status === 422
-      ? `<p><a href="${escapeHtml(errorReturnPath(input.request ?? currentRequestMeta().request))}">Go back</a></p>`
-      : "";
+	const title = escapeHtml(input.title);
 
-  return `<!doctype html>
+	const message = escapeHtml(input.message);
+
+	const errorLines = Object.entries(input.errors ?? {})
+		.flatMap(([field, messages]) => messages.map((item) => `${field}: ${item}`))
+		.map((line) => `<li>${escapeHtml(line)}</li>`)
+		.join('');
+
+	const details = errorLines ? `<ul class="error-list">${errorLines}</ul>` : '';
+
+	const goBack =
+		input.status === 422
+			? `<p><a href="${escapeHtml(errorReturnPath(input.request ?? currentRequestMeta().request))}">Go back</a></p>`
+			: '';
+
+	return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -98,56 +114,60 @@ function renderKernelErrorChrome(input: WebErrorViewInput): string {
 }
 
 function errorTemplateName(status: number): string {
-  if (status === 404) {
-    return "errors/not-found";
-  }
+	if (status === 404) {
+		return 'errors/not-found';
+	}
 
-  if (status === 403) {
-    return "errors/forbidden";
-  }
+	if (status === 403) {
+		return 'errors/forbidden';
+	}
 
-  return "errors/error";
+	return 'errors/error';
 }
 
 async function renderWebErrorHtml(
-  input: WebErrorViewInput,
-  render: WebErrorView = currentRequestMeta().webErrorView ?? createWebErrorView(),
+	input: WebErrorViewInput,
+	render: WebErrorView = currentRequestMeta().webErrorView ?? createWebErrorView(),
 ): Promise<string> {
-  return render(input);
+	return render(input);
 }
 
 async function htmlErrorResponse(
-  input: WebErrorViewInput & { status: number },
-  render?: WebErrorView,
+	input: WebErrorViewInput & { status: number },
+	render?: WebErrorView,
 ): Promise<Response> {
-  const response = htmlResponse(await renderWebErrorHtml(input, render), { status: input.status });
-  response.headers.set("Cache-Control", "no-store");
-  return response;
+	const response = htmlResponse(await renderWebErrorHtml(input, render), { status: input.status });
+
+	response.headers.set('Cache-Control', 'no-store');
+
+	return response;
 }
 
 async function notFoundHtmlResponse(body?: string, render?: WebErrorView): Promise<Response> {
-  if (body !== undefined) {
-    const response = htmlResponse(body, { status: 404 });
-    response.headers.set("Cache-Control", "no-store");
-    return response;
-  }
+	if (body !== undefined) {
+		const response = htmlResponse(body, { status: 404 });
 
-  return htmlErrorResponse(
-    {
-      status: 404,
-      title: "Not Found",
-      message: "The page you requested was not found.",
-    },
-    render,
-  );
+		response.headers.set('Cache-Control', 'no-store');
+
+		return response;
+	}
+
+	return htmlErrorResponse(
+		{
+			status: 404,
+			title: 'Not Found',
+			message: 'The page you requested was not found.',
+		},
+		render,
+	);
 }
 
 export type { WebErrorView, WebErrorViewInput, WebErrorViewOptions };
 export {
-  createWebErrorView,
-  errorTemplateName,
-  htmlErrorResponse,
-  notFoundHtmlResponse,
-  renderKernelErrorChrome,
-  renderWebErrorHtml,
+	createWebErrorView,
+	errorTemplateName,
+	htmlErrorResponse,
+	notFoundHtmlResponse,
+	renderKernelErrorChrome,
+	renderWebErrorHtml,
 };

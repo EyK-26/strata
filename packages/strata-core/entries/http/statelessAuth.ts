@@ -1,1 +1,1 @@
-export * from "../../../../src/core/http/statelessAuth.ts";
+export * from '../../../../src/core/http/statelessAuth.ts';

@@ -1,174 +1,196 @@
-import { describe, expect, test } from "bun:test";
-import { PreconditionFailedError } from "@getstrata/core/errors/http";
+import { describe, expect, test } from 'bun:test';
+
+import { PreconditionFailedError } from '@getstrata/core/errors/http';
 import {
-  applyConditionalGet,
-  assertIfMatch,
-  computeEtagFromJson,
-  etagFromResource,
-  ifMatchSatisfied,
-  ifNoneMatchSatisfied,
-  isEtagEnabled,
-} from "@getstrata/core/http/etag";
+	applyConditionalGet,
+	assertIfMatch,
+	computeEtagFromJson,
+	etagFromResource,
+	ifMatchSatisfied,
+	ifNoneMatchSatisfied,
+	isEtagEnabled,
+} from '@getstrata/core/http/etag';
 
-describe("etagFromResource", () => {
-  test("uses updated_at when present", () => {
-    const first = etagFromResource({
-      id: 1,
-      updated_at: "2026-01-01T00:00:00.000Z",
-      created_at: "2025-01-01T00:00:00.000Z",
-    });
-    const second = etagFromResource({
-      id: 1,
-      updated_at: "2026-02-01T00:00:00.000Z",
-      created_at: "2025-01-01T00:00:00.000Z",
-    });
+describe('etagFromResource', () => {
+	test('uses updated_at when present', () => {
+		const first = etagFromResource({
+			id: 1,
+			updated_at: '2026-01-01T00:00:00.000Z',
+			created_at: '2025-01-01T00:00:00.000Z',
+		});
 
-    expect(first).toMatch(/^W\/"/);
-    expect(first).not.toBe(second);
-  });
+		const second = etagFromResource({
+			id: 1,
+			updated_at: '2026-02-01T00:00:00.000Z',
+			created_at: '2025-01-01T00:00:00.000Z',
+		});
 
-  test("falls back to created_at when updated_at is missing", () => {
-    const etag = etagFromResource({ id: 5, created_at: "2025-06-01T00:00:00.000Z" });
+		expect(first).toMatch(/^W\/"/);
+		expect(first).not.toBe(second);
+	});
 
-    expect(etag).toMatch(/^W\/"/);
-  });
+	test('falls back to created_at when updated_at is missing', () => {
+		const etag = etagFromResource({ id: 5, created_at: '2025-06-01T00:00:00.000Z' });
+
+		expect(etag).toMatch(/^W\/"/);
+	});
 });
 
-describe("computeEtagFromJson", () => {
-  test("returns stable weak etags for the same payload", () => {
-    const payload = { data: [{ id: 1 }], meta: { page: 1 } };
-    expect(computeEtagFromJson(payload)).toBe(computeEtagFromJson(payload));
-  });
+describe('computeEtagFromJson', () => {
+	test('returns stable weak etags for the same payload', () => {
+		const payload = { data: [{ id: 1 }], meta: { page: 1 } };
+
+		expect(computeEtagFromJson(payload)).toBe(computeEtagFromJson(payload));
+	});
 });
 
-describe("ifNoneMatchSatisfied", () => {
-  test("matches quoted etag values", () => {
-    const etag = 'W/"abc123"';
-    const request = new Request("http://example.test/items/1", {
-      headers: { "if-none-match": etag },
-    });
+describe('ifNoneMatchSatisfied', () => {
+	test('matches quoted etag values', () => {
+		const etag = 'W/"abc123"';
 
-    expect(ifNoneMatchSatisfied(request, etag)).toBe(true);
-  });
+		const request = new Request('http://example.test/items/1', {
+			headers: { 'if-none-match': etag },
+		});
 
-  test("matches wildcard", () => {
-    const request = new Request("http://example.test/items/1", {
-      headers: { "if-none-match": "*" },
-    });
+		expect(ifNoneMatchSatisfied(request, etag)).toBe(true);
+	});
 
-    expect(ifNoneMatchSatisfied(request, 'W/"anything"')).toBe(true);
-  });
+	test('matches wildcard', () => {
+		const request = new Request('http://example.test/items/1', {
+			headers: { 'if-none-match': '*' },
+		});
+
+		expect(ifNoneMatchSatisfied(request, 'W/"anything"')).toBe(true);
+	});
 });
 
-describe("ifMatchSatisfied", () => {
-  test("returns false when header is absent", () => {
-    const request = new Request("http://example.test/items/1");
+describe('ifMatchSatisfied', () => {
+	test('returns false when header is absent', () => {
+		const request = new Request('http://example.test/items/1');
 
-    expect(ifMatchSatisfied(request, 'W/"abc"')).toBe(false);
-  });
+		expect(ifMatchSatisfied(request, 'W/"abc"')).toBe(false);
+	});
 
-  test("matches one of several etags", () => {
-    const etag = 'W/"match-me"';
-    const request = new Request("http://example.test/items/1", {
-      headers: { "if-match": 'W/"other", W/"match-me"' },
-    });
+	test('matches one of several etags', () => {
+		const etag = 'W/"match-me"';
 
-    expect(ifMatchSatisfied(request, etag)).toBe(true);
-  });
+		const request = new Request('http://example.test/items/1', {
+			headers: { 'if-match': 'W/"other", W/"match-me"' },
+		});
+
+		expect(ifMatchSatisfied(request, etag)).toBe(true);
+	});
 });
 
-describe("assertIfMatch", () => {
-  test("allows missing header by default", () => {
-    const request = new Request("http://example.test/items/1");
+describe('assertIfMatch', () => {
+	test('allows missing header by default', () => {
+		const request = new Request('http://example.test/items/1');
 
-    expect(() => assertIfMatch(request, 'W/"abc"')).not.toThrow();
-  });
+		expect(() => assertIfMatch(request, 'W/"abc"')).not.toThrow();
+	});
 
-  test("throws when etag does not match", () => {
-    const request = new Request("http://example.test/items/1", {
-      headers: { "if-match": 'W/"stale"' },
-    });
+	test('throws when etag does not match', () => {
+		const request = new Request('http://example.test/items/1', {
+			headers: { 'if-match': 'W/"stale"' },
+		});
 
-    expect(() => assertIfMatch(request, 'W/"current"')).toThrow(PreconditionFailedError);
-  });
+		expect(() => assertIfMatch(request, 'W/"current"')).toThrow(PreconditionFailedError);
+	});
 
-  test("requires header when configured", () => {
-    const request = new Request("http://example.test/items/1");
+	test('requires header when configured', () => {
+		const request = new Request('http://example.test/items/1');
 
-    expect(() => assertIfMatch(request, 'W/"current"', { required: true })).toThrow(
-      PreconditionFailedError,
-    );
-  });
+		expect(() => assertIfMatch(request, 'W/"current"', { required: true })).toThrow(
+			PreconditionFailedError,
+		);
+	});
 });
 
-describe("applyConditionalGet", () => {
-  test("returns 304 when If-None-Match matches", async () => {
-    const etag = etagFromResource({ id: 1, updated_at: "2026-01-01T00:00:00.000Z" });
-    const request = new Request("http://example.test/items/1", {
-      headers: { "if-none-match": etag },
-    });
-    const original = Response.json({ id: 1 });
+describe('applyConditionalGet', () => {
+	test('returns 304 when If-None-Match matches', async () => {
+		const etag = etagFromResource({ id: 1, updated_at: '2026-01-01T00:00:00.000Z' });
 
-    const response = applyConditionalGet(request, original, etag);
+		const request = new Request('http://example.test/items/1', {
+			headers: { 'if-none-match': etag },
+		});
 
-    expect(response.status).toBe(304);
-    expect(response.headers.get("etag")).toBe(etag);
-    expect(await response.text()).toBe("");
-  });
+		const original = Response.json({ id: 1 });
 
-  test("adds ETag header to full responses", () => {
-    const etag = etagFromResource({ id: 1, updated_at: "2026-01-01T00:00:00.000Z" });
-    const request = new Request("http://example.test/items/1");
-    const original = Response.json({ id: 1 });
+		const response = applyConditionalGet(request, original, etag);
 
-    const response = applyConditionalGet(request, original, etag);
+		expect(response.status).toBe(304);
+		expect(response.headers.get('etag')).toBe(etag);
+		expect(await response.text()).toBe('');
+	});
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("etag")).toBe(etag);
-  });
+	test('adds ETag header to full responses', () => {
+		const etag = etagFromResource({ id: 1, updated_at: '2026-01-01T00:00:00.000Z' });
+
+		const request = new Request('http://example.test/items/1');
+
+		const original = Response.json({ id: 1 });
+
+		const response = applyConditionalGet(request, original, etag);
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('etag')).toBe(etag);
+	});
 });
 
-test("explicit conditional GET policy bypasses later ambient feature changes", () => {
-  const previous = process.env.FEATURE_ETAG;
-  try {
-    const request = new Request("https://etag.example.test", {
-      headers: { "if-none-match": 'W/"owned"' },
-    });
-    process.env.FEATURE_ETAG = "false";
-    expect(
-      applyConditionalGet(request, Response.json({ id: 1 }), 'W/"owned"', { etagEnabled: true })
-        .status,
-    ).toBe(304);
-    process.env.FEATURE_ETAG = "true";
-    const unchanged = Response.json({ id: 1 });
-    expect(applyConditionalGet(request, unchanged, 'W/"owned"', { etagEnabled: false })).toBe(
-      unchanged,
-    );
-  } finally {
-    if (previous === undefined) delete process.env.FEATURE_ETAG;
-    else process.env.FEATURE_ETAG = previous;
-  }
+test('explicit conditional GET policy bypasses later ambient feature changes', () => {
+	const previous = process.env.FEATURE_ETAG;
+
+	try {
+		const request = new Request('https://etag.example.test', {
+			headers: { 'if-none-match': 'W/"owned"' },
+		});
+
+		process.env.FEATURE_ETAG = 'false';
+		expect(
+			applyConditionalGet(request, Response.json({ id: 1 }), 'W/"owned"', { etagEnabled: true })
+				.status,
+		).toBe(304);
+		process.env.FEATURE_ETAG = 'true';
+		const unchanged = Response.json({ id: 1 });
+
+		expect(applyConditionalGet(request, unchanged, 'W/"owned"', { etagEnabled: false })).toBe(
+			unchanged,
+		);
+	} finally {
+		if (previous === undefined) {
+			delete process.env.FEATURE_ETAG;
+		} else {
+			process.env.FEATURE_ETAG = previous;
+		}
+	}
 });
 
-test("omitted conditional GET policy uses a stable default while entrypoints capture explicit settings", () => {
-  const previous = process.env.FEATURE_ETAG;
-  try {
-    process.env.FEATURE_ETAG = "false";
-    const disabled = Object.freeze({ etagEnabled: isEtagEnabled(process.env.FEATURE_ETAG) });
-    const request = new Request("https://etag.example.test", {
-      headers: { "if-none-match": 'W/"owned"' },
-    });
-    expect(isEtagEnabled()).toBe(true);
-    expect(applyConditionalGet(request, Response.json({ id: 1 }), 'W/"owned"').status).toBe(304);
-    process.env.FEATURE_ETAG = "true";
-    expect(isEtagEnabled()).toBe(true);
-    expect(applyConditionalGet(request, Response.json({ id: 1 }), 'W/"owned"').status).toBe(304);
-    const original = Response.json({ id: 1 });
-    expect(applyConditionalGet(request, original, 'W/"owned"', disabled)).toBe(original);
-    expect(isEtagEnabled("true")).toBe(true);
-    expect(isEtagEnabled("false")).toBe(false);
-  } finally {
-    if (previous === undefined) delete process.env.FEATURE_ETAG;
-    else process.env.FEATURE_ETAG = previous;
-  }
+test('omitted conditional GET policy uses a stable default while entrypoints capture explicit settings', () => {
+	const previous = process.env.FEATURE_ETAG;
+
+	try {
+		process.env.FEATURE_ETAG = 'false';
+		const disabled = Object.freeze({ etagEnabled: isEtagEnabled(process.env.FEATURE_ETAG) });
+
+		const request = new Request('https://etag.example.test', {
+			headers: { 'if-none-match': 'W/"owned"' },
+		});
+
+		expect(isEtagEnabled()).toBe(true);
+		expect(applyConditionalGet(request, Response.json({ id: 1 }), 'W/"owned"').status).toBe(304);
+		process.env.FEATURE_ETAG = 'true';
+		expect(isEtagEnabled()).toBe(true);
+		expect(applyConditionalGet(request, Response.json({ id: 1 }), 'W/"owned"').status).toBe(304);
+		const original = Response.json({ id: 1 });
+
+		expect(applyConditionalGet(request, original, 'W/"owned"', disabled)).toBe(original);
+		expect(isEtagEnabled('true')).toBe(true);
+		expect(isEtagEnabled('false')).toBe(false);
+	} finally {
+		if (previous === undefined) {
+			delete process.env.FEATURE_ETAG;
+		} else {
+			process.env.FEATURE_ETAG = previous;
+		}
+	}
 });

@@ -1,1 +1,1 @@
-export * from "../../../src/bootstrap/dependencies.ts";
+export * from '../../../src/bootstrap/dependencies.ts';

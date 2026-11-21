@@ -1,168 +1,191 @@
 interface MetricLabels {
-  method: string;
-  path: string;
-  status: string;
+	method: string;
+	path: string;
+	status: string;
 }
 
 const HTTP_DURATION_BUCKETS_MS = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000] as const;
 
 type DurationHistogram = {
-  cumulative: number[];
-  sum: number;
-  count: number;
+	cumulative: number[];
+	sum: number;
+	count: number;
 };
 
 function emptyHistogram(): DurationHistogram {
-  return {
-    cumulative: HTTP_DURATION_BUCKETS_MS.map(() => 0),
-    sum: 0,
-    count: 0,
-  };
+	return {
+		cumulative: HTTP_DURATION_BUCKETS_MS.map(() => 0),
+		sum: 0,
+		count: 0,
+	};
 }
 
 class PrometheusRegistry {
-  private readonly seriesLabels = new Map<string, MetricLabels>();
+	private readonly seriesLabels = new Map<string, MetricLabels>();
 
-  constructor(private readonly maxSeries = 4096) {
-    if (!Number.isSafeInteger(maxSeries) || maxSeries < 1) {
-      throw new Error("Metrics maxSeries must be a positive safe integer.");
-    }
-  }
+	constructor(private readonly maxSeries = 4096) {
+		if (!Number.isSafeInteger(maxSeries) || maxSeries < 1) {
+			throw new Error('Metrics maxSeries must be a positive safe integer.');
+		}
+	}
 
-  private readonly httpRequestsTotal = new Map<string, number>();
-  private readonly httpRequestDurationMs = new Map<string, DurationHistogram>();
+	private readonly httpRequestsTotal = new Map<string, number>();
+	private readonly httpRequestDurationMs = new Map<string, DurationHistogram>();
 
-  incrementHttpRequest(labels: MetricLabels): void {
-    const key = this.metricKey(labels);
-    this.httpRequestsTotal.set(key, (this.httpRequestsTotal.get(key) ?? 0) + 1);
-  }
+	incrementHttpRequest(labels: MetricLabels): void {
+		const key = this.metricKey(labels);
 
-  observeHttpDuration(labels: MetricLabels, durationMs: number): void {
-    if (!Number.isFinite(durationMs) || durationMs < 0) return;
-    const key = this.metricKey(labels);
-    const histogram = this.httpRequestDurationMs.get(key) ?? emptyHistogram();
-    histogram.count += 1;
-    histogram.sum += durationMs;
+		this.httpRequestsTotal.set(key, (this.httpRequestsTotal.get(key) ?? 0) + 1);
+	}
 
-    for (let index = 0; index < HTTP_DURATION_BUCKETS_MS.length; index += 1) {
-      const bound = HTTP_DURATION_BUCKETS_MS[index];
-      if (bound !== undefined && durationMs <= bound) {
-        const count = histogram.cumulative[index] ?? 0;
-        histogram.cumulative[index] = count + 1;
-      }
-    }
+	observeHttpDuration(labels: MetricLabels, durationMs: number): void {
+		if (!Number.isFinite(durationMs) || durationMs < 0) {
+			return;
+		}
 
-    this.httpRequestDurationMs.set(key, histogram);
-  }
+		const key = this.metricKey(labels);
 
-  renderMetrics(): string {
-    const lines: string[] = [
-      "# HELP http_requests_total Total HTTP requests processed.",
-      "# TYPE http_requests_total counter",
-    ];
+		const histogram = this.httpRequestDurationMs.get(key) ?? emptyHistogram();
 
-    for (const [key, value] of this.httpRequestsTotal) {
-      lines.push(`http_requests_total{${key}} ${value}`);
-    }
+		histogram.count += 1;
+		histogram.sum += durationMs;
 
-    lines.push(
-      "# HELP http_request_duration_ms HTTP request duration in milliseconds.",
-      "# TYPE http_request_duration_ms histogram",
-    );
+		for (let index = 0; index < HTTP_DURATION_BUCKETS_MS.length; index += 1) {
+			const bound = HTTP_DURATION_BUCKETS_MS[index];
 
-    for (const [key, histogram] of this.httpRequestDurationMs) {
-      for (let index = 0; index < HTTP_DURATION_BUCKETS_MS.length; index += 1) {
-        const bound = HTTP_DURATION_BUCKETS_MS[index];
-        lines.push(
-          `http_request_duration_ms_bucket{${key},le="${bound}"} ${histogram.cumulative[index] ?? 0}`,
-        );
-      }
-      lines.push(`http_request_duration_ms_bucket{${key},le="+Inf"} ${histogram.count}`);
-      lines.push(`http_request_duration_ms_sum{${key}} ${histogram.sum}`);
-      lines.push(`http_request_duration_ms_count{${key}} ${histogram.count}`);
-    }
+			if (bound !== undefined && durationMs <= bound) {
+				const count = histogram.cumulative[index] ?? 0;
 
-    return `${lines.join("\n")}\n`;
-  }
+				histogram.cumulative[index] = count + 1;
+			}
+		}
 
-  resetForTests(): void {
-    this.seriesLabels.clear();
-    this.httpRequestsTotal.clear();
-    this.httpRequestDurationMs.clear();
-  }
+		this.httpRequestDurationMs.set(key, histogram);
+	}
 
-  getHttpRequestSummary(): {
-    totalRequests: number;
-    byStatus: Record<string, number>;
-    topPaths: Array<{ method: string; path: string; count: number }>;
-  } {
-    const byStatus: Record<string, number> = {};
-    const pathCounts = new Map<string, { method: string; path: string; count: number }>();
-    let totalRequests = 0;
+	renderMetrics(): string {
+		const lines: string[] = [
+			'# HELP http_requests_total Total HTTP requests processed.',
+			'# TYPE http_requests_total counter',
+		];
 
-    for (const [key, count] of this.httpRequestsTotal) {
-      totalRequests += count;
+		for (const [key, value] of this.httpRequestsTotal) {
+			lines.push(`http_requests_total{${key}} ${value}`);
+		}
 
-      const labels = this.seriesLabels.get(key);
-      if (!labels) continue;
-      const { method, path, status } = labels;
+		lines.push(
+			'# HELP http_request_duration_ms HTTP request duration in milliseconds.',
+			'# TYPE http_request_duration_ms histogram',
+		);
 
-      byStatus[status] = (byStatus[status] ?? 0) + count;
+		for (const [key, histogram] of this.httpRequestDurationMs) {
+			for (let index = 0; index < HTTP_DURATION_BUCKETS_MS.length; index += 1) {
+				const bound = HTTP_DURATION_BUCKETS_MS[index];
 
-      const pathKey = `${method} ${path}`;
-      const existing = pathCounts.get(pathKey);
+				lines.push(
+					`http_request_duration_ms_bucket{${key},le="${bound}"} ${histogram.cumulative[index] ?? 0}`,
+				);
+			}
 
-      if (existing) {
-        existing.count += count;
-      } else {
-        pathCounts.set(pathKey, { method, path, count });
-      }
-    }
+			lines.push(`http_request_duration_ms_bucket{${key},le="+Inf"} ${histogram.count}`);
+			lines.push(`http_request_duration_ms_sum{${key}} ${histogram.sum}`);
+			lines.push(`http_request_duration_ms_count{${key}} ${histogram.count}`);
+		}
 
-    const topPaths = Array.from(pathCounts.values())
-      .sort((left, right) => right.count - left.count)
-      .slice(0, 10);
+		return `${lines.join('\n')}\n`;
+	}
 
-    return {
-      totalRequests,
-      byStatus,
-      topPaths,
-    };
-  }
+	resetForTests(): void {
+		this.seriesLabels.clear();
+		this.httpRequestsTotal.clear();
+		this.httpRequestDurationMs.clear();
+	}
 
-  /** Storage and scrape work are capped at maxSeries plus one overflow series. */
-  getStorageStats(): { series: number; histograms: number; bucketCounters: number } {
-    return {
-      series: this.seriesLabels.size,
-      histograms: this.httpRequestDurationMs.size,
-      bucketCounters: this.httpRequestDurationMs.size * HTTP_DURATION_BUCKETS_MS.length,
-    };
-  }
+	getHttpRequestSummary(): {
+		totalRequests: number;
+		byStatus: Record<string, number>;
+		topPaths: Array<{ method: string; path: string; count: number }>;
+	} {
+		const byStatus: Record<string, number> = {};
 
-  private metricKey(labels: MetricLabels): string {
-    const normalized = {
-      method: /^(GET|HEAD|POST|PUT|PATCH|DELETE|CONNECT|OPTIONS|TRACE)$/.test(labels.method)
-        ? labels.method
-        : "OTHER",
-      path: labels.path.length <= 512 ? labels.path : "__overflow__",
-      status: /^[1-5][0-9]{2}$/.test(labels.status) ? labels.status : "000",
-    };
-    const escapeLabel = (value: string) =>
-      value.replaceAll("\\", "\\\\").replaceAll("\n", "\\n").replaceAll('"', '\\"');
-    const encode = (value: MetricLabels) =>
-      `method="${value.method}",path="${escapeLabel(value.path)}",status="${value.status}"`;
-    let key = encode(normalized);
-    if (!this.seriesLabels.has(key)) {
-      if (this.seriesLabels.size >= this.maxSeries) {
-        const overflow = { method: "OTHER", path: "__overflow__", status: "000" };
-        key = encode(overflow);
-        this.seriesLabels.set(key, overflow);
-      } else {
-        this.seriesLabels.set(key, normalized);
-      }
-    }
-    return key;
-  }
+		const pathCounts = new Map<string, { method: string; path: string; count: number }>();
+
+		let totalRequests = 0;
+
+		for (const [key, count] of this.httpRequestsTotal) {
+			totalRequests += count;
+
+			const labels = this.seriesLabels.get(key);
+
+			if (!labels) {
+				continue;
+			}
+
+			const { method, path, status } = labels;
+
+			byStatus[status] = (byStatus[status] ?? 0) + count;
+
+			const pathKey = `${method} ${path}`;
+
+			const existing = pathCounts.get(pathKey);
+
+			if (existing) {
+				existing.count += count;
+			} else {
+				pathCounts.set(pathKey, { method, path, count });
+			}
+		}
+
+		const topPaths = Array.from(pathCounts.values())
+			.sort((left, right) => right.count - left.count)
+			.slice(0, 10);
+
+		return {
+			totalRequests,
+			byStatus,
+			topPaths,
+		};
+	}
+
+	/** Storage and scrape work are capped at maxSeries plus one overflow series. */
+	getStorageStats(): { series: number; histograms: number; bucketCounters: number } {
+		return {
+			series: this.seriesLabels.size,
+			histograms: this.httpRequestDurationMs.size,
+			bucketCounters: this.httpRequestDurationMs.size * HTTP_DURATION_BUCKETS_MS.length,
+		};
+	}
+
+	private metricKey(labels: MetricLabels): string {
+		const normalized = {
+			method: /^(GET|HEAD|POST|PUT|PATCH|DELETE|CONNECT|OPTIONS|TRACE)$/.test(labels.method)
+				? labels.method
+				: 'OTHER',
+			path: labels.path.length <= 512 ? labels.path : '__overflow__',
+			status: /^[1-5][0-9]{2}$/.test(labels.status) ? labels.status : '000',
+		};
+
+		const escapeLabel = (value: string) =>
+			value.replaceAll('\\', '\\\\').replaceAll('\n', '\\n').replaceAll('"', '\\"');
+
+		const encode = (value: MetricLabels) =>
+			`method="${value.method}",path="${escapeLabel(value.path)}",status="${value.status}"`;
+
+		let key = encode(normalized);
+
+		if (!this.seriesLabels.has(key)) {
+			if (this.seriesLabels.size >= this.maxSeries) {
+				const overflow = { method: 'OTHER', path: '__overflow__', status: '000' };
+
+				key = encode(overflow);
+				this.seriesLabels.set(key, overflow);
+			} else {
+				this.seriesLabels.set(key, normalized);
+			}
+		}
+
+		return key;
+	}
 }
 
 const prometheusRegistry = new PrometheusRegistry();

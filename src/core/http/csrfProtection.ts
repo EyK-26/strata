@@ -1,29 +1,30 @@
 const DEFAULT_CSRF_TTL_MS = 60 * 60 * 1000;
 
 interface CsrfProtectionOptions {
-  expiresIn?: number;
-  maxAge?: number;
+	expiresIn?: number;
+	maxAge?: number;
 }
 
 function createCsrfProtection(secret: string, options: CsrfProtectionOptions = {}) {
-  const expiresIn = options.expiresIn ?? DEFAULT_CSRF_TTL_MS;
-  const maxAge = options.maxAge ?? expiresIn;
+	const expiresIn = options.expiresIn ?? DEFAULT_CSRF_TTL_MS;
 
-  return {
-    generate(_sessionKey?: string): string {
-      return Bun.CSRF.generate(secret, { expiresIn });
-    },
+	const maxAge = options.maxAge ?? expiresIn;
 
-    verify(token: string | undefined, _sessionKey?: string): boolean {
-      if (!token) {
-        return false;
-      }
+	return {
+		generate(_sessionKey?: string): string {
+			return Bun.CSRF.generate(secret, { expiresIn });
+		},
 
-      return Bun.CSRF.verify(token, { secret, maxAge });
-    },
+		verify(token: string | undefined, _sessionKey?: string): boolean {
+			if (!token) {
+				return false;
+			}
 
-    secret,
-  };
+			return Bun.CSRF.verify(token, { secret, maxAge });
+		},
+
+		secret,
+	};
 }
 
 export type { CsrfProtectionOptions };

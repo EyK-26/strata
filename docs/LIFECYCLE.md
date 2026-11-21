@@ -8,18 +8,23 @@ Stopping closes root admission and cancels startup and unfinished execution init
 
 ```ts
 import {
-  LifecycleCoordinator,
-  installGracefulShutdownSignals,
-} from "@getstrata/core/lifecycle/gracefulShutdown";
-import { createAppServer } from "./createApp.ts";
+	installGracefulShutdownSignals,
+	LifecycleCoordinator,
+} from '@getstrata/core/lifecycle/gracefulShutdown';
+
+import { createAppServer } from './createApp.ts';
 
 // In the generated src/bootstrap directory: HTTP is declared before startup.
 const app = await createAppServer();
 const lifecycle = new LifecycleCoordinator();
-lifecycle.register("application", async ({ reason }) => {
-  const result = await app.application.stop({ reason });
-  if (!result.successful) throw new Error("Application shutdown is incomplete.");
-}, "stop");
+lifecycle.register(
+	'application',
+	async ({ reason }) => {
+		const result = await app.application.stop({ reason });
+		if (!result.successful) throw new Error('Application shutdown is incomplete.');
+	},
+	'stop',
+);
 const uninstall = installGracefulShutdownSignals(undefined, lifecycle);
 // In tests or embedding: await lifecycle.shutdown("MANUAL"); uninstall();
 ```

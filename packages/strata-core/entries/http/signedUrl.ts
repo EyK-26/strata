@@ -1,1 +1,1 @@
-export * from "../../../../src/core/http/signedUrl.ts";
+export * from '../../../../src/core/http/signedUrl.ts';

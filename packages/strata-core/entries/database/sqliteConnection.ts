@@ -1,1 +1,1 @@
-export * from "../../../../src/core/database/sqliteConnection.ts";
+export * from '../../../../src/core/database/sqliteConnection.ts';

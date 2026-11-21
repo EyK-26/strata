@@ -19,15 +19,15 @@ Successful handling (or a successfully persisted terminal `failed_job` record) p
 Delivery is **at least once**. A process can complete an external effect and die before acknowledgement; handlers must make business effects idempotent. An optional second handler argument exposes the transport identity and cooperative ownership-loss signal:
 
 ```ts
-import { Job, type JobContext } from "@getstrata/core/queue";
+import { Job, type JobContext } from '@getstrata/core/queue';
 
 class Deliver extends Job<{ businessId: string }> {
-  static override jobName = "application.deliver";
-  async handle(payload: { businessId: string }, context?: JobContext) {
-    context?.signal.throwIfAborted();
-    // Use payload.businessId for durable business deduplication.
-    // Pass context?.signal to supported cancellable I/O.
-  }
+	static override jobName = 'application.deliver';
+	async handle(payload: { businessId: string }, context?: JobContext) {
+		context?.signal.throwIfAborted();
+		// Use payload.businessId for durable business deduplication.
+		// Pass context?.signal to supported cancellable I/O.
+	}
 }
 ```
 
@@ -44,21 +44,21 @@ A crash during handler execution still replays the admitted attempt. Terminal SQ
 The Streams queue has an explicit typed admission API that returns the stable logical ID:
 
 ```ts
-import { RedisStreamsQueue } from "@getstrata/core/queue/redisQueue";
-import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { JobRegistry } from '@getstrata/core/queue/jobRegistry';
+import { RedisStreamsQueue } from '@getstrata/core/queue/redisQueue';
 // Deliver is the job class declared above.
 const redisUrl = process.env.REDIS_URL;
-if (!redisUrl) throw new Error("REDIS_URL is required");
+if (!redisUrl) throw new Error('REDIS_URL is required');
 const registry = new JobRegistry();
 registry.register(Deliver.jobName, () => new Deliver());
 const deliverJob = new Deliver();
-const payload = { businessId: "delivery-123" };
+const payload = { businessId: 'delivery-123' };
 const queue = new RedisStreamsQueue(redisUrl, registry);
 try {
-  const jobId = await queue.enqueue(deliverJob, payload, { timeoutMs: 120_000 });
-  // Store jobId with application-owned tracking if needed.
+	const jobId = await queue.enqueue(deliverJob, payload, { timeoutMs: 120_000 });
+	// Store jobId with application-owned tracking if needed.
 } finally {
-  queue.close();
+	queue.close();
 }
 ```
 
@@ -78,8 +78,8 @@ Opt in when admitting through the explicitly selected `RedisStreamsQueue`:
 
 ```ts
 const jobId = await queue.enqueue(deliverJob, payload, {
-  cancellable: true,
-  timeoutMs: 120_000, // Optional; cancellation does not require a deadline.
+	cancellable: true,
+	timeoutMs: 120_000, // Optional; cancellation does not require a deadline.
 });
 // After application authorization verifies ownership of this tracked job:
 const accepted = await queue.cancel(jobId);
@@ -100,21 +100,25 @@ Drain older Streams workers before admitting cancellable jobs: older versions ig
 **Before upgrading runtime/CLI packages, add nullable `failed_job.job_id` to every existing application's SQL schema, even if its queue is local or list-based.** New generated schemas include this column; existing applications need a new file migration using the published Schema API:
 
 ```ts
-import { currentSqlDialect } from "@getstrata/core/database/dialect";
-import { Schema } from "@getstrata/core/database/schema";
-import type { Migration } from "@getstrata/core/database/migrations/types";
+import { currentSqlDialect } from '@getstrata/core/database/dialect';
+import type { Migration } from '@getstrata/core/database/migrations/types';
+import { Schema } from '@getstrata/core/database/schema';
 const migration: Migration = {
-  name: "add_failed_job_identity", // Use your application's next migration filename/name.
-  async up(db) {
-    await Schema.run(db, currentSqlDialect().driver, schema => {
-      schema.table("failed_job", table => { table.text("job_id").nullable(); });
-    });
-  },
-  async down(db) {
-    await Schema.run(db, currentSqlDialect().driver, schema => {
-      schema.table("failed_job", table => { table.dropColumn("job_id"); });
-    });
-  },
+	name: 'add_failed_job_identity', // Use your application's next migration filename/name.
+	async up(db) {
+		await Schema.run(db, currentSqlDialect().driver, (schema) => {
+			schema.table('failed_job', (table) => {
+				table.text('job_id').nullable();
+			});
+		});
+	},
+	async down(db) {
+		await Schema.run(db, currentSqlDialect().driver, (schema) => {
+			schema.table('failed_job', (table) => {
+				table.dropColumn('job_id');
+			});
+		});
+	},
 };
 export default migration;
 ```
@@ -134,22 +138,22 @@ Do not mix list and Streams producers or workers. Upgrade binaries first with `Q
 3. Run bounded conversion batches through the published API. The `maintenance: true` argument is an operator assertion that all producers/workers are stopped; it cannot enforce distributed maintenance by itself.
 
 ```ts
-import { RedisClient } from "bun";
 import {
-  migrateLegacyQueueToStreams,
-  reclaimExpiredQueueReservations,
-} from "@getstrata/core/queue/redisQueue";
+	migrateLegacyQueueToStreams,
+	reclaimExpiredQueueReservations,
+} from '@getstrata/core/queue/redisQueue';
+import { RedisClient } from 'bun';
 
 const redisUrl = process.env.REDIS_URL;
-if (!redisUrl) throw new Error("REDIS_URL is required");
+if (!redisUrl) throw new Error('REDIS_URL is required');
 const client = new RedisClient(redisUrl);
 try {
-  await reclaimExpiredQueueReservations(client);
-  while (await migrateLegacyQueueToStreams(client, { maintenance: true, batchSize: 100 })) {
-    // Each call moves at most 100 entries per priority.
-  }
+	await reclaimExpiredQueueReservations(client);
+	while (await migrateLegacyQueueToStreams(client, { maintenance: true, batchSize: 100 })) {
+		// Each call moves at most 100 entries per priority.
+	}
 } finally {
-  client.close();
+	client.close();
 }
 ```
 
@@ -159,7 +163,6 @@ Conversion validates Redis types and copies each FIFO entry into its priority St
 5. Validate all three priorities, SQL failure recording, and worker recovery in the target environment before restoring admission. Do not switch back to `lists` while Streams contains unacknowledged entries; drain/reconcile Streams first. No automatic backwards conversion is provided.
 
 No shop-only worker, signer, delivery insert, or queue format is required. Handlers retain the published `Job` contract; commerce event selection and idempotent effects stay in the application.
-
 
 ## Operational observations
 

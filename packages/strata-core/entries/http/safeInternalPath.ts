@@ -1,1 +1,1 @@
-export * from "../../../../src/core/http/safeInternalPath.ts";
+export * from '../../../../src/core/http/safeInternalPath.ts';

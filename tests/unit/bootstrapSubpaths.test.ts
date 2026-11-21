@@ -1,100 +1,106 @@
-import { describe, expect, test } from "bun:test";
-import { access, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { describe, expect, test } from 'bun:test';
+import { access, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
-const BOOTSTRAP_DIST = join(process.cwd(), "packages/strata-bootstrap/dist");
+const BOOTSTRAP_DIST = join(process.cwd(), 'packages/strata-bootstrap/dist');
 
-describe("@getstrata/bootstrap published subpaths", () => {
-  test("web/routing exports route helpers", async () => {
-    const routing = await import(join(BOOTSTRAP_DIST, "entries/web/routing.js"));
+describe('@getstrata/bootstrap published subpaths', () => {
+	test('web/routing exports route helpers', async () => {
+		const routing = await import(join(BOOTSTRAP_DIST, 'entries/web/routing.js'));
 
-    expect(typeof routing.routeParams).toBe("function");
-    expect(typeof routing.createRouteKernel).toBe("function");
-    expect(typeof routing.wrapSecuredRouteModelByKey).toBe("function");
-  });
+		expect(typeof routing.routeParams).toBe('function');
+		expect(typeof routing.createRouteKernel).toBe('function');
+		expect(typeof routing.wrapSecuredRouteModelByKey).toBe('function');
+	});
 
-  test("web/forms exports parseFormBody", async () => {
-    const forms = await import(join(BOOTSTRAP_DIST, "entries/web/forms.js"));
+	test('web/forms exports parseFormBody', async () => {
+		const forms = await import(join(BOOTSTRAP_DIST, 'entries/web/forms.js'));
 
-    expect(typeof forms.parseFormBody).toBe("function");
-  });
+		expect(typeof forms.parseFormBody).toBe('function');
+	});
 
-  test("cache/modelCacheTags exports tag helpers", async () => {
-    const tags = await import(join(BOOTSTRAP_DIST, "entries/cache/modelCacheTags.js"));
+	test('cache/modelCacheTags exports tag helpers', async () => {
+		const tags = await import(join(BOOTSTRAP_DIST, 'entries/cache/modelCacheTags.js'));
 
-    expect(typeof tags.cacheTagsForModelWrite).toBe("function");
-    expect(typeof tags.discoverModelTableNames).toBe("function");
-  });
+		expect(typeof tags.cacheTagsForModelWrite).toBe('function');
+		expect(typeof tags.discoverModelTableNames).toBe('function');
+	});
 
-  test("routePlan retrieves immutable owned metadata across separately bundled entries", async () => {
-    const plan = await import(join(BOOTSTRAP_DIST, "entries/routePlan.js"));
-    const spa = await import(join(BOOTSTRAP_DIST, "entries/createSpaRoutes.js"));
-    const routes = spa.createSpaRoutes({}, { prefix: "/isolated-plan", distDirectory: "/missing" });
-    const inventory = plan.getRouteInventory(routes);
-    expect(inventory.some((route: { path: string }) => route.path === "/isolated-plan")).toBe(true);
-    const composed = plan.composeRouteMaps(routes, {
-      "/unrelated": { POST: () => new Response() },
-    });
-    expect(plan.getRouteInventory(composed)).toHaveLength(inventory.length + 1);
-    expect(plan.getRouteInventory(routes)).toBe(inventory);
-    expect(Object.isFrozen(inventory)).toBe(true);
-    expect(Object.keys(routes)).not.toContain("inventory");
-  });
+	test('routePlan retrieves immutable owned metadata across separately bundled entries', async () => {
+		const plan = await import(join(BOOTSTRAP_DIST, 'entries/routePlan.js'));
 
-  test("dependencies exports createAppDependencies", async () => {
-    const dependencies = await import(join(BOOTSTRAP_DIST, "entries/dependencies.js"));
+		const spa = await import(join(BOOTSTRAP_DIST, 'entries/createSpaRoutes.js'));
 
-    expect(typeof dependencies.createAppDependencies).toBe("function");
-    expect(typeof dependencies.createAppContext).toBe("function");
-  });
+		const routes = spa.createSpaRoutes({}, { prefix: '/isolated-plan', distDirectory: '/missing' });
 
-  test("secretsGuard exports assertProductionSecrets without app domain or config", async () => {
-    const secretsGuard = await import(join(BOOTSTRAP_DIST, "entries/secretsGuard.js"));
-    const source = await readFile(join(BOOTSTRAP_DIST, "entries/secretsGuard.js"), "utf8");
+		const inventory = plan.getRouteInventory(routes);
 
-    expect(typeof secretsGuard.assertProductionSecrets).toBe("function");
-    expect(source).not.toContain("src/domain");
-    expect(source).not.toContain("src/config");
-  });
+		expect(inventory.some((route: { path: string }) => route.path === '/isolated-plan')).toBe(true);
+		const composed = plan.composeRouteMaps(routes, {
+			'/unrelated': { POST: () => new Response() },
+		});
 
-  test("discoverModules exports discovery helpers", async () => {
-    const discover = await import(join(BOOTSTRAP_DIST, "entries/discoverModules.js"));
+		expect(plan.getRouteInventory(composed)).toHaveLength(inventory.length + 1);
+		expect(plan.getRouteInventory(routes)).toBe(inventory);
+		expect(Object.isFrozen(inventory)).toBe(true);
+		expect(Object.keys(routes)).not.toContain('inventory');
+	});
 
-    expect(typeof discover.createModuleDiscovery).toBe("function");
-    expect(typeof discover.ensureModulesLoaded).toBe("function");
-    expect("discoverModules" in discover).toBe(false);
-    expect("configureModulesDirectory" in discover).toBe(false);
-  });
+	test('dependencies exports createAppDependencies', async () => {
+		const dependencies = await import(join(BOOTSTRAP_DIST, 'entries/dependencies.js'));
 
-  test("discoverListeners exports listener registrars", async () => {
-    const listeners = await import(join(BOOTSTRAP_DIST, "entries/discoverListeners.js"));
+		expect(typeof dependencies.createAppDependencies).toBe('function');
+		expect(typeof dependencies.createAppContext).toBe('function');
+	});
 
-    expect(typeof listeners.discoverListeners).toBe("function");
-  });
+	test('secretsGuard exports assertProductionSecrets without app domain or config', async () => {
+		const secretsGuard = await import(join(BOOTSTRAP_DIST, 'entries/secretsGuard.js'));
 
-  test("discoverJobs exports job discovery", async () => {
-    const jobs = await import(join(BOOTSTRAP_DIST, "entries/discoverJobs.js"));
+		const source = await readFile(join(BOOTSTRAP_DIST, 'entries/secretsGuard.js'), 'utf8');
 
-    expect(typeof jobs.discoverJobs).toBe("function");
-  });
+		expect(typeof secretsGuard.assertProductionSecrets).toBe('function');
+		expect(source).not.toContain('src/domain');
+		expect(source).not.toContain('src/config');
+	});
 
-  test("buildModuleRoutes exports module route builder", async () => {
-    const routes = await import(join(BOOTSTRAP_DIST, "entries/buildModuleRoutes.js"));
+	test('discoverModules exports discovery helpers', async () => {
+		const discover = await import(join(BOOTSTRAP_DIST, 'entries/discoverModules.js'));
 
-    expect(typeof routes.buildModuleRoutes).toBe("function");
-  });
+		expect(typeof discover.createModuleDiscovery).toBe('function');
+		expect(typeof discover.ensureModulesLoaded).toBe('function');
+		expect('discoverModules' in discover).toBe(false);
+		expect('configureModulesDirectory' in discover).toBe(false);
+	});
 
-  test("buildWebModuleRoutes exports web module route builder", async () => {
-    const routes = await import(join(BOOTSTRAP_DIST, "entries/buildWebModuleRoutes.js"));
+	test('discoverListeners exports listener registrars', async () => {
+		const listeners = await import(join(BOOTSTRAP_DIST, 'entries/discoverListeners.js'));
 
-    expect(typeof routes.buildWebModuleRoutes).toBe("function");
-  });
+		expect(typeof listeners.discoverListeners).toBe('function');
+	});
 
-  test("contracts types re-export @getstrata/core without duplicating container classes", async () => {
-    const contractsTypes = await readFile(join(BOOTSTRAP_DIST, "bootstrap/contracts.d.ts"), "utf8");
+	test('discoverJobs exports job discovery', async () => {
+		const jobs = await import(join(BOOTSTRAP_DIST, 'entries/discoverJobs.js'));
 
-    expect(contractsTypes).toContain("@getstrata/core/contracts/container");
-    expect(contractsTypes).toContain("@getstrata/core/contracts/di");
-    await expect(access(join(BOOTSTRAP_DIST, "core"))).rejects.toThrow();
-  });
+		expect(typeof jobs.discoverJobs).toBe('function');
+	});
+
+	test('buildModuleRoutes exports module route builder', async () => {
+		const routes = await import(join(BOOTSTRAP_DIST, 'entries/buildModuleRoutes.js'));
+
+		expect(typeof routes.buildModuleRoutes).toBe('function');
+	});
+
+	test('buildWebModuleRoutes exports web module route builder', async () => {
+		const routes = await import(join(BOOTSTRAP_DIST, 'entries/buildWebModuleRoutes.js'));
+
+		expect(typeof routes.buildWebModuleRoutes).toBe('function');
+	});
+
+	test('contracts types re-export @getstrata/core without duplicating container classes', async () => {
+		const contractsTypes = await readFile(join(BOOTSTRAP_DIST, 'bootstrap/contracts.d.ts'), 'utf8');
+
+		expect(contractsTypes).toContain('@getstrata/core/contracts/container');
+		expect(contractsTypes).toContain('@getstrata/core/contracts/di');
+		await expect(access(join(BOOTSTRAP_DIST, 'core'))).rejects.toThrow();
+	});
 });

@@ -1,114 +1,133 @@
-import { access } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
-import { pathToFileURL } from "node:url";
-import { renderModuleScaffold } from "./renderModule";
-import { scaffoldArguments, writeScaffoldFile } from "./scaffoldFile";
+import { access } from 'node:fs/promises';
+import { join, relative, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+import { renderModuleScaffold } from './renderModule';
+import { scaffoldArguments, writeScaffoldFile } from './scaffoldFile';
 import {
-  moduleDirectory,
-  toCamelCase,
-  toKebabCase,
-  toPascalCase,
-  webViewsDirectory,
-} from "./utils";
+	moduleDirectory,
+	toCamelCase,
+	toKebabCase,
+	toPascalCase,
+	webViewsDirectory,
+} from './utils';
 
 async function makeModuleCommand(...args: string[]): Promise<void> {
-  const parsed = scaffoldArguments("make:module", args, ["--with-web"]);
-  if (!parsed) return;
-  const withWeb = args.includes("--with-web");
-  const [name] = parsed;
+	const parsed = scaffoldArguments('make:module', args, ['--with-web']);
 
-  if (!name) {
-    throw new Error("make:module requires a name.");
-  }
+	if (!parsed) {
+		return;
+	}
 
-  const moduleSlug = toKebabCase(name);
-  const moduleName = toPascalCase(name);
-  const moduleIdentifier = toCamelCase(name);
+	const withWeb = args.includes('--with-web');
 
-  if (!moduleName || !moduleIdentifier || !moduleSlug) {
-    throw new Error("make:module requires a valid module name.");
-  }
+	const [name] = parsed;
 
-  // Inspect the generated app's inert choices without importing its bootstrap graph.
-  const choicesPath = join(process.cwd(), "src", "config", "app.ts");
-  if (await Bun.file(choicesPath).exists()) {
-    const { default: choices } = (await import(pathToFileURL(choicesPath).href)) as {
-      default?: { views?: boolean; tenancy?: string };
-    };
-    if (withWeb && choices?.views === false)
-      throw new Error(
-        "make:module --with-web requires a configured server view renderer. This app disabled views; use make:module without --with-web or configure views first.",
-      );
-    if (choices?.tenancy === "column" || choices?.tenancy === "rls")
-      throw new Error(
-        `make:module CRUD does not implement ${choices.tenancy} tenancy. Use make:model, make:controller and make:request to implement trusted tenant scoping and schema explicitly.`,
-      );
-  }
+	if (!name) {
+		throw new Error('make:module requires a name.');
+	}
 
-  const directory = await moduleDirectory(moduleSlug);
+	const moduleSlug = toKebabCase(name);
 
-  try {
-    await access(directory);
-    throw new Error(`Module already exists: ${directory}`);
-  } catch (error) {
-    if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") {
-      if (error instanceof Error && error.message.startsWith("Module already exists:")) {
-        throw error;
-      }
-      throw error;
-    }
-  }
+	const moduleName = toPascalCase(name);
 
-  const { files, webFiles, viewFiles, pluralSlug } = renderModuleScaffold({
-    moduleSlug,
-    moduleName,
-    moduleIdentifier,
-    withWeb,
-  });
+	const moduleIdentifier = toCamelCase(name);
 
-  for (const [fileName, content] of files) {
-    await writeScaffoldFile(
-      relative(process.cwd(), join(directory, fileName)).split(sep),
-      content,
-      "Module file",
-    );
-  }
+	if (!moduleName || !moduleIdentifier || !moduleSlug) {
+		throw new Error('make:module requires a valid module name.');
+	}
 
-  let createdViewsDirectory: string | undefined;
+	// Inspect the generated app's inert choices without importing its bootstrap graph.
+	const choicesPath = join(process.cwd(), 'src', 'config', 'app.ts');
 
-  if (withWeb) {
-    const viewsDirectory = webViewsDirectory(pluralSlug);
-    createdViewsDirectory = viewsDirectory;
-    for (const [fileName, content] of viewFiles) {
-      await writeScaffoldFile(
-        relative(process.cwd(), join(viewsDirectory, fileName)).split(sep),
-        content,
-        "Module view",
-      );
-    }
-    for (const [fileName, content] of webFiles) {
-      await writeScaffoldFile(
-        relative(process.cwd(), join(directory, fileName)).split(sep),
-        content,
-        "Module file",
-      );
-    }
-  }
+	if (await Bun.file(choicesPath).exists()) {
+		const { default: choices } = (await import(pathToFileURL(choicesPath).href)) as {
+			default?: { views?: boolean; tenancy?: string };
+		};
 
-  console.log(`Created module scaffold in: ${directory}`);
-  if (createdViewsDirectory) {
-    const relativeViews = createdViewsDirectory.startsWith(process.cwd())
-      ? createdViewsDirectory.slice(process.cwd().length + 1)
-      : createdViewsDirectory;
-    console.log(`Created web view scaffold in: ${relativeViews}/`);
-    console.log(`API routes use API_PREFIX (default /api/v1); HTML collection: /${pluralSlug}`);
-  }
-  console.log(`Module will be auto-discovered from the app modules directory (${moduleSlug}/)`);
-  console.log(`Next: strata make:migration create_${moduleSlug} && strata migrate`);
+		if (withWeb && choices?.views === false) {
+			throw new Error(
+				'make:module --with-web requires a configured server view renderer. This app disabled views; use make:module without --with-web or configure views first.',
+			);
+		}
 
-  console.log(
-    "Add the generated model class to src/models/register.ts modelDefinitions (passed to defineApp({ models })).",
-  );
+		if (choices?.tenancy === 'column' || choices?.tenancy === 'rls') {
+			throw new Error(
+				`make:module CRUD does not implement ${choices.tenancy} tenancy. Use make:model, make:controller and make:request to implement trusted tenant scoping and schema explicitly.`,
+			);
+		}
+	}
+
+	const directory = await moduleDirectory(moduleSlug);
+
+	try {
+		await access(directory);
+		throw new Error(`Module already exists: ${directory}`);
+	} catch (error) {
+		if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') {
+			if (error instanceof Error && error.message.startsWith('Module already exists:')) {
+				throw error;
+			}
+
+			throw error;
+		}
+	}
+
+	const { files, webFiles, viewFiles, pluralSlug } = renderModuleScaffold({
+		moduleSlug,
+		moduleName,
+		moduleIdentifier,
+		withWeb,
+	});
+
+	for (const [fileName, content] of files) {
+		await writeScaffoldFile(
+			relative(process.cwd(), join(directory, fileName)).split(sep),
+			content,
+			'Module file',
+		);
+	}
+
+	let createdViewsDirectory: string | undefined;
+
+	if (withWeb) {
+		const viewsDirectory = webViewsDirectory(pluralSlug);
+
+		createdViewsDirectory = viewsDirectory;
+		for (const [fileName, content] of viewFiles) {
+			await writeScaffoldFile(
+				relative(process.cwd(), join(viewsDirectory, fileName)).split(sep),
+				content,
+				'Module view',
+			);
+		}
+
+		for (const [fileName, content] of webFiles) {
+			await writeScaffoldFile(
+				relative(process.cwd(), join(directory, fileName)).split(sep),
+				content,
+				'Module file',
+			);
+		}
+	}
+
+	console.log(`Created module scaffold in: ${directory}`);
+
+	if (createdViewsDirectory) {
+		const relativeViews = createdViewsDirectory.startsWith(process.cwd())
+			? createdViewsDirectory.slice(process.cwd().length + 1)
+			: createdViewsDirectory;
+
+		console.log(`Created web view scaffold in: ${relativeViews}/`);
+		console.log(`API routes use API_PREFIX (default /api/v1); HTML collection: /${pluralSlug}`);
+	}
+
+	console.log(`Module will be auto-discovered from the app modules directory (${moduleSlug}/)`);
+	console.log(`Next: strata make:migration create_${moduleSlug} && strata migrate`);
+
+	console.log(
+		'Add the generated model class to src/models/register.ts modelDefinitions (passed to defineApp({ models })).',
+	);
 }
 
 export { makeModuleCommand };

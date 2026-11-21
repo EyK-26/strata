@@ -1,117 +1,134 @@
-import { GENERATED_POSTGRES_APP_ROLE, usesComposePostgres } from "./databaseDefaults.ts";
-import type { StarterFeaturePlan } from "./featurePlan.ts";
-import { renderDockerCompose } from "./renderDocker.ts";
-import { renderSupportingToolsReadme } from "./renderSupportingTools.ts";
-import type { GenerateOptions } from "./types.ts";
+import { GENERATED_POSTGRES_APP_ROLE, usesComposePostgres } from './databaseDefaults.ts';
+import type { StarterFeaturePlan } from './featurePlan.ts';
+import { renderDockerCompose } from './renderDocker.ts';
+import { renderSupportingToolsReadme } from './renderSupportingTools.ts';
+import type { GenerateOptions } from './types.ts';
 
 /**
  * Written per layer so it can only list routes this app actually serves.
  * A static template drifts the moment the auth stack changes.
  */
 function renderApiDocs(projectName: string, plan: StarterFeaturePlan): string {
-  const layers = plan.layers;
-  const rows = ["| Method | Path | Notes |", "| --- | --- | --- |"];
-  rows.push(
-    "| `GET` | `/health` | Plain text `ok` (200) when configured database/Redis checks succeed and the starter schema migration is recorded in `framework_migrations`. This infrastructure probe runs outside API auth/tenancy admission, never selects a tenant or bypasses RLS, and returns no rows. `degraded` (503) when a dependency or schema check fails. Docker HEALTHCHECK uses this path. |",
-    '| `GET` | `/ready` | JSON from the framework: `{"status":"ready","checks":{"database":"ok","redis":"skipped"}}` (200) or `not_ready` (503). `redis` is `ok` or `error` when `REDIS_URL` is set and `skipped` otherwise. It does not check the schema, so use `/health` as the deploy gate. |',
-  );
+	const layers = plan.layers;
 
-  if (plan.decisions.token) {
-    rows.push(
-      "| `POST` | `/api/v1/auth/login` | `{ email, password }` returns `{ token }`. Requires `GET /api/v1/auth/csrf` then `X-CSRF-Token`. |",
-      "| `GET` | `/api/v1/auth/me` | Requires `Authorization: Bearer <token>`. |",
-    );
-  }
-  if (plan.decisions.jwt) {
-    rows.push(
-      "| `POST` | `/api/auth/token` | Mints a short-lived JWT. Not an HTML session. Requires CSRF like JSON login. |",
-    );
-  }
-  if (plan.decisions.users) {
-    rows.push(
-      "| `POST` | `/api/v1/auth/register` | Returns neutral `{ ok: true }` (201); sign in separately. |",
-      "| `POST` | `/api/v1/auth/forgot-password` | Sends a signed reset link through the mail driver. |",
-      "| `POST` | `/api/v1/auth/reset-password` | Consumes the signed link. |",
-      ...(plan.decisions.bearerApi
-        ? ["| `GET` | `/api/user` | Current user for the active guard. |"]
-        : []),
-    );
-  }
-  if (plan.decisions.users) {
-    rows.push(
-      "| `GET` | `/api/v1/auth/csrf` | Issues the CSRF cookie and JSON token for unauthenticated writes. |",
-    );
-  }
-  if (plan.decisions.cookie) {
-    if (!plan.decisions.token)
-      rows.push(
-        "| `POST` | `/api/v1/auth/login` | `{ email, password }` sets the session cookie and returns `{ ok: true }`. Requires CSRF. |",
-        "| `GET` | `/api/v1/auth/me` | Current user from the session cookie. |",
-      );
-  }
-  if (plan.decisions.emailVerification) {
-    rows.push(
-      "| `POST` | `/api/v1/auth/verify-email` | Consumes the signed verification token; requires CSRF. |",
-    );
-  }
-  if (plan.decisions.cookieVerification)
-    rows.push(
-      "| `POST` | `/api/v1/auth/verification-notification` | Authenticated owner resend; verification is not required. Requires CSRF. |",
-    );
-  if (plan.decisions.pendingMfa)
-    rows.push(
-      "| `POST` | `/api/v1/auth/confirm-password` | Verify the current password and set an epoch-bound confirmation cookie. Requires verified session and CSRF. |",
-      "| `GET` | `/api/v1/auth/mfa` | Returns a fresh proposed `{ secret, otpauth }`; requires verified session. Does not enable MFA. |",
-      "| `POST` | `/api/v1/auth/mfa` | `{ secret, code }` enables MFA and returns `{ recoveryCodes }` once. Requires verified session, password confirmation and CSRF; revokes prior credentials. Login again with `mfa_code`. |",
-    );
-  if (layers.extras.metrics) {
-    rows.push(
-      "| `GET` | `/metrics` | Prometheus text. Production requires `Authorization: Bearer <METRICS_TOKEN>`. |",
-    );
-  }
-  if (layers.extras.billing) {
-    rows.push(
-      "| `POST` | `/billing/webhooks/stripe` | Stripe signature verification. CSRF skipped by path. Plan sync is yours. |",
-      "| `GET` | `/api/v1/billing/subscription` | Current tenant (or first) subscription row. |",
-    );
-  }
-  if (layers.extras.webhooks) {
-    rows.push(
-      "| (job) | `webhook.dispatch` | Discovered from `src/jobs/dispatchOutboundWebhookJob.ts`. No HTTP route. |",
-    );
-  }
-  if (plan.decisions.github) {
-    rows.push(
-      "| `GET` | `/auth/github` | Redirects to GitHub. 404 unless `FEATURE_OAUTH=true`. |",
-      "| `GET` | `/auth/github/callback` | Exchanges the code, JIT user, MFA gate, cookie session. |",
-    );
-  }
-  if (plan.decisions.oidc) {
-    rows.push(
-      "| `GET` | `/auth/oidc` | OIDC `createAuthorization()` plus `oidc_pkce` cookie. 404 unless `FEATURE_OAUTH=true`. |",
-      "| `GET` | `/auth/oidc/callback` | Reads PKCE, exchanges the code, JIT user, MFA gate, cookie session. |",
-    );
-  }
+	const rows = ['| Method | Path | Notes |', '| --- | --- | --- |'];
 
-  const authNote = !plan.decisions.users
-    ? `Auth is \`headers\`. Send \`x-authenticated-user-id\` (and optional \`x-authenticated-user-role\`) for local work and tests. There are no login endpoints and no \`users\` table. Production must set \`AUTH_DEV_HEADERS=false\`, which turns those headers off and leaves you without a guard, so pick another auth layer before you ship.`
-    : plan.decisions.token
-      ? `Sign in with \`GET /api/v1/auth/csrf\` then \`POST /api/v1/auth/login\` (send \`X-CSRF-Token\`), then send \`Authorization: Bearer <token>\` on every request. Tokens are stored hashed in \`api_tokens\` and expire after \`API_TOKEN_DEFAULT_EXPIRY_DAYS\` (30 in \`.env.example\`). The response includes \`expires_at\`.`
-      : plan.decisions.cookie
-        ? `Sign in with \`GET /api/v1/auth/csrf\` then \`POST /api/v1/auth/login\`; preserve the session and CSRF cookies. The response sets a cookie and returns \`{ ok: true }\`. API mode does not serve HTML login or registration forms.`
-        : `Mint a JWT with \`POST /api/auth/token\`, then send \`Authorization: Bearer <jwt>\`. JWTs expire; re-mint rather than refreshing in place.`;
+	rows.push(
+		'| `GET` | `/health` | Plain text `ok` (200) when configured database/Redis checks succeed and the starter schema migration is recorded in `framework_migrations`. This infrastructure probe runs outside API auth/tenancy admission, never selects a tenant or bypasses RLS, and returns no rows. `degraded` (503) when a dependency or schema check fails. Docker HEALTHCHECK uses this path. |',
+		'| `GET` | `/ready` | JSON from the framework: `{"status":"ready","checks":{"database":"ok","redis":"skipped"}}` (200) or `not_ready` (503). `redis` is `ok` or `error` when `REDIS_URL` is set and `skipped` otherwise. It does not check the schema, so use `/health` as the deploy gate. |',
+	);
 
-  return `# ${projectName} API
+	if (plan.decisions.token) {
+		rows.push(
+			'| `POST` | `/api/v1/auth/login` | `{ email, password }` returns `{ token }`. Requires `GET /api/v1/auth/csrf` then `X-CSRF-Token`. |',
+			'| `GET` | `/api/v1/auth/me` | Requires `Authorization: Bearer <token>`. |',
+		);
+	}
+
+	if (plan.decisions.jwt) {
+		rows.push(
+			'| `POST` | `/api/auth/token` | Mints a short-lived JWT. Not an HTML session. Requires CSRF like JSON login. |',
+		);
+	}
+
+	if (plan.decisions.users) {
+		rows.push(
+			'| `POST` | `/api/v1/auth/register` | Returns neutral `{ ok: true }` (201); sign in separately. |',
+			'| `POST` | `/api/v1/auth/forgot-password` | Sends a signed reset link through the mail driver. |',
+			'| `POST` | `/api/v1/auth/reset-password` | Consumes the signed link. |',
+			...(plan.decisions.bearerApi
+				? ['| `GET` | `/api/user` | Current user for the active guard. |']
+				: []),
+		);
+	}
+
+	if (plan.decisions.users) {
+		rows.push(
+			'| `GET` | `/api/v1/auth/csrf` | Issues the CSRF cookie and JSON token for unauthenticated writes. |',
+		);
+	}
+
+	if (plan.decisions.cookie) {
+		if (!plan.decisions.token) {
+			rows.push(
+				'| `POST` | `/api/v1/auth/login` | `{ email, password }` sets the session cookie and returns `{ ok: true }`. Requires CSRF. |',
+				'| `GET` | `/api/v1/auth/me` | Current user from the session cookie. |',
+			);
+		}
+	}
+
+	if (plan.decisions.emailVerification) {
+		rows.push(
+			'| `POST` | `/api/v1/auth/verify-email` | Consumes the signed verification token; requires CSRF. |',
+		);
+	}
+
+	if (plan.decisions.cookieVerification) {
+		rows.push(
+			'| `POST` | `/api/v1/auth/verification-notification` | Authenticated owner resend; verification is not required. Requires CSRF. |',
+		);
+	}
+
+	if (plan.decisions.pendingMfa) {
+		rows.push(
+			'| `POST` | `/api/v1/auth/confirm-password` | Verify the current password and set an epoch-bound confirmation cookie. Requires verified session and CSRF. |',
+			'| `GET` | `/api/v1/auth/mfa` | Returns a fresh proposed `{ secret, otpauth }`; requires verified session. Does not enable MFA. |',
+			'| `POST` | `/api/v1/auth/mfa` | `{ secret, code }` enables MFA and returns `{ recoveryCodes }` once. Requires verified session, password confirmation and CSRF; revokes prior credentials. Login again with `mfa_code`. |',
+		);
+	}
+
+	if (layers.extras.metrics) {
+		rows.push(
+			'| `GET` | `/metrics` | Prometheus text. Production requires `Authorization: Bearer <METRICS_TOKEN>`. |',
+		);
+	}
+
+	if (layers.extras.billing) {
+		rows.push(
+			'| `POST` | `/billing/webhooks/stripe` | Stripe signature verification. CSRF skipped by path. Plan sync is yours. |',
+			'| `GET` | `/api/v1/billing/subscription` | Current tenant (or first) subscription row. |',
+		);
+	}
+
+	if (layers.extras.webhooks) {
+		rows.push(
+			'| (job) | `webhook.dispatch` | Discovered from `src/jobs/dispatchOutboundWebhookJob.ts`. No HTTP route. |',
+		);
+	}
+
+	if (plan.decisions.github) {
+		rows.push(
+			'| `GET` | `/auth/github` | Redirects to GitHub. 404 unless `FEATURE_OAUTH=true`. |',
+			'| `GET` | `/auth/github/callback` | Exchanges the code, JIT user, MFA gate, cookie session. |',
+		);
+	}
+
+	if (plan.decisions.oidc) {
+		rows.push(
+			'| `GET` | `/auth/oidc` | OIDC `createAuthorization()` plus `oidc_pkce` cookie. 404 unless `FEATURE_OAUTH=true`. |',
+			'| `GET` | `/auth/oidc/callback` | Reads PKCE, exchanges the code, JIT user, MFA gate, cookie session. |',
+		);
+	}
+
+	const authNote = !plan.decisions.users
+		? `Auth is \`headers\`. Send \`x-authenticated-user-id\` (and optional \`x-authenticated-user-role\`) for local work and tests. There are no login endpoints and no \`users\` table. Production must set \`AUTH_DEV_HEADERS=false\`, which turns those headers off and leaves you without a guard, so pick another auth layer before you ship.`
+		: plan.decisions.token
+			? `Sign in with \`GET /api/v1/auth/csrf\` then \`POST /api/v1/auth/login\` (send \`X-CSRF-Token\`), then send \`Authorization: Bearer <token>\` on every request. Tokens are stored hashed in \`api_tokens\` and expire after \`API_TOKEN_DEFAULT_EXPIRY_DAYS\` (30 in \`.env.example\`). The response includes \`expires_at\`.`
+			: plan.decisions.cookie
+				? `Sign in with \`GET /api/v1/auth/csrf\` then \`POST /api/v1/auth/login\`; preserve the session and CSRF cookies. The response sets a cookie and returns \`{ ok: true }\`. API mode does not serve HTML login or registration forms.`
+				: `Mint a JWT with \`POST /api/auth/token\`, then send \`Authorization: Bearer <jwt>\`. JWTs expire; re-mint rather than refreshing in place.`;
+
+	return `# ${projectName} API
 
 \`FRONTEND_MODE=${layers.frontend}\`. ${
-    plan.decisions.apiDocs
-      ? "API-only: no server-rendered welcome/login pages or SPA assets. The root path is not a generated endpoint."
-      : `HTML is served alongside this API. The SPA is mounted at \`${layers.spaPrefix}\`.`
-  }
+		plan.decisions.apiDocs
+			? 'API-only: no server-rendered welcome/login pages or SPA assets. The root path is not a generated endpoint.'
+			: `HTML is served alongside this API. The SPA is mounted at \`${layers.spaPrefix}\`.`
+	}
 
 ## Routes this app serves today
 
-${rows.join("\n")}
+${rows.join('\n')}
 
 Add application resources with the CLI commands below. The starter contains only the models required by your selected features.
 
@@ -143,44 +160,49 @@ Optional modules in \`src/modules/\` remain available for feature composition. T
 }
 
 function renderIntegrationsReadme(plan: StarterFeaturePlan): string {
-  const layers = plan.layers;
-  const enabled = [
-    layers.extras.oauthGithub ? "GitHub OAuth cookie login (`/auth/github`)" : null,
-    layers.extras.oidc ? "OIDC cookie login (`/auth/oidc`, PKCE in `oidc_pkce`)" : null,
-    layers.extras.billing
-      ? "Stripe billing stub (`POST /billing/webhooks/stripe`, `GET /api/v1/billing/subscription`)"
-      : null,
-    layers.extras.webhooks
-      ? "Outbound webhooks (explicit event dispatcher + `webhook.dispatch` job)"
-      : null,
-  ].filter((row): row is string => row !== null);
+	const layers = plan.layers;
 
-  const lines = [
-    "## Integrations",
-    "",
-    "OAuth, billing, outbound webhooks, SIEM, and SAML are **off by default**. Commented placeholders live in `.env.example`. Framework map: [INTEGRATIONS.md](https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md).",
-    "",
-    "Wizard flags (any stack unless noted): `--oauth-github` and `--oidc` (cookie HTML), `--billing`, `--webhooks`. They emit controllers, routes, migrations, jobs, or listeners. Startup discovers the application’s declared listeners and jobs.",
-    "",
-  ];
-  if (enabled.length > 0) {
-    lines.push("Enabled in this app:", "", ...enabled.map((row) => `- ${row}`), "");
-  } else {
-    lines.push(
-      "This app did not pass those flags. Turn a flag on and re-run `create-strata`, or copy the commented env block and add the integration controller and routes yourself.",
-      "",
-    );
-  }
-  if (layers.extras.webhooks)
-    lines.push(
-      "Call `dispatchWebhook({ database, queue, options }, event, data)` from `src/webhooks/dispatchWebhook.ts` after your domain transaction commits. Supply an explicit public payload; never send account credentials. Compose the queue and options using `APPLICATION_QUEUE` and `APPLICATION_WEBHOOKS`. The dispatcher delivers to active subscriptions matching the event name or `*`; use a commit-aware model listener or outbox handler for transactional changes.",
-      "",
-    );
-  return `${lines.join("\n")}\n`;
+	const enabled = [
+		layers.extras.oauthGithub ? 'GitHub OAuth cookie login (`/auth/github`)' : null,
+		layers.extras.oidc ? 'OIDC cookie login (`/auth/oidc`, PKCE in `oidc_pkce`)' : null,
+		layers.extras.billing
+			? 'Stripe billing stub (`POST /billing/webhooks/stripe`, `GET /api/v1/billing/subscription`)'
+			: null,
+		layers.extras.webhooks
+			? 'Outbound webhooks (explicit event dispatcher + `webhook.dispatch` job)'
+			: null,
+	].filter((row): row is string => row !== null);
+
+	const lines = [
+		'## Integrations',
+		'',
+		'OAuth, billing, outbound webhooks, SIEM, and SAML are **off by default**. Commented placeholders live in `.env.example`. Framework map: [INTEGRATIONS.md](https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md).',
+		'',
+		'Wizard flags (any stack unless noted): `--oauth-github` and `--oidc` (cookie HTML), `--billing`, `--webhooks`. They emit controllers, routes, migrations, jobs, or listeners. Startup discovers the application’s declared listeners and jobs.',
+		'',
+	];
+
+	if (enabled.length > 0) {
+		lines.push('Enabled in this app:', '', ...enabled.map((row) => `- ${row}`), '');
+	} else {
+		lines.push(
+			'This app did not pass those flags. Turn a flag on and re-run `create-strata`, or copy the commented env block and add the integration controller and routes yourself.',
+			'',
+		);
+	}
+
+	if (layers.extras.webhooks) {
+		lines.push(
+			'Call `dispatchWebhook({ database, queue, options }, event, data)` from `src/webhooks/dispatchWebhook.ts` after your domain transaction commits. Supply an explicit public payload; never send account credentials. Compose the queue and options using `APPLICATION_QUEUE` and `APPLICATION_WEBHOOKS`. The dispatcher delivers to active subscriptions matching the event name or `*`; use a commit-aware model listener or outbox handler for transactional changes.',
+			'',
+		);
+	}
+
+	return `${lines.join('\n')}\n`;
 }
 
 function renderOpenApiReadme(): string {
-  return `## OpenAPI
+	return `## OpenAPI
 
 After you add routes, regenerate and commit the spec so CI can catch drift:
 
@@ -196,57 +218,68 @@ Put \`openapi:check\` in CI. A failure means \`docs/openapi.json\` does not matc
 }
 
 function renderReadmeIntro(
-  projectName: string,
-  options: Pick<GenerateOptions, "inRepoExample" | "dogfood">,
+	projectName: string,
+	options: Pick<GenerateOptions, 'inRepoExample' | 'dogfood'>,
 ): string {
-  if (options.dogfood) {
-    return `# ${projectName}
+	if (options.dogfood) {
+		return `# ${projectName}
 
 This generated app is an internal acceptance fixture (migrate, seed, boot, OpenAPI, smoke). It is not a product. Framework CI generates disposable fixtures; product dogfood lives in the separate strata-shop repository. Start a product app with \`bunx create-strata\`.
 `;
-  }
-  if (options.inRepoExample) {
-    return `# ${projectName}
+	}
+
+	if (options.inRepoExample) {
+		return `# ${projectName}
 
 This is a generated sibling layer map. It is not a product and it is not CI dogfood. Framework CI generates disposable acceptance fixtures; product dogfood lives in the separate strata-shop repository. Start a product app with \`bunx create-strata\`.
 `;
-  }
-  return `# ${projectName}
+	}
+
+	return `# ${projectName}
 
 Strata app generated by \`create-strata\`.
 `;
 }
 
 function renderReadme(
-  projectName: string,
-  plan: StarterFeaturePlan,
-  options: Pick<GenerateOptions, "inRepoExample" | "dogfood"> = {},
+	projectName: string,
+	plan: StarterFeaturePlan,
+	options: Pick<GenerateOptions, 'inRepoExample' | 'dogfood'> = {},
 ): string {
-  const layers = plan.layers;
-  const docker = renderDockerCompose(projectName, plan);
-  const next = [`cd ${projectName}`, "cp .env.example .env"];
-  if (docker) {
-    next.push(plan.decisions.composeUpCommand);
-  }
-  next.push("bun install");
-  if (plan.decisions.frontendBuild) {
-    next.push("bun run frontend:install", "bun run frontend:build");
-  }
-  next.push("bun run db:migrate", "bun run dev");
+	const layers = plan.layers;
 
-  const extras = Object.entries(layers.extras)
-    .filter(([, on]) => on)
-    .map(([key]) => key);
-  const dockerServices = plan.services.docker;
-  const neededTools = plan.services.required;
-  const dockerLabel =
-    neededTools.length === 0
-      ? "not needed"
-      : dockerServices.length > 0
-        ? dockerServices.join(", ")
-        : "off (local installs)";
+	const docker = renderDockerCompose(projectName, plan);
 
-  return `${renderReadmeIntro(projectName, options)}
+	const next = [`cd ${projectName}`, 'cp .env.example .env'];
+
+	if (docker) {
+		next.push(plan.decisions.composeUpCommand);
+	}
+
+	next.push('bun install');
+
+	if (plan.decisions.frontendBuild) {
+		next.push('bun run frontend:install', 'bun run frontend:build');
+	}
+
+	next.push('bun run db:migrate', 'bun run dev');
+
+	const extras = Object.entries(layers.extras)
+		.filter(([, on]) => on)
+		.map(([key]) => key);
+
+	const dockerServices = plan.services.docker;
+
+	const neededTools = plan.services.required;
+
+	const dockerLabel =
+		neededTools.length === 0
+			? 'not needed'
+			: dockerServices.length > 0
+				? dockerServices.join(', ')
+				: 'off (local installs)';
+
+	return `${renderReadmeIntro(projectName, options)}
 AI coding agents: read [AGENTS.md](AGENTS.md) for this application's structure,
 selected stack, feature workflow and validation commands. Keep it current as the app evolves.
 
@@ -263,7 +296,7 @@ selected stack, feature workflow and validation commands. Keep it current as the
 | Mail | \`${layers.mail}\` |
 | SPA prefix | \`${layers.spaPrefix}\` |
 | Docker Compose | ${dockerLabel} |
-${extras.length > 0 ? `| Extras | ${extras.join(", ")} |\n` : ""}
+${extras.length > 0 ? `| Extras | ${extras.join(', ')} |\n` : ''}
 This file is the map for this app. Framework guides: [Building apps](https://github.com/EyK-26/strata/blob/main/docs/BUILDING-APPS.md), [Auth](https://github.com/EyK-26/strata/blob/main/docs/AUTH.md), [Starter](https://github.com/EyK-26/strata/blob/main/docs/STARTER.md), [Integrations](https://github.com/EyK-26/strata/blob/main/docs/INTEGRATIONS.md).
 
 ## Application files
@@ -282,29 +315,29 @@ ${renderIntegrationsReadme(plan)}
 ## Run it
 
 \`\`\`bash
-${next.join("\n")}
+${next.join('\n')}
 \`\`\`
 
 Open http://localhost:3000. Health check: \`GET /health\`. Discover registered commands with \`bunx strata help\`. \`dev\` and \`start\` run HTTP only; workers are explicit, separate processes.
 
-${plan.decisions.redisQueue ? "Redis jobs need `bun run queue:work` in another terminal (requires `REDIS_URL`).\n\n" : "The synchronous queue handles jobs inline; no Redis queue worker is needed for it.\n\n"}For durable events, add listeners in \`src/outbox/registry.ts\`, apply \`bun run db:migrate\`, then run \`bun run outbox:work\` in another terminal. Apps that do not publish durable events do not need this worker. Durable cache invalidation also needs the outbox worker when explicitly configured. Use the same application environment, database, Redis URL and \`APP_KEY_PREFIX\` for HTTP and its workers. An idle worker is normal; startup output confirms entry into polling, not dependency health. Stop HTTP and workers before resetting the development database.
+${plan.decisions.redisQueue ? 'Redis jobs need `bun run queue:work` in another terminal (requires `REDIS_URL`).\n\n' : 'The synchronous queue handles jobs inline; no Redis queue worker is needed for it.\n\n'}For durable events, add listeners in \`src/outbox/registry.ts\`, apply \`bun run db:migrate\`, then run \`bun run outbox:work\` in another terminal. Apps that do not publish durable events do not need this worker. Durable cache invalidation also needs the outbox worker when explicitly configured. Use the same application environment, database, Redis URL and \`APP_KEY_PREFIX\` for HTTP and its workers. An idle worker is normal; startup output confirms entry into polling, not dependency health. Stop HTTP and workers before resetting the development database.
 
 ${renderSupportingToolsReadme(projectName, plan)}${
-  plan.decisions.users
-    ? `
-For the first production admin, apply migrations and run \`bunx strata auth:provision-admin --email operator@example.test --name "Initial Operator" --password-stdin${plan.decisions.tenantTable ? " --tenant 1" : ""} < /run/secrets/initial_admin_password\` before admitting traffic. Supply your own private secret-manager-mounted file, not a demo password. Passwords require at least 16 characters and at most 72 UTF-8 bytes. Tenant-enabled applications require an existing tenant ID; this command does not create tenants. It refuses existing admins/accounts, records a transactional one-time claim, and does not mark email verified or enroll MFA. Additional admins and recovery remain explicit application administration. The command does not migrate or seed automatically.
+		plan.decisions.users
+			? `
+For the first production admin, apply migrations and run \`bunx strata auth:provision-admin --email operator@example.test --name "Initial Operator" --password-stdin${plan.decisions.tenantTable ? ' --tenant 1' : ''} < /run/secrets/initial_admin_password\` before admitting traffic. Supply your own private secret-manager-mounted file, not a demo password. Passwords require at least 16 characters and at most 72 UTF-8 bytes. Tenant-enabled applications require an existing tenant ID; this command does not create tenants. It refuses existing admins/accounts, records a transactional one-time claim, and does not mark email verified or enroll MFA. Additional admins and recovery remain explicit application administration. The command does not migrate or seed automatically.
 
 Optional development demo accounts: run \`bun run db:seed:demo\` explicitly after migrations. This command refuses production and staging. It creates these accounts with password \`StrataDemo!ChangeMe\`:
 
 - \`demo@example.com\` (member)
 - \`admin@example.test\` (admin)
 `
-    : `
+			: `
 Header auth is on for local use. Send \`x-authenticated-user-id\` (and optional \`x-authenticated-user-role\`). Production must set \`AUTH_DEV_HEADERS=false\`.
 `
-}${
-  plan.decisions.htmlCookieAccounts
-    ? `
+	}${
+		plan.decisions.htmlCookieAccounts
+			? `
 HTML auth kit (restyle \`views/\` and \`public/assets/site.css\`):
 
 - Welcome: \`/\`
@@ -312,34 +345,34 @@ HTML auth kit (restyle \`views/\` and \`public/assets/site.css\`):
 - Register: \`/register\`
 - Forgot password: \`/forgot-password\`
 - Reset password: signed \`/reset-password\` (mail log when \`MAIL_DRIVER=log\`)
-${layers.extras.emailVerification ? "- Verify email: `/email/verify`\n" : ""}${layers.extras.mfa ? "- MFA challenge: `/login/mfa` and setup: `/account/mfa`\n" : ""}${layers.extras.oauthGithub ? "- GitHub: `/auth/github` (needs `FEATURE_OAUTH=true`). Failures on the callback are JSON, not the login page. State is signed and bound to the browser by the HttpOnly `oauth_state` cookie from `createOAuthStateCookie()`. The callback requires the matching cookie and clears it.\n" : ""}${layers.extras.oidc ? "- OIDC: `/auth/oidc` (needs `FEATURE_OAUTH=true` plus `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET`; otherwise the login link stays hidden and the route is 404). PKCE cookie `oidc_pkce`. Callback failures are JSON, not the login page.\n" : ""}
+${layers.extras.emailVerification ? '- Verify email: `/email/verify`\n' : ''}${layers.extras.mfa ? '- MFA challenge: `/login/mfa` and setup: `/account/mfa`\n' : ''}${layers.extras.oauthGithub ? '- GitHub: `/auth/github` (needs `FEATURE_OAUTH=true`). Failures on the callback are JSON, not the login page. State is signed and bound to the browser by the HttpOnly `oauth_state` cookie from `createOAuthStateCookie()`. The callback requires the matching cookie and clears it.\n' : ''}${layers.extras.oidc ? '- OIDC: `/auth/oidc` (needs `FEATURE_OAUTH=true` plus `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET`; otherwise the login link stays hidden and the route is 404). PKCE cookie `oidc_pkce`. Callback failures are JSON, not the login page.\n' : ''}
 Cookie name is \`strata_session\`. Forms send CSRF as \`_token\`.
 SAML start/ACS bind RelayState to a dedicated HttpOnly \`saml_state\` cookie with \`SameSite=None; Secure\`. Browser SAML login requires HTTPS, including development.
 `
-    : ""
-}${
-  plan.decisions.jsonCookieAccounts
-    ? `
+			: ''
+	}${
+		plan.decisions.jsonCookieAccounts
+			? `
 JSON cookie account flows: fetch \`GET /api/v1/auth/csrf\`, retain the cookie and send \`X-CSRF-Token\` on writes (browser clients use credentials). Register through \`POST /api/v1/auth/register\` (neutral 201), login through \`POST /api/v1/auth/login\` (session cookie), and read \`GET /api/v1/auth/me\`. Reset through \`POST /api/v1/auth/forgot-password\` then signed \`POST /api/v1/auth/reset-password\` with \`{ password }\`.
-${layers.extras.emailVerification ? "Verify through signed `POST /api/v1/auth/verify-email`; authenticated unverified owners resend through `POST /api/v1/auth/verification-notification`.\n" : ""}${layers.extras.mfa ? "MFA setup: `GET /api/v1/auth/mfa`, confirm the current password through `POST /api/v1/auth/confirm-password`, then submit `{ secret, code }` to `POST /api/v1/auth/mfa`. Store the returned recovery codes safely; enrollment revokes credentials. Login again with `{ email, password, mfa_code }` using a TOTP or one-use recovery code. Missing code returns JSON 401 `mfa_required`.\n" : ""}
+${layers.extras.emailVerification ? 'Verify through signed `POST /api/v1/auth/verify-email`; authenticated unverified owners resend through `POST /api/v1/auth/verification-notification`.\n' : ''}${layers.extras.mfa ? 'MFA setup: `GET /api/v1/auth/mfa`, confirm the current password through `POST /api/v1/auth/confirm-password`, then submit `{ secret, code }` to `POST /api/v1/auth/mfa`. Store the returned recovery codes safely; enrollment revokes credentials. Login again with `{ email, password, mfa_code }` using a TOTP or one-use recovery code. Missing code returns JSON 401 `mfa_required`.\n' : ''}
 These routes return JSON, not account pages. The client owns account forms and handling the signed mail URL: submit to its unchanged path/query, with CSRF; opening the URL with GET does not consume a token. No HTML registration/reset page or automatic login is generated for these modes. All auth JSON is private/no-store. API docs list routes; the SPA scaffold is an example client, not a complete account-management UI.
 `
-    : ""
-}${
-  plan.decisions.token
-    ? `
+			: ''
+	}${
+		plan.decisions.token
+			? `
 Opaque token login: \`POST /api/v1/auth/login\` with \`{ "email", "password" }\`. Register: \`POST /api/v1/auth/register\`. Forgot/reset: \`POST /api/v1/auth/forgot-password\` and signed \`POST /api/v1/auth/reset-password\`. Send \`Authorization: Bearer\` after login.
 `
-    : ""
-}${
-  plan.decisions.jwt
-    ? `
+			: ''
+	}${
+		plan.decisions.jwt
+			? `
 JWT mint: \`POST /api/auth/token\` with email and password. Short-lived. Do not use JWT as an HTML cookie session.
 `
-    : ""
-}${
-  layers.extras.metrics
-    ? `
+			: ''
+	}${
+		layers.extras.metrics
+			? `
 Prometheus scrape: \`GET /metrics\`. Production requires \`Authorization: Bearer <METRICS_TOKEN>\`.
 
 Metrics default to HTTP-only. In \`src/bootstrap/server.ts\`, pass explicit \`runtimeMetrics\` options to \`bootstrapApp\`:
@@ -360,10 +393,10 @@ const { routes, config, context } = await bootstrapApp({
 
 The generated provider drains owned SQL collectors through \`context.drain()\` before database closure, including workers and startup-failure cleanup. Keep the generated HTTP admission/drain and provider lifecycle order. Observation factories never migrate, seed, start a worker, or enable durable delivery. Missing schemas/unsupported SQL dialects produce collector failures on scrape; Dialect-specific collector schema/index and interruption requirements still apply. Tracing and selected-transaction acquisition collectors can be injected as borrowed options; their existing owners retain lifecycle/instrumentation responsibility. Shared queue/outbox/failed-job gauges use a designated target or max across replicas; never sum them. See the framework runtime metrics guide for semantics and operational qualification.
 `
-    : ""
-}${
-  plan.decisions.frontendBuild
-    ? `
+			: ''
+	}${
+		plan.decisions.frontendBuild
+			? `
 ## Frontend
 
 The React app lives in \`frontend/\` with its own \`package.json\`. It is not built by \`bun install\` at the root.
@@ -374,37 +407,37 @@ bun run frontend:build
 \`\`\`
 
 Until \`frontend/dist\` exists, \`${layers.spaPrefix}\` answers 503. Use \`bun run frontend:dev\` for the Vite-style dev server with hot reload.${
-        layers.frontend === "hybrid"
-          ? ` HTML stays at \`/\` and the SPA is served under \`${layers.spaPrefix}/*\`.`
-          : ""
-      }
+					layers.frontend === 'hybrid'
+						? ` HTML stays at \`/\` and the SPA is served under \`${layers.spaPrefix}/*\`.`
+						: ''
+				}
 `
-    : ""
-}${
-  layers.database === "sqlite"
-    ? ""
-    : `
+			: ''
+	}${
+		layers.database === 'sqlite'
+			? ''
+			: `
 ## Database
 
 The app uses the database named in \`DATABASE_URL\` and creates it on first migrate when the connection user may. Set \`APP_DATABASE_URL\` only when migrations and the app should target a different database than \`DATABASE_URL\`.${
-        usesComposePostgres(plan)
-          ? ` \`.env.example\` points \`DATABASE_URL\` at \`${GENERATED_POSTGRES_APP_ROLE}\` (\`NOSUPERUSER\` \`NOBYPASSRLS\`), including \`--no-docker\`. \`db/ensure-postgres-app-role.sql\` is repeatable on an existing volume; Compose init still runs on first empty volume. The \`postgres\` superuser is for CREATE ROLE / GRANT / migrate and Adminer.`
-          : ""
-      }
+					usesComposePostgres(plan)
+						? ` \`.env.example\` points \`DATABASE_URL\` at \`${GENERATED_POSTGRES_APP_ROLE}\` (\`NOSUPERUSER\` \`NOBYPASSRLS\`), including \`--no-docker\`. \`db/ensure-postgres-app-role.sql\` is repeatable on an existing volume; Compose init still runs on first empty volume. The \`postgres\` superuser is for CREATE ROLE / GRANT / migrate and Adminer.`
+						: ''
+				}
 `
-}
+	}
 ${renderOpenApiReadme()}
 ## Migration status
 
-Run \`bun run src/db/status.ts\` to inspect existing migration history. Status does not initialize missing history or repair runtime grants; missing history/read access fails with the database error. Initialize a new database with the explicit migrate command first. Migrate, fresh and rollback remain administrative mutations.${layers.database === "postgres" ? " Status needs only CONNECT, schema USAGE and SELECT on framework_migrations through its configured migration connection; it does not need schema CREATE or grant authority. The generated status call opts out of the migration helper's privilege repair, while mutation callers retain that repair." : ""} Package upgrades do not rewrite these generated application files.
+Run \`bun run src/db/status.ts\` to inspect existing migration history. Status does not initialize missing history or repair runtime grants; missing history/read access fails with the database error. Initialize a new database with the explicit migrate command first. Migrate, fresh and rollback remain administrative mutations.${layers.database === 'postgres' ? " Status needs only CONNECT, schema USAGE and SELECT on framework_migrations through its configured migration connection; it does not need schema CREATE or grant authority. The generated status call opts out of the migration helper's privilege repair, while mutation callers retain that repair." : ''} Package upgrades do not rewrite these generated application files.
 
 ## Deploy
 
 Bun >=1.4.4 is required. \`.bun-version\` and Docker stages pin the tested 1.4.4 runtime; upgrade pins deliberately and rerun checks before deployment. Runtime and TypeScript requirements use >=1.4.4, accepting future 1.4.x patches; the bun-types override keeps transitive shims above the same minimum. Refresh and commit root/frontend lockfiles when upgrading. Updating framework packages does not rewrite an existing app Dockerfile, runtime pin or manifest.
 
 \`Dockerfile\` builds a production image from the committed \`bun.lock\` (run \`bun install\` once and commit the lockfile).${
-    plan.decisions.frontendBuild ? " The React frontend is built inside the image." : ""
-  }
+		plan.decisions.frontendBuild ? ' The React frontend is built inside the image.' : ''
+	}
 
 \`\`\`bash
 docker build -t ${projectName} .
@@ -412,10 +445,10 @@ docker run --rm -p 3000:3000 --env-file .env.production ${projectName}
 \`\`\`
 
 Migrations are a deploy step, not a boot step: run \`docker run --rm --env-file .env.production ${projectName} bun run db:migrate\` before the new version takes traffic. Migrations and resets do not seed by default. Demo seeding is an explicit development command, \`bun run db:seed:demo\`, and refuses production/staging. Existing demo accounts must be disabled or have their credentials and sessions/tokens rotated before deployment.${
-    layers.database === "sqlite"
-      ? " SQLite stores its file in `/app/storage`; mount a volume there (`-v strata_data:/app/storage`) or the data is lost with the container."
-      : ""
-  }
+		layers.database === 'sqlite'
+			? ' SQLite stores its file in `/app/storage`; mount a volume there (`-v strata_data:/app/storage`) or the data is lost with the container.'
+			: ''
+	}
 The image sets \`APP_ENV=production\` and \`AUTH_DEV_HEADERS=false\`; everything else in the Production list below comes from your environment (the \`.env.production\` file above is one way).
 
 ## Production
@@ -429,13 +462,13 @@ The image sets \`APP_ENV=production\` and \`AUTH_DEV_HEADERS=false\`; everything
 - Add explicitly approved application headers with \`CORS_ADDITIONAL_ALLOWED_HEADERS=Idempotency-Key,X-Correlation-Id\`; this extends the defaults, validates header names and never reflects requested headers. OpenAPI metadata does not grant CORS access.
 - Cross-origin browser calls are off in production until you set \`CORS_ALLOWED_ORIGINS\` to explicit origins. A \`*\` entry is rejected. Non-browser clients are unaffected.
 - Behind a reverse proxy or load balancer, set \`TRUST_FORWARDED_FOR=true\` so throttles and session records see the client address instead of the proxy. Only the rightmost public hop of \`X-Forwarded-For\` is trusted.
-${plan.decisions.dedicatedSigningSecret ? "- Set `SIGNED_URL_SECRET` to 32+ characters.\n" : ""}${plan.decisions.cookie ? "- Set `SESSION_SECRET` to 32+ characters.\n" : ""}${plan.decisions.token ? "- Set `TOKEN_HASH_PEPPER`.\n" : ""}${layers.extras.scim ? "- Set `SCIM_BEARER_TOKEN`.\n" : ""}${layers.extras.metrics ? "- Set `METRICS_TOKEN`.\n" : ""}${layers.extras.oauthGithub ? "- Set `OAUTH_STATE_SECRET` and `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`.\n" : ""}${layers.extras.oidc ? "- Set `OAUTH_STATE_SECRET`, `OIDC_ISSUER`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET`. Loopback issuers work outside production; set `OIDC_ALLOW_PRIVATE=true` for other private IdPs.\n" : ""}${layers.extras.billing ? "- Set `STRIPE_WEBHOOK_SECRET` when `FEATURE_BILLING=true`.\n" : ""}${
-  plan.decisions.rls
-    ? `- \`DATABASE_URL\` must be a \`NOBYPASSRLS\` role, not the \`postgres\` superuser. Generated apps create \`${GENERATED_POSTGRES_APP_ROLE}\` via \`db/ensure-postgres-app-role.sql\` (and Compose init on first empty volume). \`MIGRATION_DATABASE_URL\` and an explicit non-development \`STRATA_APP_PASSWORD\` belong only to the migrate/provisioning process. HTTP/workers connect to the existing role without admin credentials or role/password writes. Production boot rejects username \`postgres\` or \`root\`, then inspects \`pg_roles\` for \`rolsuper\` / \`rolbypassrls\`.
+${plan.decisions.dedicatedSigningSecret ? '- Set `SIGNED_URL_SECRET` to 32+ characters.\n' : ''}${plan.decisions.cookie ? '- Set `SESSION_SECRET` to 32+ characters.\n' : ''}${plan.decisions.token ? '- Set `TOKEN_HASH_PEPPER`.\n' : ''}${layers.extras.scim ? '- Set `SCIM_BEARER_TOKEN`.\n' : ''}${layers.extras.metrics ? '- Set `METRICS_TOKEN`.\n' : ''}${layers.extras.oauthGithub ? '- Set `OAUTH_STATE_SECRET` and `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`.\n' : ''}${layers.extras.oidc ? '- Set `OAUTH_STATE_SECRET`, `OIDC_ISSUER`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET`. Loopback issuers work outside production; set `OIDC_ALLOW_PRIVATE=true` for other private IdPs.\n' : ''}${layers.extras.billing ? '- Set `STRIPE_WEBHOOK_SECRET` when `FEATURE_BILLING=true`.\n' : ''}${
+		plan.decisions.rls
+			? `- \`DATABASE_URL\` must be a \`NOBYPASSRLS\` role, not the \`postgres\` superuser. Generated apps create \`${GENERATED_POSTGRES_APP_ROLE}\` via \`db/ensure-postgres-app-role.sql\` (and Compose init on first empty volume). \`MIGRATION_DATABASE_URL\` and an explicit non-development \`STRATA_APP_PASSWORD\` belong only to the migrate/provisioning process. HTTP/workers connect to the existing role without admin credentials or role/password writes. Production boot rejects username \`postgres\` or \`root\`, then inspects \`pg_roles\` for \`rolsuper\` / \`rolbypassrls\`.
 `
-    : ""
-}
-${layers.database === "mysql" ? "- Keep the MySQL runtime account limited to application reads/writes. Set `MIGRATION_DATABASE_URL` for the same database only in the administrative migration process; provisioning and migration callbacks use that connection and close it afterward. If unset, explicit migration commands require DDL privileges on the configured account.\n" : ""}
+			: ''
+	}
+${layers.database === 'mysql' ? '- Keep the MySQL runtime account limited to application reads/writes. Set `MIGRATION_DATABASE_URL` for the same database only in the administrative migration process; provisioning and migration callbacks use that connection and close it afterward. If unset, explicit migration commands require DDL privileges on the configured account.\n' : ''}
 \`strata start\` does not migrate when \`APP_ENV=production\`. Run \`bun run db:migrate\` as a deploy step. \`GET /health\` is 200 when the starter schema migration is recorded in \`framework_migrations\` and configured dependencies are available; it returns only \`ok\` or \`degraded\` without authentication or tenant selection, and 503 when a dependency or schema check fails. Use it for readiness, not process liveness. Redis jobs need a worker: \`bun run queue:work\` (requires \`REDIS_URL\`).
 `;
 }

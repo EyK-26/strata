@@ -1,102 +1,107 @@
-import { currentRequestMeta, resolveRequestId, runWithRequestMeta } from "./requestMetaContext";
+import { currentRequestMeta, resolveRequestId, runWithRequestMeta } from './requestMetaContext';
 
 type Middleware = (request: Request, next: () => Promise<Response>) => Promise<Response>;
 
 type RouteHandler<TRequest extends Request = Request, TArguments extends unknown[] = []> = (
-  request: TRequest,
-  ...arguments_: TArguments
+	request: TRequest,
+	...arguments_: TArguments
 ) => Response | Promise<Response>;
 
 function isRouteHandler(value: unknown): value is RouteHandler<Request, unknown[]> {
-  return typeof value === "function";
+	return typeof value === 'function';
 }
 
 function isMethodRouteMap(
-  value: unknown,
+	value: unknown,
 ): value is Record<string, RouteHandler<Request, unknown[]>> {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
+	if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+		return false;
+	}
 
-  const entries = Object.entries(value);
+	const entries = Object.entries(value);
 
-  return entries.length > 0 && entries.every(([, handler]) => isRouteHandler(handler));
+	return entries.length > 0 && entries.every(([, handler]) => isRouteHandler(handler));
 }
 
 function composeMiddleware(...middleware: Middleware[]) {
-  return <TRequest extends Request = Request, TArguments extends unknown[] = []>(
-    handler: RouteHandler<TRequest, TArguments>,
-  ): RouteHandler<TRequest, TArguments> => {
-    return async (request: TRequest, ...arguments_: TArguments) => {
-      let index = 0;
+	return <TRequest extends Request = Request, TArguments extends unknown[] = []>(
+		handler: RouteHandler<TRequest, TArguments>,
+	): RouteHandler<TRequest, TArguments> => {
+		return async (request: TRequest, ...arguments_: TArguments) => {
+			let index = 0;
 
-      const dispatch = async (): Promise<Response> => {
-        if (index >= middleware.length) {
-          return await handler(request, ...arguments_);
-        }
+			const dispatch = async (): Promise<Response> => {
+				if (index >= middleware.length) {
+					return await handler(request, ...arguments_);
+				}
 
-        const current = middleware[index];
-        index += 1;
+				const current = middleware[index];
 
-        if (!current) {
-          return await handler(request, ...arguments_);
-        }
+				index += 1;
 
-        return await current(request, dispatch);
-      };
+				if (!current) {
+					return await handler(request, ...arguments_);
+				}
 
-      return await dispatch();
-    };
-  };
+				return await current(request, dispatch);
+			};
+
+			return await dispatch();
+		};
+	};
 }
 
 async function requestIdMiddleware(
-  request: Request,
-  next: () => Promise<Response>,
+	request: Request,
+	next: () => Promise<Response>,
 ): Promise<Response> {
-  const requestId = resolveRequestId(request);
-  const response = await runWithRequestMeta({ ...currentRequestMeta(), request, requestId }, next);
-  const headers = new Headers(response.headers);
-  headers.set("x-request-id", requestId);
+	const requestId = resolveRequestId(request);
 
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
+	const response = await runWithRequestMeta({ ...currentRequestMeta(), request, requestId }, next);
+
+	const headers = new Headers(response.headers);
+
+	headers.set('x-request-id', requestId);
+
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers,
+	});
 }
 
 function wrapRouteHandler<T>(handler: T, middleware: Middleware[]): T {
-  if (isMethodRouteMap(handler)) {
-    const wrapped: Record<string, RouteHandler<Request, unknown[]>> = {};
+	if (isMethodRouteMap(handler)) {
+		const wrapped: Record<string, RouteHandler<Request, unknown[]>> = {};
 
-    for (const [method, routeHandler] of Object.entries(handler)) {
-      wrapped[method] = composeMiddleware(...middleware)(routeHandler);
-    }
+		for (const [method, routeHandler] of Object.entries(handler)) {
+			wrapped[method] = composeMiddleware(...middleware)(routeHandler);
+		}
 
-    return wrapped as T;
-  }
+		return wrapped as T;
+	}
 
-  if (isRouteHandler(handler)) {
-    return composeMiddleware(...middleware)(handler) as T;
-  }
+	if (isRouteHandler(handler)) {
+		return composeMiddleware(...middleware)(handler) as T;
+	}
 
-  return handler;
+	return handler;
 }
 
 function applyMiddlewareToRoutes<T extends Record<string, unknown>>(
-  routes: T,
-  middleware: Middleware[],
+	routes: T,
+	middleware: Middleware[],
 ): T {
-  const wrapped: Record<string, unknown> = {};
+	const wrapped: Record<string, unknown> = {};
 
-  for (const [path, routeHandler] of Object.entries(routes)) {
-    const identity: Middleware = async (_request, next) =>
-      await runWithRequestMeta({ ...currentRequestMeta(), routeTemplate: path }, next);
-    wrapped[path] = wrapRouteHandler(routeHandler, [identity, ...middleware]);
-  }
+	for (const [path, routeHandler] of Object.entries(routes)) {
+		const identity: Middleware = async (_request, next) =>
+			await runWithRequestMeta({ ...currentRequestMeta(), routeTemplate: path }, next);
 
-  return wrapped as T;
+		wrapped[path] = wrapRouteHandler(routeHandler, [identity, ...middleware]);
+	}
+
+	return wrapped as T;
 }
 
 export type { Middleware, RouteHandler };

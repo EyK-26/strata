@@ -6,11 +6,11 @@ compiled SQL and native adapters remain available for specialized data access.
 
 ## Choose an engine
 
-| Engine | Application driver | Official adapter | Important differences |
-| --- | --- | --- | --- |
-| PostgreSQL | `pgsql` | Native Bun `SQL` | RLS, `ILIKE`, full-text `tsMatch`, `RETURNING` |
-| MySQL | `mysql` | Optional `mysql2` peer | No `RETURNING`; `LIKE` follows column collation |
-| SQLite | `sqlite` | Native `bun:sqlite` | File or private memory database; no row locks or RLS |
+| Engine     | Application driver | Official adapter       | Important differences                                |
+| ---------- | ------------------ | ---------------------- | ---------------------------------------------------- |
+| PostgreSQL | `pgsql`            | Native Bun `SQL`       | RLS, `ILIKE`, full-text `tsMatch`, `RETURNING`       |
+| MySQL      | `mysql`            | Optional `mysql2` peer | No `RETURNING`; `LIKE` follows column collation      |
+| SQLite     | `sqlite`           | Native `bun:sqlite`    | File or private memory database; no row locks or RLS |
 
 The starter's `--database` flag accepts `postgres`, `mysql` or `sqlite`. Its
 application definition captures connection configuration from the environment;
@@ -26,31 +26,35 @@ positive `max` pool size. PostgreSQL also accepts `idleTimeout`, `maxLifetime` a
 ## Declare a model
 
 ```ts
-import { defineModel, field, type ModelAttributes } from "@getstrata/core/database/model";
+import { defineModel, field, type ModelAttributes } from '@getstrata/core/database/model';
 
 export class Category extends defineModel({
-  table: "categories",
-  fields: { id: field.number(), name: field.string() },
+	table: 'categories',
+	fields: { id: field.number(), name: field.string() },
 }) {
-  static $fillable = ["name"] as const;
-  static $timestamps = false;
+	static $fillable = ['name'] as const;
+	static $timestamps = false;
 }
 
 export class Note extends defineModel({
-  table: "notes",
-  fields: {
-    id: field.number(),
-    body: field.string(),
-    category_id: field.number(),
-    created_at: field.timestamp(),
-  },
-  defaultOrderBy: { column: "id", direction: "ASC" },
+	table: 'notes',
+	fields: {
+		id: field.number(),
+		body: field.string(),
+		category_id: field.number(),
+		created_at: field.timestamp(),
+	},
+	defaultOrderBy: { column: 'id', direction: 'ASC' },
 }) {
-  static $fillable = ["body", "category_id"] as const;
-  static $timestamps = false;
+	static $fillable = ['body', 'category_id'] as const;
+	static $timestamps = false;
 
-  preview() { return this.get("body").slice(0, 80); }
-  category() { return this.belongsTo(Category, "category_id"); }
+	preview() {
+		return this.get('body').slice(0, 80);
+	}
+	category() {
+		return this.belongsTo(Category, 'category_id');
+	}
 }
 
 export type NoteRecord = ModelAttributes<Note>;
@@ -82,9 +86,9 @@ Inside a controller, command invocation or other owned execution:
 
 ```ts
 const notes = database.model(Note);
-const note = await notes.create({ body: "First note", category_id: categoryId });
+const note = await notes.create({ body: 'First note', category_id: categoryId });
 const found = await notes.findOrFail(note.id);
-await found.update({ body: "Edited note" });
+await found.update({ body: 'Edited note' });
 const label = found.preview();
 await found.delete();
 ```
@@ -111,15 +115,17 @@ repository effects follow their owning transaction's outcome.
 
 ```ts
 const notes = database.model(Note);
-const page = await notes.query()
-  .where({ category_id: categoryId })
-  .orderBy({ id: "desc" })
-  .paginate({ page: 1, perPage: 20 });
+const page = await notes
+	.query()
+	.where({ category_id: categoryId })
+	.orderBy({ id: 'desc' })
+	.paginate({ page: 1, perPage: 20 });
 
-const summaries = await notes.query()
-  .where({ body: { ne: "" } })
-  .select("id", "body")
-  .get(); // Array<Pick<NoteRecord, "id" | "body">>
+const summaries = await notes
+	.query()
+	.where({ body: { ne: '' } })
+	.select('id', 'body')
+	.get(); // Array<Pick<NoteRecord, "id" | "body">>
 ```
 
 Without `select`, queries return models. Projections return plain selected records
@@ -153,10 +159,12 @@ reference such as `() => Category` when imports are circular:
 ```ts
 const note = await database.model(Note).findOrFail(noteId);
 const category = await note.category().get(); // Category | null
-const sameCategory = await database.model(Note).query()
-  .where({ category_id: categoryId })
-  .with("category")
-  .get();
+const sameCategory = await database
+	.model(Note)
+	.query()
+	.where({ category_id: categoryId })
+	.with('category')
+	.get();
 ```
 
 Use eager loading (`with`) for lists to avoid a query per row. `withCount` adds
@@ -170,10 +178,10 @@ parent row lock. Relationships do not replace ownership checks or database RLS.
 ## Transactions and tenancy
 
 ```ts
-await database.transaction(async tx => {
-  const note = await tx.model(Note).findOrFail(noteId);
-  await note.update({ body: "Published" });
-  // Select every other participating model/repository from tx too.
+await database.transaction(async (tx) => {
+	const note = await tx.model(Note).findOrFail(noteId);
+	await note.update({ body: 'Published' });
+	// Select every other participating model/repository from tx too.
 });
 ```
 
@@ -202,17 +210,19 @@ Generate a file with `bunx strata make:migration create_categories`, then keep i
 generated name and fill in its schema callbacks:
 
 ```ts
-import { defineMigration } from "@getstrata/core/database/migrations";
+import { defineMigration } from '@getstrata/core/database/migrations';
 
 export default defineMigration({
-  name: "0010_categories",
-  up(schema) {
-    schema.create("categories", table => {
-      table.id();
-      table.string("name", 120);
-    });
-  },
-  down(schema) { schema.drop("categories"); },
+	name: '0010_categories',
+	up(schema) {
+		schema.create('categories', (table) => {
+			table.id();
+			table.string('name', 120);
+		});
+	},
+	down(schema) {
+		schema.drop('categories');
+	},
 });
 ```
 

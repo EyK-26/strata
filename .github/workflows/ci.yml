@@ -25,7 +25,7 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version-file: ".bun-version"
+          bun-version-file: '.bun-version'
 
       - name: Start services
         run: docker compose up -d postgres mysql redis --wait
@@ -33,10 +33,10 @@ jobs:
       - name: Run Bun 1.4 parallel unit tests
         env:
           SKIP_FIXTURE_TEST_BOOTSTRAP: 1
-          PORT: "3000"
+          PORT: '3000'
           CACHE_DRIVER: array
           QUEUE_DRIVER: sync
-          FEATURE_SCIM: "true"
+          FEATURE_SCIM: 'true'
           SCIM_BEARER_TOKEN: strata-scim-test-token
           ADMIN_API_TOKEN: strata-admin-test-token
           MEMBER_API_TOKEN: strata-member-test-token
@@ -57,7 +57,7 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version-file: ".bun-version"
+          bun-version-file: '.bun-version'
 
       - name: Start services
         run: docker compose up -d postgres mysql redis --wait
@@ -65,10 +65,10 @@ jobs:
       - name: Install dependencies and run checks
         env:
           SKIP_FIXTURE_TEST_BOOTSTRAP: 1
-          PORT: "3000"
+          PORT: '3000'
           CACHE_DRIVER: array
           QUEUE_DRIVER: sync
-          FEATURE_SCIM: "true"
+          FEATURE_SCIM: 'true'
           SCIM_BEARER_TOKEN: strata-scim-test-token
           ADMIN_API_TOKEN: strata-admin-test-token
           MEMBER_API_TOKEN: strata-member-test-token
@@ -91,7 +91,7 @@ jobs:
       - name: Set up release Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "24"
+          node-version: '24'
           package-manager-cache: false
 
       - name: Verify workspace package dry-run with the release toolchain

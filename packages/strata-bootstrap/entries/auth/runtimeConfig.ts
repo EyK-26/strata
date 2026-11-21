@@ -1,1 +1,1 @@
-export * from "../../../../src/bootstrap/auth/runtimeConfig.ts";
+export * from '../../../../src/bootstrap/auth/runtimeConfig.ts';

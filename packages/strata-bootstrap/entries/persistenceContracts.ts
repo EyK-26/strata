@@ -1,1 +1,1 @@
-export * from "../../../src/bootstrap/persistenceContracts.ts";
+export * from '../../../src/bootstrap/persistenceContracts.ts';

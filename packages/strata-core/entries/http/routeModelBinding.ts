@@ -1,1 +1,1 @@
-export * from "../../../../src/core/http/routeModelBinding.ts";
+export * from '../../../../src/core/http/routeModelBinding.ts';

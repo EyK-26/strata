@@ -2,136 +2,147 @@
 
 /** Fail if package.json export "types" paths are missing after a package build. */
 
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { parseDeclaredValueExports } from "./export-surface.ts";
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
-const ROOT = join(import.meta.dir, "..");
+import { parseDeclaredValueExports } from './export-surface.ts';
+
+const ROOT = join(import.meta.dir, '..');
 
 const PACKAGES = [
-  "packages/strata-core/package.json",
-  "packages/strata-bootstrap/package.json",
-  "packages/strata-cli/package.json",
+	'packages/strata-core/package.json',
+	'packages/strata-bootstrap/package.json',
+	'packages/strata-cli/package.json',
 ];
 
 type ExportEntry = {
-  types?: string;
-  import?: string;
-  default?: string;
-  [key: string]: unknown;
+	types?: string;
+	import?: string;
+	default?: string;
+	[key: string]: unknown;
 };
 
 function collectExportEntries(
-  exportsField: unknown,
-  prefix = "",
+	exportsField: unknown,
+	prefix = '',
 ): Array<{ key: string; types?: string; js?: string }> {
-  if (!exportsField || typeof exportsField !== "object") {
-    return [];
-  }
+	if (!exportsField || typeof exportsField !== 'object') {
+		return [];
+	}
 
-  const found: Array<{ key: string; types?: string; js?: string }> = [];
-  const record = exportsField as Record<string, unknown>;
+	const found: Array<{ key: string; types?: string; js?: string }> = [];
 
-  if (typeof record.types === "string" || typeof record.import === "string") {
-    found.push({
-      key: prefix || ".",
-      types: typeof record.types === "string" ? record.types : undefined,
-      js:
-        typeof record.import === "string"
-          ? record.import
-          : typeof record.default === "string"
-            ? record.default
-            : undefined,
-    });
-  }
+	const record = exportsField as Record<string, unknown>;
 
-  for (const [key, value] of Object.entries(record)) {
-    if (key === "types" || key === "import" || key === "default" || key === "require") {
-      continue;
-    }
+	if (typeof record.types === 'string' || typeof record.import === 'string') {
+		found.push({
+			key: prefix || '.',
+			types: typeof record.types === 'string' ? record.types : undefined,
+			js:
+				typeof record.import === 'string'
+					? record.import
+					: typeof record.default === 'string'
+						? record.default
+						: undefined,
+		});
+	}
 
-    found.push(...collectExportEntries(value, prefix ? `${prefix} ${key}` : key));
-  }
+	for (const [key, value] of Object.entries(record)) {
+		if (key === 'types' || key === 'import' || key === 'default' || key === 'require') {
+			continue;
+		}
 
-  return found;
+		found.push(...collectExportEntries(value, prefix ? `${prefix} ${key}` : key));
+	}
+
+	return found;
 }
 
 const missing: string[] = [];
+
 const unreachable: string[] = [];
+
 let runtimeChecked = 0;
 
 for (const relativePath of PACKAGES) {
-  const packageJsonPath = join(ROOT, relativePath);
-  const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as {
-    name: string;
-    exports?: ExportEntry | Record<string, ExportEntry>;
-  };
-  const packageDir = join(ROOT, relativePath, "..");
+	const packageJsonPath = join(ROOT, relativePath);
 
-  if (!existsSync(join(packageDir, "dist"))) {
-    console.log(`Skipping ${packageJson.name}: dist/ not built.`);
-    continue;
-  }
+	const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8')) as {
+		name: string;
+		exports?: ExportEntry | Record<string, ExportEntry>;
+	};
 
-  const exportEntries = collectExportEntries(packageJson.exports);
+	const packageDir = join(ROOT, relativePath, '..');
 
-  for (const { key, types, js } of exportEntries) {
-    if (types) {
-      const absolute = join(packageDir, types);
-      if (!existsSync(absolute)) {
-        missing.push(`${packageJson.name} ${key} -> ${types}`);
-      }
-    }
+	if (!existsSync(join(packageDir, 'dist'))) {
+		console.log(`Skipping ${packageJson.name}: dist/ not built.`);
+		continue;
+	}
 
-    if (!types || !js) {
-      continue;
-    }
+	const exportEntries = collectExportEntries(packageJson.exports);
 
-    const dtsPath = join(packageDir, types);
-    const jsPath = join(packageDir, js);
-    if (!existsSync(dtsPath) || !existsSync(jsPath)) {
-      continue;
-    }
+	for (const { key, types, js } of exportEntries) {
+		if (types) {
+			const absolute = join(packageDir, types);
 
-    const declared = parseDeclaredValueExports(await readFile(dtsPath, "utf8"));
-    if (declared.size === 0) {
-      continue;
-    }
+			if (!existsSync(absolute)) {
+				missing.push(`${packageJson.name} ${key} -> ${types}`);
+			}
+		}
 
-    let moduleExports: Record<string, unknown>;
-    try {
-      moduleExports = (await import(jsPath)) as Record<string, unknown>;
-    } catch (error) {
-      unreachable.push(
-        `${packageJson.name} ${key} failed to import ${js}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-      continue;
-    }
+		if (!types || !js) {
+			continue;
+		}
 
-    runtimeChecked += 1;
-    for (const name of [...declared].sort()) {
-      if (!(name in moduleExports) || moduleExports[name] === undefined) {
-        unreachable.push(`${packageJson.name} ${key} UNREACHABLE ${name}`);
-      }
-    }
-  }
+		const dtsPath = join(packageDir, types);
+
+		const jsPath = join(packageDir, js);
+
+		if (!existsSync(dtsPath) || !existsSync(jsPath)) {
+			continue;
+		}
+
+		const declared = parseDeclaredValueExports(await readFile(dtsPath, 'utf8'));
+
+		if (declared.size === 0) {
+			continue;
+		}
+
+		let moduleExports: Record<string, unknown>;
+
+		try {
+			moduleExports = (await import(jsPath)) as Record<string, unknown>;
+		} catch (error) {
+			unreachable.push(
+				`${packageJson.name} ${key} failed to import ${js}: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			);
+			continue;
+		}
+
+		runtimeChecked += 1;
+		for (const name of [...declared].sort()) {
+			if (!(name in moduleExports) || moduleExports[name] === undefined) {
+				unreachable.push(`${packageJson.name} ${key} UNREACHABLE ${name}`);
+			}
+		}
+	}
 }
 
 if (missing.length > 0) {
-  console.error(`Missing export types files:\n${missing.map((line) => `- ${line}`).join("\n")}`);
-  process.exit(1);
+	console.error(`Missing export types files:\n${missing.map((line) => `- ${line}`).join('\n')}`);
+	process.exit(1);
 }
 
 if (unreachable.length > 0) {
-  console.error(
-    `Export types declare runtime names that the JS entry does not export:\n${unreachable
-      .map((line) => `- ${line}`)
-      .join("\n")}`,
-  );
-  process.exit(1);
+	console.error(
+		`Export types declare runtime names that the JS entry does not export:\n${unreachable
+			.map((line) => `- ${line}`)
+			.join('\n')}`,
+	);
+	process.exit(1);
 }
 
 console.log(`Export types paths OK (${runtimeChecked} entries compared to runtime).`);

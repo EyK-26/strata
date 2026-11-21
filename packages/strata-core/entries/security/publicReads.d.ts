@@ -1,1 +1,1 @@
-export * from "../../../../src/core/security/publicReads.ts";
+export * from '../../../../src/core/security/publicReads.ts';

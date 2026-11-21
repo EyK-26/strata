@@ -3,24 +3,26 @@
 Use `defineProvider` to group service declarations with startup work. It produces the same `ProviderDefinition` accepted by `createApplication` and `createApplicationContext`'s `definition.providers`.
 
 ```ts
-import { createServiceToken } from "@getstrata/core/contracts/token";
-import { createApplication, defineProvider, service } from "@getstrata/core/runtime/application";
+import { createServiceToken } from '@getstrata/core/contracts/token';
+import { createApplication, defineProvider, service } from '@getstrata/core/runtime/application';
 
-const GREETING = createServiceToken<{ text: string }>("greeting");
+const GREETING = createServiceToken<{ text: string }>('greeting');
 const greetingProvider = defineProvider({
-  name: "app.greeting",
-  services: [service(GREETING, {
-    lifetime: "application",
-    dependencies: [],
-    create: () => ({ text: "Hello" }),
-  })],
-  setup(scope) {
-    console.log(scope.resolve(GREETING).text);
-  },
-  boot(scope) {
-    // All provider setup hooks have completed here.
-    console.log(`Ready to start transports for ${scope.applicationId}`);
-  },
+	name: 'app.greeting',
+	services: [
+		service(GREETING, {
+			lifetime: 'application',
+			dependencies: [],
+			create: () => ({ text: 'Hello' }),
+		}),
+	],
+	setup(scope) {
+		console.log(scope.resolve(GREETING).text);
+	},
+	boot(scope) {
+		// All provider setup hooks have completed here.
+		console.log(`Ready to start transports for ${scope.applicationId}`);
+	},
 });
 
 const app = createApplication({ providers: [greetingProvider] });

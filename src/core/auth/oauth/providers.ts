@@ -1,141 +1,148 @@
-import { safeFetch } from "../../security/safeFetch";
-import type { OAuthProfile, OAuthProvider } from "./types";
+import { safeFetch } from '../../security/safeFetch';
+
+import type { OAuthProfile, OAuthProvider } from './types';
 
 interface GitHubOAuthOptions {
-  clientId: string;
-  clientSecret: string;
-  redirectUri: string;
-  readonly production: boolean;
-  readonly userAgent: string;
+	clientId: string;
+	clientSecret: string;
+	redirectUri: string;
+	readonly production: boolean;
+	readonly userAgent: string;
 }
 
 async function githubVerifiedEmail(
-  accessToken: string,
-  options: Readonly<GitHubOAuthOptions>,
+	accessToken: string,
+	options: Readonly<GitHubOAuthOptions>,
 ): Promise<string | null> {
-  const emailsResponse = await safeFetch(
-    "https://api.github.com/user/emails",
-    {
-      headers: {
-        authorization: `Bearer ${accessToken}`,
-        accept: "application/json",
-        "user-agent": options.userAgent,
-      },
-    },
-    { timeoutMs: 10_000, maxRedirects: 0, production: options.production },
-  );
+	const emailsResponse = await safeFetch(
+		'https://api.github.com/user/emails',
+		{
+			headers: {
+				authorization: `Bearer ${accessToken}`,
+				accept: 'application/json',
+				'user-agent': options.userAgent,
+			},
+		},
+		{ timeoutMs: 10_000, maxRedirects: 0, production: options.production },
+	);
 
-  const emails = (await emailsResponse.json()) as unknown;
-  if (!Array.isArray(emails)) {
-    return null;
-  }
+	const emails = (await emailsResponse.json()) as unknown;
 
-  const verified = emails.filter(
-    (item): item is { email: string; primary?: boolean; verified?: boolean } =>
-      typeof item === "object" &&
-      item !== null &&
-      typeof (item as { email?: unknown }).email === "string" &&
-      Boolean((item as { email: string }).email.trim()) &&
-      (item as { verified?: unknown }).verified === true,
-  );
-  const primary = verified.find((item) => item.primary);
-  return (primary ?? verified[0])?.email.trim() ?? null;
+	if (!Array.isArray(emails)) {
+		return null;
+	}
+
+	const verified = emails.filter(
+		(item): item is { email: string; primary?: boolean; verified?: boolean } =>
+			typeof item === 'object' &&
+			item !== null &&
+			typeof (item as { email?: unknown }).email === 'string' &&
+			Boolean((item as { email: string }).email.trim()) &&
+			(item as { verified?: unknown }).verified === true,
+	);
+
+	const primary = verified.find((item) => item.primary);
+
+	return (primary ?? verified[0])?.email.trim() ?? null;
 }
 
 class GitHubOAuthProvider implements OAuthProvider {
-  readonly name = "github";
+	readonly name = 'github';
 
-  private readonly options: Readonly<GitHubOAuthOptions>;
-  constructor(options: GitHubOAuthOptions) {
-    if (typeof options.production !== "boolean" || !options.userAgent?.trim())
-      throw new TypeError("Explicit GitHub OAuth production policy and user agent are required.");
-    this.options = Object.freeze({ ...options });
-  }
+	private readonly options: Readonly<GitHubOAuthOptions>;
+	constructor(options: GitHubOAuthOptions) {
+		if (typeof options.production !== 'boolean' || !options.userAgent?.trim()) {
+			throw new TypeError('Explicit GitHub OAuth production policy and user agent are required.');
+		}
 
-  getAuthorizationUrl(state: string, redirectUri = this.options.redirectUri): string {
-    const params = new URLSearchParams({
-      client_id: this.options.clientId,
-      redirect_uri: redirectUri,
-      scope: "read:user user:email",
-      state,
-    });
+		this.options = Object.freeze({ ...options });
+	}
 
-    return `https://github.com/login/oauth/authorize?${params.toString()}`;
-  }
+	getAuthorizationUrl(state: string, redirectUri = this.options.redirectUri): string {
+		const params = new URLSearchParams({
+			client_id: this.options.clientId,
+			redirect_uri: redirectUri,
+			scope: 'read:user user:email',
+			state,
+		});
 
-  async exchangeCode(code: string, redirectUri = this.options.redirectUri): Promise<OAuthProfile> {
-    const tokenResponse = await safeFetch(
-      "https://github.com/login/oauth/access_token",
-      {
-        method: "POST",
-        headers: {
-          accept: "application/json",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          client_id: this.options.clientId,
-          client_secret: this.options.clientSecret,
-          code,
-          redirect_uri: redirectUri,
-        }),
-      },
-      { timeoutMs: 10_000, maxRedirects: 0, production: this.options.production },
-    );
+		return `https://github.com/login/oauth/authorize?${params.toString()}`;
+	}
 
-    const tokenBody = (await tokenResponse.json()) as { access_token?: string };
+	async exchangeCode(code: string, redirectUri = this.options.redirectUri): Promise<OAuthProfile> {
+		const tokenResponse = await safeFetch(
+			'https://github.com/login/oauth/access_token',
+			{
+				method: 'POST',
+				headers: {
+					accept: 'application/json',
+					'content-type': 'application/json',
+				},
+				body: JSON.stringify({
+					client_id: this.options.clientId,
+					client_secret: this.options.clientSecret,
+					code,
+					redirect_uri: redirectUri,
+				}),
+			},
+			{ timeoutMs: 10_000, maxRedirects: 0, production: this.options.production },
+		);
 
-    if (!tokenBody.access_token) {
-      throw new Error("GitHub OAuth token exchange failed.");
-    }
+		const tokenBody = (await tokenResponse.json()) as { access_token?: string };
 
-    const profileResponse = await safeFetch(
-      "https://api.github.com/user",
-      {
-        headers: {
-          authorization: `Bearer ${tokenBody.access_token}`,
-          accept: "application/json",
-          "user-agent": this.options.userAgent,
-        },
-      },
-      { timeoutMs: 10_000, maxRedirects: 0, production: this.options.production },
-    );
+		if (!tokenBody.access_token) {
+			throw new Error('GitHub OAuth token exchange failed.');
+		}
 
-    const profile = (await profileResponse.json()) as {
-      id: number;
-      login: string;
-      email?: string | null;
-      name?: string | null;
-    };
+		const profileResponse = await safeFetch(
+			'https://api.github.com/user',
+			{
+				headers: {
+					authorization: `Bearer ${tokenBody.access_token}`,
+					accept: 'application/json',
+					'user-agent': this.options.userAgent,
+				},
+			},
+			{ timeoutMs: 10_000, maxRedirects: 0, production: this.options.production },
+		);
 
-    const email = await githubVerifiedEmail(tokenBody.access_token, this.options);
-    if (!email) {
-      throw new Error("GitHub OAuth profile did not include a verified email address.");
-    }
+		const profile = (await profileResponse.json()) as {
+			id: number;
+			login: string;
+			email?: string | null;
+			name?: string | null;
+		};
 
-    return {
-      providerUserId: String(profile.id),
-      email,
-      name: profile.name ?? profile.login,
-    };
-  }
+		const email = await githubVerifiedEmail(tokenBody.access_token, this.options);
+
+		if (!email) {
+			throw new Error('GitHub OAuth profile did not include a verified email address.');
+		}
+
+		return {
+			providerUserId: String(profile.id),
+			email,
+			name: profile.name ?? profile.login,
+		};
+	}
 }
 
 class MockOAuthProvider implements OAuthProvider {
-  readonly name = "mock";
+	readonly name = 'mock';
 
-  constructor(private readonly profile: OAuthProfile) {}
+	constructor(private readonly profile: OAuthProfile) {}
 
-  getAuthorizationUrl(state: string): string {
-    return `https://mock.oauth/authorize?state=${encodeURIComponent(state)}`;
-  }
+	getAuthorizationUrl(state: string): string {
+		return `https://mock.oauth/authorize?state=${encodeURIComponent(state)}`;
+	}
 
-  async exchangeCode(code: string): Promise<OAuthProfile> {
-    if (code !== "valid-code") {
-      throw new Error("Invalid OAuth code.");
-    }
+	async exchangeCode(code: string): Promise<OAuthProfile> {
+		if (code !== 'valid-code') {
+			throw new Error('Invalid OAuth code.');
+		}
 
-    return this.profile;
-  }
+		return this.profile;
+	}
 }
 
 export type { GitHubOAuthOptions };

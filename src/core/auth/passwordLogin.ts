@@ -1,96 +1,115 @@
-import { UnprocessableEntityError } from "@getstrata/core/errors/http";
-import type { AuthUserRecord } from "../contracts/authUserDirectory";
-import { type MfaSecretCodec, revealMfaSecret } from "../crypto/mfaSecret";
-import type { DatabaseSession, TransactionSession } from "../database/session";
-import { recoveryCodeMatches } from "../security/recoveryCodes";
-import { verifyTotp } from "../security/totp";
-import { isAccountActive } from "./accountState";
+import { UnprocessableEntityError } from '@getstrata/core/errors/http';
 
-type PasswordLoginFailure = "mfa_required" | "mfa_invalid" | "account_inactive";
+import type { AuthUserRecord } from '../contracts/authUserDirectory';
+import { type MfaSecretCodec, revealMfaSecret } from '../crypto/mfaSecret';
+import type { DatabaseSession, TransactionSession } from '../database/session';
+import { recoveryCodeMatches } from '../security/recoveryCodes';
+import { verifyTotp } from '../security/totp';
+
+import { isAccountActive } from './accountState';
+
+type PasswordLoginFailure = 'mfa_required' | 'mfa_invalid' | 'account_inactive';
 
 type PasswordLoginSuccess = {
-  ok: true;
-  consumedRecoveryHash?: string;
+	ok: true;
+	consumedRecoveryHash?: string;
 };
 
 type PasswordLoginDenied = {
-  ok: false;
-  error: PasswordLoginFailure;
+	ok: false;
+	error: PasswordLoginFailure;
 };
 
 type PasswordLoginResult = PasswordLoginSuccess | PasswordLoginDenied;
 
 function parseRecoveryHashes(raw: string | null | undefined): string[] {
-  if (!raw?.trim()) {
-    return [];
-  }
+	if (!raw?.trim()) {
+		return [];
+	}
 
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed)
-      ? parsed.filter((item): item is string => typeof item === "string")
-      : [];
-  } catch {
-    return [];
-  }
+	try {
+		const parsed = JSON.parse(raw) as unknown;
+
+		return Array.isArray(parsed)
+			? parsed.filter((item): item is string => typeof item === 'string')
+			: [];
+	} catch {
+		return [];
+	}
 }
 
 function completePasswordLogin(
-  user: Pick<AuthUserRecord, "is_active" | "mfa_enabled" | "mfa_secret" | "mfa_recovery_codes">,
-  options: { mfaCode?: string | null },
-  mfaSecrets: MfaSecretCodec,
+	user: Pick<AuthUserRecord, 'is_active' | 'mfa_enabled' | 'mfa_secret' | 'mfa_recovery_codes'>,
+	options: { mfaCode?: string | null },
+	mfaSecrets: MfaSecretCodec,
 ): PasswordLoginResult {
-  if (!isAccountActive(user)) return { ok: false, error: "account_inactive" };
-  if (!user.mfa_enabled) {
-    return { ok: true };
-  }
+	if (!isAccountActive(user)) {
+		return { ok: false, error: 'account_inactive' };
+	}
 
-  const submitted = options.mfaCode?.trim() ?? "";
-  if (!submitted) {
-    return { ok: false, error: "mfa_required" };
-  }
+	if (!user.mfa_enabled) {
+		return { ok: true };
+	}
 
-  const secret = revealMfaSecret(user.mfa_secret, mfaSecrets);
-  if (secret && verifyTotp(secret, submitted)) {
-    return { ok: true };
-  }
+	const submitted = options.mfaCode?.trim() ?? '';
 
-  const hashes = parseRecoveryHashes(user.mfa_recovery_codes);
-  const matched = hashes.find((hash) => recoveryCodeMatches(submitted, hash));
-  if (matched) {
-    return { ok: true, consumedRecoveryHash: matched };
-  }
+	if (!submitted) {
+		return { ok: false, error: 'mfa_required' };
+	}
 
-  return { ok: false, error: "mfa_invalid" };
+	const secret = revealMfaSecret(user.mfa_secret, mfaSecrets);
+
+	if (secret && verifyTotp(secret, submitted)) {
+		return { ok: true };
+	}
+
+	const hashes = parseRecoveryHashes(user.mfa_recovery_codes);
+
+	const matched = hashes.find((hash) => recoveryCodeMatches(submitted, hash));
+
+	if (matched) {
+		return { ok: true, consumedRecoveryHash: matched };
+	}
+
+	return { ok: false, error: 'mfa_invalid' };
 }
 
 async function persistConsumedRecoveryHash(
-  sql: DatabaseSession | TransactionSession,
-  userId: number,
-  currentRaw: string | null | undefined,
-  consumedHash: string | undefined,
+	sql: DatabaseSession | TransactionSession,
+	userId: number,
+	currentRaw: string | null | undefined,
+	consumedHash: string | undefined,
 ): Promise<void> {
-  if (!consumedHash) {
-    return;
-  }
+	if (!consumedHash) {
+		return;
+	}
 
-  const hashes = parseRecoveryHashes(currentRaw);
-  if (typeof currentRaw !== "string" || !hashes.includes(consumedHash)) {
-    throw new UnprocessableEntityError("mfa_invalid");
-  }
-  const dialect = sql.dialect;
-  const returning = dialect.returningClause("id");
-  const rows = await sql.execute({
-    text: `UPDATE users SET mfa_recovery_codes = ${dialect.placeholder(1)} WHERE id = ${dialect.placeholder(2)} AND mfa_recovery_codes = ${dialect.placeholder(3)}${returning}`,
-    params: [JSON.stringify(hashes.filter((hash) => hash !== consumedHash)), userId, currentRaw],
-  });
-  const header = rows[0];
-  const affected = returning
-    ? rows.length
-    : typeof header === "object" && header !== null && "affectedRows" in header
-      ? Number(header.affectedRows)
-      : 0;
-  if (affected !== 1) throw new UnprocessableEntityError("mfa_invalid");
+	const hashes = parseRecoveryHashes(currentRaw);
+
+	if (typeof currentRaw !== 'string' || !hashes.includes(consumedHash)) {
+		throw new UnprocessableEntityError('mfa_invalid');
+	}
+
+	const dialect = sql.dialect;
+
+	const returning = dialect.returningClause('id');
+
+	const rows = await sql.execute({
+		text: `UPDATE users SET mfa_recovery_codes = ${dialect.placeholder(1)} WHERE id = ${dialect.placeholder(2)} AND mfa_recovery_codes = ${dialect.placeholder(3)}${returning}`,
+		params: [JSON.stringify(hashes.filter((hash) => hash !== consumedHash)), userId, currentRaw],
+	});
+
+	const header = rows[0];
+
+	const affected = returning
+		? rows.length
+		: typeof header === 'object' && header !== null && 'affectedRows' in header
+			? Number(header.affectedRows)
+			: 0;
+
+	if (affected !== 1) {
+		throw new UnprocessableEntityError('mfa_invalid');
+	}
 }
 
 export type { PasswordLoginResult };

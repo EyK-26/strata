@@ -1,37 +1,42 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { CORE_CACHE_TOKEN } from "@getstrata/bootstrap/config";
-import { createTestApp } from "../../src/testing/createTestApp";
-import { pinSeededIntegrationEnv } from "../helpers/integrationEnv";
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
-describe("createTestApp", () => {
-  const apps: Array<Awaited<ReturnType<typeof createTestApp>>> = [];
+import { CORE_CACHE_TOKEN } from '@getstrata/bootstrap/config';
 
-  beforeAll(() => {
-    pinSeededIntegrationEnv();
-  });
+import { createTestApp } from '../../src/testing/createTestApp';
+import { pinSeededIntegrationEnv } from '../helpers/integrationEnv';
 
-  afterAll(async () => {
-    for (const app of apps) {
-      await app.stop();
-    }
-  });
+describe('createTestApp', () => {
+	const apps: Array<Awaited<ReturnType<typeof createTestApp>>> = [];
 
-  test("starts a test server with health routes", async () => {
-    const app = await createTestApp();
-    apps.push(app);
+	beforeAll(() => {
+		pinSeededIntegrationEnv();
+	});
 
-    const response = await fetch(`${app.baseUrl}/health`);
+	afterAll(async () => {
+		for (const app of apps) {
+			await app.stop();
+		}
+	});
 
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { status?: string };
-    expect(body.status ?? "ok").toBeTruthy();
-  });
+	test('starts a test server with health routes', async () => {
+		const app = await createTestApp();
 
-  test("exposes container-resolved dependencies for unit-style route tests", async () => {
-    const app = await createTestApp();
-    apps.push(app);
+		apps.push(app);
 
-    expect(app.dependencies.container.resolve(CORE_CACHE_TOKEN)).toBeDefined();
-    expect(app.routes["/health"]).toBeDefined();
-  });
+		const response = await fetch(`${app.baseUrl}/health`);
+
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as { status?: string };
+
+		expect(body.status ?? 'ok').toBeTruthy();
+	});
+
+	test('exposes container-resolved dependencies for unit-style route tests', async () => {
+		const app = await createTestApp();
+
+		apps.push(app);
+
+		expect(app.dependencies.container.resolve(CORE_CACHE_TOKEN)).toBeDefined();
+		expect(app.routes['/health']).toBeDefined();
+	});
 });

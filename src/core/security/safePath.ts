@@ -1,31 +1,32 @@
-import { isAbsolute, resolve, sep } from "node:path";
+import { isAbsolute, resolve, sep } from 'node:path';
 
 function resolvePathUnderRoot(rootDirectory: string, path: string): string {
-  if (path.length === 0) {
-    throw new Error("Path must not be empty.");
-  }
+	if (path.length === 0) {
+		throw new Error('Path must not be empty.');
+	}
 
-  if (path.includes("\0")) {
-    throw new Error("Path must not contain a null byte.");
-  }
+	if (path.includes('\0')) {
+		throw new Error('Path must not contain a null byte.');
+	}
 
-  const root = resolve(rootDirectory);
-  const candidate = isAbsolute(path) ? resolve(path) : resolve(root, path.replace(/^\/+/u, ""));
+	const root = resolve(rootDirectory);
 
-  if (candidate === root || candidate.startsWith(`${root}${sep}`)) {
-    return candidate;
-  }
+	const candidate = isAbsolute(path) ? resolve(path) : resolve(root, path.replace(/^\/+/u, ''));
 
-  throw new Error("Path escapes the storage root.");
+	if (candidate === root || candidate.startsWith(`${root}${sep}`)) {
+		return candidate;
+	}
+
+	throw new Error('Path escapes the storage root.');
 }
 
 function assertPathUnderRoot(rootDirectory: string, userPath: string): string {
-  return resolvePathUnderRoot(rootDirectory, userPath.trim());
+	return resolvePathUnderRoot(rootDirectory, userPath.trim());
 }
 
 /** Decode a URL pathname once; leading slashes are not filesystem-absolute. */
 function assertUrlPathUnderRoot(rootDirectory: string, urlPathname: string): string {
-  return resolvePathUnderRoot(rootDirectory, decodeURIComponent(urlPathname).replace(/^\/+/u, ""));
+	return resolvePathUnderRoot(rootDirectory, decodeURIComponent(urlPathname).replace(/^\/+/u, ''));
 }
 
 export { assertPathUnderRoot, assertUrlPathUnderRoot };

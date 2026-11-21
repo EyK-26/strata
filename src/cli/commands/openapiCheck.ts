@@ -1,5 +1,6 @@
-import { createOpenApiCheckCommand } from "@getstrata/cli/openapi";
-import { bootstrapFixtureRoutes } from "./registerOpenApiRoutes";
+import { createOpenApiCheckCommand } from '@getstrata/cli/openapi';
+
+import { bootstrapFixtureRoutes } from './registerOpenApiRoutes';
 
 const openapiCheckCommand = createOpenApiCheckCommand(bootstrapFixtureRoutes);
 

@@ -1,1 +1,1 @@
-export * from "../../../../src/bootstrap/http/securedRouteModelBinding.ts";
+export * from '../../../../src/bootstrap/http/securedRouteModelBinding.ts';

@@ -1,1 +1,1 @@
-export * from "../../../../src/core/admin/types.ts";
+export * from '../../../../src/core/admin/types.ts';

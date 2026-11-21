@@ -1,1 +1,1 @@
-export * from "../../../../src/core/http/requirePasswordConfirmMiddleware.ts";
+export * from '../../../../src/core/http/requirePasswordConfirmMiddleware.ts';

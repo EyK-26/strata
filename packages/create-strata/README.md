@@ -14,15 +14,15 @@ bunx create-strata my-app --yes --frontend=server-htmx --database=sqlite --auth=
 
 A target can be a project name or directory path. Existing output paths are refused.
 
-| Layer | Choices |
-| --- | --- |
-| Frontend | `api`, `server-htmx`, `spa-react`, `hybrid` |
-| Database | `sqlite`, `postgres`, `mysql` |
+| Layer          | Choices                                                                 |
+| -------------- | ----------------------------------------------------------------------- |
+| Frontend       | `api`, `server-htmx`, `spa-react`, `hybrid`                             |
+| Database       | `sqlite`, `postgres`, `mysql`                                           |
 | Authentication | `headers`, `cookie`, `token`, `jwt`, `cookie-token`, `cookie-token-jwt` |
-| Tenancy | `none`, `column`, `rls` (PostgreSQL) |
-| Cache | `array`, `redis` |
-| Queue | `sync`, `redis` |
-| Mail | `log`, `smtp` |
+| Tenancy        | `none`, `column`, `rls` (PostgreSQL)                                    |
+| Cache          | `array`, `redis`                                                        |
+| Queue          | `sync`, `redis`                                                         |
+| Mail           | `log`, `smtp`                                                           |
 
 Optional features include MFA, email verification, SCIM, metrics, OAuth, billing, and webhooks. Availability depends on the selected layers. Docker Compose is optional; Adminer is an explicit selection. Run `bunx create-strata --help` for flags and defaults.
 

@@ -1,70 +1,74 @@
-import type FailedJobRepository from "./failedJobRepository";
-import type { FailedJobRecord } from "./types";
+import type FailedJobRepository from './failedJobRepository';
+import type { FailedJobRecord } from './types';
 
 class FailedJobService {
-  constructor(private readonly repository: FailedJobRepository) {}
+	constructor(private readonly repository: FailedJobRepository) {}
 
-  async recordFailure(input: {
-    jobName: string;
-    jobId?: string;
-    handoff?: string;
-    payload: Record<string, unknown>;
-    exception: string;
-  }): Promise<FailedJobRecord> {
-    return await this.repository.create({
-      job_name: input.jobName,
-      job_id: input.jobId ?? null,
-      ...(input.handoff === undefined ? {} : { handoff: input.handoff }),
-      payload: input.payload,
-      exception: input.exception,
-      failed_at: new Date(),
-    });
-  }
+	async recordFailure(input: {
+		jobName: string;
+		jobId?: string;
+		handoff?: string;
+		payload: Record<string, unknown>;
+		exception: string;
+	}): Promise<FailedJobRecord> {
+		return await this.repository.create({
+			job_name: input.jobName,
+			job_id: input.jobId ?? null,
+			...(input.handoff === undefined ? {} : { handoff: input.handoff }),
+			payload: input.payload,
+			exception: input.exception,
+			failed_at: new Date(),
+		});
+	}
 
-  listRecent(limit = 50): Promise<FailedJobRecord[]> {
-    return this.repository.findAll({
-      limit,
-      orderBy: { column: "failed_at", direction: "DESC" },
-    });
-  }
+	listRecent(limit = 50): Promise<FailedJobRecord[]> {
+		return this.repository.findAll({
+			limit,
+			orderBy: { column: 'failed_at', direction: 'DESC' },
+		});
+	}
 
-  /** Admit the replay before deleting its recovery record. Delivery remains at least once. */
-  async retry(
-    id: number,
-    enqueue: (record: FailedJobRecord) => Promise<void>,
-  ): Promise<FailedJobRecord> {
-    if (typeof enqueue !== "function")
-      throw new Error("Failed-job retry requires an admission callback.");
-    const failedJob = await this.repository.findByIdOrThrow(
-      id,
-      (jobId) => new Error(`Failed job ${jobId} not found.`),
-    );
+	/** Admit the replay before deleting its recovery record. Delivery remains at least once. */
+	async retry(
+		id: number,
+		enqueue: (record: FailedJobRecord) => Promise<void>,
+	): Promise<FailedJobRecord> {
+		if (typeof enqueue !== 'function') {
+			throw new Error('Failed-job retry requires an admission callback.');
+		}
 
-    await enqueue(failedJob);
-    await this.repository.deleteById(id);
-    return failedJob;
-  }
+		const failedJob = await this.repository.findByIdOrThrow(
+			id,
+			(jobId) => new Error(`Failed job ${jobId} not found.`),
+		);
 
-  async delete(id: number): Promise<void> {
-    const deleted = await this.repository.deleteById(id);
+		await enqueue(failedJob);
+		await this.repository.deleteById(id);
 
-    if (!deleted) {
-      throw new Error(`Failed job ${id} not found.`);
-    }
-  }
+		return failedJob;
+	}
 
-  async flush(): Promise<number> {
-    const jobs = await this.repository.findAll();
-    let deleted = 0;
+	async delete(id: number): Promise<void> {
+		const deleted = await this.repository.deleteById(id);
 
-    for (const job of jobs) {
-      if (await this.repository.deleteById(job.id)) {
-        deleted += 1;
-      }
-    }
+		if (!deleted) {
+			throw new Error(`Failed job ${id} not found.`);
+		}
+	}
 
-    return deleted;
-  }
+	async flush(): Promise<number> {
+		const jobs = await this.repository.findAll();
+
+		let deleted = 0;
+
+		for (const job of jobs) {
+			if (await this.repository.deleteById(job.id)) {
+				deleted += 1;
+			}
+		}
+
+		return deleted;
+	}
 }
 
 export { FailedJobService };

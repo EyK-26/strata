@@ -1,1 +1,1 @@
-export * from "../../../../src/core/cache/tags.ts";
+export * from '../../../../src/core/cache/tags.ts';

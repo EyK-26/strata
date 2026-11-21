@@ -1,1 +1,1 @@
-export * from "../../../../src/core/database/types.ts";
+export * from '../../../../src/core/database/types.ts';

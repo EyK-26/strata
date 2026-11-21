@@ -1,21 +1,21 @@
-import { createAsyncContextStore } from "../runtime/asyncContextStore";
+import { createAsyncContextStore } from '../runtime/asyncContextStore';
 
 type TraceContext = {
-  traceId: string;
-  spanId: string;
+	traceId: string;
+	spanId: string;
 };
 
-const traceContextStorage = createAsyncContextStore<TraceContext>("@getstrata/traceContext");
+const traceContextStorage = createAsyncContextStore<TraceContext>('@getstrata/traceContext');
 
 function runWithTraceContext<T>(
-  context: TraceContext,
-  callback: () => T | Promise<T>,
+	context: TraceContext,
+	callback: () => T | Promise<T>,
 ): T | Promise<T> {
-  return traceContextStorage.run(context, callback);
+	return traceContextStorage.run(context, callback);
 }
 
 function currentTraceId(): string | null {
-  return traceContextStorage.getStore()?.traceId ?? null;
+	return traceContextStorage.getStore()?.traceId ?? null;
 }
 
 export type { TraceContext };

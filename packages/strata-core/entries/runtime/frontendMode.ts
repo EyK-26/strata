@@ -1,1 +1,1 @@
-export * from "../../../../src/core/runtime/frontendMode.ts";
+export * from '../../../../src/core/runtime/frontendMode.ts';

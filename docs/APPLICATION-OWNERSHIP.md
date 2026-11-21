@@ -5,19 +5,19 @@ Generated applications normally use `defineApp` from
 `createApplication` directly:
 
 ```ts
-import { createApplication } from "@getstrata/core/runtime/application";
+import { createApplication } from '@getstrata/core/runtime/application';
 
 const app = createApplication({
-  config: { applicationName: "orders" },
-  providers: [],
+	config: { applicationName: 'orders' },
+	providers: [],
 });
 
 await app.start();
 const name = await app.run((scope) => scope.config.applicationName);
 const stopped = await app.stop();
 if (!stopped.successful) {
-  // Inspect framework-owned disposition fields. Error payloads remain opaque.
-  console.error(stopped.snapshot.cleanup, stopped.snapshot.retainedResources);
+	// Inspect framework-owned disposition fields. Error payloads remain opaque.
+	console.error(stopped.snapshot.cleanup, stopped.snapshot.retainedResources);
 }
 ```
 

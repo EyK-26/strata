@@ -1,24 +1,25 @@
 type ModuleRenderOptions = {
-  moduleSlug: string;
-  moduleName: string;
-  moduleIdentifier: string;
-  withWeb: boolean;
+	moduleSlug: string;
+	moduleName: string;
+	moduleIdentifier: string;
+	withWeb: boolean;
 };
 
 /** Render module sources without consulting or changing the application filesystem. */
 function renderModuleScaffold({
-  moduleSlug,
-  moduleName,
-  moduleIdentifier,
-  withWeb,
+	moduleSlug,
+	moduleName,
+	moduleIdentifier,
+	withWeb,
 }: ModuleRenderOptions) {
-  const moduleVariable = `${moduleIdentifier}Module`;
-  const pluralSlug = `${moduleSlug}s`;
+	const moduleVariable = `${moduleIdentifier}Module`;
 
-  const files = new Map<string, string>([
-    [
-      `models/${moduleName}.ts`,
-      `import { defineModel, field, type ModelAttributes } from "@getstrata/core/database/model";
+	const pluralSlug = `${moduleSlug}s`;
+
+	const files = new Map<string, string>([
+		[
+			`models/${moduleName}.ts`,
+			`import { defineModel, field, type ModelAttributes } from "@getstrata/core/database/model";
 
 class ${moduleName} extends defineModel({
   table: "${moduleSlug}",
@@ -30,13 +31,14 @@ class ${moduleName} extends defineModel({
 }
 
 type ${moduleName}Record = ModelAttributes<${moduleName}>;
+
 export { ${moduleName} };
 export type { ${moduleName}Record };
 `,
-    ],
-    [
-      `policies/${moduleName}Policy.ts`,
-      `import type { AuthUser } from "@getstrata/core/auth/authContext";
+		],
+		[
+			`policies/${moduleName}Policy.ts`,
+			`import type { AuthUser } from "@getstrata/core/auth/authContext";
 import { Policy } from "@getstrata/core/auth/policy";
 import type { ${moduleName}Record } from "../models/${moduleName}";
 
@@ -56,10 +58,10 @@ class ${moduleName}Policy extends Policy {
 
 export default ${moduleName}Policy;
 `,
-    ],
-    [
-      `http/requests/${moduleName}Requests.ts`,
-      `import { parseJsonBody, parsePositiveIntParam } from "@getstrata/core/http/validation";
+		],
+		[
+			`http/requests/${moduleName}Requests.ts`,
+			`import { parseJsonBody, parsePositiveIntParam } from "@getstrata/core/http/validation";
 import { parsePaginationQuery } from "@getstrata/core/http/pagination";
 import {
   maxLength,
@@ -135,10 +137,10 @@ export type {
   Update${moduleName}BodyDto,
 };
 `,
-    ],
-    [
-      "resources.ts",
-      `import { toPaginatedResourceCollection, toResourceCollection } from "@getstrata/core/http/resources";
+		],
+		[
+			'resources.ts',
+			`import { toPaginatedResourceCollection, toResourceCollection } from "@getstrata/core/http/resources";
 import type { PaginationMeta } from "@getstrata/core/pagination";
 import type { ${moduleName}Record } from "./models/${moduleName}";
 
@@ -174,10 +176,10 @@ export {
 };
 export type { ${moduleName}Resource };
 `,
-    ],
-    [
-      `http/controllers/${moduleName}Controller.ts`,
-      `import type { BusinessRequestPorts } from "@getstrata/bootstrap/persistenceContracts";
+		],
+		[
+			`http/controllers/${moduleName}Controller.ts`,
+			`import type { BusinessRequestPorts } from "@getstrata/bootstrap/persistenceContracts";
 import type { CachedJson } from "@getstrata/core/contracts/di";
 import { bindRouteModel } from "@getstrata/core/http/routeModelBinding";
 import { buildRequestCacheKey } from "@getstrata/core/http/validation";
@@ -221,12 +223,14 @@ class ${moduleName}Controller {
 
   readonly index = (async (request?: Request) => {
     const query = parse${moduleName}ListQuery(request);
+
     const cacheKey = buildRequestCacheKey("/${pluralSlug}", request);
 
     return await this.cachedJson(
       cacheKey,
       async () => {
         const result = await this.records.query().paginate(query);
+
         return to${moduleName}PaginatedResourceCollection(result.data.map((record) => record.toObject()), result.meta);
       },
       [${moduleIdentifier.toUpperCase()}_CACHE_TAG],
@@ -246,29 +250,36 @@ class ${moduleName}Controller {
 
   readonly store = (async (request: Request) => {
     const body = await parseCreate${moduleName}Body(request);
+
     const record = await this.records.create(body);
+
     return createdResponse(to${moduleName}Resource(record.toObject()));
   });
 
-  private bindUpdate(binding:RouteModelBindingPorts) {return securedBindRouteModel(
+  private bindUpdate(binding: RouteModelBindingPorts) {
+    return securedBindRouteModel(
       "id",
       (id) => this.find(id),
       { resource: "${moduleSlug}", action: "update" },
       async (req: RouteRequest<${moduleName}IdParams>, record) => {
         const body = await parseUpdate${moduleName}Body(req);
+
         const updated = await record.update(body);
+
         return jsonResponse(to${moduleName}Resource(updated.toObject()));
       },
       binding,
     );
   }
 
-  private bindDestroy(binding:RouteModelBindingPorts) {return securedBindRouteModel(
+  private bindDestroy(binding: RouteModelBindingPorts) {
+    return securedBindRouteModel(
       "id",
       (id) => this.find(id),
       { resource: "${moduleSlug}", action: "delete" },
       async (_request: RouteRequest<${moduleName}IdParams>, record) => {
         await record.delete();
+
         return noContentResponse();
       },
       binding,
@@ -278,25 +289,24 @@ class ${moduleName}Controller {
 
 export default ${moduleName}Controller;
 `,
-    ],
-    [
-      "routes.ts",
-      `import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
+		],
+		[
+			'routes.ts',
+			`import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import type { BusinessRequestPorts } from "@getstrata/bootstrap/persistenceContracts";
 import type { RouteRequest } from "@getstrata/core/http/route";
 import type { ${moduleName}IdParams } from "./http/requests/${moduleName}Requests";
 import type { CachedJson } from "@getstrata/core/contracts/di";
-${withWeb ? 'import { apiPrefix } from "@getstrata/core/runtime/appKeyPrefix";\n' : ""}import ${moduleName}Controller from "./http/controllers/${moduleName}Controller";
+${withWeb ? 'import { apiPrefix } from "@getstrata/core/runtime/appKeyPrefix";\n' : ''}import ${moduleName}Controller from "./http/controllers/${moduleName}Controller";
 
 function create${moduleName}Routes(
   cachedJson: CachedJson,
   kernel: HttpKernel,
 ) {
-  const controller = (ports: BusinessRequestPorts) => new ${moduleName}Controller(ports.database, cachedJson, kernel.routeModelBindingPorts(ports.auth));
-${withWeb ? `  const apiBase = \`\${apiPrefix()}/${pluralSlug}\`;\n` : ""}
+  const controller = (ports: BusinessRequestPorts) => new ${moduleName}Controller(ports.database, cachedJson, kernel.routeModelBindingPorts(ports.auth));${withWeb ? `\n\n  const apiBase = \`\${apiPrefix()}/${pluralSlug}\`;` : ''}
 
   return {
-    ${withWeb ? "[apiBase]" : `"/${pluralSlug}"`}: {
+    ${withWeb ? '[apiBase]' : `"/${pluralSlug}"`}: {
       GET: kernel.wrapApi((request: Request, ports: BusinessRequestPorts) => controller(ports).index(request)),
       POST: kernel.wrapAbility(
         "${pluralSlug}:create",
@@ -319,18 +329,18 @@ ${withWeb ? `  const apiBase = \`\${apiPrefix()}/${pluralSlug}\`;\n` : ""}
 
 export { create${moduleName}Routes };
 `,
-    ],
-    [
-      "index.ts",
-      `import { type AppModule } from "@getstrata/bootstrap/contracts";
+		],
+		[
+			'index.ts',
+			`import { type AppModule } from "@getstrata/bootstrap/contracts";
 import ${moduleName}Controller from "./http/controllers/${moduleName}Controller";
 import ${moduleName}Policy from "./policies/${moduleName}Policy";
 import { create${moduleName}Routes } from "./routes";${
-        withWeb
-          ? `
+				withWeb
+					? `
 import { create${moduleName}WebRoutes } from "./webRoutes";`
-          : ""
-      }
+					: ''
+			}
 
 const ${moduleVariable}: AppModule = {
   name: "${moduleSlug}",
@@ -341,13 +351,13 @@ const ${moduleVariable}: AppModule = {
   routes({ cachedJson, kernel }) {
     return create${moduleName}Routes(cachedJson, kernel);
   },${
-    withWeb
-      ? `
+		withWeb
+			? `
   webRoutes({ dependencies, kernel }) {
     return create${moduleName}WebRoutes(dependencies, kernel);
   },`
-      : ""
-  }
+			: ''
+	}
 };
 
 export default ${moduleVariable};
@@ -359,34 +369,35 @@ export {
   to${moduleName}ResourceCollection,
 } from "./resources";
 export { create${moduleName}Routes } from "./routes";${
-        withWeb
-          ? `
+				withWeb
+					? `
 export { create${moduleName}WebRoutes } from "./webRoutes";`
-          : ""
-      }
+					: ''
+			}
 export { ${moduleName} } from "./models/${moduleName}";
 export type { ${moduleName}Record } from "./models/${moduleName}";
 `,
-    ],
-  ]);
+		],
+	]);
 
-  const webFiles = new Map<string, string>();
-  const viewFiles = new Map<string, string>();
+	const webFiles = new Map<string, string>();
 
-  if (withWeb) {
-    viewFiles.set(
-      "index.eta",
-      `<section class="page-header">
+	const viewFiles = new Map<string, string>();
+
+	if (withWeb) {
+		viewFiles.set(
+			'index.eta',
+			`<section class="page-header">
   <h1>${moduleName}s</h1>
 </section>
 
 <p class="hint">Generated web view for ${pluralSlug}. Wire up ${moduleName}WebController next.</p>
 `,
-    );
+		);
 
-    webFiles.set(
-      `http/controllers/${moduleName}WebController.ts`,
-      `import type { BusinessRequestPorts } from "@getstrata/bootstrap/persistenceContracts";
+		webFiles.set(
+			`http/controllers/${moduleName}WebController.ts`,
+			`import type { BusinessRequestPorts } from "@getstrata/bootstrap/persistenceContracts";
 import type { NamespacedViewRenderer } from "@getstrata/core/view";
 import { ${moduleName} } from "../../models/${moduleName}";
 import { parse${moduleName}ListQuery } from "../requests/${moduleName}Requests";
@@ -400,6 +411,7 @@ class ${moduleName}WebController {
 
   readonly index = (async (request?: Request) => {
     const query = parse${moduleName}ListQuery(request);
+
     const result = await this.records.query().paginate(query);
 
     return this.views.renderHtmx("index.eta", {
@@ -413,11 +425,11 @@ class ${moduleName}WebController {
 
 export default ${moduleName}WebController;
 `,
-    );
+		);
 
-    webFiles.set(
-      "webRoutes.ts",
-      `import { resolveService, type AppDependencies } from "@getstrata/core/contracts/di";
+		webFiles.set(
+			'webRoutes.ts',
+			`import { resolveService, type AppDependencies } from "@getstrata/core/contracts/di";
 import { CORE_VIEW_RENDERER_TOKEN } from "@getstrata/core/view";
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import type { BusinessRequestPorts } from "@getstrata/bootstrap/persistenceContracts";
@@ -425,6 +437,7 @@ import ${moduleName}WebController from "./http/controllers/${moduleName}WebContr
 
 function create${moduleName}WebRoutes(dependencies: AppDependencies, kernel: HttpKernel) {
   const views = resolveService(dependencies, CORE_VIEW_RENDERER_TOKEN).namespace("${pluralSlug}");
+
   return {
     "/${pluralSlug}": {
       GET: kernel.wrapWebPublicRead((request: Request, ports: BusinessRequestPorts) => new ${moduleName}WebController(views, ports.database).index(request)),
@@ -434,10 +447,10 @@ function create${moduleName}WebRoutes(dependencies: AppDependencies, kernel: Htt
 
 export { create${moduleName}WebRoutes };
 `,
-    );
-  }
+		);
+	}
 
-  return { files, webFiles, viewFiles, pluralSlug };
+	return { files, webFiles, viewFiles, pluralSlug };
 }
 
 export { renderModuleScaffold };

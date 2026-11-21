@@ -1,1 +1,1 @@
-export * from "../../../../src/bootstrap/listeners/invalidateCacheOnModelWrite.ts";
+export * from '../../../../src/bootstrap/listeners/invalidateCacheOnModelWrite.ts';

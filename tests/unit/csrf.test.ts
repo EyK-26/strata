@@ -1,484 +1,546 @@
-import { describe, expect, test } from "bun:test";
-import { runWithAuthContext } from "@getstrata/core/auth/authContext";
-import { ForbiddenError } from "@getstrata/core/errors/http";
+import { describe, expect, test } from 'bun:test';
+
+import { runWithAuthContext } from '@getstrata/core/auth/authContext';
+import { ForbiddenError } from '@getstrata/core/errors/http';
 import {
-  createCsrfMiddleware,
-  csrfMiddlewareOptionsFromEnvironment,
-} from "@getstrata/core/http/csrfMiddleware";
+	createCsrfMiddleware,
+	csrfMiddlewareOptionsFromEnvironment,
+} from '@getstrata/core/http/csrfMiddleware';
 import {
-  createCsrfTokenCookie,
-  csrfCookieName,
-  csrfTokenOptionsFromEnvironment,
-  resolveCsrfToken,
-  resolveCsrfTokenForRequest,
-  verifyCsrfToken,
-} from "@getstrata/core/http/csrfToken";
-import { currentRequestMeta, runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
-import { appCookieName } from "@getstrata/core/runtime/appKeyPrefix";
-import { restoreEnvVar } from "../helpers/restoreEnv";
+	createCsrfTokenCookie,
+	csrfCookieName,
+	csrfTokenOptionsFromEnvironment,
+	resolveCsrfToken,
+	resolveCsrfTokenForRequest,
+	verifyCsrfToken,
+} from '@getstrata/core/http/csrfToken';
+import { currentRequestMeta, runWithRequestMeta } from '@getstrata/core/http/requestMetaContext';
+import { appCookieName } from '@getstrata/core/runtime/appKeyPrefix';
 
-describe("csrfToken", () => {
-  test("creates and verifies a csrf token", () => {
-    const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
-    const request = new Request("http://example.test/login", {
-      headers: { cookie: cookie.split(";")[0] ?? "" },
-    });
+import { restoreEnvVar } from '../helpers/restoreEnv';
 
-    expect(cookie).toContain("HttpOnly");
-    expect(cookie).toContain("SameSite=Lax");
-    expect(cookie).not.toContain("SameSite=None");
-    expect(verifyCsrfToken(request, token, csrfTokenOptionsFromEnvironment(process.env))).toBe(
-      true,
-    );
-    expect(
-      verifyCsrfToken(request, "wrong-token", csrfTokenOptionsFromEnvironment(process.env)),
-    ).toBe(false);
-  });
+describe('csrfToken', () => {
+	test('creates and verifies a csrf token', () => {
+		const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
 
-  test("resolveCsrfToken reuses a valid cookie token", () => {
-    const created = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
-    const request = new Request("http://example.test/", {
-      headers: { cookie: created.cookie.split(";")[0] ?? "" },
-    });
+		const request = new Request('http://example.test/login', {
+			headers: { cookie: cookie.split(';')[0] ?? '' },
+		});
 
-    expect(resolveCsrfToken(request, csrfTokenOptionsFromEnvironment(process.env)).token).toBe(
-      created.token,
-    );
-  });
+		expect(cookie).toContain('HttpOnly');
+		expect(cookie).toContain('SameSite=Lax');
+		expect(cookie).not.toContain('SameSite=None');
+		expect(verifyCsrfToken(request, token, csrfTokenOptionsFromEnvironment(process.env))).toBe(
+			true,
+		);
+		expect(
+			verifyCsrfToken(request, 'wrong-token', csrfTokenOptionsFromEnvironment(process.env)),
+		).toBe(false);
+	});
 
-  test("marks the CSRF cookie Secure in production", () => {
-    const previousEnv = process.env.APP_ENV;
-    const previousSecret = process.env.SESSION_SECRET;
-    process.env.APP_ENV = "production";
-    process.env.SESSION_SECRET = "production-csrf-secret-at-least-32-chars";
+	test('resolveCsrfToken reuses a valid cookie token', () => {
+		const created = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
 
-    try {
-      expect(createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env)).cookie).toContain(
-        "; Secure",
-      );
-    } finally {
-      restoreEnvVar("APP_ENV", previousEnv);
-      restoreEnvVar("SESSION_SECRET", previousSecret);
-    }
-  });
+		const request = new Request('http://example.test/', {
+			headers: { cookie: created.cookie.split(';')[0] ?? '' },
+		});
 
-  test("defaults to the namespaced CSRF cookie", () => {
-    const previous = process.env.CSRF_COOKIE_NAME;
-    delete process.env.CSRF_COOKIE_NAME;
+		expect(resolveCsrfToken(request, csrfTokenOptionsFromEnvironment(process.env)).token).toBe(
+			created.token,
+		);
+	});
 
-    try {
-      expect(csrfCookieName(csrfTokenOptionsFromEnvironment(process.env))).toBe(
-        appCookieName("csrf"),
-      );
-      expect(createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env)).cookie).toContain(
-        `${appCookieName("csrf")}=`,
-      );
-    } finally {
-      restoreEnvVar("CSRF_COOKIE_NAME", previous);
-    }
-  });
+	test('marks the CSRF cookie Secure in production', () => {
+		const previousEnv = process.env.APP_ENV;
 
-  test("overrides the CSRF cookie name from CSRF_COOKIE_NAME", () => {
-    const previous = process.env.CSRF_COOKIE_NAME;
-    process.env.CSRF_COOKIE_NAME = "hiring_csrf";
+		const previousSecret = process.env.SESSION_SECRET;
 
-    try {
-      expect(csrfCookieName(csrfTokenOptionsFromEnvironment(process.env))).toBe("hiring_csrf");
-      const created = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
-      expect(created.cookie).toContain("hiring_csrf=");
-      expect(created.cookie).not.toContain(`${appCookieName("csrf")}=`);
+		process.env.APP_ENV = 'production';
+		process.env.SESSION_SECRET = 'production-csrf-secret-at-least-32-chars';
 
-      const request = new Request("http://example.test/", {
-        headers: { cookie: created.cookie.split(";")[0] ?? "" },
-      });
-      expect(
-        verifyCsrfToken(request, created.token, csrfTokenOptionsFromEnvironment(process.env)),
-      ).toBe(true);
-    } finally {
-      restoreEnvVar("CSRF_COOKIE_NAME", previous);
-    }
-  });
+		try {
+			expect(createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env)).cookie).toContain(
+				'; Secure',
+			);
+		} finally {
+			restoreEnvVar('APP_ENV', previousEnv);
+			restoreEnvVar('SESSION_SECRET', previousSecret);
+		}
+	});
+
+	test('defaults to the namespaced CSRF cookie', () => {
+		const previous = process.env.CSRF_COOKIE_NAME;
+
+		delete process.env.CSRF_COOKIE_NAME;
+
+		try {
+			expect(csrfCookieName(csrfTokenOptionsFromEnvironment(process.env))).toBe(
+				appCookieName('csrf'),
+			);
+			expect(createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env)).cookie).toContain(
+				`${appCookieName('csrf')}=`,
+			);
+		} finally {
+			restoreEnvVar('CSRF_COOKIE_NAME', previous);
+		}
+	});
+
+	test('overrides the CSRF cookie name from CSRF_COOKIE_NAME', () => {
+		const previous = process.env.CSRF_COOKIE_NAME;
+
+		process.env.CSRF_COOKIE_NAME = 'hiring_csrf';
+
+		try {
+			expect(csrfCookieName(csrfTokenOptionsFromEnvironment(process.env))).toBe('hiring_csrf');
+			const created = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
+
+			expect(created.cookie).toContain('hiring_csrf=');
+			expect(created.cookie).not.toContain(`${appCookieName('csrf')}=`);
+
+			const request = new Request('http://example.test/', {
+				headers: { cookie: created.cookie.split(';')[0] ?? '' },
+			});
+
+			expect(
+				verifyCsrfToken(request, created.token, csrfTokenOptionsFromEnvironment(process.env)),
+			).toBe(true);
+		} finally {
+			restoreEnvVar('CSRF_COOKIE_NAME', previous);
+		}
+	});
 });
 
-describe("createCsrfMiddleware", () => {
-  test("allows safe methods and sets csrf cookie when needed", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-    const response = await middleware(
-      new Request("http://example.test/login"),
-      async () => new Response("ok"),
-    );
+describe('createCsrfMiddleware', () => {
+	test('allows safe methods and sets csrf cookie when needed', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("set-cookie")).toContain(`${appCookieName("csrf")}=`);
-  });
+		const response = await middleware(
+			new Request('http://example.test/login'),
+			async () => new Response('ok'),
+		);
 
-  test("rejects mutating requests without a csrf token", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-    const { cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
+		expect(response.status).toBe(200);
+		expect(response.headers.get('set-cookie')).toContain(`${appCookieName('csrf')}=`);
+	});
 
-    await expect(
-      middleware(
-        new Request("http://example.test/login", {
-          method: "POST",
-          headers: { cookie: cookie.split(";")[0] ?? "" },
-        }),
-        async () => new Response("ok"),
-      ),
-    ).rejects.toThrow(ForbiddenError);
-  });
+	test('rejects mutating requests without a csrf token', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
 
-  test("accepts mutating requests with matching form token", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-    const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
-    const body = new URLSearchParams({ _token: token, name: "Acme" });
+		const { cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
 
-    const response = await middleware(
-      new Request("http://example.test/login", {
-        method: "POST",
-        headers: {
-          cookie: cookie.split(";")[0] ?? "",
-          "content-type": "application/x-www-form-urlencoded",
-          origin: "http://example.test",
-        },
-        body,
-      }),
-      async () => new Response("created", { status: 302 }),
-    );
+		await expect(
+			middleware(
+				new Request('http://example.test/login', {
+					method: 'POST',
+					headers: { cookie: cookie.split(';')[0] ?? '' },
+				}),
+				async () => new Response('ok'),
+			),
+		).rejects.toThrow(ForbiddenError);
+	});
 
-    expect(response.status).toBe(302);
-  });
+	test('accepts mutating requests with matching form token', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
 
-  test("successful bearer or basic skips CSRF", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-    const bearer = await runWithAuthContext({ id: 9 }, "bearer", () =>
-      middleware(
-        new Request("http://example.test/api/applications", {
-          method: "POST",
-          headers: {
-            authorization: "Bearer hiring-token",
-            origin: "https://spa.example",
-          },
-        }),
-        async () => new Response("ok"),
-      ),
-    );
-    const basic = await runWithAuthContext({ id: 9 }, "basic", () =>
-      middleware(
-        new Request("http://example.test/api/applications", {
-          method: "POST",
-          headers: { authorization: `Basic ${Buffer.from("a:b").toString("base64")}` },
-        }),
-        async () => new Response("ok"),
-      ),
-    );
+		const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
 
-    expect(bearer.status).toBe(200);
-    expect(basic.status).toBe(200);
-  });
+		const body = new URLSearchParams({ _token: token, name: 'Acme' });
 
-  test("failed Bearer header does not skip CSRF when credentialSource is null", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+		const response = await middleware(
+			new Request('http://example.test/login', {
+				method: 'POST',
+				headers: {
+					cookie: cookie.split(';')[0] ?? '',
+					'content-type': 'application/x-www-form-urlencoded',
+					origin: 'http://example.test',
+				},
+				body,
+			}),
+			async () => new Response('created', { status: 302 }),
+		);
 
-    await expect(
-      runWithAuthContext(null, null, () =>
-        middleware(
-          new Request("http://example.test/login", { method: "POST" }),
-          async () => new Response("ok"),
-        ),
-      ),
-    ).rejects.toThrow(ForbiddenError);
+		expect(response.status).toBe(302);
+	});
 
-    await expect(
-      runWithAuthContext(null, null, () =>
-        middleware(
-          new Request("http://example.test/login", {
-            method: "POST",
-            headers: {
-              authorization: "Bearer garbage",
-              cookie: "strata_session=looks-like-a-session",
-            },
-          }),
-          async () => new Response("ok"),
-        ),
-      ),
-    ).rejects.toThrow(ForbiddenError);
-  });
+	test('successful bearer or basic skips CSRF', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
 
-  test("skips CSRF on the SAML ACS callback path", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-    const response = await middleware(
-      new Request("http://example.test/auth/saml/acs", { method: "POST" }),
-      async () => new Response("ok"),
-    );
-    expect(response.status).toBe(200);
-  });
+		const bearer = await runWithAuthContext({ id: 9 }, 'bearer', () =>
+			middleware(
+				new Request('http://example.test/api/applications', {
+					method: 'POST',
+					headers: {
+						authorization: 'Bearer hiring-token',
+						origin: 'https://spa.example',
+					},
+				}),
+				async () => new Response('ok'),
+			),
+		);
 
-  test("skips CSRF on inbound Stripe billing webhook paths", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-    const response = await middleware(
-      new Request("http://example.test/billing/webhooks/stripe", { method: "POST" }),
-      async () => new Response("ok"),
-    );
-    expect(response.status).toBe(200);
-  });
+		const basic = await runWithAuthContext({ id: 9 }, 'basic', () =>
+			middleware(
+				new Request('http://example.test/api/applications', {
+					method: 'POST',
+					headers: { authorization: `Basic ${Buffer.from('a:b').toString('base64')}` },
+				}),
+				async () => new Response('ok'),
+			),
+		);
 
-  test("skips CSRF on SCIM mutating paths that use their own bearer", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-    const response = await middleware(
-      new Request("http://example.test/scim/v2/Users", { method: "POST" }),
-      async () => new Response("ok"),
-    );
-    expect(response.status).toBe(200);
-  });
+		expect(bearer.status).toBe(200);
+		expect(basic.status).toBe(200);
+	});
 
-  test("skips CSRF on the configured SAML ACS pathname", async () => {
-    const previous = process.env.SAML_ACS_URL;
-    process.env.SAML_ACS_URL = "https://app.example.test/sso/acs";
-    try {
-      const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-      const response = await middleware(
-        new Request("http://example.test/sso/acs", { method: "POST" }),
-        async () => new Response("ok"),
-      );
-      expect(response.status).toBe(200);
-    } finally {
-      if (previous === undefined) {
-        delete process.env.SAML_ACS_URL;
-      } else {
-        process.env.SAML_ACS_URL = previous;
-      }
-    }
-  });
+	test('failed Bearer header does not skip CSRF when credentialSource is null', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
 
-  test("treats an unparsable SAML ACS URL as the default path", async () => {
-    const previous = process.env.SAML_ACS_URL;
-    process.env.SAML_ACS_URL = "http://%";
-    try {
-      const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-      const response = await middleware(
-        new Request("http://example.test/auth/saml/acs", { method: "POST" }),
-        async () => new Response("ok"),
-      );
-      expect(response.status).toBe(200);
-    } finally {
-      if (previous === undefined) {
-        delete process.env.SAML_ACS_URL;
-      } else {
-        process.env.SAML_ACS_URL = previous;
-      }
-    }
-  });
+		await expect(
+			runWithAuthContext(null, null, () =>
+				middleware(
+					new Request('http://example.test/login', { method: 'POST' }),
+					async () => new Response('ok'),
+				),
+			),
+		).rejects.toThrow(ForbiddenError);
 
-  test("rejects guest mutating requests without a csrf token", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-    await expect(
-      middleware(
-        new Request("http://example.test/api/v1/auth/login", { method: "POST" }),
-        async () => new Response("ok"),
-      ),
-    ).rejects.toThrow(ForbiddenError);
-  });
+		await expect(
+			runWithAuthContext(null, null, () =>
+				middleware(
+					new Request('http://example.test/login', {
+						method: 'POST',
+						headers: {
+							authorization: 'Bearer garbage',
+							cookie: 'strata_session=looks-like-a-session',
+						},
+					}),
+					async () => new Response('ok'),
+				),
+			),
+		).rejects.toThrow(ForbiddenError);
+	});
 
-  test("accepts guest JSON mutating requests with a matching CSRF header", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-    const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
-    const response = await middleware(
-      new Request("http://example.test/api/v1/auth/login", {
-        method: "POST",
-        headers: {
-          cookie: cookie.split(";")[0] ?? "",
-          "x-csrf-token": token,
-          "content-type": "application/json",
-          origin: "http://example.test",
-        },
-        body: JSON.stringify({ email: "demo@example.com" }),
-      }),
-      async () => new Response("ok"),
-    );
-    expect(response.status).toBe(200);
-  });
+	test('skips CSRF on the SAML ACS callback path', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
 
-  test("rejects a foreign Origin on cookie mutating requests after CSRF verifies", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-    const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
-    await expect(
-      middleware(
-        new Request("http://example.test/api/v1/auth/login", {
-          method: "POST",
-          headers: {
-            cookie: cookie.split(";")[0] ?? "",
-            "x-csrf-token": token,
-            origin: "https://evil.example",
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({ email: "demo@example.com", password: "x" }),
-        }),
-        async () => new Response("ok"),
-      ),
-    ).rejects.toThrow("Cross-site cookie requests are not allowed.");
-  });
+		const response = await middleware(
+			new Request('http://example.test/auth/saml/acs', { method: 'POST' }),
+			async () => new Response('ok'),
+		);
 
-  test("rejects an unparsable Origin on cookie mutating requests", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-    const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
-    await expect(
-      middleware(
-        new Request("http://example.test/api/v1/auth/login", {
-          method: "POST",
-          headers: {
-            cookie: cookie.split(";")[0] ?? "",
-            "x-csrf-token": token,
-            origin: "not a url",
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({ email: "demo@example.com" }),
-        }),
-        async () => new Response("ok"),
-      ),
-    ).rejects.toThrow("Cross-site cookie requests are not allowed.");
-  });
+		expect(response.status).toBe(200);
+	});
 
-  test("allows a same-origin Origin after CSRF verifies", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-    const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
-    const response = await middleware(
-      new Request("http://example.test/api/v1/auth/login", {
-        method: "POST",
-        headers: {
-          cookie: cookie.split(";")[0] ?? "",
-          "x-csrf-token": token,
-          origin: "http://example.test",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ email: "demo@example.com" }),
-      }),
-      async () => new Response("ok"),
-    );
-    expect(response.status).toBe(200);
-  });
+	test('skips CSRF on inbound Stripe billing webhook paths', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
 
-  test("rejects a missing Origin on cookie mutating requests after CSRF verifies", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-    const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
-    await expect(
-      middleware(
-        new Request("http://example.test/api/v1/auth/login", {
-          method: "POST",
-          headers: {
-            cookie: cookie.split(";")[0] ?? "",
-            "x-csrf-token": token,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({ email: "demo@example.com" }),
-        }),
-        async () => new Response("ok"),
-      ),
-    ).rejects.toThrow("Cross-site cookie requests are not allowed.");
-  });
+		const response = await middleware(
+			new Request('http://example.test/billing/webhooks/stripe', { method: 'POST' }),
+			async () => new Response('ok'),
+		);
 
-  test("does not require Origin on GET", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-    const response = await middleware(
-      new Request("http://example.test/login"),
-      async () => new Response("ok"),
-    );
-    expect(response.status).toBe(200);
-  });
+		expect(response.status).toBe(200);
+	});
 
-  test("requires a token after cookie login", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-    await expect(
-      runWithAuthContext({ id: 3 }, "session", () =>
-        middleware(
-          new Request("http://example.test/api/v1/auth/logout", { method: "POST" }),
-          async () => new Response("ok"),
-        ),
-      ),
-    ).rejects.toThrow(ForbiddenError);
-  });
+	test('skips CSRF on SCIM mutating paths that use their own bearer', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
 
-  test("nested GET CSRF reuses the first issued token instead of minting a second cookie", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
-    const request = new Request("http://example.test/api/v1/auth/csrf");
-    const response = await runWithRequestMeta({ ipAddress: null, userAgent: null }, async () =>
-      middleware(request, async () =>
-        middleware(request, async () =>
-          Response.json({
-            token: resolveCsrfTokenForRequest(
-              request,
-              csrfTokenOptionsFromEnvironment(process.env),
-            ),
-          }),
-        ),
-      ),
-    );
-    const cookies = response.headers.getSetCookie().filter((item) => item.includes("csrf="));
-    expect(cookies).toHaveLength(1);
-    const cookiePair = cookies[0]?.split(";")[0] ?? "";
-    const cookieToken = decodeURIComponent(cookiePair.slice(cookiePair.indexOf("=") + 1));
-    const body = (await response.json()) as { token: string };
-    expect(body.token).toBe(cookieToken);
-    expect(
-      verifyCsrfToken(
-        new Request("http://example.test/", { headers: { cookie: cookiePair } }),
-        body.token,
-        csrfTokenOptionsFromEnvironment(process.env),
-      ),
-    ).toBe(true);
-  });
+		const response = await middleware(
+			new Request('http://example.test/scim/v2/Users', { method: 'POST' }),
+			async () => new Response('ok'),
+		);
 
-  test("does not skip CSRF for an unused Authorization header", async () => {
-    const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+		expect(response.status).toBe(200);
+	});
 
-    await expect(
-      runWithAuthContext(null, null, () =>
-        middleware(
-          new Request("http://example.test/login", {
-            method: "POST",
-            headers: { authorization: "Bearer garbage" },
-          }),
-          async () => new Response("ok"),
-        ),
-      ),
-    ).rejects.toThrow(ForbiddenError);
-  });
+	test('skips CSRF on the configured SAML ACS pathname', async () => {
+		const previous = process.env.SAML_ACS_URL;
+
+		process.env.SAML_ACS_URL = 'https://app.example.test/sso/acs';
+		try {
+			const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+
+			const response = await middleware(
+				new Request('http://example.test/sso/acs', { method: 'POST' }),
+				async () => new Response('ok'),
+			);
+
+			expect(response.status).toBe(200);
+		} finally {
+			if (previous === undefined) {
+				delete process.env.SAML_ACS_URL;
+			} else {
+				process.env.SAML_ACS_URL = previous;
+			}
+		}
+	});
+
+	test('treats an unparsable SAML ACS URL as the default path', async () => {
+		const previous = process.env.SAML_ACS_URL;
+
+		process.env.SAML_ACS_URL = 'http://%';
+		try {
+			const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+
+			const response = await middleware(
+				new Request('http://example.test/auth/saml/acs', { method: 'POST' }),
+				async () => new Response('ok'),
+			);
+
+			expect(response.status).toBe(200);
+		} finally {
+			if (previous === undefined) {
+				delete process.env.SAML_ACS_URL;
+			} else {
+				process.env.SAML_ACS_URL = previous;
+			}
+		}
+	});
+
+	test('rejects guest mutating requests without a csrf token', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+
+		await expect(
+			middleware(
+				new Request('http://example.test/api/v1/auth/login', { method: 'POST' }),
+				async () => new Response('ok'),
+			),
+		).rejects.toThrow(ForbiddenError);
+	});
+
+	test('accepts guest JSON mutating requests with a matching CSRF header', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+
+		const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
+
+		const response = await middleware(
+			new Request('http://example.test/api/v1/auth/login', {
+				method: 'POST',
+				headers: {
+					cookie: cookie.split(';')[0] ?? '',
+					'x-csrf-token': token,
+					'content-type': 'application/json',
+					origin: 'http://example.test',
+				},
+				body: JSON.stringify({ email: 'demo@example.com' }),
+			}),
+			async () => new Response('ok'),
+		);
+
+		expect(response.status).toBe(200);
+	});
+
+	test('rejects a foreign Origin on cookie mutating requests after CSRF verifies', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+
+		const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
+
+		await expect(
+			middleware(
+				new Request('http://example.test/api/v1/auth/login', {
+					method: 'POST',
+					headers: {
+						cookie: cookie.split(';')[0] ?? '',
+						'x-csrf-token': token,
+						origin: 'https://evil.example',
+						'content-type': 'application/json',
+					},
+					body: JSON.stringify({ email: 'demo@example.com', password: 'x' }),
+				}),
+				async () => new Response('ok'),
+			),
+		).rejects.toThrow('Cross-site cookie requests are not allowed.');
+	});
+
+	test('rejects an unparsable Origin on cookie mutating requests', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+
+		const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
+
+		await expect(
+			middleware(
+				new Request('http://example.test/api/v1/auth/login', {
+					method: 'POST',
+					headers: {
+						cookie: cookie.split(';')[0] ?? '',
+						'x-csrf-token': token,
+						origin: 'not a url',
+						'content-type': 'application/json',
+					},
+					body: JSON.stringify({ email: 'demo@example.com' }),
+				}),
+				async () => new Response('ok'),
+			),
+		).rejects.toThrow('Cross-site cookie requests are not allowed.');
+	});
+
+	test('allows a same-origin Origin after CSRF verifies', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+
+		const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
+
+		const response = await middleware(
+			new Request('http://example.test/api/v1/auth/login', {
+				method: 'POST',
+				headers: {
+					cookie: cookie.split(';')[0] ?? '',
+					'x-csrf-token': token,
+					origin: 'http://example.test',
+					'content-type': 'application/json',
+				},
+				body: JSON.stringify({ email: 'demo@example.com' }),
+			}),
+			async () => new Response('ok'),
+		);
+
+		expect(response.status).toBe(200);
+	});
+
+	test('rejects a missing Origin on cookie mutating requests after CSRF verifies', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+
+		const { token, cookie } = createCsrfTokenCookie(csrfTokenOptionsFromEnvironment(process.env));
+
+		await expect(
+			middleware(
+				new Request('http://example.test/api/v1/auth/login', {
+					method: 'POST',
+					headers: {
+						cookie: cookie.split(';')[0] ?? '',
+						'x-csrf-token': token,
+						'content-type': 'application/json',
+					},
+					body: JSON.stringify({ email: 'demo@example.com' }),
+				}),
+				async () => new Response('ok'),
+			),
+		).rejects.toThrow('Cross-site cookie requests are not allowed.');
+	});
+
+	test('does not require Origin on GET', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+
+		const response = await middleware(
+			new Request('http://example.test/login'),
+			async () => new Response('ok'),
+		);
+
+		expect(response.status).toBe(200);
+	});
+
+	test('requires a token after cookie login', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+
+		await expect(
+			runWithAuthContext({ id: 3 }, 'session', () =>
+				middleware(
+					new Request('http://example.test/api/v1/auth/logout', { method: 'POST' }),
+					async () => new Response('ok'),
+				),
+			),
+		).rejects.toThrow(ForbiddenError);
+	});
+
+	test('nested GET CSRF reuses the first issued token instead of minting a second cookie', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+
+		const request = new Request('http://example.test/api/v1/auth/csrf');
+
+		const response = await runWithRequestMeta({ ipAddress: null, userAgent: null }, async () =>
+			middleware(request, async () =>
+				middleware(request, async () =>
+					Response.json({
+						token: resolveCsrfTokenForRequest(
+							request,
+							csrfTokenOptionsFromEnvironment(process.env),
+						),
+					}),
+				),
+			),
+		);
+
+		const cookies = response.headers.getSetCookie().filter((item) => item.includes('csrf='));
+
+		expect(cookies).toHaveLength(1);
+		const cookiePair = cookies[0]?.split(';')[0] ?? '';
+
+		const cookieToken = decodeURIComponent(cookiePair.slice(cookiePair.indexOf('=') + 1));
+
+		const body = (await response.json()) as { token: string };
+
+		expect(body.token).toBe(cookieToken);
+		expect(
+			verifyCsrfToken(
+				new Request('http://example.test/', { headers: { cookie: cookiePair } }),
+				body.token,
+				csrfTokenOptionsFromEnvironment(process.env),
+			),
+		).toBe(true);
+	});
+
+	test('does not skip CSRF for an unused Authorization header', async () => {
+		const middleware = createCsrfMiddleware(csrfMiddlewareOptionsFromEnvironment(process.env));
+
+		await expect(
+			runWithAuthContext(null, null, () =>
+				middleware(
+					new Request('http://example.test/login', {
+						method: 'POST',
+						headers: { authorization: 'Bearer garbage' },
+					}),
+					async () => new Response('ok'),
+				),
+			),
+		).rejects.toThrow(ForbiddenError);
+	});
 });
 
 test("GET CSRF scopes the explicit request without mutating or relabeling another request's metadata", async () => {
-  const options = csrfMiddlewareOptionsFromEnvironment(process.env);
-  const middleware = createCsrfMiddleware(options);
-  const policy = csrfTokenOptionsFromEnvironment(process.env);
-  const first = createCsrfTokenCookie(policy);
-  const second = createCsrfTokenCookie(policy);
-  const requestA = new Request("https://app.test/a", {
-    headers: { cookie: first.cookie.split(";")[0] ?? "" },
-  });
-  const requestB = new Request("https://app.test/b");
-  const outer = {
-    ipAddress: null,
-    userAgent: null,
-    request: requestB,
-    csrfToken: second.token,
-    cspNonce: "nonce-b",
-    flash: { level: "info", message: "flash-b" },
-  };
-  await runWithRequestMeta(outer, async () => {
-    const response = await middleware(requestA, async () => {
-      expect(currentRequestMeta().request).toBe(requestA);
-      expect(currentRequestMeta().csrfToken).toBe(first.token);
-      expect(currentRequestMeta().cspNonce).toBeUndefined();
-      expect(currentRequestMeta().flash).toBeUndefined();
-      return middleware(requestA, async () => {
-        expect(currentRequestMeta().request).toBe(requestA);
-        expect(currentRequestMeta().csrfToken).toBe(first.token);
-        return new Response("ok");
-      });
-    });
-    expect(await response.text()).toBe("ok");
-    expect(response.headers.getSetCookie()).toHaveLength(0);
-    expect(currentRequestMeta()).toBe(outer);
-    expect(outer.csrfToken).toBe(second.token);
-    expect(outer.cspNonce).toBe("nonce-b");
-    expect(outer.flash.message).toBe("flash-b");
-  });
+	const options = csrfMiddlewareOptionsFromEnvironment(process.env);
+
+	const middleware = createCsrfMiddleware(options);
+
+	const policy = csrfTokenOptionsFromEnvironment(process.env);
+
+	const first = createCsrfTokenCookie(policy);
+
+	const second = createCsrfTokenCookie(policy);
+
+	const requestA = new Request('https://app.test/a', {
+		headers: { cookie: first.cookie.split(';')[0] ?? '' },
+	});
+
+	const requestB = new Request('https://app.test/b');
+
+	const outer = {
+		ipAddress: null,
+		userAgent: null,
+		request: requestB,
+		csrfToken: second.token,
+		cspNonce: 'nonce-b',
+		flash: { level: 'info', message: 'flash-b' },
+	};
+
+	await runWithRequestMeta(outer, async () => {
+		const response = await middleware(requestA, async () => {
+			expect(currentRequestMeta().request).toBe(requestA);
+			expect(currentRequestMeta().csrfToken).toBe(first.token);
+			expect(currentRequestMeta().cspNonce).toBeUndefined();
+			expect(currentRequestMeta().flash).toBeUndefined();
+
+			return middleware(requestA, async () => {
+				expect(currentRequestMeta().request).toBe(requestA);
+				expect(currentRequestMeta().csrfToken).toBe(first.token);
+
+				return new Response('ok');
+			});
+		});
+
+		expect(await response.text()).toBe('ok');
+		expect(response.headers.getSetCookie()).toHaveLength(0);
+		expect(currentRequestMeta()).toBe(outer);
+		expect(outer.csrfToken).toBe(second.token);
+		expect(outer.cspNonce).toBe('nonce-b');
+		expect(outer.flash.message).toBe('flash-b');
+	});
 });

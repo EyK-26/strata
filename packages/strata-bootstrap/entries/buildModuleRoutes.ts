@@ -1,1 +1,1 @@
-export * from "../../../src/bootstrap/buildModuleRoutes.ts";
+export * from '../../../src/bootstrap/buildModuleRoutes.ts';

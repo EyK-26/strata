@@ -1,1 +1,1 @@
-export * from "../../../../src/core/logging/requestLoggingMiddleware.ts";
+export * from '../../../../src/core/logging/requestLoggingMiddleware.ts';

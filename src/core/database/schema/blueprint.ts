@@ -1,235 +1,264 @@
-import { ColumnDefinition, ForeignIdColumnDefinition } from "./columnDefinition.ts";
+import { ColumnDefinition, ForeignIdColumnDefinition } from './columnDefinition.ts';
 
-type IndexKind = "index" | "unique" | "partial" | "uniquePartial" | "fullText" | "gin";
+type IndexKind = 'index' | 'unique' | 'partial' | 'uniquePartial' | 'fullText' | 'gin';
 
 interface IndexDefinition {
-  name?: string;
-  columns: string[];
-  kind: IndexKind;
-  where?: string;
-  order?: "asc" | "desc";
+	name?: string;
+	columns: string[];
+	kind: IndexKind;
+	where?: string;
+	order?: 'asc' | 'desc';
 }
 
 interface TableForeignKeyDefinition {
-  columns: string[];
-  referencesTable: string;
-  referencesColumns: string[];
-  name?: string;
-  onDelete?: "cascade" | "set null" | "restrict";
+	columns: string[];
+	referencesTable: string;
+	referencesColumns: string[];
+	name?: string;
+	onDelete?: 'cascade' | 'set null' | 'restrict';
 }
 
 interface TableCheckDefinition {
-  expression: string;
-  name?: string;
+	expression: string;
+	name?: string;
 }
 
-type BlueprintAction = "create" | "alter" | "drop";
+type BlueprintAction = 'create' | 'alter' | 'drop';
 
 class Blueprint {
-  readonly table: string;
-  readonly action: BlueprintAction;
-  readonly columns: ColumnDefinition[] = [];
-  readonly indexes: IndexDefinition[] = [];
-  readonly foreignKeys: TableForeignKeyDefinition[] = [];
-  readonly checks: TableCheckDefinition[] = [];
-  readonly droppedColumns: string[] = [];
-  readonly droppedIndexes: string[] = [];
+	readonly table: string;
+	readonly action: BlueprintAction;
+	readonly columns: ColumnDefinition[] = [];
+	readonly indexes: IndexDefinition[] = [];
+	readonly foreignKeys: TableForeignKeyDefinition[] = [];
+	readonly checks: TableCheckDefinition[] = [];
+	readonly droppedColumns: string[] = [];
+	readonly droppedIndexes: string[] = [];
 
-  constructor(table: string, action: BlueprintAction) {
-    this.table = table;
-    this.action = action;
-  }
+	constructor(table: string, action: BlueprintAction) {
+		this.table = table;
+		this.action = action;
+	}
 
-  id(name = "id"): ColumnDefinition {
-    const column = new ColumnDefinition(name, "id");
-    column.primary();
-    column.autoIncrement = true;
-    this.columns.push(column);
-    return column;
-  }
+	id(name = 'id'): ColumnDefinition {
+		const column = new ColumnDefinition(name, 'id');
 
-  /** Generated 64-bit primary key; does not change existing id() migrations. */
-  bigId(name = "id"): ColumnDefinition {
-    const column = new ColumnDefinition(name, "bigId");
-    column.primary();
-    column.autoIncrement = true;
-    this.columns.push(column);
-    return column;
-  }
+		column.primary();
+		column.autoIncrement = true;
+		this.columns.push(column);
 
-  string(name: string, length?: number): ColumnDefinition {
-    if (length !== undefined && (!Number.isSafeInteger(length) || length <= 0)) {
-      throw new Error("String length must be a positive safe integer.");
-    }
-    const column = new ColumnDefinition(name, "string");
-    column.length = length;
-    column.notNullable();
-    this.columns.push(column);
-    return column;
-  }
+		return column;
+	}
 
-  /** Application-supplied UUID: native PostgreSQL UUID, MySQL CHAR(36), SQLite TEXT. */
-  uuid(name: string): ColumnDefinition {
-    const column = new ColumnDefinition(name, "uuid");
-    column.notNullable();
-    this.columns.push(column);
-    return column;
-  }
+	/** Generated 64-bit primary key; does not change existing id() migrations. */
+	bigId(name = 'id'): ColumnDefinition {
+		const column = new ColumnDefinition(name, 'bigId');
 
-  text(name: string): ColumnDefinition {
-    const column = new ColumnDefinition(name, "text");
-    column.notNullable();
-    this.columns.push(column);
-    return column;
-  }
+		column.primary();
+		column.autoIncrement = true;
+		this.columns.push(column);
 
-  boolean(name: string): ColumnDefinition {
-    const column = new ColumnDefinition(name, "boolean");
-    column.notNullable();
-    this.columns.push(column);
-    return column;
-  }
+		return column;
+	}
 
-  integer(name: string): ColumnDefinition {
-    const column = new ColumnDefinition(name, "integer");
-    column.notNullable();
-    this.columns.push(column);
-    return column;
-  }
+	string(name: string, length?: number): ColumnDefinition {
+		if (length !== undefined && (!Number.isSafeInteger(length) || length <= 0)) {
+			throw new Error('String length must be a positive safe integer.');
+		}
 
-  bigInteger(name: string): ColumnDefinition {
-    const column = new ColumnDefinition(name, "bigInteger");
-    column.notNullable();
-    this.columns.push(column);
-    return column;
-  }
+		const column = new ColumnDefinition(name, 'string');
 
-  timestamp(name: string): ColumnDefinition {
-    const column = new ColumnDefinition(name, "timestamp");
-    column.notNullable();
-    this.columns.push(column);
-    return column;
-  }
+		column.length = length;
+		column.notNullable();
+		this.columns.push(column);
 
-  json(name: string): ColumnDefinition {
-    const column = new ColumnDefinition(name, "json");
-    column.notNullable();
-    this.columns.push(column);
-    return column;
-  }
+		return column;
+	}
 
-  jsonb(name: string): ColumnDefinition {
-    const column = new ColumnDefinition(name, "jsonb");
-    column.notNullable();
-    this.columns.push(column);
-    return column;
-  }
+	/** Application-supplied UUID: native PostgreSQL UUID, MySQL CHAR(36), SQLite TEXT. */
+	uuid(name: string): ColumnDefinition {
+		const column = new ColumnDefinition(name, 'uuid');
 
-  foreignId(name: string): ForeignIdColumnDefinition {
-    const column = new ForeignIdColumnDefinition(name);
-    this.columns.push(column);
-    return column;
-  }
+		column.notNullable();
+		this.columns.push(column);
 
-  timestamps(): void {
-    this.timestamp("created_at").defaultRaw("NOW()");
-    this.timestamp("updated_at").defaultRaw("NOW()");
-  }
+		return column;
+	}
 
-  softDeletes(): void {
-    this.timestamp("deleted_at").nullable();
-  }
+	text(name: string): ColumnDefinition {
+		const column = new ColumnDefinition(name, 'text');
 
-  dropColumn(name: string): void {
-    this.droppedColumns.push(name);
-  }
+		column.notNullable();
+		this.columns.push(column);
 
-  dropSoftDeletes(): void {
-    this.dropColumn("deleted_at");
-    this.dropIndex(`idx_${this.table}_deleted_at`);
-  }
+		return column;
+	}
 
-  dropIndex(name: string): void {
-    this.droppedIndexes.push(name);
-  }
+	boolean(name: string): ColumnDefinition {
+		const column = new ColumnDefinition(name, 'boolean');
 
-  unique(columns: string | string[], name?: string): void {
-    this.indexes.push({
-      name,
-      columns: Array.isArray(columns) ? columns : [columns],
-      kind: "unique",
-    });
-  }
+		column.notNullable();
+		this.columns.push(column);
 
-  foreignKey(
-    columns: string[],
-    referencesTable: string,
-    referencesColumns: string[],
-    options: { name?: string; onDelete?: "cascade" | "set null" | "restrict" } = {},
-  ): void {
-    if (!columns.length || columns.length !== referencesColumns.length) {
-      throw new Error("Foreign key columns must be nonempty and match referenced columns.");
-    }
-    this.foreignKeys.push({
-      columns: [...columns],
-      referencesTable,
-      referencesColumns: [...referencesColumns],
-      ...options,
-    });
-  }
+		return column;
+	}
 
-  check(expression: string, name?: string): void {
-    if (!expression.trim()) throw new Error("Check expression must not be empty.");
-    this.checks.push({ expression, name });
-  }
+	integer(name: string): ColumnDefinition {
+		const column = new ColumnDefinition(name, 'integer');
 
-  index(columns: string | string[], options: { name?: string; order?: "asc" | "desc" } = {}): void {
-    this.indexes.push({
-      name: options.name,
-      columns: Array.isArray(columns) ? columns : [columns],
-      kind: "index",
-      order: options.order,
-    });
-  }
+		column.notNullable();
+		this.columns.push(column);
 
-  partialIndex(
-    columns: string | string[],
-    where: string,
-    nameOrOptions?: string | { name?: string; unique?: boolean },
-  ): void {
-    const options =
-      typeof nameOrOptions === "string" ? { name: nameOrOptions } : (nameOrOptions ?? {});
+		return column;
+	}
 
-    this.indexes.push({
-      name: options.name,
-      columns: Array.isArray(columns) ? columns : [columns],
-      kind: options.unique ? "uniquePartial" : "partial",
-      where,
-    });
-  }
+	bigInteger(name: string): ColumnDefinition {
+		const column = new ColumnDefinition(name, 'bigInteger');
 
-  fullText(columns: string | string[], name?: string): void {
-    this.indexes.push({
-      name,
-      columns: Array.isArray(columns) ? columns : [columns],
-      kind: "fullText",
-    });
-  }
+		column.notNullable();
+		this.columns.push(column);
 
-  ginIndex(column: string, name?: string): void {
-    this.indexes.push({
-      name,
-      columns: [column],
-      kind: "gin",
-    });
-  }
+		return column;
+	}
+
+	timestamp(name: string): ColumnDefinition {
+		const column = new ColumnDefinition(name, 'timestamp');
+
+		column.notNullable();
+		this.columns.push(column);
+
+		return column;
+	}
+
+	json(name: string): ColumnDefinition {
+		const column = new ColumnDefinition(name, 'json');
+
+		column.notNullable();
+		this.columns.push(column);
+
+		return column;
+	}
+
+	jsonb(name: string): ColumnDefinition {
+		const column = new ColumnDefinition(name, 'jsonb');
+
+		column.notNullable();
+		this.columns.push(column);
+
+		return column;
+	}
+
+	foreignId(name: string): ForeignIdColumnDefinition {
+		const column = new ForeignIdColumnDefinition(name);
+
+		this.columns.push(column);
+
+		return column;
+	}
+
+	timestamps(): void {
+		this.timestamp('created_at').defaultRaw('NOW()');
+		this.timestamp('updated_at').defaultRaw('NOW()');
+	}
+
+	softDeletes(): void {
+		this.timestamp('deleted_at').nullable();
+	}
+
+	dropColumn(name: string): void {
+		this.droppedColumns.push(name);
+	}
+
+	dropSoftDeletes(): void {
+		this.dropColumn('deleted_at');
+		this.dropIndex(`idx_${this.table}_deleted_at`);
+	}
+
+	dropIndex(name: string): void {
+		this.droppedIndexes.push(name);
+	}
+
+	unique(columns: string | string[], name?: string): void {
+		this.indexes.push({
+			name,
+			columns: Array.isArray(columns) ? columns : [columns],
+			kind: 'unique',
+		});
+	}
+
+	foreignKey(
+		columns: string[],
+		referencesTable: string,
+		referencesColumns: string[],
+		options: { name?: string; onDelete?: 'cascade' | 'set null' | 'restrict' } = {},
+	): void {
+		if (!columns.length || columns.length !== referencesColumns.length) {
+			throw new Error('Foreign key columns must be nonempty and match referenced columns.');
+		}
+
+		this.foreignKeys.push({
+			columns: [...columns],
+			referencesTable,
+			referencesColumns: [...referencesColumns],
+			...options,
+		});
+	}
+
+	check(expression: string, name?: string): void {
+		if (!expression.trim()) {
+			throw new Error('Check expression must not be empty.');
+		}
+
+		this.checks.push({ expression, name });
+	}
+
+	index(columns: string | string[], options: { name?: string; order?: 'asc' | 'desc' } = {}): void {
+		this.indexes.push({
+			name: options.name,
+			columns: Array.isArray(columns) ? columns : [columns],
+			kind: 'index',
+			order: options.order,
+		});
+	}
+
+	partialIndex(
+		columns: string | string[],
+		where: string,
+		nameOrOptions?: string | { name?: string; unique?: boolean },
+	): void {
+		const options =
+			typeof nameOrOptions === 'string' ? { name: nameOrOptions } : (nameOrOptions ?? {});
+
+		this.indexes.push({
+			name: options.name,
+			columns: Array.isArray(columns) ? columns : [columns],
+			kind: options.unique ? 'uniquePartial' : 'partial',
+			where,
+		});
+	}
+
+	fullText(columns: string | string[], name?: string): void {
+		this.indexes.push({
+			name,
+			columns: Array.isArray(columns) ? columns : [columns],
+			kind: 'fullText',
+		});
+	}
+
+	ginIndex(column: string, name?: string): void {
+		this.indexes.push({
+			name,
+			columns: [column],
+			kind: 'gin',
+		});
+	}
 }
 
 export type {
-  BlueprintAction,
-  IndexDefinition,
-  IndexKind,
-  TableCheckDefinition,
-  TableForeignKeyDefinition,
+	BlueprintAction,
+	IndexDefinition,
+	IndexKind,
+	TableCheckDefinition,
+	TableForeignKeyDefinition,
 };
 export { Blueprint };

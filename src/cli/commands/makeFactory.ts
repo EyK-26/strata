@@ -1,1 +1,1 @@
-export { makeFactoryCommand } from "@getstrata/cli/scaffold";
+export { makeFactoryCommand } from '@getstrata/cli/scaffold';

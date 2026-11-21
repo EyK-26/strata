@@ -1,433 +1,566 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+
 import {
-  installGracefulShutdownSignals,
-  LifecycleCoordinator,
-} from "@getstrata/core/lifecycle/gracefulShutdown";
+	installGracefulShutdownSignals,
+	LifecycleCoordinator,
+} from '@getstrata/core/lifecycle/gracefulShutdown';
 
 const signalCleanups: (() => void)[] = [];
+
 afterEach(() => {
-  for (const cleanup of signalCleanups.splice(0)) cleanup();
+	for (const cleanup of signalCleanups.splice(0)) {
+		cleanup();
+	}
 });
 
-describe("gracefulShutdown", () => {
-  test("runs registered handlers in registration order", async () => {
-    const lifecycle = new LifecycleCoordinator();
-    const order: string[] = [];
+describe('gracefulShutdown', () => {
+	test('runs registered handlers in registration order', async () => {
+		const lifecycle = new LifecycleCoordinator();
 
-    lifecycle.register("first", async () => {
-      order.push("first");
-    });
-    lifecycle.register("second", async () => {
-      order.push("second");
-    });
+		const order: string[] = [];
 
-    await lifecycle.shutdown("TEST");
+		lifecycle.register('first', async () => {
+			order.push('first');
+		});
+		lifecycle.register('second', async () => {
+			order.push('second');
+		});
 
-    expect(order).toEqual(["first", "second"]);
-  });
+		await lifecycle.shutdown('TEST');
 
-  test("ignores duplicate shutdown requests", async () => {
-    const lifecycle = new LifecycleCoordinator();
-    let calls = 0;
+		expect(order).toEqual(['first', 'second']);
+	});
 
-    lifecycle.register("once", async () => {
-      calls += 1;
-    });
+	test('ignores duplicate shutdown requests', async () => {
+		const lifecycle = new LifecycleCoordinator();
 
-    await Promise.all([lifecycle.shutdown("TEST"), lifecycle.shutdown("TEST")]);
+		let calls = 0;
 
-    expect(calls).toBe(1);
-  });
+		lifecycle.register('once', async () => {
+			calls += 1;
+		});
 
-  test("continues running handlers when one fails", async () => {
-    const lifecycle = new LifecycleCoordinator();
-    const order: string[] = [];
-    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+		await Promise.all([lifecycle.shutdown('TEST'), lifecycle.shutdown('TEST')]);
 
-    lifecycle.register("broken", async () => {
-      throw new Error("shutdown failed");
-    });
-    lifecycle.register("after", async () => {
-      order.push("after");
-    });
+		expect(calls).toBe(1);
+	});
 
-    await lifecycle.shutdown("TEST");
+	test('continues running handlers when one fails', async () => {
+		const lifecycle = new LifecycleCoordinator();
 
-    errorSpy.mockRestore();
-    expect(order).toEqual(["after"]);
-  });
+		const order: string[] = [];
 
-  test("unregister removes a shutdown handler", async () => {
-    const lifecycle = new LifecycleCoordinator();
-    const order: string[] = [];
+		const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
 
-    const unregister = lifecycle.register("temporary", async () => {
-      order.push("temporary");
-    });
-    lifecycle.register("permanent", async () => {
-      order.push("permanent");
-    });
+		lifecycle.register('broken', async () => {
+			throw new Error('shutdown failed');
+		});
+		lifecycle.register('after', async () => {
+			order.push('after');
+		});
 
-    unregister();
-    await lifecycle.shutdown("TEST");
+		await lifecycle.shutdown('TEST');
 
-    expect(order).toEqual(["permanent"]);
-  });
+		errorSpy.mockRestore();
+		expect(order).toEqual(['after']);
+	});
 
-  test("installGracefulShutdownSignals is idempotent", () => {
-    const lifecycle = new LifecycleCoordinator();
-    const before = process.listenerCount("SIGUSR2");
+	test('unregister removes a shutdown handler', async () => {
+		const lifecycle = new LifecycleCoordinator();
 
-    signalCleanups.push(installGracefulShutdownSignals(["SIGUSR2"], lifecycle));
-    const afterFirst = process.listenerCount("SIGUSR2");
-    signalCleanups.push(installGracefulShutdownSignals(["SIGUSR2"], lifecycle));
+		const order: string[] = [];
 
-    expect(afterFirst).toBe(before + 1);
-    expect(process.listenerCount("SIGUSR2")).toBe(afterFirst);
-  });
+		const unregister = lifecycle.register('temporary', async () => {
+			order.push('temporary');
+		});
 
-  test("installGracefulShutdownSignals drains handlers before exiting", async () => {
-    const lifecycle = new LifecycleCoordinator();
-    const order: string[] = [];
-    const originalExit = process.exit;
-    let exitCode = -1;
+		lifecycle.register('permanent', async () => {
+			order.push('permanent');
+		});
 
-    process.exit = ((code?: number) => {
-      exitCode = code ?? 0;
-    }) as typeof process.exit;
+		unregister();
+		await lifecycle.shutdown('TEST');
 
-    lifecycle.register("cleanup", async () => {
-      order.push("cleanup");
-    });
+		expect(order).toEqual(['permanent']);
+	});
 
-    signalCleanups.push(installGracefulShutdownSignals(["SIGUSR2"], lifecycle));
-    process.emit("SIGUSR2");
+	test('installGracefulShutdownSignals is idempotent', () => {
+		const lifecycle = new LifecycleCoordinator();
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
+		const before = process.listenerCount('SIGUSR2');
 
-    process.exit = originalExit;
+		signalCleanups.push(installGracefulShutdownSignals(['SIGUSR2'], lifecycle));
+		const afterFirst = process.listenerCount('SIGUSR2');
 
-    expect(order).toEqual(["cleanup"]);
-    expect(exitCode).toBe(0);
-  });
-  test("phase order is independent of resource registration and all callers await the same drain", async () => {
-    const lifecycle = new LifecycleCoordinator({ timeoutMs: 1000 });
-    const order: string[] = [];
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    lifecycle.register(
-      "database",
-      () => {
-        order.push("close");
-      },
-      "close",
-    );
-    lifecycle.register(
-      "telemetry",
-      () => {
-        order.push("flush");
-      },
-      "flush",
-    );
-    lifecycle.register(
-      "worker",
-      async () => {
-        order.push("drain");
-        await gate;
-      },
-      "drain",
-    );
-    lifecycle.register(
-      "admission",
-      () => {
-        order.push("stop");
-      },
-      "stop",
-    );
-    const first = lifecycle.shutdown("TEST");
-    const second = lifecycle.shutdown("TEST_AGAIN");
-    expect(first).toBe(second);
-    await Bun.sleep(5);
-    expect(order).toEqual(["stop", "drain"]);
-    expect(() => lifecycle.register("late", () => {})).toThrow("during shutdown");
-    release();
-    expect((await first).successful).toBe(true);
-    expect(order).toEqual(["stop", "drain", "flush", "close"]);
-  });
+		signalCleanups.push(installGracefulShutdownSignals(['SIGUSR2'], lifecycle));
 
-  test("old unregister ownership cannot remove a replacement", async () => {
-    const lifecycle = new LifecycleCoordinator();
-    let calls = 0;
-    const remove = lifecycle.register("owned", () => {
-      calls += 100;
-    });
-    lifecycle.register("owned", () => {
-      calls++;
-    });
-    remove();
-    await lifecycle.shutdown();
-    expect(calls).toBe(1);
-  });
+		expect(afterFirst).toBe(before + 1);
+		expect(process.listenerCount('SIGUSR2')).toBe(afterFirst);
+	});
 
-  test("failed drain forces admission closed and never closes infrastructure", async () => {
-    const lifecycle = new LifecycleCoordinator();
-    const order: string[] = [];
-    const logging = spyOn(console, "error").mockImplementation(() => {});
-    try {
-      lifecycle.register(
-        "broken",
-        () => {
-          throw new Error("drain failed");
-        },
-        "drain",
-      );
-      lifecycle.register(
-        "infra",
-        () => {
-          order.push("close");
-        },
-        "close",
-      );
-      lifecycle.register(
-        "force",
-        (context) => {
-          expect(context.signal.aborted).toBe(true);
-          order.push("force");
-        },
-        "force",
-      );
-      const result = await lifecycle.shutdown();
-      expect(result.successful).toBe(false);
-      expect(result.timedOut).toBe(false);
-      expect(order).toEqual(["force"]);
-    } finally {
-      logging.mockRestore();
-    }
-  });
+	test('installGracefulShutdownSignals drains handlers before exiting', async () => {
+		const lifecycle = new LifecycleCoordinator();
 
-  test("deadline aborts and forces once, with no late infrastructure closure", async () => {
-    const lifecycle = new LifecycleCoordinator({ timeoutMs: 30 });
-    let release!: () => void;
-    let force = 0;
-    let close = 0;
-    let signal: AbortSignal | undefined;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    lifecycle.register(
-      "work",
-      async (context) => {
-        signal = context.signal;
-        await gate;
-      },
-      "drain",
-    );
-    lifecycle.register(
-      "infra",
-      () => {
-        close++;
-      },
-      "close",
-    );
-    lifecycle.register(
-      "force",
-      () => {
-        force++;
-      },
-      "force",
-    );
-    const result = await lifecycle.shutdown();
-    expect(result.timedOut).toBe(true);
-    expect(result.successful).toBe(false);
-    expect(signal?.aborted).toBe(true);
-    release();
-    await Bun.sleep(5);
-    expect(close).toBe(0);
-    expect(force).toBe(1);
-    expect(await lifecycle.shutdown()).toEqual(result);
-    expect(force).toBe(1);
-  });
+		const order: string[] = [];
 
-  test("flush and close failures retain non-success while other safe cleanup continues", async () => {
-    const lifecycle = new LifecycleCoordinator();
-    const order: string[] = [];
-    const logging = spyOn(console, "error").mockImplementation(() => {});
-    try {
-      lifecycle.register(
-        "flush",
-        () => {
-          throw new Error("exporter failed");
-        },
-        "flush",
-      );
-      lifecycle.register(
-        "close",
-        () => {
-          throw new Error("close failed");
-        },
-        "close",
-      );
-      lifecycle.register(
-        "later",
-        () => {
-          order.push("closed");
-        },
-        "close",
-      );
-      const result = await lifecycle.shutdown();
-      expect(result.successful).toBe(false);
-      expect(result.errors.map((entry) => entry.phase)).toEqual(["flush", "close"]);
-      expect(order).toEqual(["closed"]);
-    } finally {
-      logging.mockRestore();
-    }
-  });
+		const originalExit = process.exit;
 
-  test("signal ownership is uninstallable and repeated signals exit once with failure status", async () => {
-    const lifecycle = new LifecycleCoordinator({ timeoutMs: 20 });
-    const exits: number[] = [];
-    const original = process.exit;
-    const count = process.listenerCount("SIGUSR2");
-    process.exit = ((code?: number) => {
-      exits.push(code ?? 0);
-    }) as typeof process.exit;
-    const remove = installGracefulShutdownSignals(["SIGUSR2"], lifecycle);
-    try {
-      lifecycle.register("stuck", () => new Promise<void>(() => {}), "drain");
-      process.emit("SIGUSR2");
-      process.emit("SIGUSR2");
-      await Bun.sleep(40);
-      expect(exits).toEqual([1]);
-    } finally {
-      process.exit = original;
-      remove();
-    }
-    expect(process.listenerCount("SIGUSR2")).toBe(count);
-    for (const timeoutMs of [0, -1, Infinity, NaN, 1.5, 2_147_483_648])
-      expect(() => new LifecycleCoordinator({ timeoutMs })).toThrow(RangeError);
-  });
+		let exitCode = -1;
+
+		process.exit = ((code?: number) => {
+			exitCode = code ?? 0;
+		}) as typeof process.exit;
+
+		lifecycle.register('cleanup', async () => {
+			order.push('cleanup');
+		});
+
+		signalCleanups.push(installGracefulShutdownSignals(['SIGUSR2'], lifecycle));
+		process.emit('SIGUSR2');
+
+		await new Promise((resolve) => setTimeout(resolve, 20));
+
+		process.exit = originalExit;
+
+		expect(order).toEqual(['cleanup']);
+		expect(exitCode).toBe(0);
+	});
+	test('phase order is independent of resource registration and all callers await the same drain', async () => {
+		const lifecycle = new LifecycleCoordinator({ timeoutMs: 1000 });
+
+		const order: string[] = [];
+
+		let release!: () => void;
+
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+
+		lifecycle.register(
+			'database',
+			() => {
+				order.push('close');
+			},
+			'close',
+		);
+		lifecycle.register(
+			'telemetry',
+			() => {
+				order.push('flush');
+			},
+			'flush',
+		);
+		lifecycle.register(
+			'worker',
+			async () => {
+				order.push('drain');
+				await gate;
+			},
+			'drain',
+		);
+		lifecycle.register(
+			'admission',
+			() => {
+				order.push('stop');
+			},
+			'stop',
+		);
+		const first = lifecycle.shutdown('TEST');
+
+		const second = lifecycle.shutdown('TEST_AGAIN');
+
+		expect(first).toBe(second);
+		await Bun.sleep(5);
+		expect(order).toEqual(['stop', 'drain']);
+		expect(() => lifecycle.register('late', () => {})).toThrow('during shutdown');
+		release();
+		expect((await first).successful).toBe(true);
+		expect(order).toEqual(['stop', 'drain', 'flush', 'close']);
+	});
+
+	test('old unregister ownership cannot remove a replacement', async () => {
+		const lifecycle = new LifecycleCoordinator();
+
+		let calls = 0;
+
+		const remove = lifecycle.register('owned', () => {
+			calls += 100;
+		});
+
+		lifecycle.register('owned', () => {
+			calls++;
+		});
+		remove();
+		await lifecycle.shutdown();
+		expect(calls).toBe(1);
+	});
+
+	test('failed drain forces admission closed and never closes infrastructure', async () => {
+		const lifecycle = new LifecycleCoordinator();
+
+		const order: string[] = [];
+
+		const logging = spyOn(console, 'error').mockImplementation(() => {});
+
+		try {
+			lifecycle.register(
+				'broken',
+				() => {
+					throw new Error('drain failed');
+				},
+				'drain',
+			);
+			lifecycle.register(
+				'infra',
+				() => {
+					order.push('close');
+				},
+				'close',
+			);
+			lifecycle.register(
+				'force',
+				(context) => {
+					expect(context.signal.aborted).toBe(true);
+					order.push('force');
+				},
+				'force',
+			);
+			const result = await lifecycle.shutdown();
+
+			expect(result.successful).toBe(false);
+			expect(result.timedOut).toBe(false);
+			expect(order).toEqual(['force']);
+		} finally {
+			logging.mockRestore();
+		}
+	});
+
+	test('deadline aborts and forces once, with no late infrastructure closure', async () => {
+		const lifecycle = new LifecycleCoordinator({ timeoutMs: 30 });
+
+		let release!: () => void;
+
+		let force = 0;
+
+		let close = 0;
+
+		let signal: AbortSignal | undefined;
+
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+
+		lifecycle.register(
+			'work',
+			async (context) => {
+				signal = context.signal;
+				await gate;
+			},
+			'drain',
+		);
+		lifecycle.register(
+			'infra',
+			() => {
+				close++;
+			},
+			'close',
+		);
+		let laterDrain = 0;
+
+		lifecycle.register(
+			'later drain',
+			() => {
+				laterDrain++;
+			},
+			'drain',
+		);
+		lifecycle.register(
+			'force',
+			() => {
+				force++;
+			},
+			'force',
+		);
+		const result = await lifecycle.shutdown();
+
+		expect(result.timedOut).toBe(true);
+		expect(result.successful).toBe(false);
+		expect(signal?.aborted).toBe(true);
+		release();
+		await Bun.sleep(5);
+		expect(close).toBe(0);
+		expect(laterDrain).toBe(0);
+		expect(force).toBe(1);
+		expect(await lifecycle.shutdown()).toEqual(result);
+		expect(force).toBe(1);
+	});
+
+	test('a stop handler settling after the deadline never admits the next phase', async () => {
+		const lifecycle = new LifecycleCoordinator({ timeoutMs: 30 });
+
+		const stop = Promise.withResolvers<void>();
+
+		let drains = 0;
+
+		lifecycle.register('stop', () => stop.promise, 'stop');
+		lifecycle.register('drain', () => { drains++; }, 'drain');
+
+		try {
+			const result = await lifecycle.shutdown();
+
+			expect(result.successful).toBe(false);
+			expect(result.timedOut).toBe(true);
+			stop.resolve();
+			await stop.promise;
+			expect(drains).toBe(0);
+		} finally {
+			stop.resolve();
+		}
+	});
+
+	test('a deadline and late drain failure force shutdown only once if a hook shadows its signal', async () => {
+		const lifecycle = new LifecycleCoordinator({ timeoutMs: 30 });
+
+		const drain = Promise.withResolvers<void>();
+
+		let forced = 0;
+
+		let closed = 0;
+
+		lifecycle.register('drain', async () => {
+			await drain.promise;
+
+			throw new Error('Drain failed after the deadline.');
+		}, 'drain');
+		lifecycle.register('force', ({ signal }) => {
+			forced++;
+			Object.defineProperty(signal, 'aborted', { value: false });
+		}, 'force');
+		lifecycle.register('close', () => { closed++; }, 'close');
+
+		try {
+			const result = await lifecycle.shutdown();
+
+			expect(result.timedOut).toBe(true);
+			expect(result.successful).toBe(false);
+			drain.resolve();
+			await drain.promise;
+			await Promise.resolve();
+			expect(forced).toBe(1);
+			expect(closed).toBe(0);
+		} finally {
+			drain.resolve();
+		}
+	});
+
+	test('flush and close failures retain non-success while other safe cleanup continues', async () => {
+		const lifecycle = new LifecycleCoordinator();
+
+		const order: string[] = [];
+
+		const logging = spyOn(console, 'error').mockImplementation(() => {});
+
+		try {
+			lifecycle.register(
+				'flush',
+				() => {
+					throw new Error('exporter failed');
+				},
+				'flush',
+			);
+			lifecycle.register(
+				'close',
+				() => {
+					throw new Error('close failed');
+				},
+				'close',
+			);
+			lifecycle.register(
+				'later',
+				() => {
+					order.push('closed');
+				},
+				'close',
+			);
+			const result = await lifecycle.shutdown();
+
+			expect(result.successful).toBe(false);
+			expect(result.errors.map((entry) => entry.phase)).toEqual(['flush', 'close']);
+			expect(order).toEqual(['closed']);
+		} finally {
+			logging.mockRestore();
+		}
+	});
+
+	test('signal ownership is uninstallable and repeated signals exit once with failure status', async () => {
+		const lifecycle = new LifecycleCoordinator({ timeoutMs: 20 });
+
+		const exits: number[] = [];
+
+		const original = process.exit;
+
+		const count = process.listenerCount('SIGUSR2');
+
+		process.exit = ((code?: number) => {
+			exits.push(code ?? 0);
+		}) as typeof process.exit;
+		const remove = installGracefulShutdownSignals(['SIGUSR2'], lifecycle);
+
+		try {
+			lifecycle.register('stuck', () => new Promise<void>(() => {}), 'drain');
+			process.emit('SIGUSR2');
+			process.emit('SIGUSR2');
+			await Bun.sleep(40);
+			expect(exits).toEqual([1]);
+		} finally {
+			process.exit = original;
+			remove();
+		}
+		expect(process.listenerCount('SIGUSR2')).toBe(count);
+		for (const timeoutMs of [0, -1, Infinity, NaN, 1.5, 2_147_483_648]) {
+			expect(() => new LifecycleCoordinator({ timeoutMs })).toThrow(RangeError);
+		}
+	});
 });
 
-test("failed force hooks are observed and cannot prevent other emergency handlers", async () => {
-  const lifecycle = new LifecycleCoordinator();
-  const logging = spyOn(console, "error").mockImplementation(() => {});
-  let forced = false;
-  try {
-    lifecycle.register(
-      "broken-stop",
-      () => {
-        throw new Error("admission failed");
-      },
-      "stop",
-    );
-    lifecycle.register(
-      "sync-force",
-      () => {
-        throw new Error("sync force failed");
-      },
-      "force",
-    );
-    lifecycle.register(
-      "async-force",
-      async () => {
-        throw new Error("async force failed");
-      },
-      "force",
-    );
-    lifecycle.register(
-      "remaining-force",
-      () => {
-        forced = true;
-      },
-      "force",
-    );
-    const result = await lifecycle.shutdown();
-    await Bun.sleep(0);
-    expect(result.successful).toBe(false);
-    expect(forced).toBe(true);
-    expect(logging).toHaveBeenCalledTimes(3);
-  } finally {
-    logging.mockRestore();
-  }
+test('failed force hooks are observed and cannot prevent other emergency handlers', async () => {
+	const lifecycle = new LifecycleCoordinator();
+
+	const logging = spyOn(console, 'error').mockImplementation(() => {});
+
+	let forced = false;
+
+	try {
+		lifecycle.register(
+			'broken-stop',
+			() => {
+				throw new Error('admission failed');
+			},
+			'stop',
+		);
+		lifecycle.register(
+			'sync-force',
+			() => {
+				throw new Error('sync force failed');
+			},
+			'force',
+		);
+		lifecycle.register(
+			'async-force',
+			async () => {
+				throw new Error('async force failed');
+			},
+			'force',
+		);
+		lifecycle.register(
+			'remaining-force',
+			() => {
+				forced = true;
+			},
+			'force',
+		);
+		const result = await lifecycle.shutdown();
+
+		await Bun.sleep(0);
+		expect(result.successful).toBe(false);
+		expect(forced).toBe(true);
+		expect(logging).toHaveBeenCalledTimes(3);
+	} finally {
+		logging.mockRestore();
+	}
 });
 
-test("unexpected coordinator rejection on a signal exits with failure status", async () => {
-  class BrokenCoordinator extends LifecycleCoordinator {
-    override shutdown(): Promise<never> {
-      return Promise.reject(new Error("coordinator failed"));
-    }
-  }
-  const logging = spyOn(console, "error").mockImplementation(() => {});
-  const exits: number[] = [];
-  const original = process.exit;
-  process.exit = ((code?: number) => {
-    exits.push(code ?? 0);
-  }) as typeof process.exit;
-  const remove = installGracefulShutdownSignals(["SIGUSR2"], new BrokenCoordinator());
-  try {
-    process.emit("SIGUSR2");
-    await Bun.sleep(0);
-    expect(exits).toEqual([1]);
-    expect(logging).toHaveBeenCalledTimes(1);
-  } finally {
-    remove();
-    process.exit = original;
-    logging.mockRestore();
-  }
+test('unexpected coordinator rejection on a signal exits with failure status', async () => {
+	class BrokenCoordinator extends LifecycleCoordinator {
+		override shutdown(): Promise<never> {
+			return Promise.reject(new Error('coordinator failed'));
+		}
+	}
+
+	const logging = spyOn(console, 'error').mockImplementation(() => {});
+
+	const exits: number[] = [];
+
+	const original = process.exit;
+
+	process.exit = ((code?: number) => {
+		exits.push(code ?? 0);
+	}) as typeof process.exit;
+	const remove = installGracefulShutdownSignals(['SIGUSR2'], new BrokenCoordinator());
+
+	try {
+		process.emit('SIGUSR2');
+		await Bun.sleep(0);
+		expect(exits).toEqual([1]);
+		expect(logging).toHaveBeenCalledTimes(1);
+	} finally {
+		remove();
+		process.exit = original;
+		logging.mockRestore();
+	}
 });
 
-test("invalid environment timeout and runtime phase fail before registering resources", async () => {
-  const before = process.env.SHUTDOWN_TIMEOUT_MS;
-  try {
-    for (const value of ["0", "NaN", "2147483648"]) {
-      process.env.SHUTDOWN_TIMEOUT_MS = value;
-      expect(() => new LifecycleCoordinator()).toThrow("SHUTDOWN_TIMEOUT_MS");
-    }
-  } finally {
-    if (before === undefined) delete process.env.SHUTDOWN_TIMEOUT_MS;
-    else process.env.SHUTDOWN_TIMEOUT_MS = before;
-  }
-  const coordinator = new LifecycleCoordinator({ timeoutMs: 1000 });
-  let called = false;
-  expect(() =>
-    Reflect.apply(coordinator.register, coordinator, [
-      "bad",
-      () => {
-        called = true;
-      },
-      "unsupported",
-    ]),
-  ).toThrow("Unknown shutdown phase");
-  expect((await coordinator.shutdown()).successful).toBe(true);
-  expect(called).toBe(false);
+test('invalid environment timeout and runtime phase fail before registering resources', async () => {
+	const before = process.env.SHUTDOWN_TIMEOUT_MS;
+
+	try {
+		for (const value of ['0', 'NaN', '2147483648']) {
+			process.env.SHUTDOWN_TIMEOUT_MS = value;
+			expect(() => new LifecycleCoordinator()).toThrow('SHUTDOWN_TIMEOUT_MS');
+		}
+	} finally {
+		if (before === undefined) {
+			delete process.env.SHUTDOWN_TIMEOUT_MS;
+		} else {
+			process.env.SHUTDOWN_TIMEOUT_MS = before;
+		}
+	}
+	const coordinator = new LifecycleCoordinator({ timeoutMs: 1000 });
+
+	let called = false;
+
+	expect(() =>
+		Reflect.apply(coordinator.register, coordinator, [
+			'bad',
+			() => {
+				called = true;
+			},
+			'unsupported',
+		]),
+	).toThrow('Unknown shutdown phase');
+	expect((await coordinator.shutdown()).successful).toBe(true);
+	expect(called).toBe(false);
 });
 
-test("independent lifecycle owners cannot drain or unregister one another", async () => {
-  const a = new LifecycleCoordinator();
-  const b = new LifecycleCoordinator();
-  const calls: string[] = [];
-  const removeA = a.register("same-resource", () => {
-    calls.push("A");
-  });
-  b.register("same-resource", () => {
-    calls.push("B");
-  });
-  removeA();
-  a.register("same-resource", () => {
-    calls.push("A2");
-  });
-  await a.shutdown();
-  expect(calls).toEqual(["A2"]);
-  expect(b.isShuttingDown).toBe(false);
-  await b.shutdown();
-  expect(calls).toEqual(["A2", "B"]);
+test('independent lifecycle owners cannot drain or unregister one another', async () => {
+	const a = new LifecycleCoordinator();
+
+	const b = new LifecycleCoordinator();
+
+	const calls: string[] = [];
+
+	const removeA = a.register('same-resource', () => {
+		calls.push('A');
+	});
+
+	b.register('same-resource', () => {
+		calls.push('B');
+	});
+	removeA();
+	a.register('same-resource', () => {
+		calls.push('A2');
+	});
+	await a.shutdown();
+	expect(calls).toEqual(['A2']);
+	expect(b.isShuttingDown).toBe(false);
+	await b.shutdown();
+	expect(calls).toEqual(['A2', 'B']);
 });
 
-test("signal installation rejects missing ownership before installing listeners", () => {
-  const before = process.listenerCount("SIGUSR2");
-  // @ts-expect-error An explicit lifecycle is required even for a custom signal list.
-  expect(() => installGracefulShutdownSignals(["SIGUSR2"])).toThrow("explicit lifecycle");
-  expect(process.listenerCount("SIGUSR2")).toBe(before);
+test('signal installation rejects missing ownership before installing listeners', () => {
+	const before = process.listenerCount('SIGUSR2');
+
+	// @ts-expect-error An explicit lifecycle is required even for a custom signal list.
+	expect(() => installGracefulShutdownSignals(['SIGUSR2'])).toThrow('explicit lifecycle');
+	expect(process.listenerCount('SIGUSR2')).toBe(before);
 });

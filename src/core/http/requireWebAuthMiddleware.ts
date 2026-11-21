@@ -1,33 +1,38 @@
-import { runWithAuthUser } from "@getstrata/core/auth/authContext";
-import { createIntendedUrlCookieFromRequest } from "@getstrata/core/auth/intendedUrlCookie";
-import { UnauthorizedError } from "@getstrata/core/errors/http";
-import type { AuthReader } from "../auth/authReader";
-import { requestPrefersJson } from "./contentNegotiation";
-import type { Middleware } from "./middleware";
-import { loginRedirectLocation } from "./safeInternalPath";
+import { runWithAuthUser } from '@getstrata/core/auth/authContext';
+import { createIntendedUrlCookieFromRequest } from '@getstrata/core/auth/intendedUrlCookie';
+import { UnauthorizedError } from '@getstrata/core/errors/http';
+
+import type { AuthReader } from '../auth/authReader';
+
+import { requestPrefersJson } from './contentNegotiation';
+import type { Middleware } from './middleware';
+import { loginRedirectLocation } from './safeInternalPath';
 
 function createRequireWebAuthMiddleware(
-  auth: AuthReader,
-  intendedOptions: import("../auth/intendedUrlCookie").IntendedUrlCookieOptions,
+	auth: AuthReader,
+	intendedOptions: import('../auth/intendedUrlCookie').IntendedUrlCookieOptions,
 ): Middleware {
-  return async (request: Request, next: () => Promise<Response>) => {
-    const user = await auth.resolve(request);
+	return async (request: Request, next: () => Promise<Response>) => {
+		const user = await auth.resolve(request);
 
-    if (user) {
-      return await runWithAuthUser(user, () => next());
-    }
+		if (user) {
+			return await runWithAuthUser(user, () => next());
+		}
 
-    if (requestPrefersJson(request)) {
-      throw new UnauthorizedError();
-    }
+		if (requestPrefersJson(request)) {
+			throw new UnauthorizedError();
+		}
 
-    const intended = createIntendedUrlCookieFromRequest(request, intendedOptions);
-    const headers = new Headers({ Location: loginRedirectLocation(request) });
-    if (intended) {
-      headers.append("Set-Cookie", intended);
-    }
-    return new Response(null, { status: 302, headers });
-  };
+		const intended = createIntendedUrlCookieFromRequest(request, intendedOptions);
+
+		const headers = new Headers({ Location: loginRedirectLocation(request) });
+
+		if (intended) {
+			headers.append('Set-Cookie', intended);
+		}
+
+		return new Response(null, { status: 302, headers });
+	};
 }
 
 export { createRequireWebAuthMiddleware };

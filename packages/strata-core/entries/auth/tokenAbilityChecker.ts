@@ -1,1 +1,1 @@
-export * from "../../../../src/core/auth/tokenAbilityChecker.ts";
+export * from '../../../../src/core/auth/tokenAbilityChecker.ts';

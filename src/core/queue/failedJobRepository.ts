@@ -1,60 +1,69 @@
-import { defineRepository, type RepositoryBinding } from "@getstrata/core/database/definitions";
-import type { MutationValues, QueryOptions } from "@getstrata/core/database/types";
-import { BaseRepository } from "#strata-orm-runtime";
-import { failedJobTable } from "./failedJobTable";
-import type { FailedJobRecord } from "./types";
+import { defineRepository, type RepositoryBinding } from '@getstrata/core/database/definitions';
+import type { MutationValues, QueryOptions } from '@getstrata/core/database/types';
 
-class FailedJobRepository extends BaseRepository<FailedJobRecord, "id"> {
-  constructor(private readonly selected: RepositoryBinding<FailedJobRecord, "id">) {
-    super(selected);
-  }
+import { BaseRepository } from '#strata-orm-runtime';
 
-  override async create(values: MutationValues<FailedJobRecord>): Promise<FailedJobRecord> {
-    // This table owns the JSON/timestamp storage mapping. Repository callers and
-    // replay callbacks retain the logical Record/Date contract on every driver.
-    const stored = {
-      ...values,
-      ...(values.payload === undefined
-        ? {}
-        : {
-            // Bun's PostgreSQL JSONB codec serializes objects itself; a JSON
-            // string here becomes a JSONB string rather than the original object.
-            payload:
-              this.selected.dialect.driver === "pgsql"
-                ? values.payload
-                : JSON.stringify(values.payload),
-          }),
-      ...(values.failed_at === undefined
-        ? {}
-        : { failed_at: this.selected.dialect.timestampValue(values.failed_at) }),
-    };
-    return hydrateFailure(await super.create(stored as MutationValues<FailedJobRecord>));
-  }
+import { failedJobTable } from './failedJobTable';
+import type { FailedJobRecord } from './types';
 
-  override async findAll(options: QueryOptions<FailedJobRecord> = {}): Promise<FailedJobRecord[]> {
-    const rows = await super.findAll(options);
-    // Selections are driver projections. An alias named payload/failed_at need
-    // not represent stored JSON/a timestamp and must not be coerced as one.
-    return options.select?.length ? rows : rows.map(hydrateFailure);
-  }
+class FailedJobRepository extends BaseRepository<FailedJobRecord, 'id'> {
+	constructor(private readonly selected: RepositoryBinding<FailedJobRecord, 'id'>) {
+		super(selected);
+	}
+
+	override async create(values: MutationValues<FailedJobRecord>): Promise<FailedJobRecord> {
+		// This table owns the JSON/timestamp storage mapping. Repository callers and
+		// replay callbacks retain the logical Record/Date contract on every driver.
+		const stored = {
+			...values,
+			...(values.payload === undefined
+				? {}
+				: {
+						// Bun's PostgreSQL JSONB codec serializes objects itself; a JSON
+						// string here becomes a JSONB string rather than the original object.
+						payload:
+							this.selected.dialect.driver === 'pgsql'
+								? values.payload
+								: JSON.stringify(values.payload),
+					}),
+			...(values.failed_at === undefined
+				? {}
+				: { failed_at: this.selected.dialect.timestampValue(values.failed_at) }),
+		};
+
+		return hydrateFailure(await super.create(stored as MutationValues<FailedJobRecord>));
+	}
+
+	override async findAll(options: QueryOptions<FailedJobRecord> = {}): Promise<FailedJobRecord[]> {
+		const rows = await super.findAll(options);
+
+		// Selections are driver projections. An alias named payload/failed_at need
+		// not represent stored JSON/a timestamp and must not be coerced as one.
+		return options.select?.length ? rows : rows.map(hydrateFailure);
+	}
 }
 
 function hydrateFailure(row: FailedJobRecord): FailedJobRecord {
-  const result = { ...row };
-  if (typeof row.payload === "string") result.payload = JSON.parse(row.payload);
-  // A projection must retain exactly its selected fields; absent timestamps
-  // must not become fabricated Invalid Dates (or extra JSON null properties).
-  if ("failed_at" in row && !(row.failed_at instanceof Date)) {
-    result.failed_at = new Date(row.failed_at);
-  }
-  return result;
+	const result = { ...row };
+
+	if (typeof row.payload === 'string') {
+		result.payload = JSON.parse(row.payload);
+	}
+
+	// A projection must retain exactly its selected fields; absent timestamps
+	// must not become fabricated Invalid Dates (or extra JSON null properties).
+	if ('failed_at' in row && !(row.failed_at instanceof Date)) {
+		result.failed_at = new Date(row.failed_at);
+	}
+
+	return result;
 }
 
 const failedJobRepository = defineRepository({
-  name: "core.failedJobs",
-  table: failedJobTable,
-  dependencies: [] as const,
-  create: (binding) => new FailedJobRepository(binding),
+	name: 'core.failedJobs',
+	table: failedJobTable,
+	dependencies: [] as const,
+	create: (binding) => new FailedJobRepository(binding),
 });
 
 export { FailedJobRepository, failedJobRepository };

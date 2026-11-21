@@ -1,1 +1,1 @@
-export * from "../../../src/bootstrap/ownedHttpRoute";
+export * from '../../../src/bootstrap/ownedHttpRoute';

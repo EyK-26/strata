@@ -1,1 +1,1 @@
-export * from "../../../../src/core/audit/exportAuditLogs.ts";
+export * from '../../../../src/core/audit/exportAuditLogs.ts';

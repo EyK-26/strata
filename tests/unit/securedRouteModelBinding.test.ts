@@ -1,197 +1,205 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import type { AuthUser } from "@getstrata/core/auth/authContext";
-import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
-import { Policy, PolicyDeniedError, PolicyGate } from "@getstrata/core/auth/policy";
-import { NotFoundError, PreconditionFailedError } from "@getstrata/core/errors/http";
-import { etagFromResource } from "@getstrata/core/http/etag";
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+
+import type { AuthUser } from '@getstrata/core/auth/authContext';
+import { AuthManager, GuestGuard } from '@getstrata/core/auth/guard';
+import { Policy, PolicyDeniedError, PolicyGate } from '@getstrata/core/auth/policy';
+import { NotFoundError, PreconditionFailedError } from '@getstrata/core/errors/http';
+import { etagFromResource } from '@getstrata/core/http/etag';
 import {
-  type RouteModelBindingPorts,
-  securedBindRouteModel,
-} from "@getstrata/core/http/securedRouteModelBinding";
+	type RouteModelBindingPorts,
+	securedBindRouteModel,
+} from '@getstrata/core/http/securedRouteModelBinding';
+
 import {
-  enableDevAuthHeaders,
-  guestGuardOptions,
-  restoreDevAuthHeaders,
-} from "../helpers/devAuthHeaders";
+	enableDevAuthHeaders,
+	guestGuardOptions,
+	restoreDevAuthHeaders,
+} from '../helpers/devAuthHeaders';
 
 interface WidgetRecord {
-  id: number;
-  name: string;
-  updated_at: string;
+	id: number;
+	name: string;
+	updated_at: string;
 }
 
 class WidgetPolicy extends Policy {
-  override view(_user: AuthUser | null, _resource: WidgetRecord): boolean {
-    return true;
-  }
+	override view(_user: AuthUser | null, _resource: WidgetRecord): boolean {
+		return true;
+	}
 
-  override update(_user: AuthUser | null, _resource: WidgetRecord): boolean {
-    return _user?.role === "admin";
-  }
+	override update(_user: AuthUser | null, _resource: WidgetRecord): boolean {
+		return _user?.role === 'admin';
+	}
 }
 
 type WidgetParams = { id: string };
 
 function bootstrapPolicyGate(): RouteModelBindingPorts {
-  const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
-  const gate = new PolicyGate();
-  gate.register("widget", new WidgetPolicy());
-  return { auth, authorize: gate.authorize.bind(gate), etagEnabled: true };
+	const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
+
+	const gate = new PolicyGate();
+
+	gate.register('widget', new WidgetPolicy());
+
+	return { auth, authorize: gate.authorize.bind(gate), etagEnabled: true };
 }
 
-describe("securedBindRouteModel", () => {
-  let previousHeaders: string | undefined;
-  beforeEach(() => {
-    previousHeaders = enableDevAuthHeaders();
-  });
-  afterEach(() => {
-    restoreDevAuthHeaders(previousHeaders);
-  });
-  test("authorizes against the resolved model before running the handler", async () => {
-    const ports = bootstrapPolicyGate();
+describe('securedBindRouteModel', () => {
+	let previousHeaders: string | undefined;
 
-    const handler = securedBindRouteModel(
-      "id",
-      async (id) => ({
-        id,
-        name: `Widget ${id}`,
-        updated_at: "2026-01-01T00:00:00.000Z",
-      }),
-      { resource: "widget", action: "update" },
-      async (_request, widget) => Response.json(widget),
-      ports,
-    );
+	beforeEach(() => {
+		previousHeaders = enableDevAuthHeaders();
+	});
+	afterEach(() => {
+		restoreDevAuthHeaders(previousHeaders);
+	});
+	test('authorizes against the resolved model before running the handler', async () => {
+		const ports = bootstrapPolicyGate();
 
-    await expect(
-      handler({
-        params: { id: "1" },
-        headers: new Headers(),
-      } as Request & { params: WidgetParams }),
-    ).rejects.toThrow(PolicyDeniedError);
+		const handler = securedBindRouteModel(
+			'id',
+			async (id) => ({
+				id,
+				name: `Widget ${id}`,
+				updated_at: '2026-01-01T00:00:00.000Z',
+			}),
+			{ resource: 'widget', action: 'update' },
+			async (_request, widget) => Response.json(widget),
+			ports,
+		);
 
-    const model = {
-      id: 1,
-      name: "Widget 1",
-      updated_at: "2026-01-01T00:00:00.000Z",
-    };
-    const etag = etagFromResource(model);
+		await expect(
+			handler({
+				params: { id: '1' },
+				headers: new Headers(),
+			} as Request & { params: WidgetParams }),
+		).rejects.toThrow(PolicyDeniedError);
 
-    const response = await handler({
-      params: { id: "1" },
-      headers: new Headers({
-        "x-authenticated-user-id": "1",
-        "x-authenticated-user-role": "admin",
-        "if-match": etag,
-      }),
-    } as Request & { params: WidgetParams });
+		const model = {
+			id: 1,
+			name: 'Widget 1',
+			updated_at: '2026-01-01T00:00:00.000Z',
+		};
 
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual(model);
-  });
+		const etag = etagFromResource(model);
 
-  test("propagates resolver failures before authorization runs", async () => {
-    const ports = bootstrapPolicyGate();
+		const response = await handler({
+			params: { id: '1' },
+			headers: new Headers({
+				'x-authenticated-user-id': '1',
+				'x-authenticated-user-role': 'admin',
+				'if-match': etag,
+			}),
+		} as Request & { params: WidgetParams });
 
-    const handler = securedBindRouteModel(
-      "id",
-      async (id) => {
-        throw new NotFoundError(`Widget ${id} not found.`);
-      },
-      { resource: "widget", action: "update" },
-      async () => Response.json({ ok: true }),
-      ports,
-    );
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual(model);
+	});
 
-    await expect(
-      handler({
-        params: { id: "404" },
-        headers: new Headers({
-          "x-authenticated-user-id": "1",
-          "x-authenticated-user-role": "admin",
-        }),
-      } as Request & { params: WidgetParams }),
-    ).rejects.toThrow("Widget 404 not found.");
-  });
+	test('propagates resolver failures before authorization runs', async () => {
+		const ports = bootstrapPolicyGate();
 
-  test("returns 304 for view when If-None-Match matches", async () => {
-    const ports = bootstrapPolicyGate();
+		const handler = securedBindRouteModel(
+			'id',
+			async (id) => {
+				throw new NotFoundError(`Widget ${id} not found.`);
+			},
+			{ resource: 'widget', action: 'update' },
+			async () => Response.json({ ok: true }),
+			ports,
+		);
 
-    const model = {
-      id: 1,
-      name: "Widget 1",
-      updated_at: "2026-01-01T00:00:00.000Z",
-    };
-    const etag = etagFromResource(model);
+		await expect(
+			handler({
+				params: { id: '404' },
+				headers: new Headers({
+					'x-authenticated-user-id': '1',
+					'x-authenticated-user-role': 'admin',
+				}),
+			} as Request & { params: WidgetParams }),
+		).rejects.toThrow('Widget 404 not found.');
+	});
 
-    const handler = securedBindRouteModel(
-      "id",
-      async () => model,
-      { resource: "widget", action: "view" },
-      async (_request, widget) => Response.json(widget),
-      ports,
-    );
+	test('returns 304 for view when If-None-Match matches', async () => {
+		const ports = bootstrapPolicyGate();
 
-    const response = await handler({
-      params: { id: "1" },
-      headers: new Headers({
-        "if-none-match": etag,
-      }),
-    } as Request & { params: WidgetParams });
+		const model = {
+			id: 1,
+			name: 'Widget 1',
+			updated_at: '2026-01-01T00:00:00.000Z',
+		};
 
-    expect(response.status).toBe(304);
-    expect(response.headers.get("etag")).toBe(etag);
-  });
+		const etag = etagFromResource(model);
 
-  test("rejects update when If-Match does not match", async () => {
-    const ports = bootstrapPolicyGate();
+		const handler = securedBindRouteModel(
+			'id',
+			async () => model,
+			{ resource: 'widget', action: 'view' },
+			async (_request, widget) => Response.json(widget),
+			ports,
+		);
 
-    const handler = securedBindRouteModel(
-      "id",
-      async (id) => ({
-        id,
-        name: `Widget ${id}`,
-        updated_at: "2026-01-01T00:00:00.000Z",
-      }),
-      { resource: "widget", action: "update" },
-      async (_request, widget) => Response.json(widget),
-      ports,
-    );
+		const response = await handler({
+			params: { id: '1' },
+			headers: new Headers({
+				'if-none-match': etag,
+			}),
+		} as Request & { params: WidgetParams });
 
-    await expect(
-      handler({
-        params: { id: "1" },
-        headers: new Headers({
-          "x-authenticated-user-id": "1",
-          "x-authenticated-user-role": "admin",
-          "if-match": 'W/"stale"',
-        }),
-      } as Request & { params: WidgetParams }),
-    ).rejects.toThrow(PreconditionFailedError);
-  });
+		expect(response.status).toBe(304);
+		expect(response.headers.get('etag')).toBe(etag);
+	});
 
-  test("rejects update when If-Match header is missing", async () => {
-    const ports = bootstrapPolicyGate();
+	test('rejects update when If-Match does not match', async () => {
+		const ports = bootstrapPolicyGate();
 
-    const handler = securedBindRouteModel(
-      "id",
-      async (id) => ({
-        id,
-        name: `Widget ${id}`,
-        updated_at: "2026-01-01T00:00:00.000Z",
-      }),
-      { resource: "widget", action: "update" },
-      async (_request, widget) => Response.json(widget),
-      ports,
-    );
+		const handler = securedBindRouteModel(
+			'id',
+			async (id) => ({
+				id,
+				name: `Widget ${id}`,
+				updated_at: '2026-01-01T00:00:00.000Z',
+			}),
+			{ resource: 'widget', action: 'update' },
+			async (_request, widget) => Response.json(widget),
+			ports,
+		);
 
-    await expect(
-      handler({
-        params: { id: "1" },
-        headers: new Headers({
-          "x-authenticated-user-id": "1",
-          "x-authenticated-user-role": "admin",
-        }),
-      } as Request & { params: WidgetParams }),
-    ).rejects.toThrow(PreconditionFailedError);
-  });
+		await expect(
+			handler({
+				params: { id: '1' },
+				headers: new Headers({
+					'x-authenticated-user-id': '1',
+					'x-authenticated-user-role': 'admin',
+					'if-match': 'W/"stale"',
+				}),
+			} as Request & { params: WidgetParams }),
+		).rejects.toThrow(PreconditionFailedError);
+	});
+
+	test('rejects update when If-Match header is missing', async () => {
+		const ports = bootstrapPolicyGate();
+
+		const handler = securedBindRouteModel(
+			'id',
+			async (id) => ({
+				id,
+				name: `Widget ${id}`,
+				updated_at: '2026-01-01T00:00:00.000Z',
+			}),
+			{ resource: 'widget', action: 'update' },
+			async (_request, widget) => Response.json(widget),
+			ports,
+		);
+
+		await expect(
+			handler({
+				params: { id: '1' },
+				headers: new Headers({
+					'x-authenticated-user-id': '1',
+					'x-authenticated-user-role': 'admin',
+				}),
+			} as Request & { params: WidgetParams }),
+		).rejects.toThrow(PreconditionFailedError);
+	});
 });

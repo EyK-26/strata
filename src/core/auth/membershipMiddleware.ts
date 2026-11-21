@@ -1,1 +1,1 @@
-export { createMembershipContextMiddleware as createMembershipMiddleware } from "./membershipContextMiddleware";
+export { createMembershipContextMiddleware as createMembershipMiddleware } from './membershipContextMiddleware';

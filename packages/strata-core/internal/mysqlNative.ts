@@ -1,1 +1,1 @@
-export * from "../../../src/core/database/mysqlNative.ts";
+export * from '../../../src/core/database/mysqlNative.ts';

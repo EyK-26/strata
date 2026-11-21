@@ -1,81 +1,87 @@
-import { describe, expect, test } from "bun:test";
-import { buildWebModuleRoutes } from "@getstrata/bootstrap/buildWebModuleRoutes";
+import { describe, expect, test } from 'bun:test';
+
+import { buildWebModuleRoutes } from '@getstrata/bootstrap/buildWebModuleRoutes';
 import {
-  CORE_AUTH_TOKEN,
-  CORE_POLICY_GATE_TOKEN,
-  CORE_QUEUE_TOKEN,
-} from "@getstrata/bootstrap/config";
-import type { AppModule } from "@getstrata/bootstrap/contracts";
-import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { getRouteInventory } from "@getstrata/bootstrap/routePlan";
-import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
-import { PolicyGate } from "@getstrata/core/auth/policy";
-import { CacheRepository } from "@getstrata/core/cache/repository";
-import { SimpleCache } from "@getstrata/core/cache/simpleCache";
-import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
-import { CORE_ABILITY_CHECKER_TOKEN } from "@getstrata/core/contracts/serviceTokens";
-import { SyncQueue } from "@getstrata/core/queue";
-import { guestGuardOptions } from "../helpers/devAuthHeaders";
-import { createMockDependencies } from "./testHelpers";
+	CORE_AUTH_TOKEN,
+	CORE_POLICY_GATE_TOKEN,
+	CORE_QUEUE_TOKEN,
+} from '@getstrata/bootstrap/config';
+import type { AppModule } from '@getstrata/bootstrap/contracts';
+import { ServiceContainer } from '@getstrata/bootstrap/contracts';
+import { getRouteInventory } from '@getstrata/bootstrap/routePlan';
+import { AuthManager, GuestGuard } from '@getstrata/core/auth/guard';
+import { PolicyGate } from '@getstrata/core/auth/policy';
+import { CacheRepository } from '@getstrata/core/cache/repository';
+import { SimpleCache } from '@getstrata/core/cache/simpleCache';
+import { SimpleCacheStore } from '@getstrata/core/cache/simpleCacheStore';
+import { CORE_ABILITY_CHECKER_TOKEN } from '@getstrata/core/contracts/serviceTokens';
+import { SyncQueue } from '@getstrata/core/queue';
+
+import { guestGuardOptions } from '../helpers/devAuthHeaders';
+
+import { createMockDependencies } from './testHelpers';
 
 const fixtureModule: AppModule = {
-  name: "pages",
-  webRoutes() {
-    return {
-      "/home": async () => new Response("home"),
-    };
-  },
+	name: 'pages',
+	webRoutes() {
+		return {
+			'/home': async () => new Response('home'),
+		};
+	},
 };
 
 function createTestDependencies() {
-  const container = new ServiceContainer();
-  const dependencies = createMockDependencies(
-    container,
-    new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
-  );
+	const container = new ServiceContainer();
 
-  dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard(guestGuardOptions())));
-  dependencies.container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
-  dependencies.container.set(CORE_QUEUE_TOKEN, new SyncQueue());
-  dependencies.container.set(CORE_ABILITY_CHECKER_TOKEN, {
-    requireAbility: () => undefined,
-    tokenCan: () => true,
-  });
+	const dependencies = createMockDependencies(
+		container,
+		new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
+	);
 
-  return dependencies;
+	dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard(guestGuardOptions())));
+	dependencies.container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
+	dependencies.container.set(CORE_QUEUE_TOKEN, new SyncQueue());
+	dependencies.container.set(CORE_ABILITY_CHECKER_TOKEN, {
+		requireAbility: () => undefined,
+		tokenCan: () => true,
+	});
+
+	return dependencies;
 }
 
-describe("buildWebModuleRoutes", () => {
-  test("builds web routes from supplied module webRoutes hooks", () => {
-    const dependencies = createTestDependencies();
-    const routes = buildWebModuleRoutes(dependencies, {
-      modules: [fixtureModule],
-    });
+describe('buildWebModuleRoutes', () => {
+	test('builds web routes from supplied module webRoutes hooks', () => {
+		const dependencies = createTestDependencies();
 
-    expect(routes["/home"]).toBeDefined();
-  });
-  test("merges seed and module methods without changing unrelated paths", () => {
-    const routes = buildWebModuleRoutes(createTestDependencies(), {
-      seedRoutes: {
-        "/shared": { DELETE: () => new Response("seed") },
-        "/kept": () => new Response("kept"),
-      },
-      modules: [
-        { name: "first", webRoutes: () => ({ "/shared": { GET: () => new Response("first") } }) },
-        {
-          name: "second",
-          webRoutes: () => ({ "/shared": { POST: () => new Response("second") } }),
-        },
-      ],
-    });
-    expect(Object.keys(routes["/shared"])).toEqual(["DELETE", "GET", "POST"]);
-    expect(typeof routes["/kept"]).toBe("function");
-    expect(getRouteInventory(routes)).toEqual([
-      { method: "*", path: "/kept", middleware: ["global", "web"] },
-      { method: "DELETE", path: "/shared", middleware: ["global", "web"] },
-      { method: "GET", path: "/shared", middleware: ["global", "web"] },
-      { method: "POST", path: "/shared", middleware: ["global", "web"] },
-      { method: "HEAD", path: "/shared", middleware: ["global", "web"] },
-    ]);
-  });
+		const routes = buildWebModuleRoutes(dependencies, {
+			modules: [fixtureModule],
+		});
+
+		expect(routes['/home']).toBeDefined();
+	});
+	test('merges seed and module methods without changing unrelated paths', () => {
+		const routes = buildWebModuleRoutes(createTestDependencies(), {
+			seedRoutes: {
+				'/shared': { DELETE: () => new Response('seed') },
+				'/kept': () => new Response('kept'),
+			},
+			modules: [
+				{ name: 'first', webRoutes: () => ({ '/shared': { GET: () => new Response('first') } }) },
+				{
+					name: 'second',
+					webRoutes: () => ({ '/shared': { POST: () => new Response('second') } }),
+				},
+			],
+		});
+
+		expect(Object.keys(routes['/shared'])).toEqual(['DELETE', 'GET', 'POST']);
+		expect(typeof routes['/kept']).toBe('function');
+		expect(getRouteInventory(routes)).toEqual([
+			{ method: '*', path: '/kept', middleware: ['global', 'web'] },
+			{ method: 'DELETE', path: '/shared', middleware: ['global', 'web'] },
+			{ method: 'GET', path: '/shared', middleware: ['global', 'web'] },
+			{ method: 'POST', path: '/shared', middleware: ['global', 'web'] },
+			{ method: 'HEAD', path: '/shared', middleware: ['global', 'web'] },
+		]);
+	});
 });

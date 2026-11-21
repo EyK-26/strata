@@ -1,133 +1,156 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { ConflictError, ForbiddenError } from "@getstrata/core/errors/http";
-import { createJsonErrorMiddleware, withErrorHandling } from "@getstrata/core/http/response";
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+
+import { ConflictError, ForbiddenError } from '@getstrata/core/errors/http';
+import { createJsonErrorMiddleware, withErrorHandling } from '@getstrata/core/http/response';
 
 const previousFrontendMode = process.env.FRONTEND_MODE;
 
 afterEach(() => {
-  if (previousFrontendMode === undefined) {
-    delete process.env.FRONTEND_MODE;
-  } else {
-    process.env.FRONTEND_MODE = previousFrontendMode;
-  }
+	if (previousFrontendMode === undefined) {
+		delete process.env.FRONTEND_MODE;
+	} else {
+		process.env.FRONTEND_MODE = previousFrontendMode;
+	}
 });
 
-describe("withErrorHandling", () => {
-  test("unknown exceptions become a generic 500 and are logged with their stack", async () => {
-    process.env.FRONTEND_MODE = "api";
-    const errorLog = spyOn(console, "error").mockImplementation(() => undefined);
-    try {
-      const handler = withErrorHandling(async (_request: Request) => {
-        throw new TypeError("undefined is not an object (evaluating 'table.columns.map')");
-      });
-      const response = await handler(new Request("http://app.test/api/things"));
-      expect(response.status).toBe(500);
-      expect(response.headers.get("cache-control")).toBe("no-store");
-      expect(await response.json()).toEqual({ error: "Internal server error." });
+describe('withErrorHandling', () => {
+	test('unknown exceptions become a generic 500 and are logged with their stack', async () => {
+		process.env.FRONTEND_MODE = 'api';
+		const errorLog = spyOn(console, 'error').mockImplementation(() => undefined);
 
-      const logged = errorLog.mock.calls.map((call) => String(call[0])).join("\n");
-      expect(logged).toContain("Unhandled request error");
-      expect(logged).toContain("table.columns.map");
-    } finally {
-      errorLog.mockRestore();
-    }
-  });
+		try {
+			const handler = withErrorHandling(async (_request: Request) => {
+				throw new TypeError("undefined is not an object (evaluating 'table.columns.map')");
+			});
 
-  test("HttpError instances keep their status and message and are not logged as server errors", async () => {
-    process.env.FRONTEND_MODE = "api";
-    const errorLog = spyOn(console, "error").mockImplementation(() => undefined);
-    try {
-      const handler = withErrorHandling(async (_request: Request) => {
-        throw new ConflictError("Email is already registered.");
-      });
-      const response = await handler(new Request("http://app.test/api/things"));
-      expect(response.status).toBe(409);
-      expect(response.headers.get("cache-control")).toBe("no-store");
-      expect(await response.json()).toEqual({ error: "Email is already registered." });
-      expect(errorLog).not.toHaveBeenCalled();
-    } finally {
-      errorLog.mockRestore();
-    }
-  });
+			const response = await handler(new Request('http://app.test/api/things'));
 
-  test("driver constraint errors map to 4xx without echoing SQL details", async () => {
-    process.env.FRONTEND_MODE = "api";
-    const handler = withErrorHandling(async (_request: Request) => {
-      throw Object.assign(new Error("UNIQUE constraint failed: users.email"), {
-        code: "SQLITE_CONSTRAINT_UNIQUE",
-        errno: 2067,
-      });
-    });
-    const response = await handler(new Request("http://app.test/api/things"));
-    expect(response.status).toBe(409);
-    const body = (await response.json()) as { error: string };
-    expect(body.error).toBe("A record with these values already exists.");
-    expect(body.error).not.toContain("users.email");
-  });
+			expect(response.status).toBe(500);
+			expect(response.headers.get('cache-control')).toBe('no-store');
+			expect(await response.json()).toEqual({ error: 'Internal server error.' });
+
+			const logged = errorLog.mock.calls.map((call) => String(call[0])).join('\n');
+
+			expect(logged).toContain('Unhandled request error');
+			expect(logged).toContain('table.columns.map');
+		} finally {
+			errorLog.mockRestore();
+		}
+	});
+
+	test('HttpError instances keep their status and message and are not logged as server errors', async () => {
+		process.env.FRONTEND_MODE = 'api';
+		const errorLog = spyOn(console, 'error').mockImplementation(() => undefined);
+
+		try {
+			const handler = withErrorHandling(async (_request: Request) => {
+				throw new ConflictError('Email is already registered.');
+			});
+
+			const response = await handler(new Request('http://app.test/api/things'));
+
+			expect(response.status).toBe(409);
+			expect(response.headers.get('cache-control')).toBe('no-store');
+			expect(await response.json()).toEqual({ error: 'Email is already registered.' });
+			expect(errorLog).not.toHaveBeenCalled();
+		} finally {
+			errorLog.mockRestore();
+		}
+	});
+
+	test('driver constraint errors map to 4xx without echoing SQL details', async () => {
+		process.env.FRONTEND_MODE = 'api';
+		const handler = withErrorHandling(async (_request: Request) => {
+			throw Object.assign(new Error('UNIQUE constraint failed: users.email'), {
+				code: 'SQLITE_CONSTRAINT_UNIQUE',
+				errno: 2067,
+			});
+		});
+
+		const response = await handler(new Request('http://app.test/api/things'));
+
+		expect(response.status).toBe(409);
+		const body = (await response.json()) as { error: string };
+
+		expect(body.error).toBe('A record with these values already exists.');
+		expect(body.error).not.toContain('users.email');
+	});
 });
 
-describe("createJsonErrorMiddleware", () => {
-  test("maps thrown ForbiddenError to JSON 403", async () => {
-    const middleware = createJsonErrorMiddleware();
-    const response = await middleware(
-      new Request("http://app.test/api/v1/auth/login"),
-      async () => {
-        throw new ForbiddenError("Invalid or missing CSRF token.");
-      },
-    );
-    expect(response.status).toBe(403);
-    expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(await response.json()).toEqual({ error: "Invalid or missing CSRF token." });
-  });
+describe('createJsonErrorMiddleware', () => {
+	test('maps thrown ForbiddenError to JSON 403', async () => {
+		const middleware = createJsonErrorMiddleware();
+
+		const response = await middleware(
+			new Request('http://app.test/api/v1/auth/login'),
+			async () => {
+				throw new ForbiddenError('Invalid or missing CSRF token.');
+			},
+		);
+
+		expect(response.status).toBe(403);
+		expect(response.headers.get('cache-control')).toBe('no-store');
+		expect(await response.json()).toEqual({ error: 'Invalid or missing CSRF token.' });
+	});
 });
 
-test("API error context overrides HTML negotiation in nested legacy wrappers", async () => {
-  process.env.FRONTEND_MODE = "hybrid";
-  const handler = withErrorHandling(
-    async (_request: Request) => {
-      throw new ForbiddenError("Signature rejected.");
-    },
-    { enabled: true },
-  );
-  const response = await createJsonErrorMiddleware()(
-    new Request("http://app.test/billing/webhooks/stripe", { headers: { accept: "text/html" } }),
-    () => handler(new Request("http://app.test/billing/webhooks/stripe")),
-  );
-  expect(response.status).toBe(403);
-  expect(response.headers.get("content-type")).toContain("application/json");
-  expect(await response.json()).toEqual({ error: "Signature rejected." });
+test('API error context overrides HTML negotiation in nested legacy wrappers', async () => {
+	process.env.FRONTEND_MODE = 'hybrid';
+	const handler = withErrorHandling(
+		async (_request: Request) => {
+			throw new ForbiddenError('Signature rejected.');
+		},
+		{ enabled: true },
+	);
+
+	const response = await createJsonErrorMiddleware()(
+		new Request('http://app.test/billing/webhooks/stripe', { headers: { accept: 'text/html' } }),
+		() => handler(new Request('http://app.test/billing/webhooks/stripe')),
+	);
+
+	expect(response.status).toBe(403);
+	expect(response.headers.get('content-type')).toContain('application/json');
+	expect(await response.json()).toEqual({ error: 'Signature rejected.' });
 });
 
-test("private JSON preserves payload, status and multiple cookies without changing public defaults", async () => {
-  const { jsonResponse, privateJsonResponse } = await import("@getstrata/core/http/response");
-  const headers = new Headers({ "Cache-Control": "public, max-age=60", "X-Custom": "retained" });
-  headers.append("Set-Cookie", "one=1; HttpOnly");
-  headers.append("Set-Cookie", "two=2; HttpOnly");
-  const response = privateJsonResponse({ identity: 7 }, { status: 201, headers });
-  expect(response.status).toBe(201);
-  expect(await response.json()).toEqual({ identity: 7 });
-  expect(response.headers.get("cache-control")).toBe("private, no-store");
-  expect(response.headers.get("x-custom")).toBe("retained");
-  expect(response.headers.getSetCookie()).toEqual(headers.getSetCookie());
-  expect(headers.get("cache-control")).toBe("public, max-age=60");
-  expect(jsonResponse({ public: true }).headers.get("cache-control")).toBeNull();
+test('private JSON preserves payload, status and multiple cookies without changing public defaults', async () => {
+	const { jsonResponse, privateJsonResponse } = await import('@getstrata/core/http/response');
+
+	const headers = new Headers({ 'Cache-Control': 'public, max-age=60', 'X-Custom': 'retained' });
+
+	headers.append('Set-Cookie', 'one=1; HttpOnly');
+	headers.append('Set-Cookie', 'two=2; HttpOnly');
+	const response = privateJsonResponse({ identity: 7 }, { status: 201, headers });
+
+	expect(response.status).toBe(201);
+	expect(await response.json()).toEqual({ identity: 7 });
+	expect(response.headers.get('cache-control')).toBe('private, no-store');
+	expect(response.headers.get('x-custom')).toBe('retained');
+	expect(response.headers.getSetCookie()).toEqual(headers.getSetCookie());
+	expect(headers.get('cache-control')).toBe('public, max-age=60');
+	expect(jsonResponse({ public: true }).headers.get('cache-control')).toBeNull();
 });
 
-test("API context keeps throttle errors JSON inside HTML owners on custom prefixes and HTMX", async () => {
-  const { createWebErrorMiddleware } = await import("@getstrata/core/http/response");
-  const { tooManyRequestsResponse } = await import("@getstrata/core/http/throttleResponse");
-  const variants: Record<string, string>[] = [
-    { accept: "text/html" },
-    { accept: "text/html", "hx-request": "true" },
-  ];
-  for (const headers of variants) {
-    const request = new Request("https://app.test/service/limits", { headers });
-    const response = await createWebErrorMiddleware({ enabled: true })(request, () =>
-      createJsonErrorMiddleware()(request, () => tooManyRequestsResponse(request, "limited", 23)),
-    );
-    expect(response.status).toBe(429);
-    expect(response.headers.get("content-type")).toContain("application/json");
-    expect(response.headers.get("retry-after")).toBe("23");
-    expect(await response.json()).toEqual({ error: "limited" });
-  }
+test('API context keeps throttle errors JSON inside HTML owners on custom prefixes and HTMX', async () => {
+	const { createWebErrorMiddleware } = await import('@getstrata/core/http/response');
+
+	const { tooManyRequestsResponse } = await import('@getstrata/core/http/throttleResponse');
+
+	const variants: Record<string, string>[] = [
+		{ accept: 'text/html' },
+		{ accept: 'text/html', 'hx-request': 'true' },
+	];
+
+	for (const headers of variants) {
+		const request = new Request('https://app.test/service/limits', { headers });
+
+		const response = await createWebErrorMiddleware({ enabled: true })(request, () =>
+			createJsonErrorMiddleware()(request, () => tooManyRequestsResponse(request, 'limited', 23)),
+		);
+
+		expect(response.status).toBe(429);
+		expect(response.headers.get('content-type')).toContain('application/json');
+		expect(response.headers.get('retry-after')).toBe('23');
+		expect(await response.json()).toEqual({ error: 'limited' });
+	}
 });

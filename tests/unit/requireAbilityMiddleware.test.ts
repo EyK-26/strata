@@ -1,87 +1,91 @@
-import { describe, expect, test } from "bun:test";
-import type { AbilityChecker } from "@getstrata/core/auth/abilityChecker";
-import type { AuthUser } from "@getstrata/core/auth/authContext";
-import { runWithAuthUser } from "@getstrata/core/auth/authContext";
-import { ForbiddenError } from "@getstrata/core/errors/http";
-import { createRequireAbilityMiddleware } from "@getstrata/core/http/requireAbilityMiddleware";
+import { describe, expect, test } from 'bun:test';
+
+import type { AbilityChecker } from '@getstrata/core/auth/abilityChecker';
+import type { AuthUser } from '@getstrata/core/auth/authContext';
+import { runWithAuthUser } from '@getstrata/core/auth/authContext';
+import { ForbiddenError } from '@getstrata/core/errors/http';
+import { createRequireAbilityMiddleware } from '@getstrata/core/http/requireAbilityMiddleware';
 
 function hasAbility(user: AuthUser | null, ability: string): boolean {
-  const abilities = user?.abilities ?? [];
-  return abilities.includes("*") || abilities.includes(ability);
+	const abilities = user?.abilities ?? [];
+
+	return abilities.includes('*') || abilities.includes(ability);
 }
 
 const abilityChecker: AbilityChecker = {
-  tokenCan: hasAbility,
-  requireAbility(user, ability) {
-    if (!hasAbility(user, ability)) {
-      throw new ForbiddenError("Token ability required.");
-    }
-  },
+	tokenCan: hasAbility,
+	requireAbility(user, ability) {
+		if (!hasAbility(user, ability)) {
+			throw new ForbiddenError('Token ability required.');
+		}
+	},
 };
 
-describe("createRequireAbilityMiddleware", () => {
-  test("allows users with the required ability", async () => {
-    const middleware = createRequireAbilityMiddleware(abilityChecker)("applications:delete");
+describe('createRequireAbilityMiddleware', () => {
+	test('allows users with the required ability', async () => {
+		const middleware = createRequireAbilityMiddleware(abilityChecker)('applications:delete');
 
-    const response = await runWithAuthUser(
-      { id: 1, abilities: ["applications:delete"] },
-      async () =>
-        await middleware(new Request("http://example.test/applications/1"), async () =>
-          Response.json({ ok: true }),
-        ),
-    );
+		const response = await runWithAuthUser(
+			{ id: 1, abilities: ['applications:delete'] },
+			async () =>
+				await middleware(new Request('http://example.test/applications/1'), async () =>
+					Response.json({ ok: true }),
+				),
+		);
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("cache-control")).toBeNull();
-  });
+		expect(response.status).toBe(200);
+		expect(response.headers.get('cache-control')).toBeNull();
+	});
 
-  test("rejects users missing the required ability", async () => {
-    const middleware = createRequireAbilityMiddleware(abilityChecker)("applications:delete");
+	test('rejects users missing the required ability', async () => {
+		const middleware = createRequireAbilityMiddleware(abilityChecker)('applications:delete');
 
-    const response = await runWithAuthUser(
-      { id: 1, abilities: ["applications:read"] },
-      async () =>
-        await middleware(new Request("http://example.test/applications/1"), async () =>
-          Response.json({ ok: true }),
-        ),
-    );
+		const response = await runWithAuthUser(
+			{ id: 1, abilities: ['applications:read'] },
+			async () =>
+				await middleware(new Request('http://example.test/applications/1'), async () =>
+					Response.json({ ok: true }),
+				),
+		);
 
-    expect(response.status).toBe(403);
-    expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(await response.json()).toEqual({ error: "Token ability required." });
-  });
+		expect(response.status).toBe(403);
+		expect(response.headers.get('cache-control')).toBe('no-store');
+		expect(await response.json()).toEqual({ error: 'Token ability required.' });
+	});
 
-  test("JSON denials keep checker details private and never invoke the handler", async () => {
-    const middleware = createRequireAbilityMiddleware({
-      ...abilityChecker,
-      requireAbility() {
-        throw new ForbiddenError("Denied.", { auditOnly: "fixture-private-detail" });
-      },
-    })("fixture");
-    const response = await runWithAuthUser({ id: 1, abilities: [] }, () =>
-      middleware(
-        new Request("https://example.test/private", { headers: { accept: "application/json" } }),
-        async () => {
-          throw new Error("Denied handler must not run.");
-        },
-      ),
-    );
-    expect(response.status).toBe(403);
-    expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(await response.json()).toEqual({ error: "Denied." });
-  });
+	test('JSON denials keep checker details private and never invoke the handler', async () => {
+		const middleware = createRequireAbilityMiddleware({
+			...abilityChecker,
+			requireAbility() {
+				throw new ForbiddenError('Denied.', { auditOnly: 'fixture-private-detail' });
+			},
+		})('fixture');
 
-  test("allows wildcard abilities", async () => {
-    const middleware = createRequireAbilityMiddleware(abilityChecker)("departments:delete");
+		const response = await runWithAuthUser({ id: 1, abilities: [] }, () =>
+			middleware(
+				new Request('https://example.test/private', { headers: { accept: 'application/json' } }),
+				async () => {
+					throw new Error('Denied handler must not run.');
+				},
+			),
+		);
 
-    const response = await runWithAuthUser(
-      { id: 1, abilities: ["*"] },
-      async () =>
-        await middleware(new Request("http://example.test/departments/1"), async () =>
-          Response.json({ ok: true }),
-        ),
-    );
+		expect(response.status).toBe(403);
+		expect(response.headers.get('cache-control')).toBe('no-store');
+		expect(await response.json()).toEqual({ error: 'Denied.' });
+	});
 
-    expect(response.status).toBe(200);
-  });
+	test('allows wildcard abilities', async () => {
+		const middleware = createRequireAbilityMiddleware(abilityChecker)('departments:delete');
+
+		const response = await runWithAuthUser(
+			{ id: 1, abilities: ['*'] },
+			async () =>
+				await middleware(new Request('http://example.test/departments/1'), async () =>
+					Response.json({ ok: true }),
+				),
+		);
+
+		expect(response.status).toBe(200);
+	});
 });

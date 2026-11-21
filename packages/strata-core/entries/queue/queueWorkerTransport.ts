@@ -1,1 +1,1 @@
-export * from "../../../../src/core/queue/queueWorkerTransport.ts";
+export * from '../../../../src/core/queue/queueWorkerTransport.ts';

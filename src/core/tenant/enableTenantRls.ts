@@ -1,9 +1,9 @@
 function assertSafeIdentifier(identifier: string): string {
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
-    throw new Error(`Invalid SQL identifier: ${identifier}`);
-  }
+	if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
+		throw new Error(`Invalid SQL identifier: ${identifier}`);
+	}
 
-  return identifier;
+	return identifier;
 }
 
 const RLS_HELPER_SQL = `
@@ -39,7 +39,7 @@ $$ LANGUAGE plpgsql STABLE;
 `;
 
 function tenantIsolationPolicy(table: string, predicate: string): string {
-  return `
+	return `
 ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ${table} FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON ${table};
@@ -56,14 +56,15 @@ WITH CHECK (
 }
 
 function enableTenantRlsSql(tableName: string): string {
-  const table = assertSafeIdentifier(tableName);
-  return tenantIsolationPolicy(table, `tenant_id = app_current_tenant_id()`);
+	const table = assertSafeIdentifier(tableName);
+
+	return tenantIsolationPolicy(table, `tenant_id = app_current_tenant_id()`);
 }
 
 function enableUsersRlsSql(): string {
-  return tenantIsolationPolicy(
-    "users",
-    `tenant_id = app_current_tenant_id()
+	return tenantIsolationPolicy(
+		'users',
+		`tenant_id = app_current_tenant_id()
   OR (
     app_bypass_identifier() IS NOT NULL
     AND (
@@ -71,59 +72,64 @@ function enableUsersRlsSql(): string {
       OR email = app_bypass_identifier()
     )
   )`,
-  );
+	);
 }
 
 function userOwnedIdentifierPredicate(table: string, userIdColumn: string): string {
-  const userIdMatch = `${table}.${userIdColumn}::text = app_bypass_identifier()`;
-  if (table === "sessions") {
-    return `(app_bypass_identifier() IS NOT NULL AND (${table}.id::text = app_bypass_identifier() OR ${userIdMatch}))`;
-  }
-  if (table === "api_tokens" || table === "auth_one_time_tokens") {
-    return `(app_bypass_identifier() IS NOT NULL AND (${table}.token_hash = app_bypass_identifier() OR ${userIdMatch}))`;
-  }
-  return `(app_bypass_identifier() IS NOT NULL AND ${userIdMatch})`;
+	const userIdMatch = `${table}.${userIdColumn}::text = app_bypass_identifier()`;
+
+	if (table === 'sessions') {
+		return `(app_bypass_identifier() IS NOT NULL AND (${table}.id::text = app_bypass_identifier() OR ${userIdMatch}))`;
+	}
+
+	if (table === 'api_tokens' || table === 'auth_one_time_tokens') {
+		return `(app_bypass_identifier() IS NOT NULL AND (${table}.token_hash = app_bypass_identifier() OR ${userIdMatch}))`;
+	}
+
+	return `(app_bypass_identifier() IS NOT NULL AND ${userIdMatch})`;
 }
 
-function enableUserOwnedRlsSql(tableName: string, userIdColumn = "user_id"): string {
-  const table = assertSafeIdentifier(tableName);
-  const column = assertSafeIdentifier(userIdColumn);
-  return tenantIsolationPolicy(
-    table,
-    `EXISTS (
+function enableUserOwnedRlsSql(tableName: string, userIdColumn = 'user_id'): string {
+	const table = assertSafeIdentifier(tableName);
+
+	const column = assertSafeIdentifier(userIdColumn);
+
+	return tenantIsolationPolicy(
+		table,
+		`EXISTS (
     SELECT 1 FROM users u
     WHERE u.id = ${table}.${column}
       AND u.tenant_id = app_current_tenant_id()
   )
   OR ${userOwnedIdentifierPredicate(table, column)}`,
-  );
+	);
 }
 
 function generatedRlsBootstrapSql(
-  tables: readonly string[],
-  userOwnedTables: readonly string[] = [],
+	tables: readonly string[],
+	userOwnedTables: readonly string[] = [],
 ): string {
-  return [
-    RLS_HELPER_SQL,
-    ...tables.map((table) => (table === "users" ? enableUsersRlsSql() : enableTenantRlsSql(table))),
-    ...userOwnedTables.map((table) => enableUserOwnedRlsSql(table)),
-  ].join("\n");
+	return [
+		RLS_HELPER_SQL,
+		...tables.map((table) => (table === 'users' ? enableUsersRlsSql() : enableTenantRlsSql(table))),
+		...userOwnedTables.map((table) => enableUserOwnedRlsSql(table)),
+	].join('\n');
 }
 
 export {
-  assertPostgresRoleCannotBypassRls,
-  dropPostgresTablesAsAdmin,
-  ensurePostgresAppRole,
-  ensurePostgresDatabaseAndAppRole,
-  grantPostgresAppRolePrivileges,
-  inspectCurrentPostgresRole,
-  isPostgresUrl,
-  openPostgresAdminConnection,
-  POSTGRES_APP_ROLE,
-  POSTGRES_APP_ROLE_PASSWORD,
-  POSTGRES_SUPERUSER_PASSWORD,
-  postgresAppRoleSql,
-  postgresDatabaseNameFromUrl,
-  postgresUrlUsername,
-} from "./postgresAppRole";
+	assertPostgresRoleCannotBypassRls,
+	dropPostgresTablesAsAdmin,
+	ensurePostgresAppRole,
+	ensurePostgresDatabaseAndAppRole,
+	grantPostgresAppRolePrivileges,
+	inspectCurrentPostgresRole,
+	isPostgresUrl,
+	openPostgresAdminConnection,
+	POSTGRES_APP_ROLE,
+	POSTGRES_APP_ROLE_PASSWORD,
+	POSTGRES_SUPERUSER_PASSWORD,
+	postgresAppRoleSql,
+	postgresDatabaseNameFromUrl,
+	postgresUrlUsername,
+} from './postgresAppRole';
 export { enableTenantRlsSql, enableUserOwnedRlsSql, generatedRlsBootstrapSql, RLS_HELPER_SQL };

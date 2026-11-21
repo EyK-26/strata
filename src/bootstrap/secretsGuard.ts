@@ -1,23 +1,27 @@
-import { resolveFieldEncryptionKeyring } from "@getstrata/core/crypto/fieldEncryption";
-import { envFlagEnabled, isProductionEnv } from "@getstrata/core/runtime/appEnv";
-import { isViewsMode, parseFrontendMode } from "@getstrata/core/runtime/frontendMode";
+import { resolveFieldEncryptionKeyring } from '@getstrata/core/crypto/fieldEncryption';
+import { envFlagEnabled, isProductionEnv } from '@getstrata/core/runtime/appEnv';
+import { isViewsMode, parseFrontendMode } from '@getstrata/core/runtime/frontendMode';
 import {
-  assertPostgresRoleCannotBypassRls,
-  isPostgresUrl,
-  postgresUrlUsername,
-} from "@getstrata/core/tenant/enableTenantRls";
-import { isRlsTenancy } from "@getstrata/core/tenant/tenancyConfig";
+	assertPostgresRoleCannotBypassRls,
+	isPostgresUrl,
+	postgresUrlUsername,
+} from '@getstrata/core/tenant/enableTenantRls';
+import { isRlsTenancy } from '@getstrata/core/tenant/tenancyConfig';
 
 /** Published test-token strings that must never ship in production. */
-const PUBLISHED_TEST_ADMIN_API_TOKEN = "strata-admin-test-token";
-const PUBLISHED_TEST_MEMBER_API_TOKEN = "strata-member-test-token";
-const PUBLISHED_TEST_SCIM_BEARER_TOKEN = "strata-scim-test-token";
+const PUBLISHED_TEST_ADMIN_API_TOKEN = 'strata-admin-test-token';
+
+const PUBLISHED_TEST_MEMBER_API_TOKEN = 'strata-member-test-token';
+
+const PUBLISHED_TEST_SCIM_BEARER_TOKEN = 'strata-scim-test-token';
+
 const MIN_SESSION_SECRET_LENGTH = 32;
 
 const PUBLISHED_TEST_TOKENS = new Set([
-  PUBLISHED_TEST_ADMIN_API_TOKEN,
-  PUBLISHED_TEST_MEMBER_API_TOKEN,
+	PUBLISHED_TEST_ADMIN_API_TOKEN,
+	PUBLISHED_TEST_MEMBER_API_TOKEN,
 ]);
+
 const PUBLISHED_TEST_SCIM_TOKENS = new Set([PUBLISHED_TEST_SCIM_BEARER_TOKEN]);
 
 /**
@@ -29,200 +33,205 @@ const PLACEHOLDER_SECRET_PATTERN = /change-me/i;
 
 /** Secrets that must not still hold generated placeholders when production checks run. */
 const SECRETS_TO_ROTATE = [
-  "SESSION_SECRET",
-  "SIGNED_URL_SECRET",
-  "TOKEN_HASH_PEPPER",
-  "METRICS_TOKEN",
-  "SCIM_BEARER_TOKEN",
-  "JWT_SECRET",
-  "OAUTH_STATE_SECRET",
-  "KMS_ENCRYPTION_KEY",
-  "STRIPE_WEBHOOK_SECRET",
-  "ADMIN_API_TOKEN",
-  "MEMBER_API_TOKEN",
-  "DATABASE_URL",
-  "APP_DATABASE_URL",
+	'SESSION_SECRET',
+	'SIGNED_URL_SECRET',
+	'TOKEN_HASH_PEPPER',
+	'METRICS_TOKEN',
+	'SCIM_BEARER_TOKEN',
+	'JWT_SECRET',
+	'OAUTH_STATE_SECRET',
+	'KMS_ENCRYPTION_KEY',
+	'STRIPE_WEBHOOK_SECRET',
+	'ADMIN_API_TOKEN',
+	'MEMBER_API_TOKEN',
+	'DATABASE_URL',
+	'APP_DATABASE_URL',
 ] as const;
 
 /** PostgreSQL roles that skip FORCE RLS. */
-const RLS_BYPASS_DATABASE_USERS = new Set(["postgres", "root"]);
+const RLS_BYPASS_DATABASE_USERS = new Set(['postgres', 'root']);
 
 function assertNoPlaceholderSecrets(env: Record<string, string | undefined>): void {
-  const unrotated = SECRETS_TO_ROTATE.filter((name) =>
-    PLACEHOLDER_SECRET_PATTERN.test(env[name]?.trim() ?? ""),
-  );
+	const unrotated = SECRETS_TO_ROTATE.filter((name) =>
+		PLACEHOLDER_SECRET_PATTERN.test(env[name]?.trim() ?? ''),
+	);
 
-  if (unrotated.length > 0) {
-    throw new Error(
-      `Production startup blocked: replace the generated placeholder values for ${unrotated.join(", ")}.`,
-    );
-  }
+	if (unrotated.length > 0) {
+		throw new Error(
+			`Production startup blocked: replace the generated placeholder values for ${unrotated.join(', ')}.`,
+		);
+	}
 }
 
 function isTokenAuthEnabled(env: Record<string, string | undefined>): boolean {
-  return (
-    Boolean(env.ADMIN_API_TOKEN?.trim()) ||
-    Boolean(env.MEMBER_API_TOKEN?.trim()) ||
-    envFlagEnabled(env.FEATURE_API_TOKENS)
-  );
+	return (
+		Boolean(env.ADMIN_API_TOKEN?.trim()) ||
+		Boolean(env.MEMBER_API_TOKEN?.trim()) ||
+		envFlagEnabled(env.FEATURE_API_TOKENS)
+	);
 }
 
 function isOAuthEnabled(env: Record<string, string | undefined>): boolean {
-  return (
-    envFlagEnabled(env.FEATURE_OAUTH) ||
-    envFlagEnabled(env.FEATURE_SAML) ||
-    Boolean(env.GITHUB_CLIENT_ID?.trim()) ||
-    Boolean(env.OIDC_ISSUER?.trim()) ||
-    Boolean(env.SAML_IDP_SSO_URL?.trim()) ||
-    Boolean(env.SAML_LOGIN_URL?.trim())
-  );
+	return (
+		envFlagEnabled(env.FEATURE_OAUTH) ||
+		envFlagEnabled(env.FEATURE_SAML) ||
+		Boolean(env.GITHUB_CLIENT_ID?.trim()) ||
+		Boolean(env.OIDC_ISSUER?.trim()) ||
+		Boolean(env.SAML_IDP_SSO_URL?.trim()) ||
+		Boolean(env.SAML_LOGIN_URL?.trim())
+	);
 }
 
 function isHeaderOnlyAuth(env: Record<string, string | undefined>): boolean {
-  const frontend = env.FRONTEND_MODE?.trim() ?? "";
-  return env.AUTH_MODE === "headers" || (frontend === "api" && env.AUTH_DEV_HEADERS === "true");
+	const frontend = env.FRONTEND_MODE?.trim() ?? '';
+
+	return env.AUTH_MODE === 'headers' || (frontend === 'api' && env.AUTH_DEV_HEADERS === 'true');
 }
 
 function isCorsConfigured(env: Record<string, string | undefined>): boolean {
-  return env.CORS_ALLOWED_ORIGINS !== undefined;
+	return env.CORS_ALLOWED_ORIGINS !== undefined;
 }
 
 function assertAuthDevHeadersDisabled(env: Record<string, string | undefined>): void {
-  if (env.AUTH_DEV_HEADERS !== "false") {
-    throw new Error(
-      "Production startup blocked: set AUTH_DEV_HEADERS=false to disable development auth headers.",
-    );
-  }
+	if (env.AUTH_DEV_HEADERS !== 'false') {
+		throw new Error(
+			'Production startup blocked: set AUTH_DEV_HEADERS=false to disable development auth headers.',
+		);
+	}
 }
 
 function assertSessionSecret(env: Record<string, string | undefined>): void {
-  const secret = env.SESSION_SECRET?.trim() ?? "";
+	const secret = env.SESSION_SECRET?.trim() ?? '';
 
-  if (secret.length < MIN_SESSION_SECRET_LENGTH) {
-    throw new Error(
-      "Production startup blocked: set SESSION_SECRET when FRONTEND_MODE=server-htmx or hybrid (32+ characters).",
-    );
-  }
+	if (secret.length < MIN_SESSION_SECRET_LENGTH) {
+		throw new Error(
+			'Production startup blocked: set SESSION_SECRET when FRONTEND_MODE=server-htmx or hybrid (32+ characters).',
+		);
+	}
 }
 
 function assertPublishedTestTokensRotated(env: Record<string, string | undefined>): void {
-  const adminToken = env.ADMIN_API_TOKEN ?? "";
-  const memberToken = env.MEMBER_API_TOKEN ?? "";
-  const scimToken = env.SCIM_BEARER_TOKEN ?? "";
+	const adminToken = env.ADMIN_API_TOKEN ?? '';
 
-  if (PUBLISHED_TEST_TOKENS.has(adminToken) || PUBLISHED_TEST_TOKENS.has(memberToken)) {
-    throw new Error(
-      "Production startup blocked: rotate ADMIN_API_TOKEN and MEMBER_API_TOKEN away from published test defaults.",
-    );
-  }
+	const memberToken = env.MEMBER_API_TOKEN ?? '';
 
-  if (scimToken && PUBLISHED_TEST_SCIM_TOKENS.has(scimToken)) {
-    throw new Error(
-      "Production startup blocked: rotate SCIM_BEARER_TOKEN away from published test defaults.",
-    );
-  }
+	const scimToken = env.SCIM_BEARER_TOKEN ?? '';
+
+	if (PUBLISHED_TEST_TOKENS.has(adminToken) || PUBLISHED_TEST_TOKENS.has(memberToken)) {
+		throw new Error(
+			'Production startup blocked: rotate ADMIN_API_TOKEN and MEMBER_API_TOKEN away from published test defaults.',
+		);
+	}
+
+	if (scimToken && PUBLISHED_TEST_SCIM_TOKENS.has(scimToken)) {
+		throw new Error(
+			'Production startup blocked: rotate SCIM_BEARER_TOKEN away from published test defaults.',
+		);
+	}
 }
 
 function assertTokenAuthProductionSecrets(env: Record<string, string | undefined>): void {
-  assertPublishedTestTokensRotated(env);
+	assertPublishedTestTokensRotated(env);
 
-  if (!env.TOKEN_HASH_PEPPER?.trim()) {
-    throw new Error("Production startup blocked: set TOKEN_HASH_PEPPER for API token hashing.");
-  }
+	if (!env.TOKEN_HASH_PEPPER?.trim()) {
+		throw new Error('Production startup blocked: set TOKEN_HASH_PEPPER for API token hashing.');
+	}
 
-  if (!env.API_TOKEN_DEFAULT_EXPIRY_DAYS?.trim()) {
-    throw new Error(
-      "Production startup blocked: set API_TOKEN_DEFAULT_EXPIRY_DAYS to enforce token rotation.",
-    );
-  }
+	if (!env.API_TOKEN_DEFAULT_EXPIRY_DAYS?.trim()) {
+		throw new Error(
+			'Production startup blocked: set API_TOKEN_DEFAULT_EXPIRY_DAYS to enforce token rotation.',
+		);
+	}
 }
 
 function assertFeatureProductionSecrets(env: Record<string, string | undefined>): void {
-  if (envFlagEnabled(env.FEATURE_SCIM)) {
-    const scimToken = env.SCIM_BEARER_TOKEN ?? PUBLISHED_TEST_SCIM_BEARER_TOKEN;
+	if (envFlagEnabled(env.FEATURE_SCIM)) {
+		const scimToken = env.SCIM_BEARER_TOKEN ?? PUBLISHED_TEST_SCIM_BEARER_TOKEN;
 
-    if (PUBLISHED_TEST_SCIM_TOKENS.has(scimToken) || !env.SCIM_BEARER_TOKEN?.trim()) {
-      throw new Error(
-        "Production startup blocked: rotate SCIM_BEARER_TOKEN away from published test defaults.",
-      );
-    }
-  }
+		if (PUBLISHED_TEST_SCIM_TOKENS.has(scimToken) || !env.SCIM_BEARER_TOKEN?.trim()) {
+			throw new Error(
+				'Production startup blocked: rotate SCIM_BEARER_TOKEN away from published test defaults.',
+			);
+		}
+	}
 
-  if (
-    (envFlagEnabled(env.FEATURE_FIELD_ENCRYPTION) || envFlagEnabled(env.FEATURE_MFA)) &&
-    !env.KMS_ENCRYPTION_KEY?.trim() &&
-    !env.KMS_ENCRYPTION_KEYRING
-  ) {
-    throw new Error(
-      "Production startup blocked: set KMS_ENCRYPTION_KEY or KMS_ENCRYPTION_KEYRING when field encryption or MFA is enabled.",
-    );
-  }
+	if (
+		(envFlagEnabled(env.FEATURE_FIELD_ENCRYPTION) || envFlagEnabled(env.FEATURE_MFA)) &&
+		!env.KMS_ENCRYPTION_KEY?.trim() &&
+		!env.KMS_ENCRYPTION_KEYRING
+	) {
+		throw new Error(
+			'Production startup blocked: set KMS_ENCRYPTION_KEY or KMS_ENCRYPTION_KEYRING when field encryption or MFA is enabled.',
+		);
+	}
 
-  if (envFlagEnabled(env.FEATURE_SAML)) {
-    const required = [
-      "SAML_IDP_CERT",
-      "SAML_IDP_SSO_URL",
-      "SAML_SP_ENTITY_ID",
-      "SAML_ACS_URL",
-      "SAML_IDP_ISSUER",
-    ] as const;
-    const missing = required.filter((name) => !env[name]?.trim());
-    if (missing.length > 0) {
-      throw new Error(
-        `Production startup blocked: set ${missing.join(", ")} when FEATURE_SAML=true.`,
-      );
-    }
+	if (envFlagEnabled(env.FEATURE_SAML)) {
+		const required = [
+			'SAML_IDP_CERT',
+			'SAML_IDP_SSO_URL',
+			'SAML_SP_ENTITY_ID',
+			'SAML_ACS_URL',
+			'SAML_IDP_ISSUER',
+		] as const;
 
-    if (env.SAML_WANT_RESPONSE_SIGNED === "false") {
-      throw new Error(
-        "Production startup blocked: signed SAML responses are required (do not set SAML_WANT_RESPONSE_SIGNED=false).",
-      );
-    }
-  }
+		const missing = required.filter((name) => !env[name]?.trim());
 
-  if (envFlagEnabled(env.UPLOAD_ALLOW_UNKNOWN_MIME)) {
-    throw new Error(
-      "Production startup blocked: set UPLOAD_ALLOW_UNKNOWN_MIME=false (unknown MIME types are not allowed).",
-    );
-  }
+		if (missing.length > 0) {
+			throw new Error(
+				`Production startup blocked: set ${missing.join(', ')} when FEATURE_SAML=true.`,
+			);
+		}
 
-  if (envFlagEnabled(env.FEATURE_BILLING) && !env.STRIPE_WEBHOOK_SECRET?.trim()) {
-    throw new Error(
-      "Production startup blocked: set STRIPE_WEBHOOK_SECRET when billing webhooks are enabled.",
-    );
-  }
+		if (env.SAML_WANT_RESPONSE_SIGNED === 'false') {
+			throw new Error(
+				'Production startup blocked: signed SAML responses are required (do not set SAML_WANT_RESPONSE_SIGNED=false).',
+			);
+		}
+	}
 
-  if (isOAuthEnabled(env) && !env.OAUTH_STATE_SECRET?.trim()) {
-    throw new Error(
-      "Production startup blocked: set OAUTH_STATE_SECRET for OAuth CSRF protection.",
-    );
-  }
+	if (envFlagEnabled(env.UPLOAD_ALLOW_UNKNOWN_MIME)) {
+		throw new Error(
+			'Production startup blocked: set UPLOAD_ALLOW_UNKNOWN_MIME=false (unknown MIME types are not allowed).',
+		);
+	}
 
-  if (isCorsConfigured(env)) {
-    const corsOrigins = (env.CORS_ALLOWED_ORIGINS ?? "*").split(",").map((origin) => origin.trim());
+	if (envFlagEnabled(env.FEATURE_BILLING) && !env.STRIPE_WEBHOOK_SECRET?.trim()) {
+		throw new Error(
+			'Production startup blocked: set STRIPE_WEBHOOK_SECRET when billing webhooks are enabled.',
+		);
+	}
 
-    if (corsOrigins.includes("*")) {
-      throw new Error(
-        "Production startup blocked: set explicit CORS_ALLOWED_ORIGINS instead of wildcard.",
-      );
-    }
-  }
+	if (isOAuthEnabled(env) && !env.OAUTH_STATE_SECRET?.trim()) {
+		throw new Error(
+			'Production startup blocked: set OAUTH_STATE_SECRET for OAuth CSRF protection.',
+		);
+	}
 
-  if (envFlagEnabled(env.TENANT_DEV_HEADERS)) {
-    throw new Error("Production startup blocked: set TENANT_DEV_HEADERS=false.");
-  }
+	if (isCorsConfigured(env)) {
+		const corsOrigins = (env.CORS_ALLOWED_ORIGINS ?? '*').split(',').map((origin) => origin.trim());
 
-  if (!env.SIEM_EXPORT_URL?.trim() && envFlagEnabled(env.FEATURE_SIEM_EXPORT)) {
-    console.warn("[secrets] SIEM_EXPORT_URL is not configured; audit logs remain database-only.");
-  }
+		if (corsOrigins.includes('*')) {
+			throw new Error(
+				'Production startup blocked: set explicit CORS_ALLOWED_ORIGINS instead of wildcard.',
+			);
+		}
+	}
+
+	if (envFlagEnabled(env.TENANT_DEV_HEADERS)) {
+		throw new Error('Production startup blocked: set TENANT_DEV_HEADERS=false.');
+	}
+
+	if (!env.SIEM_EXPORT_URL?.trim() && envFlagEnabled(env.FEATURE_SIEM_EXPORT)) {
+		console.warn('[secrets] SIEM_EXPORT_URL is not configured; audit logs remain database-only.');
+	}
 }
 
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"]);
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]']);
 
 type LivePostgresRoleInspector = () => Promise<{
-  rolname: string;
-  rolsuper: boolean;
-  rolbypassrls: boolean;
+	rolname: string;
+	rolsuper: boolean;
+	rolbypassrls: boolean;
 } | null>;
 
 /**
@@ -231,17 +240,21 @@ type LivePostgresRoleInspector = () => Promise<{
  * not the rls runtime pool. MIGRATION_DATABASE_URL may stay a superuser.
  */
 function rlsRuntimeDatabaseUrl(
-  env: Record<string, string | undefined>,
-): { name: "APP_DATABASE_URL" | "DATABASE_URL"; raw: string } | null {
-  const app = env.APP_DATABASE_URL?.trim();
-  if (app) {
-    return { name: "APP_DATABASE_URL", raw: app };
-  }
-  const database = env.DATABASE_URL?.trim();
-  if (database) {
-    return { name: "DATABASE_URL", raw: database };
-  }
-  return null;
+	env: Record<string, string | undefined>,
+): { name: 'APP_DATABASE_URL' | 'DATABASE_URL'; raw: string } | null {
+	const app = env.APP_DATABASE_URL?.trim();
+
+	if (app) {
+		return { name: 'APP_DATABASE_URL', raw: app };
+	}
+
+	const database = env.DATABASE_URL?.trim();
+
+	if (database) {
+		return { name: 'DATABASE_URL', raw: database };
+	}
+
+	return null;
 }
 
 /**
@@ -251,28 +264,33 @@ function rlsRuntimeDatabaseUrl(
  * pg_roles check in assertRlsLiveDatabaseRole().
  */
 function assertRlsUsesAppDatabaseRole(env: Record<string, string | undefined>): void {
-  if (!isRlsTenancy(env)) {
-    return;
-  }
+	if (!isRlsTenancy(env)) {
+		return;
+	}
 
-  const runtime = rlsRuntimeDatabaseUrl(env);
-  if (!runtime) {
-    return;
-  }
-  const user = postgresUrlUsername(runtime.raw);
-  if (user === null) {
-    return;
-  }
-  if (user === "") {
-    throw new Error(
-      `TENANCY_DRIVER=rls startup blocked: ${runtime.name} must include a NOBYPASSRLS role username.`,
-    );
-  }
-  if (RLS_BYPASS_DATABASE_USERS.has(user.toLowerCase())) {
-    throw new Error(
-      `TENANCY_DRIVER=rls startup blocked: ${runtime.name} for TENANCY_DRIVER=rls must use a NOBYPASSRLS role, not ${user}. FORCE RLS does not apply to PostgreSQL superusers.`,
-    );
-  }
+	const runtime = rlsRuntimeDatabaseUrl(env);
+
+	if (!runtime) {
+		return;
+	}
+
+	const user = postgresUrlUsername(runtime.raw);
+
+	if (user === null) {
+		return;
+	}
+
+	if (user === '') {
+		throw new Error(
+			`TENANCY_DRIVER=rls startup blocked: ${runtime.name} must include a NOBYPASSRLS role username.`,
+		);
+	}
+
+	if (RLS_BYPASS_DATABASE_USERS.has(user.toLowerCase())) {
+		throw new Error(
+			`TENANCY_DRIVER=rls startup blocked: ${runtime.name} for TENANCY_DRIVER=rls must use a NOBYPASSRLS role, not ${user}. FORCE RLS does not apply to PostgreSQL superusers.`,
+		);
+	}
 }
 
 /**
@@ -281,91 +299,106 @@ function assertRlsUsesAppDatabaseRole(env: Record<string, string | undefined>): 
  * MIGRATION_DATABASE_URL may stay a superuser.
  */
 async function assertRlsLiveDatabaseRole(
-  env: Record<string, string | undefined>,
-  inspect: LivePostgresRoleInspector,
+	env: Record<string, string | undefined>,
+	inspect: LivePostgresRoleInspector,
 ): Promise<void> {
-  if (!isRlsTenancy(env)) {
-    return;
-  }
+	if (!isRlsTenancy(env)) {
+		return;
+	}
 
-  const runtime = rlsRuntimeDatabaseUrl(env);
-  if (!runtime || !isPostgresUrl(runtime.raw)) {
-    return;
-  }
-  const source = runtime.name;
+	const runtime = rlsRuntimeDatabaseUrl(env);
 
-  assertRlsUsesAppDatabaseRole(env);
+	if (!runtime || !isPostgresUrl(runtime.raw)) {
+		return;
+	}
 
-  let role: { rolname: string; rolsuper: boolean; rolbypassrls: boolean } | null;
-  try {
-    const inspected = await inspect();
-    if (!inspected) throw new TypeError("Missing live PostgreSQL role.");
-    const { rolname, rolsuper, rolbypassrls } = inspected;
-    if (
-      typeof rolname !== "string" ||
-      !rolname.trim() ||
-      typeof rolsuper !== "boolean" ||
-      typeof rolbypassrls !== "boolean"
-    )
-      throw new TypeError("Malformed live PostgreSQL role.");
-    role = { rolname, rolsuper, rolbypassrls };
-  } catch {
-    throw new Error(
-      `TENANCY_DRIVER=rls startup blocked: could not inspect the live Postgres role for ${source}.`,
-    );
-  }
-  assertPostgresRoleCannotBypassRls(role, source);
+	const source = runtime.name;
+
+	assertRlsUsesAppDatabaseRole(env);
+
+	let role: { rolname: string; rolsuper: boolean; rolbypassrls: boolean } | null;
+
+	try {
+		const inspected = await inspect();
+
+		if (!inspected) {
+			throw new TypeError('Missing live PostgreSQL role.');
+		}
+
+		const { rolname, rolsuper, rolbypassrls } = inspected;
+
+		if (
+			typeof rolname !== 'string' ||
+			!rolname.trim() ||
+			typeof rolsuper !== 'boolean' ||
+			typeof rolbypassrls !== 'boolean'
+		) {
+			throw new TypeError('Malformed live PostgreSQL role.');
+		}
+
+		role = { rolname, rolsuper, rolbypassrls };
+	} catch {
+		throw new Error(
+			`TENANCY_DRIVER=rls startup blocked: could not inspect the live Postgres role for ${source}.`,
+		);
+	}
+	assertPostgresRoleCannotBypassRls(role, source);
 }
 
 /** Signed links (password reset, email verification) and redirects are built from APP_URL. */
 function assertPublicAppUrl(env: Record<string, string | undefined>): void {
-  const raw = env.APP_URL?.trim() ?? "";
-  let url: URL | null = null;
-  try {
-    url = raw ? new URL(raw) : null;
-  } catch {
-    url = null;
-  }
-  if (!url || !/^https?:$/.test(url.protocol) || LOCAL_HOSTS.has(url.hostname)) {
-    throw new Error(
-      "Production startup blocked: set APP_URL to the public origin of this app (for example https://app.example.com). Signed links and redirects are built from it.",
-    );
-  }
-  if (url.protocol === "http:") {
-    console.warn(
-      `[secrets] APP_URL uses http; session cookies are marked Secure in production and will not be sent over ${raw}.`,
-    );
-  }
+	const raw = env.APP_URL?.trim() ?? '';
+
+	let url: URL | null = null;
+
+	try {
+		url = raw ? new URL(raw) : null;
+	} catch {
+		url = null;
+	}
+
+	if (!url || !/^https?:$/.test(url.protocol) || LOCAL_HOSTS.has(url.hostname)) {
+		throw new Error(
+			'Production startup blocked: set APP_URL to the public origin of this app (for example https://app.example.com). Signed links and redirects are built from it.',
+		);
+	}
+
+	if (url.protocol === 'http:') {
+		console.warn(
+			`[secrets] APP_URL uses http; session cookies are marked Secure in production and will not be sent over ${raw}.`,
+		);
+	}
 }
 
 function assertProductionSecrets(env: Record<string, string | undefined> = process.env): void {
-  // Explicit keyring configuration is validated at boot, also in development.
-  resolveFieldEncryptionKeyring(env);
-  if (!isProductionEnv(env)) {
-    return;
-  }
+	// Explicit keyring configuration is validated at boot, also in development.
+	resolveFieldEncryptionKeyring(env);
 
-  assertNoPlaceholderSecrets(env);
-  assertAuthDevHeadersDisabled(env);
-  assertPublicAppUrl(env);
+	if (!isProductionEnv(env)) {
+		return;
+	}
 
-  if (isHeaderOnlyAuth(env)) {
-    throw new Error(
-      "Production startup blocked: header-only authentication is not allowed. Configure cookie, token, or JWT auth.",
-    );
-  }
+	assertNoPlaceholderSecrets(env);
+	assertAuthDevHeadersDisabled(env);
+	assertPublicAppUrl(env);
 
-  if (isTokenAuthEnabled(env)) {
-    assertTokenAuthProductionSecrets(env);
-  }
+	if (isHeaderOnlyAuth(env)) {
+		throw new Error(
+			'Production startup blocked: header-only authentication is not allowed. Configure cookie, token, or JWT auth.',
+		);
+	}
 
-  assertFeatureProductionSecrets(env);
+	if (isTokenAuthEnabled(env)) {
+		assertTokenAuthProductionSecrets(env);
+	}
 
-  if (isViewsMode(parseFrontendMode(env.FRONTEND_MODE))) {
-    assertSessionSecret(env);
-  }
+	assertFeatureProductionSecrets(env);
 
-  assertRlsUsesAppDatabaseRole(env);
+	if (isViewsMode(parseFrontendMode(env.FRONTEND_MODE))) {
+		assertSessionSecret(env);
+	}
+
+	assertRlsUsesAppDatabaseRole(env);
 }
 
 export { assertProductionSecrets, assertRlsLiveDatabaseRole };

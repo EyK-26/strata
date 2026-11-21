@@ -1,738 +1,875 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { existsSync } from 'node:fs';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import {
-  generateProject,
-  resolveOverlayRoot,
-  resolveProjectTarget,
-  resolveTemplateRoot,
-} from "../../../packages/strata-starter/src/generate.ts";
+	generateProject,
+	resolveOverlayRoot,
+	resolveProjectTarget,
+	resolveTemplateRoot,
+} from '../../../packages/strata-starter/src/generate.ts';
 import {
-  layersFromFlags,
-  parseCreateStrataArgs,
-} from "../../../packages/strata-starter/src/parseArgs.ts";
+	layersFromFlags,
+	parseCreateStrataArgs,
+} from '../../../packages/strata-starter/src/parseArgs.ts';
 
 const tempDirectories: string[] = [];
 
 afterEach(async () => {
-  while (tempDirectories.length > 0) {
-    const directory = tempDirectories.pop();
-    if (directory) {
-      await rm(directory, { recursive: true, force: true });
-    }
-  }
+	while (tempDirectories.length > 0) {
+		const directory = tempDirectories.pop();
+
+		if (directory) {
+			await rm(directory, { recursive: true, force: true });
+		}
+	}
 });
 
 async function tempDir(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "strata-portability-"));
-  tempDirectories.push(directory);
-  return directory;
+	const directory = await mkdtemp(join(tmpdir(), 'strata-portability-'));
+
+	tempDirectories.push(directory);
+
+	return directory;
 }
 
 function generateFromArgs(directory: string, argv: string[]): string {
-  const flags = parseCreateStrataArgs(argv);
-  const name = flags.projectName ?? "app";
-  generateProject({
-    projectName: name,
-    targetDir: join(directory, name),
-    layers: layersFromFlags(flags),
-    templateRoot: resolveTemplateRoot(),
-    overlayRoot: resolveOverlayRoot(),
-  });
-  return join(directory, name);
+	const flags = parseCreateStrataArgs(argv);
+
+	const name = flags.projectName ?? 'app';
+
+	generateProject({
+		projectName: name,
+		targetDir: join(directory, name),
+		layers: layersFromFlags(flags),
+		templateRoot: resolveTemplateRoot(),
+		overlayRoot: resolveOverlayRoot(),
+	});
+
+	return join(directory, name);
 }
 
-describe("resolveProjectTarget", () => {
-  test("accepts a bare project name relative to the cwd", () => {
-    expect(resolveProjectTarget("my-app", "/work")).toEqual({
-      projectName: "my-app",
-      targetDir: "/work/my-app",
-    });
-  });
+describe('resolveProjectTarget', () => {
+	test('accepts a bare project name relative to the cwd', () => {
+		expect(resolveProjectTarget('my-app', '/work')).toEqual({
+			projectName: 'my-app',
+			targetDir: '/work/my-app',
+		});
+	});
 
-  test("accepts an absolute directory path and uses the basename as the project name", () => {
-    expect(resolveProjectTarget("/tmp/nested/deep-app", "/work")).toEqual({
-      projectName: "deep-app",
-      targetDir: "/tmp/nested/deep-app",
-    });
-  });
+	test('accepts an absolute directory path and uses the basename as the project name', () => {
+		expect(resolveProjectTarget('/tmp/nested/deep-app', '/work')).toEqual({
+			projectName: 'deep-app',
+			targetDir: '/tmp/nested/deep-app',
+		});
+	});
 
-  test("accepts a relative directory path", () => {
-    expect(resolveProjectTarget("./sub/dir-app", "/work")).toEqual({
-      projectName: "dir-app",
-      targetDir: "/work/sub/dir-app",
-    });
-  });
+	test('accepts a relative directory path', () => {
+		expect(resolveProjectTarget('./sub/dir-app', '/work')).toEqual({
+			projectName: 'dir-app',
+			targetDir: '/work/sub/dir-app',
+		});
+	});
 
-  test("still rejects an unusable basename", () => {
-    expect(() => resolveProjectTarget("/tmp/bad name!", "/work")).toThrow(
-      /letters, numbers, hyphens, and underscores/,
-    );
-  });
+	test('still rejects an unusable basename', () => {
+		expect(() => resolveProjectTarget('/tmp/bad name!', '/work')).toThrow(
+			/letters, numbers, hyphens, and underscores/,
+		);
+	});
 });
 
-describe("MySQL portability", () => {
-  test("keyed string columns are bounded so MySQL can index them", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, [
-      "myapp",
-      "--frontend=server-htmx",
-      "--database=mysql",
-      "--auth=cookie-token",
-      "--tenancy=column",
-      "--yes",
-    ]);
-    const migrate = await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8");
+describe('MySQL portability', () => {
+	test('keyed string columns are bounded so MySQL can index them', async () => {
+		const root = await tempDir();
 
-    // MySQL errno 1170: a TEXT column cannot appear in a key specification.
-    expect(migrate).not.toMatch(/TEXT[^,\n]*\bUNIQUE\b/);
-    expect(migrate).not.toMatch(/TEXT\s+PRIMARY KEY/);
-    // MySQL ER_BLOB_CANT_HAVE_DEFAULT: a TEXT column cannot have a default.
-    expect(migrate).not.toMatch(/TEXT[^,\n]*\bDEFAULT\b/);
+		const app = generateFromArgs(root, [
+			'myapp',
+			'--frontend=server-htmx',
+			'--database=mysql',
+			'--auth=cookie-token',
+			'--tenancy=column',
+			'--yes',
+		]);
 
-    expect(migrate).toContain("email VARCHAR(255) NOT NULL UNIQUE");
-    expect(migrate).toContain("id VARCHAR(255) PRIMARY KEY");
-    expect(migrate).toContain("token_hash VARCHAR(255) NOT NULL UNIQUE");
-    expect(migrate).toContain("slug VARCHAR(255) NOT NULL UNIQUE");
-  });
+		const migrate = await readFile(join(app, 'src/db/migrations/0001_starter_schema.ts'), 'utf8');
 
-  test("postgres and sqlite keep unbounded TEXT for the same columns", async () => {
-    const root = await tempDir();
-    for (const database of ["postgres", "sqlite"]) {
-      const app = generateFromArgs(root, [
-        `pg-${database}`,
-        "--frontend=server-htmx",
-        `--database=${database}`,
-        "--auth=cookie-token",
-        "--yes",
-      ]);
-      const migrate = await readFile(join(app, "src/db/migrations/0001_starter_schema.ts"), "utf8");
-      expect(migrate).toContain("email TEXT NOT NULL UNIQUE");
-      expect(migrate).not.toContain("VARCHAR(255)");
-    }
-  });
+		// MySQL errno 1170: a TEXT column cannot appear in a key specification.
+		expect(migrate).not.toMatch(/TEXT[^,\n]*\bUNIQUE\b/);
+		expect(migrate).not.toMatch(/TEXT\s+PRIMARY KEY/);
+		// MySQL ER_BLOB_CANT_HAVE_DEFAULT: a TEXT column cannot have a default.
+		expect(migrate).not.toMatch(/TEXT[^,\n]*\bDEFAULT\b/);
 
-  test("mysql ensureAppDatabase creates the database it was pointed at", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, ["myapp2", "--database=mysql", "--yes"]);
-    const ensure = await readFile(join(app, "src/bootstrap/ensureDatabase.ts"), "utf8");
+		expect(migrate).toContain('email VARCHAR(255) NOT NULL UNIQUE');
+		expect(migrate).toContain('id VARCHAR(255) PRIMARY KEY');
+		expect(migrate).toContain('token_hash VARCHAR(255) NOT NULL UNIQUE');
+		expect(migrate).toContain('slug VARCHAR(255) NOT NULL UNIQUE');
+	});
 
-    expect(ensure).toContain("ensureDatabase({ driver: connection.driver");
-    expect(ensure).toContain('from "@getstrata/bootstrap/databaseCommands"');
-    expect(ensure).not.toContain("CREATE DATABASE");
+	test('postgres and sqlite keep unbounded TEXT for the same columns', async () => {
+		const root = await tempDir();
 
-    const pkg = JSON.parse(await readFile(join(app, "package.json"), "utf8")) as {
-      dependencies: Record<string, string>;
-    };
-    expect(pkg.dependencies.eta).toBeUndefined();
-    expect(pkg.dependencies.mysql2).toBe("^3.24.3");
-  });
+		for (const database of ['postgres', 'sqlite']) {
+			const app = generateFromArgs(root, [
+				`pg-${database}`,
+				'--frontend=server-htmx',
+				`--database=${database}`,
+				'--auth=cookie-token',
+				'--yes',
+			]);
 
-  test("timestamp parameters use a format MySQL DATETIME accepts", async () => {
-    const root = await tempDir();
-    const mysqlApp = generateFromArgs(root, [
-      "mytime",
-      "--frontend=server-htmx",
-      "--database=mysql",
-      "--auth=cookie",
-      "--email-verification",
-      "--yes",
-    ]);
-    const mysqlAuth = await readAuthSources(mysqlApp);
-    expect(mysqlAuth).toContain("prepareAccountMail(ports");
-    expect(mysqlAuth).toContain("registerAccount(ports");
-    expect(mysqlAuth).not.toContain('.slice(0, 19).replace("T", " ")');
-    const { dialectFor } = await import("../../../src/core/database/dialect");
-    const value = new Date("2026-01-02T03:04:05.000Z");
-    expect(dialectFor("mysql").timestampValue(value)).toBe("2026-01-02 03:04:05");
-    expect(dialectFor("pgsql").timestampValue(value)).toBe("2026-01-02T03:04:05.000Z");
-  });
+			const migrate = await readFile(join(app, 'src/db/migrations/0001_starter_schema.ts'), 'utf8');
 
-  test("migrate and fresh use a finally-owned migration connection", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, ["myclose", "--database=mysql", "--yes"]);
-    const runtime = await readFile(join(app, "src/db/migrationRuntime.ts"), "utf8");
-    expect(runtime).toContain("export function withMigrationDatabase<T>");
-    expect(runtime).toContain("runMigrationDatabase(databaseOptions(environment), operation");
-    for (const file of ["migrate", "fresh"]) {
-      const source = await readFile(join(app, `src/db/${file}.ts`), "utf8");
-      expect(source).toContain("await withMigrationDatabase(async (db)");
-      expect(source).not.toContain("closeDatabase");
-    }
-  });
+			expect(migrate).toContain('email TEXT NOT NULL UNIQUE');
+			expect(migrate).not.toContain('VARCHAR(255)');
+		}
+	});
+
+	test('mysql ensureAppDatabase creates the database it was pointed at', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, ['myapp2', '--database=mysql', '--yes']);
+
+		const ensure = await readFile(join(app, 'src/bootstrap/ensureDatabase.ts'), 'utf8');
+
+		expect(ensure).toContain('ensureDatabase({ driver: connection.driver');
+		expect(ensure).toContain('from "@getstrata/bootstrap/databaseCommands"');
+		expect(ensure).not.toContain('CREATE DATABASE');
+
+		const pkg = JSON.parse(await readFile(join(app, 'package.json'), 'utf8')) as {
+			dependencies: Record<string, string>;
+		};
+
+		expect(pkg.dependencies.eta).toBeUndefined();
+		expect(pkg.dependencies.mysql2).toBe('^3.24.3');
+	});
+
+	test('timestamp parameters use a format MySQL DATETIME accepts', async () => {
+		const root = await tempDir();
+
+		const mysqlApp = generateFromArgs(root, [
+			'mytime',
+			'--frontend=server-htmx',
+			'--database=mysql',
+			'--auth=cookie',
+			'--email-verification',
+			'--yes',
+		]);
+
+		const mysqlAuth = await readAuthSources(mysqlApp);
+
+		expect(mysqlAuth).toContain('prepareAccountMail(ports');
+		expect(mysqlAuth).toContain('registerAccount(ports');
+		expect(mysqlAuth).not.toContain('.slice(0, 19).replace("T", " ")');
+		const { dialectFor } = await import('../../../src/core/database/dialect');
+
+		const value = new Date('2026-01-02T03:04:05.000Z');
+
+		expect(dialectFor('mysql').timestampValue(value)).toBe('2026-01-02 03:04:05');
+		expect(dialectFor('pgsql').timestampValue(value)).toBe('2026-01-02T03:04:05.000Z');
+	});
+
+	test('migrate and fresh use a finally-owned migration connection', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, ['myclose', '--database=mysql', '--yes']);
+
+		const runtime = await readFile(join(app, 'src/db/migrationRuntime.ts'), 'utf8');
+
+		expect(runtime).toContain('export function withMigrationDatabase<T>');
+		expect(runtime).toContain('runMigrationDatabase(databaseOptions(environment), operation');
+		for (const file of ['migrate', 'fresh']) {
+			const source = await readFile(join(app, `src/db/${file}.ts`), 'utf8');
+
+			expect(source).toContain('await withMigrationDatabase(async (db)');
+			expect(source).not.toContain('closeDatabase');
+		}
+	});
 });
 
-describe("database name resolution", () => {
-  test("no layer combination renames the database to a _test suffix", async () => {
-    const root = await tempDir();
-    for (const database of ["postgres", "mysql"]) {
-      const app = generateFromArgs(root, [`acme-${database}`, `--database=${database}`, "--yes"]);
-      const ensure = await readFile(join(app, "src/bootstrap/ensureDatabase.ts"), "utf8");
-      const env = await readFile(join(app, ".env.example"), "utf8");
+describe('database name resolution', () => {
+	test('no layer combination renames the database to a _test suffix', async () => {
+		const root = await tempDir();
 
-      expect(ensure).not.toContain("_test");
-      expect(env).not.toContain("_test");
-      expect(env).toContain(`/acme_${database}`);
-    }
-  });
+		for (const database of ['postgres', 'mysql']) {
+			const app = generateFromArgs(root, [`acme-${database}`, `--database=${database}`, '--yes']);
 
-  test("APP_DATABASE_URL stays the documented override", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, ["ovr", "--database=postgres", "--yes"]);
-    const ensure = await readFile(join(app, "src/bootstrap/ensureDatabase.ts"), "utf8");
-    expect(ensure).toContain("resolveDatabaseOptions(environment");
-    expect(ensure).toContain("DATABASE_URL");
+			const ensure = await readFile(join(app, 'src/bootstrap/ensureDatabase.ts'), 'utf8');
 
-    // The override is discoverable from the app itself, not only from source.
-    const env = await readFile(join(app, ".env.example"), "utf8");
-    expect(env).toContain("# APP_DATABASE_URL=");
-    const readme = await readFile(join(app, "README.md"), "utf8");
-    expect(readme).toContain("## Database");
-    expect(readme).toContain("APP_DATABASE_URL");
-  });
+			const env = await readFile(join(app, '.env.example'), 'utf8');
 
-  test("sqlite apps do not mention APP_DATABASE_URL", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, ["lite", "--database=sqlite", "--yes"]);
-    const env = await readFile(join(app, ".env.example"), "utf8");
-    expect(env).not.toContain("APP_DATABASE_URL");
-    const readme = await readFile(join(app, "README.md"), "utf8");
-    expect(readme).not.toContain("APP_DATABASE_URL");
-  });
+			expect(ensure).not.toContain('_test');
+			expect(env).not.toContain('_test');
+			expect(env).toContain(`/acme_${database}`);
+		}
+	});
+
+	test('APP_DATABASE_URL stays the documented override', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, ['ovr', '--database=postgres', '--yes']);
+
+		const ensure = await readFile(join(app, 'src/bootstrap/ensureDatabase.ts'), 'utf8');
+
+		expect(ensure).toContain('resolveDatabaseOptions(environment');
+		expect(ensure).toContain('DATABASE_URL');
+
+		// The override is discoverable from the app itself, not only from source.
+		const env = await readFile(join(app, '.env.example'), 'utf8');
+
+		expect(env).toContain('# APP_DATABASE_URL=');
+		const readme = await readFile(join(app, 'README.md'), 'utf8');
+
+		expect(readme).toContain('## Database');
+		expect(readme).toContain('APP_DATABASE_URL');
+	});
+
+	test('sqlite apps do not mention APP_DATABASE_URL', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, ['lite', '--database=sqlite', '--yes']);
+
+		const env = await readFile(join(app, '.env.example'), 'utf8');
+
+		expect(env).not.toContain('APP_DATABASE_URL');
+		const readme = await readFile(join(app, 'README.md'), 'utf8');
+
+		expect(readme).not.toContain('APP_DATABASE_URL');
+	});
 });
 
-describe("tenancy rls coercion is visible", () => {
-  test("sqlite and mysql print why rls became column", () => {
-    const warn = spyOn(console, "warn").mockImplementation(() => undefined);
-    try {
-      const sqlite = layersFromFlags(
-        parseCreateStrataArgs(["demo", "--database=sqlite", "--tenancy=rls", "--yes"]),
-      );
-      expect(sqlite.tenancy).toBe("column");
-      const mysql = layersFromFlags(
-        parseCreateStrataArgs(["demo", "--database=mysql", "--tenancy=rls", "--yes"]),
-      );
-      expect(mysql.tenancy).toBe("column");
+describe('tenancy rls coercion is visible', () => {
+	test('sqlite and mysql print why rls became column', () => {
+		const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
 
-      const messages = warn.mock.calls.map((call) => String(call[0]));
-      expect(messages.filter((m) => m.includes("Using --tenancy column"))).toHaveLength(2);
-      expect(messages.some((m) => m.includes("sqlite has no equivalent"))).toBe(true);
-      expect(messages.some((m) => m.includes("mysql has no equivalent"))).toBe(true);
-    } finally {
-      warn.mockRestore();
-    }
-  });
+		try {
+			const sqlite = layersFromFlags(
+				parseCreateStrataArgs(['demo', '--database=sqlite', '--tenancy=rls', '--yes']),
+			);
 
-  test("postgres keeps rls without a notice", () => {
-    const warn = spyOn(console, "warn").mockImplementation(() => undefined);
-    try {
-      const layers = layersFromFlags(
-        parseCreateStrataArgs(["demo", "--database=postgres", "--tenancy=rls", "--yes"]),
-      );
-      expect(layers.tenancy).toBe("rls");
-      expect(warn.mock.calls.some((call) => String(call[0]).includes("tenancy"))).toBe(false);
-    } finally {
-      warn.mockRestore();
-    }
-  });
+			expect(sqlite.tenancy).toBe('column');
+			const mysql = layersFromFlags(
+				parseCreateStrataArgs(['demo', '--database=mysql', '--tenancy=rls', '--yes']),
+			);
+
+			expect(mysql.tenancy).toBe('column');
+
+			const messages = warn.mock.calls.map((call) => String(call[0]));
+
+			expect(messages.filter((m) => m.includes('Using --tenancy column'))).toHaveLength(2);
+			expect(messages.some((m) => m.includes('sqlite has no equivalent'))).toBe(true);
+			expect(messages.some((m) => m.includes('mysql has no equivalent'))).toBe(true);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	test('postgres keeps rls without a notice', () => {
+		const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+
+		try {
+			const layers = layersFromFlags(
+				parseCreateStrataArgs(['demo', '--database=postgres', '--tenancy=rls', '--yes']),
+			);
+
+			expect(layers.tenancy).toBe('rls');
+			expect(warn.mock.calls.some((call) => String(call[0]).includes('tenancy'))).toBe(false);
+		} finally {
+			warn.mockRestore();
+		}
+	});
 });
 
-describe("extras flags match the wizard", () => {
-  test("header auth drops MFA, email verification, and SCIM flags", () => {
-    const layers = layersFromFlags(
-      parseCreateStrataArgs([
-        "app",
-        "--auth=headers",
-        "--mfa",
-        "--scim",
-        "--email-verification",
-        "--metrics",
-        "--yes",
-      ]),
-    );
+describe('extras flags match the wizard', () => {
+	test('header auth drops MFA, email verification, and SCIM flags', () => {
+		const layers = layersFromFlags(
+			parseCreateStrataArgs([
+				'app',
+				'--auth=headers',
+				'--mfa',
+				'--scim',
+				'--email-verification',
+				'--metrics',
+				'--yes',
+			]),
+		);
 
-    expect(layers.extras.mfa).toBe(false);
-    expect(layers.extras.scim).toBe(false);
-    expect(layers.extras.emailVerification).toBe(false);
-    // metrics applies to every auth stack.
-    expect(layers.extras.metrics).toBe(true);
-    expect(layers.extras.oauthGithub).toBe(false);
-    expect(layers.extras.oidc).toBe(false);
-    expect(layers.extras.billing).toBe(false);
-    expect(layers.extras.webhooks).toBe(false);
-  });
+		expect(layers.extras.mfa).toBe(false);
+		expect(layers.extras.scim).toBe(false);
+		expect(layers.extras.emailVerification).toBe(false);
+		// metrics applies to every auth stack.
+		expect(layers.extras.metrics).toBe(true);
+		expect(layers.extras.oauthGithub).toBe(false);
+		expect(layers.extras.oidc).toBe(false);
+		expect(layers.extras.billing).toBe(false);
+		expect(layers.extras.webhooks).toBe(false);
+	});
 
-  test("header auth env does not advertise features it has no code for", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, ["hdr", "--auth=headers", "--mfa", "--scim", "--yes"]);
-    const env = await readFile(join(app, ".env.example"), "utf8");
+	test('header auth env does not advertise features it has no code for', async () => {
+		const root = await tempDir();
 
-    expect(env).toContain("FEATURE_MFA=false");
-    expect(env).not.toContain("FEATURE_SCIM=true");
-    expect(existsSync(join(app, "src/http/controllers/ScimController.ts"))).toBe(false);
-    expect(existsSync(join(app, "src/bootstrap/pendingMfa.ts"))).toBe(false);
-  });
+		const app = generateFromArgs(root, ['hdr', '--auth=headers', '--mfa', '--scim', '--yes']);
 
-  test("token auth keeps SCIM but still drops MFA", () => {
-    const layers = layersFromFlags(
-      parseCreateStrataArgs(["app", "--auth=token", "--mfa", "--scim", "--yes"]),
-    );
+		const env = await readFile(join(app, '.env.example'), 'utf8');
 
-    expect(layers.extras.mfa).toBe(false);
-    expect(layers.extras.scim).toBe(true);
-  });
+		expect(env).toContain('FEATURE_MFA=false');
+		expect(env).not.toContain('FEATURE_SCIM=true');
+		expect(existsSync(join(app, 'src/http/controllers/ScimController.ts'))).toBe(false);
+		expect(existsSync(join(app, 'src/bootstrap/pendingMfa.ts'))).toBe(false);
+	});
 
-  test("cookie auth keeps every extra", () => {
-    const layers = layersFromFlags(
-      parseCreateStrataArgs([
-        "app",
-        "--frontend=server-htmx",
-        "--auth=cookie",
-        "--mfa",
-        "--scim",
-        "--email-verification",
-        "--yes",
-      ]),
-    );
+	test('token auth keeps SCIM but still drops MFA', () => {
+		const layers = layersFromFlags(
+			parseCreateStrataArgs(['app', '--auth=token', '--mfa', '--scim', '--yes']),
+		);
 
-    expect(layers.extras.mfa).toBe(true);
-    expect(layers.extras.scim).toBe(true);
-    expect(layers.extras.emailVerification).toBe(true);
-  });
+		expect(layers.extras.mfa).toBe(false);
+		expect(layers.extras.scim).toBe(true);
+	});
+
+	test('cookie auth keeps every extra', () => {
+		const layers = layersFromFlags(
+			parseCreateStrataArgs([
+				'app',
+				'--frontend=server-htmx',
+				'--auth=cookie',
+				'--mfa',
+				'--scim',
+				'--email-verification',
+				'--yes',
+			]),
+		);
+
+		expect(layers.extras.mfa).toBe(true);
+		expect(layers.extras.scim).toBe(true);
+		expect(layers.extras.emailVerification).toBe(true);
+	});
 });
 
-describe("frontend build wiring", () => {
-  test("spa-react and hybrid get the frontend:build script the 503 names", async () => {
-    const root = await tempDir();
-    for (const frontend of ["spa-react", "hybrid"]) {
-      const app = generateFromArgs(root, [`fe-${frontend}`, `--frontend=${frontend}`, "--yes"]);
-      const manifest = JSON.parse(await readFile(join(app, "package.json"), "utf8")) as {
-        scripts: Record<string, string>;
-      };
+describe('frontend build wiring', () => {
+	test('spa-react and hybrid get the frontend:build script the 503 names', async () => {
+		const root = await tempDir();
 
-      expect(manifest.scripts["frontend:build"]).toBe("cd frontend && bun run build");
-      expect(manifest.scripts["frontend:install"]).toBe("cd frontend && bun install");
-      expect(await readFile(join(app, "README.md"), "utf8")).toContain("bun run frontend:build");
-    }
-  });
+		for (const frontend of ['spa-react', 'hybrid']) {
+			const app = generateFromArgs(root, [`fe-${frontend}`, `--frontend=${frontend}`, '--yes']);
 
-  test("api and server-htmx apps have no frontend scripts", async () => {
-    const root = await tempDir();
-    for (const frontend of ["api", "server-htmx"]) {
-      const app = generateFromArgs(root, [`fe2-${frontend}`, `--frontend=${frontend}`, "--yes"]);
-      const manifest = JSON.parse(await readFile(join(app, "package.json"), "utf8")) as {
-        scripts: Record<string, string>;
-      };
+			const manifest = JSON.parse(await readFile(join(app, 'package.json'), 'utf8')) as {
+				scripts: Record<string, string>;
+			};
 
-      expect(manifest.scripts["frontend:build"]).toBeUndefined();
-    }
-  });
+			expect(manifest.scripts['frontend:build']).toBe('cd frontend && bun run build');
+			expect(manifest.scripts['frontend:install']).toBe('cd frontend && bun install');
+			expect(await readFile(join(app, 'README.md'), 'utf8')).toContain('bun run frontend:build');
+		}
+	});
 
-  test("the SPA overlay only calls endpoints the generated backend serves", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, ["spa", "--frontend=spa-react", "--auth=token", "--yes"]);
+	test('api and server-htmx apps have no frontend scripts', async () => {
+		const root = await tempDir();
 
-    const pages = join(app, "frontend/src");
-    for (const stale of ["OrganizationsPage.tsx", "ProjectsPage.tsx", "TasksPage.tsx"]) {
-      expect(existsSync(join(pages, "pages", stale))).toBe(false);
-    }
+		for (const frontend of ['api', 'server-htmx']) {
+			const app = generateFromArgs(root, [`fe2-${frontend}`, `--frontend=${frontend}`, '--yes']);
 
-    const shell = await readFile(join(pages, "App.tsx"), "utf8");
-    expect(shell).not.toContain("organizations");
-    expect(shell).not.toContain("projects");
-    expect(shell).not.toContain("tasks");
+			const manifest = JSON.parse(await readFile(join(app, 'package.json'), 'utf8')) as {
+				scripts: Record<string, string>;
+			};
 
-    const home = await readFile(join(pages, "pages/HomePage.tsx"), "utf8");
-    expect(home).toContain("auth/me");
-  });
+			expect(manifest.scripts['frontend:build']).toBeUndefined();
+		}
+	});
+
+	test('the SPA overlay only calls endpoints the generated backend serves', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, ['spa', '--frontend=spa-react', '--auth=token', '--yes']);
+
+		const pages = join(app, 'frontend/src');
+
+		for (const stale of ['OrganizationsPage.tsx', 'ProjectsPage.tsx', 'TasksPage.tsx']) {
+			expect(existsSync(join(pages, 'pages', stale))).toBe(false);
+		}
+
+		const shell = await readFile(join(pages, 'App.tsx'), 'utf8');
+
+		expect(shell).not.toContain('organizations');
+		expect(shell).not.toContain('projects');
+		expect(shell).not.toContain('tasks');
+
+		const home = await readFile(join(pages, 'pages/HomePage.tsx'), 'utf8');
+
+		expect(home).toContain('auth/me');
+	});
 });
 
-describe("generated login defaults", () => {
-  test("public auth pages never embed development credentials", async () => {
-    const root = await tempDir();
-    for (const [frontend, auth] of [
-      ["spa-react", "token"],
-      ["spa-react", "cookie"],
-      ["hybrid", "cookie-token-jwt"],
-      ["server-htmx", "cookie"],
-    ] as const) {
-      const app = generateFromArgs(root, [
-        `login-${frontend}-${auth}`,
-        `--frontend=${frontend}`,
-        `--auth=${auth}`,
-        "--yes",
-      ]);
-      const publicPages: string[] = [];
-      if (existsSync(join(app, "views/home.eta")))
-        publicPages.push(await readFile(join(app, "views/home.eta"), "utf8"));
-      if (existsSync(join(app, "views/auth/login.eta"))) {
-        publicPages.push(await readFile(join(app, "views/auth/login.eta"), "utf8"));
-      }
-      if (frontend !== "server-htmx") {
-        const spaLogin = await readFile(join(app, "frontend/src/pages/LoginPage.tsx"), "utf8");
-        publicPages.push(spaLogin);
-        expect(spaLogin).toContain('const [email, setEmail] = useState("")');
-        expect(spaLogin).toContain('const [password, setPassword] = useState("")');
-        expect(spaLogin).toContain('autoComplete="username"');
-        expect(spaLogin).toContain('autoComplete="current-password"');
-      }
-      for (const page of publicPages) {
-        expect(page).not.toContain("StrataDemo!ChangeMe");
-        expect(page).not.toContain("demo@example.com");
-        expect(page).not.toContain("admin@example.test");
-      }
-      const readme = await readFile(join(app, "README.md"), "utf8");
-      const runInstructions = readme.split("## Run it")[1]?.split("Open http://localhost:3000")[0];
-      expect(runInstructions).toContain("bun run db:migrate");
-      expect(runInstructions).not.toContain("bun run db:seed:demo");
-      expect(readme).toContain("Optional development demo accounts");
-      expect(readme).toContain("bun run db:seed:demo");
-    }
-  });
+describe('generated login defaults', () => {
+	test('public auth pages never embed development credentials', async () => {
+		const root = await tempDir();
+
+		for (const [frontend, auth] of [
+			['spa-react', 'token'],
+			['spa-react', 'cookie'],
+			['hybrid', 'cookie-token-jwt'],
+			['server-htmx', 'cookie'],
+		] as const) {
+			const app = generateFromArgs(root, [
+				`login-${frontend}-${auth}`,
+				`--frontend=${frontend}`,
+				`--auth=${auth}`,
+				'--yes',
+			]);
+
+			const publicPages: string[] = [];
+
+			if (existsSync(join(app, 'views/home.eta'))) {
+				publicPages.push(await readFile(join(app, 'views/home.eta'), 'utf8'));
+			}
+
+			if (existsSync(join(app, 'views/auth/login.eta'))) {
+				publicPages.push(await readFile(join(app, 'views/auth/login.eta'), 'utf8'));
+			}
+
+			if (frontend !== 'server-htmx') {
+				const spaLogin = await readFile(join(app, 'frontend/src/pages/LoginPage.tsx'), 'utf8');
+
+				publicPages.push(spaLogin);
+				expect(spaLogin).toContain('const [email, setEmail] = useState("")');
+				expect(spaLogin).toContain('const [password, setPassword] = useState("")');
+				expect(spaLogin).toContain('autoComplete="username"');
+				expect(spaLogin).toContain('autoComplete="current-password"');
+			}
+
+			for (const page of publicPages) {
+				expect(page).not.toContain('StrataDemo!ChangeMe');
+				expect(page).not.toContain('demo@example.com');
+				expect(page).not.toContain('admin@example.test');
+			}
+
+			const readme = await readFile(join(app, 'README.md'), 'utf8');
+
+			const runInstructions = readme.split('## Run it')[1]?.split('Open http://localhost:3000')[0];
+
+			expect(runInstructions).toContain('bun run db:migrate');
+			expect(runInstructions).not.toContain('bun run db:seed:demo');
+			expect(readme).toContain('Optional development demo accounts');
+			expect(readme).toContain('bun run db:seed:demo');
+		}
+	});
 });
 
-describe("generated API docs", () => {
-  test("header auth docs claim no login routes", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, ["docs-hdr", "--frontend=api", "--auth=headers", "--yes"]);
-    const docs = await readFile(join(app, "docs/API.md"), "utf8");
+describe('generated API docs', () => {
+	test('header auth docs claim no login routes', async () => {
+		const root = await tempDir();
 
-    expect(docs).toContain("`GET` | `/health`");
-    expect(docs).toContain("Docker HEALTHCHECK uses this path");
-    // /ready is served by createHealthRoutes() in every generated app; document what it checks.
-    expect(docs).toContain("`GET` | `/ready`");
-    expect(docs).toContain("does not check the schema");
-    expect(docs).not.toContain("/api/v1/auth/login");
-    expect(docs).not.toContain("actingAs");
-    expect(docs).not.toContain("postJson");
-  });
+		const app = generateFromArgs(root, ['docs-hdr', '--frontend=api', '--auth=headers', '--yes']);
 
-  test("token auth docs list the login routes that exist", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, ["docs-tok", "--frontend=api", "--auth=token", "--yes"]);
-    const docs = await readFile(join(app, "docs/API.md"), "utf8");
+		const docs = await readFile(join(app, 'docs/API.md'), 'utf8');
 
-    expect(docs).toContain("/api/v1/auth/login");
-    expect(docs).toContain("/api/v1/auth/me");
-    expect(docs).not.toContain("/api/auth/token");
-  });
+		expect(docs).toContain('`GET` | `/health`');
+		expect(docs).toContain('Docker HEALTHCHECK uses this path');
+		// /ready is served by createHealthRoutes() in every generated app; document what it checks.
+		expect(docs).toContain('`GET` | `/ready`');
+		expect(docs).toContain('does not check the schema');
+		expect(docs).not.toContain('/api/v1/auth/login');
+		expect(docs).not.toContain('actingAs');
+		expect(docs).not.toContain('postJson');
+	});
 
-  for (const auth of [
-    "headers",
-    "cookie",
-    "token",
-    "jwt",
-    "cookie-token",
-    "cookie-token-jwt",
-  ] as const) {
-    test(`${auth} API documentation only advertises emitted auth routes and neutral registration`, async () => {
-      const root = await tempDir();
-      const app = generateFromArgs(root, [
-        "docs-stack",
-        "--frontend=api",
-        `--auth=${auth}`,
-        "--email-verification",
-        "--yes",
-      ]);
-      const docs = await readFile(join(app, "docs/API.md"), "utf8");
-      const source = auth === "headers" ? "" : await readAuthSources(app);
-      for (const row of docs.matchAll(/\| `(GET|POST)` \| `([^`]+)`/g)) {
-        const path = row[2];
-        if (!path?.startsWith("/api/")) continue;
-        expect(source).toContain(`"${path}":`);
-      }
-      const json = auth !== "headers";
-      expect(docs.includes("`POST` | `/api/v1/auth/register`")).toBe(json);
-      if (json) expect(docs).toContain("neutral `{ ok: true }`");
-      if (auth === "cookie") {
-        expect(docs).toContain("POST /api/v1/auth/login");
-        expect(docs).not.toContain("`GET` | `/`");
-        expect(docs).not.toContain("`GET` | `/login`");
-        expect(docs).not.toContain("/api/auth/token");
-      }
-    });
-  }
+	test('token auth docs list the login routes that exist', async () => {
+		const root = await tempDir();
 
-  for (const frontend of ["api", "spa-react", "server-htmx"] as const) {
-    test(`${frontend} cookie account routes and documentation match the selected transport`, async () => {
-      const root = await tempDir();
-      const app = generateFromArgs(root, [
-        "cookie-contract",
-        `--frontend=${frontend}`,
-        "--auth=cookie",
-        "--mfa",
-        "--email-verification",
-        "--yes",
-      ]);
-      const source = await readAuthSources(app);
-      const readme = await readFile(join(app, "README.md"), "utf8");
-      const json = frontend !== "server-htmx";
-      for (const path of [
-        "register",
-        "forgot-password",
-        "reset-password",
-        "verify-email",
-        "verification-notification",
-        "confirm-password",
-        "mfa",
-      ]) {
-        expect(source.includes(`"/api/v1/auth/${path}":`)).toBe(json);
-      }
-      expect(readme.includes("HTML auth kit")).toBe(!json);
-      expect(readme.includes("JSON cookie account flows")).toBe(json);
-      if (json) {
-        expect(source).toContain("kernel.wrapVerified(kernel.wrapPasswordConfirm(");
-        expect(source).toContain(
-          "const recoveryCodes = await enrollMfa(_ports, authServices, user, secret)",
-        );
-        expect(readme).toContain("opening the URL with GET does not consume a token");
-      }
-    });
-  }
+		const app = generateFromArgs(root, ['docs-tok', '--frontend=api', '--auth=token', '--yes']);
 
-  test("metrics docs appear only when the extra is on", async () => {
-    const root = await tempDir();
-    const withMetrics = generateFromArgs(root, [
-      "docs-m",
-      "--frontend=api",
-      "--auth=token",
-      "--metrics",
-      "--yes",
-    ]);
-    const without = generateFromArgs(root, [
-      "docs-nm",
-      "--frontend=api",
-      "--auth=token",
-      "--no-metrics",
-      "--yes",
-    ]);
+		const docs = await readFile(join(app, 'docs/API.md'), 'utf8');
 
-    expect(await readFile(join(withMetrics, "docs/API.md"), "utf8")).toContain("/metrics");
-    expect(await readFile(join(without, "docs/API.md"), "utf8")).not.toContain("/metrics");
-  });
+		expect(docs).toContain('/api/v1/auth/login');
+		expect(docs).toContain('/api/v1/auth/me');
+		expect(docs).not.toContain('/api/auth/token');
+	});
 
-  test("non-api frontends do not ship an API-only doc", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, ["docs-html", "--frontend=server-htmx", "--yes"]);
-    expect(existsSync(join(app, "docs/API.md"))).toBe(false);
-  });
+	for (const auth of [
+		'headers',
+		'cookie',
+		'token',
+		'jwt',
+		'cookie-token',
+		'cookie-token-jwt',
+	] as const) {
+		test(`${auth} API documentation only advertises emitted auth routes and neutral registration`, async () => {
+			const root = await tempDir();
+
+			const app = generateFromArgs(root, [
+				'docs-stack',
+				'--frontend=api',
+				`--auth=${auth}`,
+				'--email-verification',
+				'--yes',
+			]);
+
+			const docs = await readFile(join(app, 'docs/API.md'), 'utf8');
+
+			const source = auth === 'headers' ? '' : await readAuthSources(app);
+
+			for (const row of docs.matchAll(/\| `(GET|POST)` \| `([^`]+)`/g)) {
+				const path = row[2];
+
+				if (!path?.startsWith('/api/')) {
+					continue;
+				}
+
+				expect(source).toContain(`"${path}":`);
+			}
+
+			const json = auth !== 'headers';
+
+			expect(docs.includes('`POST` | `/api/v1/auth/register`')).toBe(json);
+
+			if (json) {
+				expect(docs).toContain('neutral `{ ok: true }`');
+			}
+
+			if (auth === 'cookie') {
+				expect(docs).toContain('POST /api/v1/auth/login');
+				expect(docs).not.toContain('`GET` | `/`');
+				expect(docs).not.toContain('`GET` | `/login`');
+				expect(docs).not.toContain('/api/auth/token');
+			}
+		});
+	}
+
+	for (const frontend of ['api', 'spa-react', 'server-htmx'] as const) {
+		test(`${frontend} cookie account routes and documentation match the selected transport`, async () => {
+			const root = await tempDir();
+
+			const app = generateFromArgs(root, [
+				'cookie-contract',
+				`--frontend=${frontend}`,
+				'--auth=cookie',
+				'--mfa',
+				'--email-verification',
+				'--yes',
+			]);
+
+			const source = await readAuthSources(app);
+
+			const readme = await readFile(join(app, 'README.md'), 'utf8');
+
+			const json = frontend !== 'server-htmx';
+
+			for (const path of [
+				'register',
+				'forgot-password',
+				'reset-password',
+				'verify-email',
+				'verification-notification',
+				'confirm-password',
+				'mfa',
+			]) {
+				expect(source.includes(`"/api/v1/auth/${path}":`)).toBe(json);
+			}
+
+			expect(readme.includes('HTML auth kit')).toBe(!json);
+			expect(readme.includes('JSON cookie account flows')).toBe(json);
+
+			if (json) {
+				expect(source).toContain('kernel.wrapVerified(kernel.wrapPasswordConfirm(');
+				expect(source).toContain(
+					'const recoveryCodes = await enrollMfa(_ports, authServices, user, secret)',
+				);
+				expect(readme).toContain('opening the URL with GET does not consume a token');
+			}
+		});
+	}
+
+	test('metrics docs appear only when the extra is on', async () => {
+		const root = await tempDir();
+
+		const withMetrics = generateFromArgs(root, [
+			'docs-m',
+			'--frontend=api',
+			'--auth=token',
+			'--metrics',
+			'--yes',
+		]);
+
+		const without = generateFromArgs(root, [
+			'docs-nm',
+			'--frontend=api',
+			'--auth=token',
+			'--no-metrics',
+			'--yes',
+		]);
+
+		expect(await readFile(join(withMetrics, 'docs/API.md'), 'utf8')).toContain('/metrics');
+		expect(await readFile(join(without, 'docs/API.md'), 'utf8')).not.toContain('/metrics');
+	});
+
+	test('non-api frontends do not ship an API-only doc', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, ['docs-html', '--frontend=server-htmx', '--yes']);
+
+		expect(existsSync(join(app, 'docs/API.md'))).toBe(false);
+	});
 });
 
-describe("production defaults", () => {
-  test("boot does not migrate when APP_ENV=production", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, ["prod", "--yes"]);
-    const createApp = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
+describe('production defaults', () => {
+	test('boot does not migrate when APP_ENV=production', async () => {
+		const root = await tempDir();
 
-    expect(createApp).toContain("defineApp({");
-    expect(createApp).toContain("  migrate,");
-    expect(createApp).not.toContain("await migrate()");
-  });
+		const app = generateFromArgs(root, ['prod', '--yes']);
 
-  test("HTML apps explain the FEATURE_PUBLIC_READS default they ship", async () => {
-    const root = await tempDir();
-    const html = generateFromArgs(root, [
-      "pr-html",
-      "--frontend=server-htmx",
-      "--auth=cookie",
-      "--yes",
-    ]);
-    const env = await readFile(join(html, ".env.example"), "utf8");
-    const readme = await readFile(join(html, "README.md"), "utf8");
+		const createApp = await readFile(join(app, 'src/bootstrap/createApp.ts'), 'utf8');
 
-    expect(env).toContain("FEATURE_PUBLIC_READS=false");
-    expect(env).toContain("TENANT_DEV_HEADERS=false");
-    expect(env).toContain("FEATURE_SAML=false");
-    expect(env).toContain("FEATURE_OAUTH=false");
-    expect(env).toContain("FEATURE_BILLING=false");
-    expect(env).toContain("# GITHUB_CLIENT_ID=");
-    expect(env).toContain("# STRIPE_WEBHOOK_SECRET=");
-    expect(env).toContain("# WEBHOOK_ALLOW_PRIVATE=true");
-    expect(env).toContain("wrapWebPublicRead");
-    expect(readme).toContain("FEATURE_PUBLIC_READS=false");
-    expect(readme).toContain("wrapWebPublicRead");
-    expect(readme).toContain("CORE_PUBLIC_TENANCY_TOKEN");
-    expect(readme).toContain("TENANT_DEV_HEADERS=false");
-  });
+		expect(createApp).toContain('defineApp({');
+		expect(createApp).toContain('  migrate,');
+		expect(createApp).not.toContain('await migrate()');
+	});
 
-  test("api apps ship the production-safe default", async () => {
-    const root = await tempDir();
-    const api = generateFromArgs(root, ["pr-api", "--frontend=api", "--yes"]);
-    const env = await readFile(join(api, ".env.example"), "utf8");
-    expect(env).toContain("FEATURE_PUBLIC_READS=false");
-    expect(env).toContain("TENANT_DEV_HEADERS=false");
-  });
+	test('HTML apps explain the FEATURE_PUBLIC_READS default they ship', async () => {
+		const root = await tempDir();
 
-  test("every generated placeholder secret carries the change-me marker", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, [
-      "ph",
-      "--frontend=server-htmx",
-      "--auth=cookie-token-jwt",
-      "--scim",
-      "--metrics",
-      "--yes",
-    ]);
-    const env = await readFile(join(app, ".env.example"), "utf8");
+		const html = generateFromArgs(root, [
+			'pr-html',
+			'--frontend=server-htmx',
+			'--auth=cookie',
+			'--yes',
+		]);
 
-    // The production guard rejects secrets matching /change-me/i, so any
-    // placeholder without that marker would slip into production unnoticed.
-    const secrets = [
-      "SESSION_SECRET",
-      "TOKEN_HASH_PEPPER",
-      "METRICS_TOKEN",
-      "SCIM_BEARER_TOKEN",
-      "JWT_SECRET",
-    ];
-    for (const name of secrets) {
-      const match = env.match(new RegExp(`^${name}=(.+)$`, "m"));
-      if (match?.[1]) {
-        expect(match[1]).toMatch(/change-me/i);
-      }
-    }
-  });
+		const env = await readFile(join(html, '.env.example'), 'utf8');
+
+		const readme = await readFile(join(html, 'README.md'), 'utf8');
+
+		expect(env).toContain('FEATURE_PUBLIC_READS=false');
+		expect(env).toContain('TENANT_DEV_HEADERS=false');
+		expect(env).toContain('FEATURE_SAML=false');
+		expect(env).toContain('FEATURE_OAUTH=false');
+		expect(env).toContain('FEATURE_BILLING=false');
+		expect(env).toContain('# GITHUB_CLIENT_ID=');
+		expect(env).toContain('# STRIPE_WEBHOOK_SECRET=');
+		expect(env).toContain('# WEBHOOK_ALLOW_PRIVATE=true');
+		expect(env).toContain('wrapWebPublicRead');
+		expect(readme).toContain('FEATURE_PUBLIC_READS=false');
+		expect(readme).toContain('wrapWebPublicRead');
+		expect(readme).toContain('CORE_PUBLIC_TENANCY_TOKEN');
+		expect(readme).toContain('TENANT_DEV_HEADERS=false');
+	});
+
+	test('api apps ship the production-safe default', async () => {
+		const root = await tempDir();
+
+		const api = generateFromArgs(root, ['pr-api', '--frontend=api', '--yes']);
+
+		const env = await readFile(join(api, '.env.example'), 'utf8');
+
+		expect(env).toContain('FEATURE_PUBLIC_READS=false');
+		expect(env).toContain('TENANT_DEV_HEADERS=false');
+	});
+
+	test('every generated placeholder secret carries the change-me marker', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, [
+			'ph',
+			'--frontend=server-htmx',
+			'--auth=cookie-token-jwt',
+			'--scim',
+			'--metrics',
+			'--yes',
+		]);
+
+		const env = await readFile(join(app, '.env.example'), 'utf8');
+
+		// The production guard rejects secrets matching /change-me/i, so any
+		// placeholder without that marker would slip into production unnoticed.
+		const secrets = [
+			'SESSION_SECRET',
+			'TOKEN_HASH_PEPPER',
+			'METRICS_TOKEN',
+			'SCIM_BEARER_TOKEN',
+			'JWT_SECRET',
+		];
+
+		for (const name of secrets) {
+			const match = env.match(new RegExp(`^${name}=(.+)$`, 'm'));
+
+			if (match?.[1]) {
+				expect(match[1]).toMatch(/change-me/i);
+			}
+		}
+	});
 });
 
-describe("generated deploy files", () => {
-  test("sqlite cookie app gets a production Dockerfile with a storage volume", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, [
-      "deploy-lite",
-      "--frontend=server-htmx",
-      "--database=sqlite",
-      "--auth=cookie",
-      "--yes",
-    ]);
-    const dockerfile = await readFile(join(app, "Dockerfile"), "utf8");
-    expect(dockerfile).toContain("FROM oven/bun:1.4.4 AS deps");
-    expect(await readFile(join(app, ".bun-version"), "utf8")).toBe("1.4.4\n");
-    const manifest = JSON.parse(await readFile(join(app, "package.json"), "utf8"));
-    expect(manifest.engines.bun).toBe(">=1.4.4");
-    expect(manifest.overrides["bun-types"]).toBe(">=1.4.4");
-    expect(dockerfile).toContain("bun install --frozen-lockfile --production");
-    expect(dockerfile).toContain("ENV APP_ENV=production");
-    expect(dockerfile).toContain("ENV AUTH_DEV_HEADERS=false");
-    expect(dockerfile).toContain("USER bun");
-    expect(dockerfile).toContain('VOLUME ["/app/storage"]');
-    expect(dockerfile).toContain("HEALTHCHECK");
-    expect(dockerfile).toContain('CMD ["bun", "./node_modules/.bin/strata", "start"]');
-    expect(dockerfile).not.toContain("AS frontend");
+describe('generated deploy files', () => {
+	test('sqlite cookie app gets a production Dockerfile with a storage volume', async () => {
+		const root = await tempDir();
 
-    const ignore = await readFile(join(app, ".dockerignore"), "utf8");
-    expect(ignore.split("\n")).toEqual(
-      expect.arrayContaining([".env", "node_modules", ".git", "!.env.example"]),
-    );
-    expect(ignore).not.toContain("frontend/dist");
+		const app = generateFromArgs(root, [
+			'deploy-lite',
+			'--frontend=server-htmx',
+			'--database=sqlite',
+			'--auth=cookie',
+			'--yes',
+		]);
 
-    const readme = await readFile(join(app, "README.md"), "utf8");
-    expect(readme).toContain("## Deploy");
-    expect(readme).toContain("docker build -t deploy-lite .");
-    expect(readme).toContain("mount a volume");
+		const dockerfile = await readFile(join(app, 'Dockerfile'), 'utf8');
 
-    const gitignore = await readFile(join(app, ".gitignore"), "utf8");
-    expect(gitignore).toContain("storage/*.sqlite-wal");
-  });
+		expect(dockerfile).toContain('FROM oven/bun:1.4.4 AS deps');
+		expect(await readFile(join(app, '.bun-version'), 'utf8')).toBe('1.4.4\n');
+		const manifest = JSON.parse(await readFile(join(app, 'package.json'), 'utf8'));
 
-  test("postgres hybrid app builds the frontend inside the image and has no sqlite volume", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, [
-      "deploy-hybrid",
-      "--frontend=hybrid",
-      "--database=postgres",
-      "--auth=cookie-token",
-      "--yes",
-    ]);
-    const dockerfile = await readFile(join(app, "Dockerfile"), "utf8");
-    expect(dockerfile).toContain("FROM oven/bun:1.4.4 AS frontend");
-    expect(dockerfile).toContain("COPY --from=frontend /app/frontend/dist ./frontend/dist");
-    expect(dockerfile).not.toContain("VOLUME");
+		expect(manifest.engines.bun).toBe('>=1.4.4');
+		expect(manifest.overrides['bun-types']).toBe('>=1.4.4');
+		expect(dockerfile).toContain('bun install --frozen-lockfile --production');
+		expect(dockerfile).toContain('ENV APP_ENV=production');
+		expect(dockerfile).toContain('ENV AUTH_DEV_HEADERS=false');
+		expect(dockerfile).toContain('USER bun');
+		expect(dockerfile).toContain('VOLUME ["/app/storage"]');
+		expect(dockerfile).toContain('HEALTHCHECK');
+		expect(dockerfile).toContain('CMD ["bun", "./node_modules/.bin/strata", "start"]');
+		expect(dockerfile).not.toContain('AS frontend');
 
-    const frontend = JSON.parse(await readFile(join(app, "frontend/package.json"), "utf8"));
-    expect(frontend.engines.bun).toBe(">=1.4.4");
-    expect(frontend.devDependencies["@types/bun"]).toBe(">=1.4.4");
-    expect(frontend.overrides["bun-types"]).toBe(">=1.4.4");
-    const lock = await readFile(join(app, "frontend/bun.lock"), "utf8");
-    const lockedTypes = lock.match(/"bun-types@([^"]+)"/);
-    expect(lockedTypes).not.toBeNull();
-    expect(Bun.semver.satisfies(lockedTypes?.[1] ?? "0.0.0", ">=1.4.4")).toBe(true);
+		const ignore = await readFile(join(app, '.dockerignore'), 'utf8');
 
-    const ignore = await readFile(join(app, ".dockerignore"), "utf8");
-    expect(ignore).toContain("frontend/node_modules");
-    expect(ignore).toContain("frontend/dist");
+		expect(ignore.split('\n')).toEqual(
+			expect.arrayContaining(['.env', 'node_modules', '.git', '!.env.example']),
+		);
+		expect(ignore).not.toContain('frontend/dist');
 
-    const readme = await readFile(join(app, "README.md"), "utf8");
-    expect(readme).toContain("built inside the image");
-    expect(readme).not.toContain("mount a volume");
-  });
+		const readme = await readFile(join(app, 'README.md'), 'utf8');
 
-  test("README production list covers APP_URL, proxies, CORS, and the health gate", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, ["prod-health", "--frontend=api", "--auth=token", "--yes"]);
-    const readme = await readFile(join(app, "README.md"), "utf8");
-    expect(readme).toContain("Set `APP_URL` to the public origin");
-    expect(readme).toContain("TRUST_FORWARDED_FOR=true");
-    expect(readme).toContain("Cross-origin browser calls are off in production");
-    expect(readme).toContain("framework_migrations");
-    expect(readme).toContain("starter schema migration is recorded");
-    const env = await readFile(join(app, ".env.example"), "utf8");
-    expect(env).toContain("# TRUST_FORWARDED_FOR=true");
-  });
+		expect(readme).toContain('## Deploy');
+		expect(readme).toContain('docker build -t deploy-lite .');
+		expect(readme).toContain('mount a volume');
+
+		const gitignore = await readFile(join(app, '.gitignore'), 'utf8');
+
+		expect(gitignore).toContain('storage/*.sqlite-wal');
+	});
+
+	test('postgres hybrid app builds the frontend inside the image and has no sqlite volume', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, [
+			'deploy-hybrid',
+			'--frontend=hybrid',
+			'--database=postgres',
+			'--auth=cookie-token',
+			'--yes',
+		]);
+
+		const dockerfile = await readFile(join(app, 'Dockerfile'), 'utf8');
+
+		expect(dockerfile).toContain('FROM oven/bun:1.4.4 AS frontend');
+		expect(dockerfile).toContain('COPY --from=frontend /app/frontend/dist ./frontend/dist');
+		expect(dockerfile).not.toContain('VOLUME');
+
+		const frontend = JSON.parse(await readFile(join(app, 'frontend/package.json'), 'utf8'));
+
+		expect(frontend.engines.bun).toBe('>=1.4.4');
+		expect(frontend.devDependencies['@types/bun']).toBe('>=1.4.4');
+		expect(frontend.overrides['bun-types']).toBe('>=1.4.4');
+		const lock = await readFile(join(app, 'frontend/bun.lock'), 'utf8');
+
+		const lockedTypes = lock.match(/"bun-types@([^"]+)"/);
+
+		expect(lockedTypes).not.toBeNull();
+		expect(Bun.semver.satisfies(lockedTypes?.[1] ?? '0.0.0', '>=1.4.4')).toBe(true);
+
+		const ignore = await readFile(join(app, '.dockerignore'), 'utf8');
+
+		expect(ignore).toContain('frontend/node_modules');
+		expect(ignore).toContain('frontend/dist');
+
+		const readme = await readFile(join(app, 'README.md'), 'utf8');
+
+		expect(readme).toContain('built inside the image');
+		expect(readme).not.toContain('mount a volume');
+	});
+
+	test('README production list covers APP_URL, proxies, CORS, and the health gate', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, ['prod-health', '--frontend=api', '--auth=token', '--yes']);
+
+		const readme = await readFile(join(app, 'README.md'), 'utf8');
+
+		expect(readme).toContain('Set `APP_URL` to the public origin');
+		expect(readme).toContain('TRUST_FORWARDED_FOR=true');
+		expect(readme).toContain('Cross-origin browser calls are off in production');
+		expect(readme).toContain('framework_migrations');
+		expect(readme).toContain('starter schema migration is recorded');
+		const env = await readFile(join(app, '.env.example'), 'utf8');
+
+		expect(env).toContain('# TRUST_FORWARDED_FOR=true');
+	});
 });
 
-test("hybrid cookie apps retain HTML and add the React JSON account contract", async () => {
-  const root = await tempDir();
-  for (const auth of ["cookie", "cookie-token", "cookie-token-jwt"]) {
-    const app = generateFromArgs(root, [
-      auth,
-      "--frontend=hybrid",
-      `--auth=${auth}`,
-      "--mfa",
-      "--email-verification",
-      "--yes",
-    ]);
-    const source = await readAuthSources(app);
-    for (const path of [
-      "/login",
-      "/register",
-      "/account/mfa",
-      "/api/v1/auth/register",
-      "/api/v1/auth/confirm-password",
-      "/api/v1/auth/mfa",
-      "/api/v1/auth/verification-notification",
-    ])
-      expect(source).toContain(`"${path}":`);
-    const docs = await readFile(join(app, "README.md"), "utf8");
-    expect(docs).toContain("HTML auth kit");
-    expect(docs).toContain("JSON cookie account flows");
-  }
+test('hybrid cookie apps retain HTML and add the React JSON account contract', async () => {
+	const root = await tempDir();
+
+	for (const auth of ['cookie', 'cookie-token', 'cookie-token-jwt']) {
+		const app = generateFromArgs(root, [
+			auth,
+			'--frontend=hybrid',
+			`--auth=${auth}`,
+			'--mfa',
+			'--email-verification',
+			'--yes',
+		]);
+
+		const source = await readAuthSources(app);
+
+		for (const path of [
+			'/login',
+			'/register',
+			'/account/mfa',
+			'/api/v1/auth/register',
+			'/api/v1/auth/confirm-password',
+			'/api/v1/auth/mfa',
+			'/api/v1/auth/verification-notification',
+		]) {
+			expect(source).toContain(`"${path}":`);
+		}
+
+		const docs = await readFile(join(app, 'README.md'), 'utf8');
+
+		expect(docs).toContain('HTML auth kit');
+		expect(docs).toContain('JSON cookie account flows');
+	}
 });
 
-test("header apps register the complete published AuthManager and GuestGuard", async () => {
-  const root = await tempDir();
-  const app = generateFromArgs(root, [
-    "header-contract",
-    "--frontend=spa-react",
-    "--auth=headers",
-    "--yes",
-  ]);
-  const source = await readFile(join(app, "src/bootstrap/auth.ts"), "utf8");
-  expect(source).toContain("new AuthManager(new GuestGuard(snapshot))");
-  expect(source).toContain("authenticate: request => auth.authenticate(request)");
-  expect(source).toContain("const env = Object.freeze({...options.environment});");
-  expect(source).not.toContain("class StarterAuthManager");
-  expect(existsSync(join(app, "src/http/controllers/AuthController.ts"))).toBe(false);
+test('header apps register the complete published AuthManager and GuestGuard', async () => {
+	const root = await tempDir();
+
+	const app = generateFromArgs(root, [
+		'header-contract',
+		'--frontend=spa-react',
+		'--auth=headers',
+		'--yes',
+	]);
+
+	const source = await readFile(join(app, 'src/bootstrap/auth.ts'), 'utf8');
+
+	expect(source).toContain('new AuthManager(new GuestGuard(snapshot))');
+	expect(source).toContain('authenticate: request => auth.authenticate(request)');
+	expect(source).toContain('const env = Object.freeze({...options.environment});');
+	expect(source).not.toContain('class StarterAuthManager');
+	expect(existsSync(join(app, 'src/http/controllers/AuthController.ts'))).toBe(false);
 });
 
 async function readAuthSources(app: string): Promise<string> {
-  const paths = [
-    "src/http/auth/account.ts",
-    "src/http/controllers/AuthController.ts",
-    "src/routes/api.ts",
-    "src/routes/web.ts",
-  ];
-  const web = join(app, "src/http/controllers/AuthWebController.ts");
-  if (existsSync(web)) paths.push("src/http/controllers/AuthWebController.ts");
-  return (await Promise.all(paths.map((path) => readFile(join(app, path), "utf8")))).join("\n");
+	const paths = [
+		'src/http/auth/account.ts',
+		'src/http/controllers/AuthController.ts',
+		'src/routes/api.ts',
+		'src/routes/web.ts',
+	];
+
+	const web = join(app, 'src/http/controllers/AuthWebController.ts');
+
+	if (existsSync(web)) {
+		paths.push('src/http/controllers/AuthWebController.ts');
+	}
+
+	return (await Promise.all(paths.map((path) => readFile(join(app, path), 'utf8')))).join('\n');
 }

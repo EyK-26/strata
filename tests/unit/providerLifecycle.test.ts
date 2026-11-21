@@ -1,251 +1,296 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from 'bun:test';
+
 import {
-  collectProviders,
-  createApplicationContext,
-  createAppContext as createOwnedContext,
-} from "@getstrata/bootstrap/context";
-import type { ServiceProvider } from "@getstrata/bootstrap/contracts";
-import { CORE_HTTP_CLEANUP_TOKEN } from "@getstrata/core/contracts/serviceTokens";
-import { createServiceToken } from "@getstrata/core/contracts/token";
-import { createDatabaseBindings } from "@getstrata/core/database/bindings";
+	collectProviders,
+	createAppContext as createOwnedContext,
+	createApplicationContext,
+} from '@getstrata/bootstrap/context';
+import type { ServiceProvider } from '@getstrata/bootstrap/contracts';
+import { CORE_HTTP_CLEANUP_TOKEN } from '@getstrata/core/contracts/serviceTokens';
+import { createServiceToken } from '@getstrata/core/contracts/token';
+import { createDatabaseBindings } from '@getstrata/core/database/bindings';
 
 const contextOptions = () => ({
-  connection: "main",
-  definition: {
-    providers: [],
-    services: createDatabaseBindings({
-      default: "main",
-      connections: { main: { driver: "sqlite", filename: ":memory:" } },
-    }),
-  },
+	connection: 'main',
+	definition: {
+		providers: [],
+		services: createDatabaseBindings({
+			default: 'main',
+			connections: { main: { driver: 'sqlite', filename: ':memory:' } },
+		}),
+	},
 });
+
 const createAppContext = (providers: readonly ServiceProvider[]) =>
-  createOwnedContext(providers, contextOptions());
+	createOwnedContext(providers, contextOptions());
 
 const base = () =>
-  collectProviders([]).filter((provider) =>
-    ["core.config", "core.cache", "core.storage"].includes(provider.name),
-  );
+	collectProviders([]).filter((provider) =>
+		['core.config', 'core.cache', 'core.storage'].includes(provider.name),
+	);
 
-describe("awaited provider lifecycle", () => {
-  test("HTTP cleanup registration is scoped to each application context", async () => {
-    const first = await createAppContext(base());
-    const second = await createAppContext(base());
-    let a = 0;
-    let b = 0;
-    first.container.resolve(CORE_HTTP_CLEANUP_TOKEN)(() => {
-      a++;
-    });
-    second.container.resolve(CORE_HTTP_CLEANUP_TOKEN)(() => {
-      b++;
-    });
-    await first.dispose();
-    await first.dispose();
-    expect([a, b]).toEqual([1, 0]);
-    await second.dispose();
-    expect([a, b]).toEqual([1, 1]);
-    expect(() => first.container.resolve(CORE_HTTP_CLEANUP_TOKEN)(() => {})).toThrow("disposed");
-  });
+describe('awaited provider lifecycle', () => {
+	test('HTTP cleanup registration is scoped to each application context', async () => {
+		const first = await createAppContext(base());
 
-  test("delayed module registrations finish before any provider boots or context is published", async () => {
-    const order: string[] = [];
-    let release!: () => void;
-    let entered!: () => void;
-    const delayed = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const started = new Promise<void>((resolve) => {
-      entered = resolve;
-    });
-    const starter: ServiceProvider = {
-      name: "starter",
-      register() {
-        order.push("starter.register");
-      },
-      boot({ container }) {
-        expect(container.resolve<string>(LateBinding)).toBe("ready");
-        order.push("starter.boot");
-      },
-    };
-    const module: ServiceProvider = {
-      name: "module",
-      async register({ container, config }) {
-        entered();
-        await delayed;
-        config.set("lifecycle.ready", true);
-        container.set(LateBinding, "ready");
-        order.push("module.register");
-      },
-      async boot() {
-        await Promise.resolve();
-        order.push("module.boot");
-      },
-    };
-    const owner = createApplicationContext([...base(), starter, module], contextOptions());
-    const pending = owner.start();
-    await started;
-    expect(order).toEqual(["starter.register"]);
-    expect(owner.application.state.phase).toBe("starting");
-    expect(owner.application.state.boot).toBe("pending");
-    release();
-    const context = await pending;
-    expect(order).toEqual(["starter.register", "module.register", "starter.boot", "module.boot"]);
-    expect(context.container.resolve(LateBinding)).toBe("ready");
-    expect(owner.application.state.phase).toBe("ready");
-    await context.dispose();
-    expect(owner.application.state.phase).toBe("stopped");
-    await expect(context.invoke({ kind: "command" }, () => undefined)).rejects.toBeDefined();
-  });
+		const second = await createAppContext(base());
 
-  test("failed async registration cleans partial acquisitions in reverse order and does not boot", async () => {
-    const order: string[] = [];
-    const first: ServiceProvider = {
-      name: "first",
-      register({ onCleanup }) {
-        onCleanup(async () => {
-          await Promise.resolve();
-          order.push("first.close");
-        });
-      },
-      boot() {
-        order.push("boot");
-      },
-    };
-    const failing: ServiceProvider = {
-      name: "failing",
-      async register({ onCleanup }) {
-        onCleanup(() => {
-          order.push("failing.close");
-        });
-        await Promise.resolve();
-        throw new Error("register failed");
-      },
-    };
-    await expect(createAppContext([...base(), first, failing])).rejects.toThrow("register failed");
-    expect(order).toEqual(["failing.close", "first.close"]);
-    const retry = await createAppContext(base());
-    await retry.dispose();
-  });
+		let a = 0;
 
-  test("failed async boot cleans all registered resources, including providers not booted", async () => {
-    const order: string[] = [];
-    const first: ServiceProvider = {
-      name: "first",
-      register({ onCleanup }) {
-        onCleanup(() => {
-          order.push("first.close");
-        });
-      },
-      async boot() {
-        await Promise.resolve();
-        throw new Error("boot failed");
-      },
-    };
-    const second: ServiceProvider = {
-      name: "second",
-      register({ onCleanup }) {
-        onCleanup(() => {
-          order.push("second.close");
-        });
-      },
-      boot() {
-        order.push("second.boot");
-      },
-    };
-    await expect(createAppContext([...base(), first, second])).rejects.toThrow("boot failed");
-    expect(order).toEqual(["second.close", "first.close"]);
-  });
+		let b = 0;
 
-  test("cleanup is awaited once, continues after failures and preserves the startup error", async () => {
-    const order: string[] = [];
-    const provider: ServiceProvider = {
-      name: "resource",
-      register({ onCleanup }) {
-        onCleanup(() => {
-          order.push("first.close");
-        });
-        onCleanup(async () => {
-          await Promise.resolve();
-          order.push("second.close");
-          throw new Error("cleanup failed");
-        });
-      },
-    };
-    const context = await createAppContext([...base(), provider]);
-    const results = await Promise.allSettled([context.dispose(), context.dispose()]);
-    expect(results.every((result) => result.status === "rejected")).toBe(true);
-    expect(order).toEqual(["second.close", "first.close"]);
-    const startupError = new Error("startup failed");
-    const failure: ServiceProvider = {
-      ...provider,
-      async boot() {
-        throw startupError;
-      },
-    };
-    const owner = createApplicationContext([...base(), failure], contextOptions());
-    await expect(owner.start()).rejects.toBeInstanceOf(AggregateError);
-    await expect(owner.start()).rejects.toMatchObject({ cause: startupError });
-    const completion = await owner.application.completion;
-    expect(
-      completion.snapshot.errors.some(
-        (item) => item.kind === "startup" && item.error === startupError,
-      ),
-    ).toBe(true);
-    const cleanup = completion.snapshot.errors.find((item) => item.kind === "cleanup");
-    const cleanupError = cleanup?.error;
-    expect(cleanupError).toBeInstanceOf(AggregateError);
-    if (!(cleanupError instanceof AggregateError))
-      throw new Error("Expected aggregate cleanup failure.");
-    expect(cleanupError.errors[0]).toEqual(new Error("cleanup failed"));
-  });
+		first.container.resolve(CORE_HTTP_CLEANUP_TOKEN)(() => {
+			a++;
+		});
+		second.container.resolve(CORE_HTTP_CLEANUP_TOKEN)(() => {
+			b++;
+		});
+		await first.dispose();
+		await first.dispose();
+		expect([a, b]).toEqual([1, 0]);
+		await second.dispose();
+		expect([a, b]).toEqual([1, 1]);
+		expect(() => first.container.resolve(CORE_HTTP_CLEANUP_TOKEN)(() => {})).toThrow('disposed');
+	});
 
-  test("dependency validation failure unwinds resources and older context disposal cannot clear a newer one", async () => {
-    let closed = 0;
-    await expect(
-      createAppContext([
-        {
-          name: "incomplete",
-          register({ onCleanup }) {
-            onCleanup(() => {
-              closed++;
-            });
-          },
-        },
-      ]),
-    ).rejects.toThrow('dependency "cache"');
-    expect(closed).toBe(1);
-    const first = await createAppContext(base());
-    const second = await createAppContext(base());
-    await first.dispose();
-    expect(second.application.state.phase).toBe("ready");
-    expect(await second.invoke({ kind: "command" }, () => "second-owned")).toBe("second-owned");
-    await second.dispose();
-  });
+	test('delayed module registrations finish before any provider boots or context is published', async () => {
+		const order: string[] = [];
+
+		let release!: () => void;
+
+		let entered!: () => void;
+
+		const delayed = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+
+		const started = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+
+		const starter: ServiceProvider = {
+			name: 'starter',
+			register() {
+				order.push('starter.register');
+			},
+			boot({ container }) {
+				expect(container.resolve<string>(LateBinding)).toBe('ready');
+				order.push('starter.boot');
+			},
+		};
+
+		const module: ServiceProvider = {
+			name: 'module',
+			async register({ container, config }) {
+				entered();
+				await delayed;
+				config.set('lifecycle.ready', true);
+				container.set(LateBinding, 'ready');
+				order.push('module.register');
+			},
+			async boot() {
+				await Promise.resolve();
+				order.push('module.boot');
+			},
+		};
+
+		const owner = createApplicationContext([...base(), starter, module], contextOptions());
+
+		const pending = owner.start();
+
+		await started;
+		expect(order).toEqual(['starter.register']);
+		expect(owner.application.state.phase).toBe('starting');
+		expect(owner.application.state.boot).toBe('pending');
+		release();
+		const context = await pending;
+
+		expect(order).toEqual(['starter.register', 'module.register', 'starter.boot', 'module.boot']);
+		expect(context.container.resolve(LateBinding)).toBe('ready');
+		expect(owner.application.state.phase).toBe('ready');
+		await context.dispose();
+		expect(owner.application.state.phase).toBe('stopped');
+		await expect(context.invoke({ kind: 'command' }, () => undefined)).rejects.toBeDefined();
+	});
+
+	test('failed async registration cleans partial acquisitions in reverse order and does not boot', async () => {
+		const order: string[] = [];
+
+		const first: ServiceProvider = {
+			name: 'first',
+			register({ onCleanup }) {
+				onCleanup(async () => {
+					await Promise.resolve();
+					order.push('first.close');
+				});
+			},
+			boot() {
+				order.push('boot');
+			},
+		};
+
+		const failing: ServiceProvider = {
+			name: 'failing',
+			async register({ onCleanup }) {
+				onCleanup(() => {
+					order.push('failing.close');
+				});
+				await Promise.resolve();
+				throw new Error('register failed');
+			},
+		};
+
+		await expect(createAppContext([...base(), first, failing])).rejects.toThrow('register failed');
+		expect(order).toEqual(['failing.close', 'first.close']);
+		const retry = await createAppContext(base());
+
+		await retry.dispose();
+	});
+
+	test('failed async boot cleans all registered resources, including providers not booted', async () => {
+		const order: string[] = [];
+
+		const first: ServiceProvider = {
+			name: 'first',
+			register({ onCleanup }) {
+				onCleanup(() => {
+					order.push('first.close');
+				});
+			},
+			async boot() {
+				await Promise.resolve();
+				throw new Error('boot failed');
+			},
+		};
+
+		const second: ServiceProvider = {
+			name: 'second',
+			register({ onCleanup }) {
+				onCleanup(() => {
+					order.push('second.close');
+				});
+			},
+			boot() {
+				order.push('second.boot');
+			},
+		};
+
+		await expect(createAppContext([...base(), first, second])).rejects.toThrow('boot failed');
+		expect(order).toEqual(['second.close', 'first.close']);
+	});
+
+	test('cleanup is awaited once, continues after failures and preserves the startup error', async () => {
+		const order: string[] = [];
+
+		const provider: ServiceProvider = {
+			name: 'resource',
+			register({ onCleanup }) {
+				onCleanup(() => {
+					order.push('first.close');
+				});
+				onCleanup(async () => {
+					await Promise.resolve();
+					order.push('second.close');
+					throw new Error('cleanup failed');
+				});
+			},
+		};
+
+		const context = await createAppContext([...base(), provider]);
+
+		const results = await Promise.allSettled([context.dispose(), context.dispose()]);
+
+		expect(results.every((result) => result.status === 'rejected')).toBe(true);
+		expect(order).toEqual(['second.close', 'first.close']);
+		const startupError = new Error('startup failed');
+
+		const failure: ServiceProvider = {
+			...provider,
+			async boot() {
+				throw startupError;
+			},
+		};
+
+		const owner = createApplicationContext([...base(), failure], contextOptions());
+
+		await expect(owner.start()).rejects.toBeInstanceOf(AggregateError);
+		await expect(owner.start()).rejects.toMatchObject({ cause: startupError });
+		const completion = await owner.application.completion;
+
+		expect(
+			completion.snapshot.errors.some(
+				(item) => item.kind === 'startup' && item.error === startupError,
+			),
+		).toBe(true);
+		const cleanup = completion.snapshot.errors.find((item) => item.kind === 'cleanup');
+
+		const cleanupError = cleanup?.error;
+
+		expect(cleanupError).toBeInstanceOf(AggregateError);
+
+		if (!(cleanupError instanceof AggregateError)) {
+			throw new Error('Expected aggregate cleanup failure.');
+		}
+
+		expect(cleanupError.errors[0]).toEqual(new Error('cleanup failed'));
+	});
+
+	test('dependency validation failure unwinds resources and older context disposal cannot clear a newer one', async () => {
+		let closed = 0;
+
+		await expect(
+			createAppContext([
+				{
+					name: 'incomplete',
+					register({ onCleanup }) {
+						onCleanup(() => {
+							closed++;
+						});
+					},
+				},
+			]),
+		).rejects.toThrow('dependency "cache"');
+		expect(closed).toBe(1);
+		const first = await createAppContext(base());
+
+		const second = await createAppContext(base());
+
+		await first.dispose();
+		expect(second.application.state.phase).toBe('ready');
+		expect(await second.invoke({ kind: 'command' }, () => 'second-owned')).toBe('second-owned');
+		await second.dispose();
+	});
 });
 
-test("HTTP startup rejects a delayed provider before socket admission and cleans its resource", async () => {
-  const { mkdtemp, mkdir, rm, writeFile } = await import("node:fs/promises");
-  const { join } = await import("node:path");
-  const { tmpdir } = await import("node:os");
-  const root = await mkdtemp(join(tmpdir(), "strata-provider-http-"));
-  const directory = join(root, "probe");
-  await mkdir(directory);
-  await writeFile(
-    join(directory, "index.ts"),
-    `export default {
+test('HTTP startup rejects a delayed provider before socket admission and cleans its resource', async () => {
+	const { mkdtemp, mkdir, rm, writeFile } = await import('node:fs/promises');
+
+	const { join } = await import('node:path');
+
+	const { tmpdir } = await import('node:os');
+
+	const root = await mkdtemp(join(tmpdir(), 'strata-provider-http-'));
+
+	const directory = join(root, 'probe');
+
+	await mkdir(directory);
+	await writeFile(
+		join(directory, 'index.ts'),
+		`export default {
     name: "http-startup-probe",
     providers: [{ name: "delayed-probe",
       register({ onCleanup }) { globalThis.acquired++; onCleanup?.(() => { globalThis.closed++; }); },
       async boot() { await Bun.sleep(5); throw new Error("provider probe failed"); }
     }]
   };`,
-  );
-  const repo = join(import.meta.dir, "../..");
-  const script = `
-    import App from ${JSON.stringify(join(repo, "src/bootstrap/app.ts"))};
-    import { ensureModulesLoaded } from ${JSON.stringify(join(repo, "src/bootstrap/discoverModules.ts"))};
-    import { collectProviders } from ${JSON.stringify(join(repo, "src/bootstrap/context.ts"))};
-    import { createDatabaseBindings } from ${JSON.stringify(join(repo, "src/core/database/bindings.ts"))};
+	);
+	const repo = join(import.meta.dir, '../..');
+
+	const script = `
+    import App from ${JSON.stringify(join(repo, 'src/bootstrap/app.ts'))};
+    import { ensureModulesLoaded } from ${JSON.stringify(join(repo, 'src/bootstrap/discoverModules.ts'))};
+    import { collectProviders } from ${JSON.stringify(join(repo, 'src/bootstrap/context.ts'))};
+    import { createDatabaseBindings } from ${JSON.stringify(join(repo, 'src/core/database/bindings.ts'))};
     globalThis.acquired = 0; globalThis.closed = 0;
     let bound = 0;
     Bun.serve = () => { bound++; throw new Error("unexpected socket admission"); };
@@ -256,140 +301,157 @@ test("HTTP startup rejects a delayed provider before socket admission and cleans
     await app.shutdown();
     console.log(JSON.stringify({ bound, acquired: globalThis.acquired, closed: globalThis.closed, failure }));
   `;
-  try {
-    const process = Bun.spawn(["bun", "-e", script], {
-      cwd: repo,
-      stdout: "pipe",
-      stderr: "pipe",
-      env: {
-        ...Bun.env,
-        APP_ENV: "local",
-        DATABASE_URL: "sqlite://:memory:",
-        DB_CONNECTION: "sqlite",
-        FRONTEND_MODE: "api",
-        CACHE_DRIVER: "array",
-        QUEUE_DRIVER: "sync",
-        SCHEDULER_DRIVER: "disabled",
-      },
-    });
-    const [output, errors, code] = await Promise.all([
-      new Response(process.stdout).text(),
-      new Response(process.stderr).text(),
-      process.exited,
-    ]);
-    if (code !== 0) throw new Error(`Startup probe failed: ${errors}`);
-    expect(JSON.parse(output.trim())).toEqual({
-      bound: 0,
-      acquired: 1,
-      closed: 1,
-      failure: "provider probe failed",
-    });
-  } finally {
-    await rm(root, { recursive: true });
-  }
+
+	try {
+		const process = Bun.spawn(['bun', '-e', script], {
+			cwd: repo,
+			stdout: 'pipe',
+			stderr: 'pipe',
+			env: {
+				...Bun.env,
+				APP_ENV: 'local',
+				DATABASE_URL: 'sqlite://:memory:',
+				DB_CONNECTION: 'sqlite',
+				FRONTEND_MODE: 'api',
+				CACHE_DRIVER: 'array',
+				QUEUE_DRIVER: 'sync',
+				SCHEDULER_DRIVER: 'disabled',
+			},
+		});
+
+		const [output, errors, code] = await Promise.all([
+			new Response(process.stdout).text(),
+			new Response(process.stderr).text(),
+			process.exited,
+		]);
+
+		if (code !== 0) {
+			throw new Error(`Startup probe failed: ${errors}`);
+		}
+
+		expect(JSON.parse(output.trim())).toEqual({
+			bound: 0,
+			acquired: 1,
+			closed: 1,
+			failure: 'provider probe failed',
+		});
+	} finally {
+		await rm(root, { recursive: true });
+	}
 });
 
-test("provider flush completes once before any owned resource closes", async () => {
-  const order: string[] = [];
-  const context = await createAppContext([
-    ...base(),
-    {
-      name: "telemetry",
-      register({ onCleanup }) {
-        onCleanup(() => {
-          order.push("close");
-        });
-        onCleanup(async () => {
-          await Bun.sleep(5);
-          order.push("flush");
-        }, "flush");
-      },
-    },
-  ]);
-  await Promise.all([context.flush(), context.flush()]);
-  expect(order).toEqual(["flush"]);
-  await Promise.all([context.dispose(), context.dispose()]);
-  expect(order).toEqual(["flush", "close"]);
+test('provider flush completes once before any owned resource closes', async () => {
+	const order: string[] = [];
+
+	const context = await createAppContext([
+		...base(),
+		{
+			name: 'telemetry',
+			register({ onCleanup }) {
+				onCleanup(() => {
+					order.push('close');
+				});
+				onCleanup(async () => {
+					await Bun.sleep(5);
+					order.push('flush');
+				}, 'flush');
+			},
+		},
+	]);
+
+	await Promise.all([context.flush(), context.flush()]);
+	expect(order).toEqual(['flush']);
+	await Promise.all([context.dispose(), context.dispose()]);
+	expect(order).toEqual(['flush', 'close']);
 });
 
-test("provider disposal drains before flushing and closing, even when registered out of order", async () => {
-  const order: string[] = [];
-  const context = await createAppContext([
-    ...base(),
-    {
-      name: "runtime",
-      register({ onCleanup }) {
-        onCleanup(() => {
-          order.push("close");
-        });
-        onCleanup(() => {
-          order.push("flush");
-        }, "flush");
-        onCleanup(async () => {
-          await Bun.sleep(5);
-          order.push("drain");
-        }, "drain");
-      },
-    },
-  ]);
-  await context.dispose();
-  expect(order).toEqual(["drain", "flush", "close"]);
+test('provider disposal drains before flushing and closing, even when registered out of order', async () => {
+	const order: string[] = [];
+
+	const context = await createAppContext([
+		...base(),
+		{
+			name: 'runtime',
+			register({ onCleanup }) {
+				onCleanup(() => {
+					order.push('close');
+				});
+				onCleanup(() => {
+					order.push('flush');
+				}, 'flush');
+				onCleanup(async () => {
+					await Bun.sleep(5);
+					order.push('drain');
+				}, 'drain');
+			},
+		},
+	]);
+
+	await context.dispose();
+	expect(order).toEqual(['drain', 'flush', 'close']);
 });
 
-test("failed provider drain leaves infrastructure open instead of closing beneath live work", async () => {
-  let closed = false;
-  const context = await createAppContext([
-    ...base(),
-    {
-      name: "runtime",
-      register({ onCleanup }) {
-        onCleanup(() => {
-          closed = true;
-        });
-        onCleanup(() => {
-          throw new Error("drain failed");
-        }, "drain");
-      },
-    },
-  ]);
-  await expect(context.dispose()).rejects.toThrow("Application shutdown is incomplete.");
-  expect(
-    context.application.state.errors.some(
-      (item) => item.kind === "cleanup" && item.phase === "drain",
-    ),
-  ).toBe(true);
-  expect(closed).toBe(false);
+test('failed provider drain leaves infrastructure open instead of closing beneath live work', async () => {
+	let closed = false;
+
+	const context = await createAppContext([
+		...base(),
+		{
+			name: 'runtime',
+			register({ onCleanup }) {
+				onCleanup(() => {
+					closed = true;
+				});
+				onCleanup(() => {
+					throw new Error('drain failed');
+				}, 'drain');
+			},
+		},
+	]);
+
+	await expect(context.dispose()).rejects.toThrow('Application shutdown is incomplete.');
+	expect(
+		context.application.state.errors.some(
+			(item) => item.kind === 'cleanup' && item.phase === 'drain',
+		),
+	).toBe(true);
+	expect(closed).toBe(false);
 });
 
-test("direct disposal preserves application services until admitted work and telemetry finish", async () => {
-  let release!: () => void;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const reads: unknown[] = [];
-  const context = await createAppContext([
-    ...base(),
-    {
-      name: "runtime",
-      register({ config, onCleanup }) {
-        config.set("drain.active", "available");
-        onCleanup(async () => {
-          await gate;
-          reads.push(config.get<string>("drain.active"));
-        }, "drain");
-        onCleanup(() => {
-          reads.push(config.get<string>("drain.active"));
-        }, "flush");
-      },
-    },
-  ]);
-  const disposal = context.dispose();
-  expect(context.config.get<string>("drain.active")).toBe("available");
-  release();
-  await disposal;
-  expect(reads).toEqual(["available", "available"]);
-  expect(context.application.state.phase).toBe("stopped");
-  await expect(context.invoke({ kind: "command" }, () => undefined)).rejects.toBeDefined();
+test('direct disposal preserves application services until admitted work and telemetry finish', async () => {
+	let release!: () => void;
+
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+
+	const reads: unknown[] = [];
+
+	const context = await createAppContext([
+		...base(),
+		{
+			name: 'runtime',
+			register({ config, onCleanup }) {
+				config.set('drain.active', 'available');
+				onCleanup(async () => {
+					await gate;
+					reads.push(config.get<string>('drain.active'));
+				}, 'drain');
+				onCleanup(() => {
+					reads.push(config.get<string>('drain.active'));
+				}, 'flush');
+			},
+		},
+	]);
+
+	const disposal = context.dispose();
+
+	expect(context.config.get<string>('drain.active')).toBe('available');
+	release();
+	await disposal;
+	expect(reads).toEqual(['available', 'available']);
+	expect(context.application.state.phase).toBe('stopped');
+	await expect(context.invoke({ kind: 'command' }, () => undefined)).rejects.toBeDefined();
 });
 
-const LateBinding = createServiceToken<string>("late.binding");
+const LateBinding = createServiceToken<string>('late.binding');

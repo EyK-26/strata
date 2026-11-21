@@ -1,53 +1,54 @@
-import { validateSpaPrefix } from "@getstrata/core/runtime/frontendMode";
-import { defaultLayers } from "./presets.ts";
+import { validateSpaPrefix } from '@getstrata/core/runtime/frontendMode';
+
+import { defaultLayers } from './presets.ts';
 import {
-  AUTH_STACKS,
-  type AuthStack,
-  CACHE_DRIVERS,
-  type CacheLayer,
-  DATABASES,
-  type DatabaseLayer,
-  DOCKER_SERVICE_NAMES,
-  type DockerServiceName,
-  dockerDatabaseService,
-  dockerLayerForNeeded,
-  enableDockerServices,
-  extraApplies,
-  FRONTENDS,
-  type FrontendMode,
-  MAIL_DRIVERS,
-  type MailLayer,
-  neededDockerServices,
-  QUEUE_DRIVERS,
-  type QueueLayer,
-  reconcileDocker,
-  type StarterLayers,
-  TENANCY_DRIVERS,
-  type TenancyLayer,
-} from "./types.ts";
+	AUTH_STACKS,
+	type AuthStack,
+	CACHE_DRIVERS,
+	type CacheLayer,
+	type DatabaseLayer,
+	DATABASES,
+	DOCKER_SERVICE_NAMES,
+	dockerDatabaseService,
+	dockerLayerForNeeded,
+	type DockerServiceName,
+	enableDockerServices,
+	extraApplies,
+	type FrontendMode,
+	FRONTENDS,
+	MAIL_DRIVERS,
+	type MailLayer,
+	neededDockerServices,
+	QUEUE_DRIVERS,
+	type QueueLayer,
+	reconcileDocker,
+	type StarterLayers,
+	TENANCY_DRIVERS,
+	type TenancyLayer,
+} from './types.ts';
 
 interface ParsedFlags {
-  help: boolean;
-  yes: boolean;
-  noInteractive: boolean;
-  force: boolean;
-  extrasPrompt: boolean;
-  projectName?: string;
-  frontend?: FrontendMode;
-  database?: DatabaseLayer;
-  auth?: AuthStack;
-  tenancy?: TenancyLayer;
-  cache?: CacheLayer;
-  queue?: QueueLayer;
-  mail?: MailLayer;
-  spaPrefix?: string;
-  extras: Partial<StarterLayers["extras"]>;
-  docker?: boolean;
-  dockerServices?: DockerServiceName[];
+	help: boolean;
+	yes: boolean;
+	noInteractive: boolean;
+	force: boolean;
+	extrasPrompt: boolean;
+	projectName?: string;
+	frontend?: FrontendMode;
+	database?: DatabaseLayer;
+	auth?: AuthStack;
+	tenancy?: TenancyLayer;
+	cache?: CacheLayer;
+	queue?: QueueLayer;
+	mail?: MailLayer;
+	spaPrefix?: string;
+	extras: Partial<StarterLayers['extras']>;
+	docker?: boolean;
+	dockerServices?: DockerServiceName[];
 }
 
 function usage(): string {
-  return `Usage: create-strata [project-name] [options]
+	return `Usage: create-strata [project-name] [options]
 
 Scaffold a runnable Strata app. The wizard always asks each layer. For CI, pass --yes
 and the layer flags you want (defaults are SQLite, JSON API, header auth).
@@ -86,244 +87,271 @@ Examples:
 }
 
 function takeValue(arg: string, prefix: string): string | undefined {
-  if (arg.startsWith(`${prefix}=`)) {
-    return arg.slice(prefix.length + 1);
-  }
-  return undefined;
+	if (arg.startsWith(`${prefix}=`)) {
+		return arg.slice(prefix.length + 1);
+	}
+
+	return undefined;
 }
 
 function parseEnum<T extends string>(value: string, allowed: readonly T[], label: string): T {
-  if ((allowed as readonly string[]).includes(value)) {
-    return value as T;
-  }
-  throw new Error(`Unknown ${label} "${value}". Expected ${allowed.join(", ")}.`);
+	if ((allowed as readonly string[]).includes(value)) {
+		return value as T;
+	}
+
+	throw new Error(`Unknown ${label} "${value}". Expected ${allowed.join(', ')}.`);
 }
 
 function parseDockerServiceList(raw: string): DockerServiceName[] {
-  const names = raw
-    .split(",")
-    .map((part) => part.trim().toLowerCase())
-    .filter((part) => part.length > 0);
-  const unknown = names.filter(
-    (name) => !(DOCKER_SERVICE_NAMES as readonly string[]).includes(name),
-  );
-  if (unknown.length > 0) {
-    throw new Error(
-      `Unknown docker service "${unknown.join(", ")}". Expected ${DOCKER_SERVICE_NAMES.join(", ")}.`,
-    );
-  }
-  return names as DockerServiceName[];
+	const names = raw
+		.split(',')
+		.map((part) => part.trim().toLowerCase())
+		.filter((part) => part.length > 0);
+
+	const unknown = names.filter(
+		(name) => !(DOCKER_SERVICE_NAMES as readonly string[]).includes(name),
+	);
+
+	if (unknown.length > 0) {
+		throw new Error(
+			`Unknown docker service "${unknown.join(', ')}". Expected ${DOCKER_SERVICE_NAMES.join(', ')}.`,
+		);
+	}
+
+	return names as DockerServiceName[];
 }
 
 function dockerFlagsProvided(flags: ParsedFlags): boolean {
-  return flags.docker !== undefined || flags.dockerServices !== undefined;
+	return flags.docker !== undefined || flags.dockerServices !== undefined;
 }
 
 function parseCreateStrataArgs(argv: string[]): ParsedFlags {
-  const flags: ParsedFlags = {
-    help: false,
-    yes: false,
-    noInteractive: false,
-    force: false,
-    extrasPrompt: false,
-    extras: {},
-  };
-  const positional: string[] = [];
+	const flags: ParsedFlags = {
+		help: false,
+		yes: false,
+		noInteractive: false,
+		force: false,
+		extrasPrompt: false,
+		extras: {},
+	};
 
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (!arg) {
-      continue;
-    }
-    if (arg === "-h" || arg === "--help") {
-      flags.help = true;
-      continue;
-    }
-    if (arg === "--yes" || arg === "-y") {
-      flags.yes = true;
-      continue;
-    }
-    if (arg === "--no-interactive") {
-      flags.noInteractive = true;
-      continue;
-    }
-    if (arg === "--force") {
-      flags.force = true;
-      continue;
-    }
-    if (arg === "--extras" || arg === "--corporate") {
-      flags.extrasPrompt = true;
-      continue;
-    }
-    if (arg === "--docker") {
-      flags.docker = true;
-      flags.dockerServices = undefined;
-      continue;
-    }
-    if (arg === "--no-docker") {
-      flags.docker = false;
-      flags.dockerServices = undefined;
-      continue;
-    }
+	const positional: string[] = [];
 
-    const dockerServicesInline = takeValue(arg, "--docker-services");
-    if (dockerServicesInline !== undefined) {
-      flags.docker = true;
-      flags.dockerServices = parseDockerServiceList(dockerServicesInline);
-      continue;
-    }
-    if (arg === "--docker-services") {
-      flags.docker = true;
-      flags.dockerServices = parseDockerServiceList(argv[index + 1] ?? "");
-      index += 1;
-      continue;
-    }
+	for (let index = 0; index < argv.length; index += 1) {
+		const arg = argv[index];
 
-    const boolFlags: Array<[string, keyof StarterLayers["extras"], boolean]> = [
-      ["--mfa", "mfa", true],
-      ["--no-mfa", "mfa", false],
-      ["--email-verification", "emailVerification", true],
-      ["--no-email-verification", "emailVerification", false],
-      ["--scim", "scim", true],
-      ["--no-scim", "scim", false],
-      ["--metrics", "metrics", true],
-      ["--no-metrics", "metrics", false],
-      ["--oauth-github", "oauthGithub", true],
-      ["--no-oauth-github", "oauthGithub", false],
-      ["--oidc", "oidc", true],
-      ["--no-oidc", "oidc", false],
-      ["--billing", "billing", true],
-      ["--no-billing", "billing", false],
-      ["--webhooks", "webhooks", true],
-      ["--no-webhooks", "webhooks", false],
-    ];
-    const boolMatch = boolFlags.find(([name]) => name === arg);
-    if (boolMatch) {
-      flags.extras[boolMatch[1]] = boolMatch[2];
-      continue;
-    }
+		if (!arg) {
+			continue;
+		}
 
-    const pairs: Array<[string, (value: string) => void]> = [
-      [
-        "--frontend",
-        (value) => {
-          flags.frontend = parseEnum(value, FRONTENDS, "frontend");
-        },
-      ],
-      [
-        "--database",
-        (value) => {
-          flags.database = parseEnum(value, DATABASES, "database");
-        },
-      ],
-      [
-        "--auth",
-        (value) => {
-          flags.auth = parseEnum(value, AUTH_STACKS, "auth");
-        },
-      ],
-      [
-        "--tenancy",
-        (value) => {
-          flags.tenancy = parseEnum(value, TENANCY_DRIVERS, "tenancy");
-        },
-      ],
-      [
-        "--cache",
-        (value) => {
-          flags.cache = parseEnum(value, CACHE_DRIVERS, "cache");
-        },
-      ],
-      [
-        "--queue",
-        (value) => {
-          flags.queue = parseEnum(value, QUEUE_DRIVERS, "queue");
-        },
-      ],
-      [
-        "--mail",
-        (value) => {
-          flags.mail = parseEnum(value, MAIL_DRIVERS, "mail");
-        },
-      ],
-      [
-        "--spa-prefix",
-        (value) => {
-          flags.spaPrefix = value.startsWith("/") ? value : `/${value}`;
-        },
-      ],
-    ];
+		if (arg === '-h' || arg === '--help') {
+			flags.help = true;
+			continue;
+		}
 
-    let matched = false;
-    for (const [name, apply] of pairs) {
-      const inline = takeValue(arg, name);
-      if (inline !== undefined) {
-        apply(inline);
-        matched = true;
-        break;
-      }
-      if (arg === name) {
-        apply(argv[index + 1] ?? "");
-        index += 1;
-        matched = true;
-        break;
-      }
-    }
-    if (matched) {
-      continue;
-    }
+		if (arg === '--yes' || arg === '-y') {
+			flags.yes = true;
+			continue;
+		}
 
-    if (arg.startsWith("-")) {
-      throw new Error(`Unknown option ${arg}. Pass --help to list flags.`);
-    }
-    positional.push(arg);
-  }
+		if (arg === '--no-interactive') {
+			flags.noInteractive = true;
+			continue;
+		}
 
-  if (positional[0]) {
-    flags.projectName = positional[0];
-  }
-  return flags;
+		if (arg === '--force') {
+			flags.force = true;
+			continue;
+		}
+
+		if (arg === '--extras' || arg === '--corporate') {
+			flags.extrasPrompt = true;
+			continue;
+		}
+
+		if (arg === '--docker') {
+			flags.docker = true;
+			flags.dockerServices = undefined;
+			continue;
+		}
+
+		if (arg === '--no-docker') {
+			flags.docker = false;
+			flags.dockerServices = undefined;
+			continue;
+		}
+
+		const dockerServicesInline = takeValue(arg, '--docker-services');
+
+		if (dockerServicesInline !== undefined) {
+			flags.docker = true;
+			flags.dockerServices = parseDockerServiceList(dockerServicesInline);
+			continue;
+		}
+
+		if (arg === '--docker-services') {
+			flags.docker = true;
+			flags.dockerServices = parseDockerServiceList(argv[index + 1] ?? '');
+			index += 1;
+			continue;
+		}
+
+		const boolFlags: Array<[string, keyof StarterLayers['extras'], boolean]> = [
+			['--mfa', 'mfa', true],
+			['--no-mfa', 'mfa', false],
+			['--email-verification', 'emailVerification', true],
+			['--no-email-verification', 'emailVerification', false],
+			['--scim', 'scim', true],
+			['--no-scim', 'scim', false],
+			['--metrics', 'metrics', true],
+			['--no-metrics', 'metrics', false],
+			['--oauth-github', 'oauthGithub', true],
+			['--no-oauth-github', 'oauthGithub', false],
+			['--oidc', 'oidc', true],
+			['--no-oidc', 'oidc', false],
+			['--billing', 'billing', true],
+			['--no-billing', 'billing', false],
+			['--webhooks', 'webhooks', true],
+			['--no-webhooks', 'webhooks', false],
+		];
+
+		const boolMatch = boolFlags.find(([name]) => name === arg);
+
+		if (boolMatch) {
+			flags.extras[boolMatch[1]] = boolMatch[2];
+			continue;
+		}
+
+		const pairs: Array<[string, (value: string) => void]> = [
+			[
+				'--frontend',
+				(value) => {
+					flags.frontend = parseEnum(value, FRONTENDS, 'frontend');
+				},
+			],
+			[
+				'--database',
+				(value) => {
+					flags.database = parseEnum(value, DATABASES, 'database');
+				},
+			],
+			[
+				'--auth',
+				(value) => {
+					flags.auth = parseEnum(value, AUTH_STACKS, 'auth');
+				},
+			],
+			[
+				'--tenancy',
+				(value) => {
+					flags.tenancy = parseEnum(value, TENANCY_DRIVERS, 'tenancy');
+				},
+			],
+			[
+				'--cache',
+				(value) => {
+					flags.cache = parseEnum(value, CACHE_DRIVERS, 'cache');
+				},
+			],
+			[
+				'--queue',
+				(value) => {
+					flags.queue = parseEnum(value, QUEUE_DRIVERS, 'queue');
+				},
+			],
+			[
+				'--mail',
+				(value) => {
+					flags.mail = parseEnum(value, MAIL_DRIVERS, 'mail');
+				},
+			],
+			[
+				'--spa-prefix',
+				(value) => {
+					flags.spaPrefix = value.startsWith('/') ? value : `/${value}`;
+				},
+			],
+		];
+
+		let matched = false;
+
+		for (const [name, apply] of pairs) {
+			const inline = takeValue(arg, name);
+
+			if (inline !== undefined) {
+				apply(inline);
+				matched = true;
+				break;
+			}
+
+			if (arg === name) {
+				apply(argv[index + 1] ?? '');
+				index += 1;
+				matched = true;
+				break;
+			}
+		}
+
+		if (matched) {
+			continue;
+		}
+
+		if (arg.startsWith('-')) {
+			throw new Error(`Unknown option ${arg}. Pass --help to list flags.`);
+		}
+
+		positional.push(arg);
+	}
+
+	if (positional[0]) {
+		flags.projectName = positional[0];
+	}
+
+	return flags;
 }
 
 function applyDockerFlags(layers: StarterLayers, flags: ParsedFlags): StarterLayers {
-  const needed = neededDockerServices(layers);
+	const needed = neededDockerServices(layers);
 
-  if (flags.docker === false) {
-    return {
-      ...layers,
-      docker: dockerLayerForNeeded(layers, false),
-    };
-  }
+	if (flags.docker === false) {
+		return {
+			...layers,
+			docker: dockerLayerForNeeded(layers, false),
+		};
+	}
 
-  if (flags.dockerServices) {
-    const databaseService = dockerDatabaseService(layers.database);
-    const selected = flags.dockerServices.filter((name) => {
-      if (needed.includes(name)) {
-        return true;
-      }
-      return (
-        name === "adminer" &&
-        databaseService !== null &&
-        flags.dockerServices?.includes(databaseService) === true
-      );
-    });
-    return {
-      ...layers,
-      docker: {
-        enabled: selected.length > 0,
-        services: enableDockerServices(selected),
-      },
-    };
-  }
+	if (flags.dockerServices) {
+		const databaseService = dockerDatabaseService(layers.database);
 
-  if (flags.docker === true) {
-    return {
-      ...layers,
-      docker: dockerLayerForNeeded(layers, true),
-    };
-  }
+		const selected = flags.dockerServices.filter((name) => {
+			if (needed.includes(name)) {
+				return true;
+			}
 
-  return layers;
+			return (
+				name === 'adminer' &&
+				databaseService !== null &&
+				flags.dockerServices?.includes(databaseService) === true
+			);
+		});
+
+		return {
+			...layers,
+			docker: {
+				enabled: selected.length > 0,
+				services: enableDockerServices(selected),
+			},
+		};
+	}
+
+	if (flags.docker === true) {
+		return {
+			...layers,
+			docker: dockerLayerForNeeded(layers, true),
+		};
+	}
+
+	return layers;
 }
 
 /**
@@ -331,65 +359,73 @@ function applyDockerFlags(layers: StarterLayers, flags: ParsedFlags): StarterLay
  * to agree, otherwise `--auth headers --mfa` writes FEATURE_MFA=true into an app
  * that has no MFA code.
  */
-function extraFlagName(extra: keyof StarterLayers["extras"]): string {
-  if (extra === "emailVerification") {
-    return "email-verification";
-  }
-  if (extra === "oauthGithub") {
-    return "oauth-github";
-  }
-  if (extra === "oidc") {
-    return "oidc";
-  }
-  return extra;
+function extraFlagName(extra: keyof StarterLayers['extras']): string {
+	if (extra === 'emailVerification') {
+		return 'email-verification';
+	}
+
+	if (extra === 'oauthGithub') {
+		return 'oauth-github';
+	}
+
+	if (extra === 'oidc') {
+		return 'oidc';
+	}
+
+	return extra;
 }
 
 function dropInapplicableExtras(layers: StarterLayers, flags: ParsedFlags): void {
-  for (const key of Object.keys(layers.extras) as Array<keyof StarterLayers["extras"]>) {
-    if (extraApplies(key, layers.auth)) {
-      continue;
-    }
-    if (flags.extras[key] === true) {
-      console.warn(`Ignoring --${extraFlagName(key)}: not available with --auth ${layers.auth}.`);
-    }
-    layers.extras[key] = false;
-  }
+	for (const key of Object.keys(layers.extras) as Array<keyof StarterLayers['extras']>) {
+		if (extraApplies(key, layers.auth)) {
+			continue;
+		}
+
+		if (flags.extras[key] === true) {
+			console.warn(`Ignoring --${extraFlagName(key)}: not available with --auth ${layers.auth}.`);
+		}
+
+		layers.extras[key] = false;
+	}
 }
 
 function applyFlagOverrides(base: StarterLayers, flags: ParsedFlags): StarterLayers {
-  const next: StarterLayers = {
-    ...base,
-    frontend: flags.frontend ?? base.frontend,
-    database: flags.database ?? base.database,
-    auth: flags.auth ?? base.auth,
-    tenancy: flags.tenancy ?? base.tenancy,
-    cache: flags.cache ?? base.cache,
-    queue: flags.queue ?? base.queue,
-    mail: flags.mail ?? base.mail,
-    spaPrefix: flags.spaPrefix ?? base.spaPrefix,
-    extras: { ...base.extras, ...flags.extras },
-  };
-  if (next.database !== "postgres" && next.tenancy === "rls") {
-    console.warn(
-      `Using --tenancy column: rls is Postgres-only (SET LOCAL app.tenant_id) and ${next.database} has no equivalent.`,
-    );
-    next.tenancy = "column";
-  }
-  next.spaPrefix = validateSpaPrefix(next.spaPrefix);
-  dropInapplicableExtras(next, flags);
-  return reconcileDocker(applyDockerFlags(next, flags));
+	const next: StarterLayers = {
+		...base,
+		frontend: flags.frontend ?? base.frontend,
+		database: flags.database ?? base.database,
+		auth: flags.auth ?? base.auth,
+		tenancy: flags.tenancy ?? base.tenancy,
+		cache: flags.cache ?? base.cache,
+		queue: flags.queue ?? base.queue,
+		mail: flags.mail ?? base.mail,
+		spaPrefix: flags.spaPrefix ?? base.spaPrefix,
+		extras: { ...base.extras, ...flags.extras },
+	};
+
+	if (next.database !== 'postgres' && next.tenancy === 'rls') {
+		console.warn(
+			`Using --tenancy column: rls is Postgres-only (SET LOCAL app.tenant_id) and ${next.database} has no equivalent.`,
+		);
+		next.tenancy = 'column';
+	}
+
+	next.spaPrefix = validateSpaPrefix(next.spaPrefix);
+	dropInapplicableExtras(next, flags);
+
+	return reconcileDocker(applyDockerFlags(next, flags));
 }
 
 function layersFromFlags(flags: ParsedFlags): StarterLayers {
-  return applyFlagOverrides(defaultLayers(), flags);
+	return applyFlagOverrides(defaultLayers(), flags);
 }
 
 export type { ParsedFlags };
 export {
-  applyFlagOverrides,
-  dockerFlagsProvided,
-  layersFromFlags,
-  parseCreateStrataArgs,
-  parseDockerServiceList,
-  usage,
+	applyFlagOverrides,
+	dockerFlagsProvided,
+	layersFromFlags,
+	parseCreateStrataArgs,
+	parseDockerServiceList,
+	usage,
 };

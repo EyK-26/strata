@@ -1,49 +1,50 @@
-import { createAsyncContextStore } from "../runtime/asyncContextStore";
-import type { WebErrorView } from "../view/webErrorView";
+import { createAsyncContextStore } from '../runtime/asyncContextStore';
+import type { WebErrorView } from '../view/webErrorView';
 
 type RequestMeta = {
-  ipAddress: string | null;
-  /** Immediate socket peer recorded by the transport; never a forwarded client header. */
-  peerAddress?: string | null;
-  userAgent: string | null;
-  request?: Request;
-  /** Canonical correlation identity shared by response policies and logging. */
-  requestId?: string;
-  /** Registered route template; never a URL supplied by the client. */
-  routeTemplate?: string;
-  /** API error contracts take precedence over client content negotiation. */
-  errorFormat?: "json";
-  /** Captured owner policy; carried only within this request. */
-  webErrorView?: WebErrorView;
-  viewsEnabled?: boolean;
-  webErrorsProduction?: boolean;
-  flash?: { level: string; message: string } | null;
-  csrfToken?: string;
-  cspNonce?: string;
+	ipAddress: string | null;
+	/** Immediate socket peer recorded by the transport; never a forwarded client header. */
+	peerAddress?: string | null;
+	userAgent: string | null;
+	request?: Request;
+	/** Canonical correlation identity shared by response policies and logging. */
+	requestId?: string;
+	/** Registered route template; never a URL supplied by the client. */
+	routeTemplate?: string;
+	/** API error contracts take precedence over client content negotiation. */
+	errorFormat?: 'json';
+	/** Captured owner policy; carried only within this request. */
+	webErrorView?: WebErrorView;
+	viewsEnabled?: boolean;
+	webErrorsProduction?: boolean;
+	flash?: { level: string; message: string } | null;
+	csrfToken?: string;
+	cspNonce?: string;
 };
 
-const requestMetaContext = createAsyncContextStore<RequestMeta>("@getstrata/requestMetaContext");
+const requestMetaContext = createAsyncContextStore<RequestMeta>('@getstrata/requestMetaContext');
 
 function runWithRequestMeta<T>(meta: RequestMeta, callback: () => T | Promise<T>): T | Promise<T> {
-  return requestMetaContext.run(meta, callback);
+	return requestMetaContext.run(meta, callback);
 }
 
 function currentRequestMeta(): RequestMeta {
-  return (
-    requestMetaContext.getStore() ?? {
-      ipAddress: null,
-      userAgent: null,
-    }
-  );
+	return (
+		requestMetaContext.getStore() ?? {
+			ipAddress: null,
+			userAgent: null,
+		}
+	);
 }
 
 function resolveRequestId(request: Request): string {
-  const meta = currentRequestMeta();
-  return (
-    (meta.request === request ? meta.requestId : undefined) ??
-    request.headers.get("x-request-id") ??
-    crypto.randomUUID()
-  );
+	const meta = currentRequestMeta();
+
+	return (
+		(meta.request === request ? meta.requestId : undefined) ??
+		request.headers.get('x-request-id') ??
+		crypto.randomUUID()
+	);
 }
 
 export type { RequestMeta };

@@ -1,198 +1,202 @@
-import { describe, expect, mock, test } from "bun:test";
-import { runWithAuthUser } from "@getstrata/core/auth/authContext";
+import { describe, expect, mock, test } from 'bun:test';
+
+import { runWithAuthUser } from '@getstrata/core/auth/authContext';
 import MembershipService, {
-  resolveMembershipService,
-} from "@getstrata/core/auth/membershipService";
-import { ForbiddenError } from "@getstrata/core/errors/http";
-import MembershipImplementation from "../../src/core/auth/membershipServiceImplementation";
-import { resolveMembershipService as resolveDirect } from "../../src/core/auth/resolveMembershipService";
+	resolveMembershipService,
+} from '@getstrata/core/auth/membershipService';
+import { ForbiddenError } from '@getstrata/core/errors/http';
+
+import MembershipImplementation from '../../src/core/auth/membershipServiceImplementation';
+import { resolveMembershipService as resolveDirect } from '../../src/core/auth/resolveMembershipService';
 
 const membershipRepository = {
-  listForUser: mock(async (userId: number) =>
-    userId === 2
-      ? [
-          { id: 1, organization_id: 5, user_id: 2, role: "admin" as const, created_at: new Date() },
-          {
-            id: 2,
-            organization_id: 6,
-            user_id: 2,
-            role: "member" as const,
-            created_at: new Date(),
-          },
-        ]
-      : [],
-  ),
-  findMembership: mock(async (userId: number, organizationId: number) => {
-    if (userId === 2 && organizationId === 5) {
-      return {
-        id: 1,
-        organization_id: 5,
-        user_id: 2,
-        role: "admin" as const,
-        created_at: new Date("2026-01-01T00:00:00.000Z"),
-      };
-    }
+	listForUser: mock(async (userId: number) =>
+		userId === 2
+			? [
+					{ id: 1, organization_id: 5, user_id: 2, role: 'admin' as const, created_at: new Date() },
+					{
+						id: 2,
+						organization_id: 6,
+						user_id: 2,
+						role: 'member' as const,
+						created_at: new Date(),
+					},
+				]
+			: [],
+	),
+	findMembership: mock(async (userId: number, organizationId: number) => {
+		if (userId === 2 && organizationId === 5) {
+			return {
+				id: 1,
+				organization_id: 5,
+				user_id: 2,
+				role: 'admin' as const,
+				created_at: new Date('2026-01-01T00:00:00.000Z'),
+			};
+		}
 
-    return null;
-  }),
-  listForOrganization: mock(async (organizationId: number) =>
-    organizationId === 5
-      ? [
-          {
-            id: 1,
-            organization_id: 5,
-            user_id: 2,
-            role: "admin" as const,
-            created_at: new Date("2026-01-01T00:00:00.000Z"),
-          },
-        ]
-      : [],
-  ),
-  addMember: mock(
-    async (input: {
-      organizationId: number;
-      userId: number;
-      role?: "owner" | "admin" | "member";
-    }) => ({
-      id: 9,
-      organization_id: input.organizationId,
-      user_id: input.userId,
-      role: input.role ?? "member",
-      created_at: new Date("2026-01-01T00:00:00.000Z"),
-    }),
-  ),
-  removeMember: mock(async () => true),
-  updateMemberRole: mock(
-    async (organizationId: number, userId: number, role: "owner" | "admin" | "member") => ({
-      id: 1,
-      organization_id: organizationId,
-      user_id: userId,
-      role,
-      created_at: new Date("2026-01-01T00:00:00.000Z"),
-    }),
-  ),
+		return null;
+	}),
+	listForOrganization: mock(async (organizationId: number) =>
+		organizationId === 5
+			? [
+					{
+						id: 1,
+						organization_id: 5,
+						user_id: 2,
+						role: 'admin' as const,
+						created_at: new Date('2026-01-01T00:00:00.000Z'),
+					},
+				]
+			: [],
+	),
+	addMember: mock(
+		async (input: {
+			organizationId: number;
+			userId: number;
+			role?: 'owner' | 'admin' | 'member';
+		}) => ({
+			id: 9,
+			organization_id: input.organizationId,
+			user_id: input.userId,
+			role: input.role ?? 'member',
+			created_at: new Date('2026-01-01T00:00:00.000Z'),
+		}),
+	),
+	removeMember: mock(async () => true),
+	updateMemberRole: mock(
+		async (organizationId: number, userId: number, role: 'owner' | 'admin' | 'member') => ({
+			id: 1,
+			organization_id: organizationId,
+			user_id: userId,
+			role,
+			created_at: new Date('2026-01-01T00:00:00.000Z'),
+		}),
+	),
 };
 
 function createService(): MembershipService {
-  return new MembershipService(membershipRepository);
+	return new MembershipService(membershipRepository);
 }
 
-describe("MembershipService", () => {
-  test("listOrganizationIdsForUser maps memberships to organization ids", async () => {
-    const service = createService();
+describe('MembershipService', () => {
+	test('listOrganizationIdsForUser maps memberships to organization ids', async () => {
+		const service = createService();
 
-    await expect(service.listOrganizationIdsForUser(2)).resolves.toEqual([5, 6]);
-    await expect(service.listOrganizationIdsForUser(999)).resolves.toEqual([]);
-  });
+		await expect(service.listOrganizationIdsForUser(2)).resolves.toEqual([5, 6]);
+		await expect(service.listOrganizationIdsForUser(999)).resolves.toEqual([]);
+	});
 
-  test("getOrgRole returns membership roles or null", async () => {
-    const service = createService();
+	test('getOrgRole returns membership roles or null', async () => {
+		const service = createService();
 
-    await expect(service.getOrgRole(2, 5)).resolves.toBe("admin");
-    await expect(service.getOrgRole(2, 99)).resolves.toBeNull();
-  });
+		await expect(service.getOrgRole(2, 5)).resolves.toBe('admin');
+		await expect(service.getOrgRole(2, 99)).resolves.toBeNull();
+	});
 
-  test("requireOrgAccess requires authentication", async () => {
-    const service = createService();
+	test('requireOrgAccess requires authentication', async () => {
+		const service = createService();
 
-    await expect(service.requireOrgAccess(5, "member", null)).rejects.toThrow(ForbiddenError);
-  });
+		await expect(service.requireOrgAccess(5, 'member', null)).rejects.toThrow(ForbiddenError);
+	});
 
-  test("requireOrgAccess grants global admins owner access", async () => {
-    const service = createService();
+	test('requireOrgAccess grants global admins owner access', async () => {
+		const service = createService();
 
-    await expect(service.requireOrgAccess(5, "owner", { id: 1, role: "admin" })).resolves.toBe(
-      "owner",
-    );
-  });
+		await expect(service.requireOrgAccess(5, 'owner', { id: 1, role: 'admin' })).resolves.toBe(
+			'owner',
+		);
+	});
 
-  test("requireOrgAccess validates minimum organization roles", async () => {
-    const service = createService();
+	test('requireOrgAccess validates minimum organization roles', async () => {
+		const service = createService();
 
-    await expect(service.requireOrgAccess(5, "member", { id: 2, role: "member" })).resolves.toBe(
-      "admin",
-    );
+		await expect(service.requireOrgAccess(5, 'member', { id: 2, role: 'member' })).resolves.toBe(
+			'admin',
+		);
 
-    await expect(service.requireOrgAccess(5, "owner", { id: 2, role: "member" })).rejects.toThrow(
-      "Organization membership required.",
-    );
+		await expect(service.requireOrgAccess(5, 'owner', { id: 2, role: 'member' })).rejects.toThrow(
+			'Organization membership required.',
+		);
 
-    await expect(
-      service.requireOrgAccess(5, "member", { id: "bad", role: "member" }),
-    ).rejects.toThrow("Invalid authenticated user.");
-  });
+		await expect(
+			service.requireOrgAccess(5, 'member', { id: 'bad', role: 'member' }),
+		).rejects.toThrow('Invalid authenticated user.');
+	});
 
-  test("filterAccessibleOrganizationIds handles guests, admins, and members", async () => {
-    const service = createService();
+	test('filterAccessibleOrganizationIds handles guests, admins, and members', async () => {
+		const service = createService();
 
-    await expect(service.filterAccessibleOrganizationIds([5, 6, 7], null)).resolves.toEqual([]);
-    await expect(
-      service.filterAccessibleOrganizationIds([5, 6, 7], { id: 1, role: "admin" }),
-    ).resolves.toEqual([5, 6, 7]);
-    await expect(
-      service.filterAccessibleOrganizationIds([5, 6, 7], { id: 2, role: "member" }),
-    ).resolves.toEqual([5, 6]);
-  });
+		await expect(service.filterAccessibleOrganizationIds([5, 6, 7], null)).resolves.toEqual([]);
+		await expect(
+			service.filterAccessibleOrganizationIds([5, 6, 7], { id: 1, role: 'admin' }),
+		).resolves.toEqual([5, 6, 7]);
+		await expect(
+			service.filterAccessibleOrganizationIds([5, 6, 7], { id: 2, role: 'member' }),
+		).resolves.toEqual([5, 6]);
+	});
 
-  test("delegates member management to the repository", async () => {
-    const service = createService();
+	test('delegates member management to the repository', async () => {
+		const service = createService();
 
-    await expect(service.addOwnerOnOrganizationCreate(5, 2)).resolves.toBeUndefined();
-    expect(membershipRepository.addMember).toHaveBeenCalledWith({
-      organizationId: 5,
-      userId: 2,
-      role: "owner",
-    });
+		await expect(service.addOwnerOnOrganizationCreate(5, 2)).resolves.toBeUndefined();
+		expect(membershipRepository.addMember).toHaveBeenCalledWith({
+			organizationId: 5,
+			userId: 2,
+			role: 'owner',
+		});
 
-    await expect(service.listMembersForOrganization(5)).resolves.toHaveLength(1);
-    await expect(service.addMember({ organizationId: 5, userId: 3 })).resolves.toMatchObject({
-      user_id: 3,
-    });
-    await expect(service.removeMember(5, 3)).resolves.toBe(true);
-    await expect(service.updateMemberRole(5, 3, "admin")).resolves.toMatchObject({
-      user_id: 3,
-      role: "admin",
-    });
-    expect(membershipRepository.updateMemberRole).toHaveBeenCalledWith(5, 3, "admin");
-  });
+		await expect(service.listMembersForOrganization(5)).resolves.toHaveLength(1);
+		await expect(service.addMember({ organizationId: 5, userId: 3 })).resolves.toMatchObject({
+			user_id: 3,
+		});
+		await expect(service.removeMember(5, 3)).resolves.toBe(true);
+		await expect(service.updateMemberRole(5, 3, 'admin')).resolves.toMatchObject({
+			user_id: 3,
+			role: 'admin',
+		});
+		expect(membershipRepository.updateMemberRole).toHaveBeenCalledWith(5, 3, 'admin');
+	});
 
-  test("resolveMembershipService uses the supplied lookup without application fallback", async () => {
-    const allowed = resolveMembershipService(membershipRepository);
-    const denied = resolveMembershipService({
-      ...membershipRepository,
-      findMembership: async () => null,
-    });
-    await expect(allowed.requireOrgAccess(5, "member", { id: 2, role: "member" })).resolves.toBe(
-      "admin",
-    );
-    await expect(denied.requireOrgAccess(5, "member", { id: 2, role: "member" })).rejects.toThrow(
-      ForbiddenError,
-    );
-    expect(allowed).not.toBe(denied);
-  });
+	test('resolveMembershipService uses the supplied lookup without application fallback', async () => {
+		const allowed = resolveMembershipService(membershipRepository);
+
+		const denied = resolveMembershipService({
+			...membershipRepository,
+			findMembership: async () => null,
+		});
+
+		await expect(allowed.requireOrgAccess(5, 'member', { id: 2, role: 'member' })).resolves.toBe(
+			'admin',
+		);
+		await expect(denied.requireOrgAccess(5, 'member', { id: 2, role: 'member' })).rejects.toThrow(
+			ForbiddenError,
+		);
+		expect(allowed).not.toBe(denied);
+	});
 });
 
-describe("MembershipService current auth user defaults", () => {
-  test("requireOrgAccess uses currentAuthUser when user is omitted", async () => {
-    const service = createService();
+describe('MembershipService current auth user defaults', () => {
+	test('requireOrgAccess uses currentAuthUser when user is omitted', async () => {
+		const service = createService();
 
-    await runWithAuthUser({ id: 2, role: "member" }, async () => {
-      await expect(service.requireOrgAccess(5)).resolves.toBe("admin");
-      await expect(service.requireOrgAccess(5, "member")).resolves.toBe("admin");
-    });
-  });
+		await runWithAuthUser({ id: 2, role: 'member' }, async () => {
+			await expect(service.requireOrgAccess(5)).resolves.toBe('admin');
+			await expect(service.requireOrgAccess(5, 'member')).resolves.toBe('admin');
+		});
+	});
 
-  test("filterAccessibleOrganizationIds uses currentAuthUser when user is omitted", async () => {
-    const service = createService();
+	test('filterAccessibleOrganizationIds uses currentAuthUser when user is omitted', async () => {
+		const service = createService();
 
-    await runWithAuthUser({ id: 2, role: "member" }, async () => {
-      await expect(service.filterAccessibleOrganizationIds([5, 7])).resolves.toEqual([5]);
-    });
-  });
+		await runWithAuthUser({ id: 2, role: 'member' }, async () => {
+			await expect(service.filterAccessibleOrganizationIds([5, 7])).resolves.toEqual([5]);
+		});
+	});
 });
 
-test("membership service façade preserves implementation and resolver identity", () => {
-  expect(MembershipService).toBe(MembershipImplementation);
-  expect(resolveMembershipService).toBe(resolveDirect);
-  expect(createService()).toBeInstanceOf(MembershipImplementation);
+test('membership service façade preserves implementation and resolver identity', () => {
+	expect(MembershipService).toBe(MembershipImplementation);
+	expect(resolveMembershipService).toBe(resolveDirect);
+	expect(createService()).toBeInstanceOf(MembershipImplementation);
 });

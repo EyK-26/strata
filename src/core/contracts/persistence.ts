@@ -1,24 +1,29 @@
-import type { DatabaseSession, TransactionSession } from "../database/session";
-import type { ExecutionEnvelope, ExecutionOptions } from "./application";
+import type { DatabaseSession, TransactionSession } from '../database/session';
+
+import type { ExecutionEnvelope, ExecutionOptions } from './application';
+
 export type SelectedSession = DatabaseSession | TransactionSession;
+
 export interface ExecutionPersistence {
-  readonly database: DatabaseSession;
-  readonly policy: ScopedPolicy;
+	readonly database: DatabaseSession;
+	readonly policy: ScopedPolicy;
 }
+
 export type PersistenceInvocation = <T>(
-  envelope: ExecutionEnvelope,
-  work: (ports: ExecutionPersistence) => T | Promise<T>,
-  options?: ExecutionOptions,
+	envelope: ExecutionEnvelope,
+	work: (ports: ExecutionPersistence) => T | Promise<T>,
+	options?: ExecutionOptions,
 ) => Promise<T>;
 
 export type EstablishedDatabasePolicy =
-  | Readonly<{ kind: "tenant"; tenantId: number }>
-  | Readonly<{ kind: "bypass" }>
-  | Readonly<{ kind: "identifier"; identifier: string | number }>;
+	| Readonly<{ kind: 'tenant'; tenantId: number }>
+	| Readonly<{ kind: 'bypass' }>
+	| Readonly<{ kind: 'identifier'; identifier: string | number }>;
+
 export interface ScopedPolicy {
-  run<T>(
-    selected: SelectedSession,
-    policy: EstablishedDatabasePolicy,
-    work: (child: TransactionSession) => T | Promise<T>,
-  ): Promise<T>;
+	run<T>(
+		selected: SelectedSession,
+		policy: EstablishedDatabasePolicy,
+		work: (child: TransactionSession) => T | Promise<T>,
+	): Promise<T>;
 }

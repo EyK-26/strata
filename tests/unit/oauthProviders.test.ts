@@ -1,344 +1,362 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
-import { GitHubOAuthProvider, MockOAuthProvider } from "@getstrata/core/auth/oauth/providers";
-import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/testing";
-import { restoreEnvVar } from "../helpers/restoreEnv";
+import { afterEach, describe, expect, mock, test } from 'bun:test';
+
+import { GitHubOAuthProvider, MockOAuthProvider } from '@getstrata/core/auth/oauth/providers';
+import { resetDnsLookupForTests, setDnsLookupForTests } from '@getstrata/core/testing';
+
+import { restoreEnvVar } from '../helpers/restoreEnv';
 
 const originalFetch = globalThis.fetch;
 
 function mockPublicDns() {
-  setDnsLookupForTests(async () => [{ address: "1.1.1.1", family: 4 }]);
+	setDnsLookupForTests(async () => [{ address: '1.1.1.1', family: 4 }]);
 }
 
 function mockGitHub(options: {
-  profile: Record<string, unknown>;
-  emails?: unknown;
-  tokenBody?: Record<string, unknown>;
-  onToken?: (body: string) => void;
-  onProfile?: (headers: Headers) => void;
+	profile: Record<string, unknown>;
+	emails?: unknown;
+	tokenBody?: Record<string, unknown>;
+	onToken?: (body: string) => void;
+	onProfile?: (headers: Headers) => void;
 }) {
-  globalThis.fetch = mock((input: string | URL | Request, init?: RequestInit) => {
-    const url = String(input);
+	globalThis.fetch = mock((input: string | URL | Request, init?: RequestInit) => {
+		const url = String(input);
 
-    if (url.includes("/login/oauth/access_token")) {
-      options.onToken?.(String(init?.body ?? ""));
-      return Promise.resolve(Response.json(options.tokenBody ?? { access_token: "gh-token" }));
-    }
+		if (url.includes('/login/oauth/access_token')) {
+			options.onToken?.(String(init?.body ?? ''));
 
-    if (url.includes("/user/emails")) {
-      return Promise.resolve(
-        Response.json(
-          options.emails ?? [
-            { email: String(options.profile.email ?? ""), primary: true, verified: true },
-          ],
-        ),
-      );
-    }
+			return Promise.resolve(Response.json(options.tokenBody ?? { access_token: 'gh-token' }));
+		}
 
-    options.onProfile?.(new Headers(init?.headers));
-    return Promise.resolve(Response.json(options.profile));
-  }) as unknown as typeof fetch;
+		if (url.includes('/user/emails')) {
+			return Promise.resolve(
+				Response.json(
+					options.emails ?? [
+						{ email: String(options.profile.email ?? ''), primary: true, verified: true },
+					],
+				),
+			);
+		}
+
+		options.onProfile?.(new Headers(init?.headers));
+
+		return Promise.resolve(Response.json(options.profile));
+	}) as unknown as typeof fetch;
 }
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
-  resetDnsLookupForTests();
+	globalThis.fetch = originalFetch;
+	resetDnsLookupForTests();
 });
 
-describe("GitHubOAuthProvider", () => {
-  const options = {
-    production: true,
-    userAgent: "strata",
-    clientId: "github-client",
-    clientSecret: "github-secret",
-    redirectUri: "https://app.example.com/auth/github/callback",
-  };
+describe('GitHubOAuthProvider', () => {
+	const options = {
+		production: true,
+		userAgent: 'strata',
+		clientId: 'github-client',
+		clientSecret: 'github-secret',
+		redirectUri: 'https://app.example.com/auth/github/callback',
+	};
 
-  test("builds a GitHub authorization url", () => {
-    const provider = new GitHubOAuthProvider(options);
-    const url = new URL(provider.getAuthorizationUrl("gh-state"));
+	test('builds a GitHub authorization url', () => {
+		const provider = new GitHubOAuthProvider(options);
 
-    expect(url.hostname).toBe("github.com");
-    expect(url.pathname).toBe("/login/oauth/authorize");
-    expect(url.searchParams.get("client_id")).toBe("github-client");
-    expect(url.searchParams.get("state")).toBe("gh-state");
-    expect(url.searchParams.get("redirect_uri")).toBe(options.redirectUri);
+		const url = new URL(provider.getAuthorizationUrl('gh-state'));
 
-    const webUrl = new URL(
-      provider.getAuthorizationUrl("gh-state", "https://app.example.com/oauth/github/callback"),
-    );
-    expect(webUrl.searchParams.get("redirect_uri")).toBe(
-      "https://app.example.com/oauth/github/callback",
-    );
-  });
+		expect(url.hostname).toBe('github.com');
+		expect(url.pathname).toBe('/login/oauth/authorize');
+		expect(url.searchParams.get('client_id')).toBe('github-client');
+		expect(url.searchParams.get('state')).toBe('gh-state');
+		expect(url.searchParams.get('redirect_uri')).toBe(options.redirectUri);
 
-  test("exchanges a code using an override redirect uri", async () => {
-    mockPublicDns();
-    let tokenBody = "";
+		const webUrl = new URL(
+			provider.getAuthorizationUrl('gh-state', 'https://app.example.com/oauth/github/callback'),
+		);
 
-    mockGitHub({
-      profile: {
-        id: 7,
-        login: "web-octocat",
-        email: "web@github.com",
-        name: "Web Octocat",
-      },
-      emails: [{ email: "web@github.com", primary: true, verified: true }],
-      onToken: (body) => {
-        tokenBody = body;
-      },
-    });
+		expect(webUrl.searchParams.get('redirect_uri')).toBe(
+			'https://app.example.com/oauth/github/callback',
+		);
+	});
 
-    const provider = new GitHubOAuthProvider(options);
-    await provider.exchangeCode("gh-code", "https://app.example.com/oauth/github/callback");
+	test('exchanges a code using an override redirect uri', async () => {
+		mockPublicDns();
+		let tokenBody = '';
 
-    expect(tokenBody).toContain("https://app.example.com/oauth/github/callback");
-  });
+		mockGitHub({
+			profile: {
+				id: 7,
+				login: 'web-octocat',
+				email: 'web@github.com',
+				name: 'Web Octocat',
+			},
+			emails: [{ email: 'web@github.com', primary: true, verified: true }],
+			onToken: (body) => {
+				tokenBody = body;
+			},
+		});
 
-  test("exchanges a code for a profile", async () => {
-    mockPublicDns();
-    const previousUserAgent = process.env.APP_USER_AGENT;
-    const previousPrefix = process.env.APP_KEY_PREFIX;
-    delete process.env.APP_USER_AGENT;
-    delete process.env.APP_KEY_PREFIX;
-    let profileUserAgent = "";
+		const provider = new GitHubOAuthProvider(options);
 
-    mockGitHub({
-      profile: {
-        id: 42,
-        login: "octocat",
-        email: "octocat@github.com",
-        name: "The Octocat",
-      },
-      emails: [{ email: "octocat@github.com", primary: true, verified: true }],
-      onProfile: (headers) => {
-        profileUserAgent = headers.get("user-agent") ?? "";
-      },
-    });
+		await provider.exchangeCode('gh-code', 'https://app.example.com/oauth/github/callback');
 
-    try {
-      const provider = new GitHubOAuthProvider(options);
-      const profile = await provider.exchangeCode("gh-code");
+		expect(tokenBody).toContain('https://app.example.com/oauth/github/callback');
+	});
 
-      expect(profile).toEqual({
-        providerUserId: "42",
-        email: "octocat@github.com",
-        name: "The Octocat",
-      });
-      expect(profileUserAgent).toBe("strata");
-    } finally {
-      restoreEnvVar("APP_USER_AGENT", previousUserAgent);
-      restoreEnvVar("APP_KEY_PREFIX", previousPrefix);
-    }
-  });
+	test('exchanges a code for a profile', async () => {
+		mockPublicDns();
+		const previousUserAgent = process.env.APP_USER_AGENT;
 
-  test("falls back to a verified GitHub email list when the profile omits email", async () => {
-    mockPublicDns();
-    globalThis.fetch = mock((input: string | URL | Request) => {
-      const url = String(input);
+		const previousPrefix = process.env.APP_KEY_PREFIX;
 
-      if (url.includes("/login/oauth/access_token")) {
-        return Promise.resolve(Response.json({ access_token: "gh-token" }));
-      }
+		delete process.env.APP_USER_AGENT;
+		delete process.env.APP_KEY_PREFIX;
+		let profileUserAgent = '';
 
-      if (url.includes("/user/emails")) {
-        return Promise.resolve(
-          Response.json([
-            { email: "other@github.com", primary: false, verified: true },
-            { email: "primary@github.com", primary: true, verified: true },
-          ]),
-        );
-      }
+		mockGitHub({
+			profile: {
+				id: 42,
+				login: 'octocat',
+				email: 'octocat@github.com',
+				name: 'The Octocat',
+			},
+			emails: [{ email: 'octocat@github.com', primary: true, verified: true }],
+			onProfile: (headers) => {
+				profileUserAgent = headers.get('user-agent') ?? '';
+			},
+		});
 
-      return Promise.resolve(
-        Response.json({
-          id: 99,
-          login: "ghost",
-          email: null,
-          name: null,
-        }),
-      );
-    }) as unknown as typeof fetch;
+		try {
+			const provider = new GitHubOAuthProvider(options);
 
-    const provider = new GitHubOAuthProvider(options);
-    await expect(provider.exchangeCode("gh-code")).resolves.toEqual({
-      providerUserId: "99",
-      email: "primary@github.com",
-      name: "ghost",
-    });
-  });
+			const profile = await provider.exchangeCode('gh-code');
 
-  test("throws when GitHub has no verified email instead of inventing a noreply address", async () => {
-    mockPublicDns();
-    globalThis.fetch = mock((input: string | URL | Request) => {
-      const url = String(input);
+			expect(profile).toEqual({
+				providerUserId: '42',
+				email: 'octocat@github.com',
+				name: 'The Octocat',
+			});
+			expect(profileUserAgent).toBe('strata');
+		} finally {
+			restoreEnvVar('APP_USER_AGENT', previousUserAgent);
+			restoreEnvVar('APP_KEY_PREFIX', previousPrefix);
+		}
+	});
 
-      if (url.includes("/login/oauth/access_token")) {
-        return Promise.resolve(Response.json({ access_token: "gh-token" }));
-      }
+	test('falls back to a verified GitHub email list when the profile omits email', async () => {
+		mockPublicDns();
+		globalThis.fetch = mock((input: string | URL | Request) => {
+			const url = String(input);
 
-      if (url.includes("/user/emails")) {
-        return Promise.resolve(
-          Response.json([{ email: "unverified@github.com", primary: true, verified: false }]),
-        );
-      }
+			if (url.includes('/login/oauth/access_token')) {
+				return Promise.resolve(Response.json({ access_token: 'gh-token' }));
+			}
 
-      return Promise.resolve(
-        Response.json({
-          id: 99,
-          login: "ghost",
-          email: null,
-          name: null,
-        }),
-      );
-    }) as unknown as typeof fetch;
+			if (url.includes('/user/emails')) {
+				return Promise.resolve(
+					Response.json([
+						{ email: 'other@github.com', primary: false, verified: true },
+						{ email: 'primary@github.com', primary: true, verified: true },
+					]),
+				);
+			}
 
-    const provider = new GitHubOAuthProvider(options);
-    await expect(provider.exchangeCode("gh-code")).rejects.toThrow(
-      "did not include a verified email address",
-    );
-  });
+			return Promise.resolve(
+				Response.json({
+					id: 99,
+					login: 'ghost',
+					email: null,
+					name: null,
+				}),
+			);
+		}) as unknown as typeof fetch;
 
-  test("ignores an unverified profile email and uses a verified list address", async () => {
-    mockPublicDns();
-    mockGitHub({
-      profile: {
-        id: 88,
-        login: "unverified",
-        email: "unverified@github.com",
-        name: "Unverified",
-      },
-      emails: [
-        { email: "unverified@github.com", primary: true, verified: false },
-        { email: "verified@github.com", primary: false, verified: true },
-      ],
-    });
+		const provider = new GitHubOAuthProvider(options);
 
-    const provider = new GitHubOAuthProvider(options);
-    await expect(provider.exchangeCode("gh-code")).resolves.toEqual({
-      providerUserId: "88",
-      email: "verified@github.com",
-      name: "Unverified",
-    });
-  });
+		await expect(provider.exchangeCode('gh-code')).resolves.toEqual({
+			providerUserId: '99',
+			email: 'primary@github.com',
+			name: 'ghost',
+		});
+	});
 
-  test("throws when the profile email is unverified and no verified address exists", async () => {
-    mockPublicDns();
-    mockGitHub({
-      profile: {
-        id: 77,
-        login: "ghost",
-        email: "unverified@github.com",
-        name: "Ghost",
-      },
-      emails: [{ email: "unverified@github.com", primary: true, verified: false }],
-    });
+	test('throws when GitHub has no verified email instead of inventing a noreply address', async () => {
+		mockPublicDns();
+		globalThis.fetch = mock((input: string | URL | Request) => {
+			const url = String(input);
 
-    const provider = new GitHubOAuthProvider(options);
-    await expect(provider.exchangeCode("gh-code")).rejects.toThrow(
-      "did not include a verified email address",
-    );
-  });
+			if (url.includes('/login/oauth/access_token')) {
+				return Promise.resolve(Response.json({ access_token: 'gh-token' }));
+			}
 
-  test("uses login as the display name when GitHub omits name", async () => {
-    mockPublicDns();
-    mockGitHub({
-      profile: {
-        id: 11,
-        login: "nameless",
-        email: "nameless@github.com",
-        name: null,
-      },
-      emails: [{ email: "nameless@github.com", primary: true, verified: true }],
-    });
+			if (url.includes('/user/emails')) {
+				return Promise.resolve(
+					Response.json([{ email: 'unverified@github.com', primary: true, verified: false }]),
+				);
+			}
 
-    const provider = new GitHubOAuthProvider(options);
-    await expect(provider.exchangeCode("gh-code")).resolves.toEqual({
-      providerUserId: "11",
-      email: "nameless@github.com",
-      name: "nameless",
-    });
-  });
+			return Promise.resolve(
+				Response.json({
+					id: 99,
+					login: 'ghost',
+					email: null,
+					name: null,
+				}),
+			);
+		}) as unknown as typeof fetch;
 
-  test("throws when token exchange fails", async () => {
-    mockPublicDns();
-    globalThis.fetch = mock(() =>
-      Promise.resolve(Response.json({ error: "bad_verification_code" })),
-    ) as unknown as typeof fetch;
+		const provider = new GitHubOAuthProvider(options);
 
-    const provider = new GitHubOAuthProvider(options);
+		await expect(provider.exchangeCode('gh-code')).rejects.toThrow(
+			'did not include a verified email address',
+		);
+	});
 
-    await expect(provider.exchangeCode("bad-code")).rejects.toThrow(
-      "GitHub OAuth token exchange failed.",
-    );
-  });
+	test('ignores an unverified profile email and uses a verified list address', async () => {
+		mockPublicDns();
+		mockGitHub({
+			profile: {
+				id: 88,
+				login: 'unverified',
+				email: 'unverified@github.com',
+				name: 'Unverified',
+			},
+			emails: [
+				{ email: 'unverified@github.com', primary: true, verified: false },
+				{ email: 'verified@github.com', primary: false, verified: true },
+			],
+		});
+
+		const provider = new GitHubOAuthProvider(options);
+
+		await expect(provider.exchangeCode('gh-code')).resolves.toEqual({
+			providerUserId: '88',
+			email: 'verified@github.com',
+			name: 'Unverified',
+		});
+	});
+
+	test('throws when the profile email is unverified and no verified address exists', async () => {
+		mockPublicDns();
+		mockGitHub({
+			profile: {
+				id: 77,
+				login: 'ghost',
+				email: 'unverified@github.com',
+				name: 'Ghost',
+			},
+			emails: [{ email: 'unverified@github.com', primary: true, verified: false }],
+		});
+
+		const provider = new GitHubOAuthProvider(options);
+
+		await expect(provider.exchangeCode('gh-code')).rejects.toThrow(
+			'did not include a verified email address',
+		);
+	});
+
+	test('uses login as the display name when GitHub omits name', async () => {
+		mockPublicDns();
+		mockGitHub({
+			profile: {
+				id: 11,
+				login: 'nameless',
+				email: 'nameless@github.com',
+				name: null,
+			},
+			emails: [{ email: 'nameless@github.com', primary: true, verified: true }],
+		});
+
+		const provider = new GitHubOAuthProvider(options);
+
+		await expect(provider.exchangeCode('gh-code')).resolves.toEqual({
+			providerUserId: '11',
+			email: 'nameless@github.com',
+			name: 'nameless',
+		});
+	});
+
+	test('throws when token exchange fails', async () => {
+		mockPublicDns();
+		globalThis.fetch = mock(() =>
+			Promise.resolve(Response.json({ error: 'bad_verification_code' })),
+		) as unknown as typeof fetch;
+
+		const provider = new GitHubOAuthProvider(options);
+
+		await expect(provider.exchangeCode('bad-code')).rejects.toThrow(
+			'GitHub OAuth token exchange failed.',
+		);
+	});
 });
 
-describe("MockOAuthProvider", () => {
-  test("returns the configured profile for a valid code", async () => {
-    const provider = new MockOAuthProvider({
-      providerUserId: "mock-user",
-      email: "mock@example.com",
-      name: "Mock User",
-    });
+describe('MockOAuthProvider', () => {
+	test('returns the configured profile for a valid code', async () => {
+		const provider = new MockOAuthProvider({
+			providerUserId: 'mock-user',
+			email: 'mock@example.com',
+			name: 'Mock User',
+		});
 
-    expect(provider.getAuthorizationUrl("mock-state")).toContain("state=mock-state");
+		expect(provider.getAuthorizationUrl('mock-state')).toContain('state=mock-state');
 
-    await expect(provider.exchangeCode("valid-code")).resolves.toEqual({
-      providerUserId: "mock-user",
-      email: "mock@example.com",
-      name: "Mock User",
-    });
-  });
+		await expect(provider.exchangeCode('valid-code')).resolves.toEqual({
+			providerUserId: 'mock-user',
+			email: 'mock@example.com',
+			name: 'Mock User',
+		});
+	});
 
-  test("rejects invalid oauth codes", async () => {
-    const provider = new MockOAuthProvider({
-      providerUserId: "mock-user",
-      email: "mock@example.com",
-      name: "Mock User",
-    });
+	test('rejects invalid oauth codes', async () => {
+		const provider = new MockOAuthProvider({
+			providerUserId: 'mock-user',
+			email: 'mock@example.com',
+			name: 'Mock User',
+		});
 
-    await expect(provider.exchangeCode("invalid")).rejects.toThrow("Invalid OAuth code.");
-  });
+		await expect(provider.exchangeCode('invalid')).rejects.toThrow('Invalid OAuth code.');
+	});
 });
 
-test("a malformed GitHub email response cannot supply a verified identity", async () => {
-  mockPublicDns();
-  mockGitHub({
-    profile: { id: 17, login: "one", email: null },
-    emails: { email: "spoof@example.test", verified: true },
-  });
-  const provider = new GitHubOAuthProvider({
-    production: true,
-    userAgent: "strata-test",
-    clientId: "client",
-    clientSecret: "secret",
-    redirectUri: "https://app.example.com/callback",
-  });
-  await expect(provider.exchangeCode("code")).rejects.toThrow("verified email");
+test('a malformed GitHub email response cannot supply a verified identity', async () => {
+	mockPublicDns();
+	mockGitHub({
+		profile: { id: 17, login: 'one', email: null },
+		emails: { email: 'spoof@example.test', verified: true },
+	});
+	const provider = new GitHubOAuthProvider({
+		production: true,
+		userAgent: 'strata-test',
+		clientId: 'client',
+		clientSecret: 'secret',
+		redirectUri: 'https://app.example.com/callback',
+	});
+
+	await expect(provider.exchangeCode('code')).rejects.toThrow('verified email');
 });
 
-test("GitHub OAuth snapshots explicit outbound policy and refuses incomplete configuration", async () => {
-  expect(
-    () =>
-      new GitHubOAuthProvider({
-        clientId: "id",
-        clientSecret: "secret",
-        redirectUri: "https://app.test/callback",
-        production: undefined as unknown as boolean,
-        userAgent: "owned",
-      }),
-  ).toThrow("Explicit GitHub OAuth");
-  const options = {
-    clientId: "id",
-    clientSecret: "secret",
-    redirectUri: "https://app.test/callback",
-    production: true,
-    userAgent: "owned",
-  };
-  const provider = new GitHubOAuthProvider(options);
-  options.production = false;
-  options.userAgent = "changed";
-  setDnsLookupForTests(async () => [{ address: "127.0.0.1", family: 4 }]);
-  // The caller cannot weaken this provider's captured production policy after creation.
-  await expect(provider.exchangeCode("code")).rejects.toThrow();
+test('GitHub OAuth snapshots explicit outbound policy and refuses incomplete configuration', async () => {
+	expect(
+		() =>
+			new GitHubOAuthProvider({
+				clientId: 'id',
+				clientSecret: 'secret',
+				redirectUri: 'https://app.test/callback',
+				production: undefined as unknown as boolean,
+				userAgent: 'owned',
+			}),
+	).toThrow('Explicit GitHub OAuth');
+	const options = {
+		clientId: 'id',
+		clientSecret: 'secret',
+		redirectUri: 'https://app.test/callback',
+		production: true,
+		userAgent: 'owned',
+	};
+
+	const provider = new GitHubOAuthProvider(options);
+
+	options.production = false;
+	options.userAgent = 'changed';
+	setDnsLookupForTests(async () => [{ address: '127.0.0.1', family: 4 }]);
+	// The caller cannot weaken this provider's captured production policy after creation.
+	await expect(provider.exchangeCode('code')).rejects.toThrow();
 });

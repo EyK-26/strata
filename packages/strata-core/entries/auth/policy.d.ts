@@ -1,1 +1,1 @@
-export * from "../../../../src/core/auth/policy.ts";
+export * from '../../../../src/core/auth/policy.ts';

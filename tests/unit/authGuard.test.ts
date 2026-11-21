@@ -1,272 +1,315 @@
-import { describe, expect, test } from "bun:test";
-import { AuthenticationRequiredError } from "@getstrata/core/auth/authOutcome";
-import { establishedAuthReader, runWithEstablishedAuth } from "@getstrata/core/auth/authReader";
-import { ApiTokenGuard, AuthManager, CompositeGuard, GuestGuard } from "@getstrata/core/auth/guard";
-import { toHttpError, UnauthorizedError } from "@getstrata/core/errors/http";
-import { authFixtureOutcome } from "../helpers/authOutcome";
-import { guestGuardOptions } from "../helpers/devAuthHeaders";
-import { restoreEnvVar } from "../helpers/restoreEnv";
+import { describe, expect, test } from 'bun:test';
 
-describe("AuthManager", () => {
-  test("GuestGuard always resolves null without dev headers", async () => {
-    const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
+import { AuthenticationRequiredError } from '@getstrata/core/auth/authOutcome';
+import { establishedAuthReader, runWithEstablishedAuth } from '@getstrata/core/auth/authReader';
+import { ApiTokenGuard, AuthManager, CompositeGuard, GuestGuard } from '@getstrata/core/auth/guard';
+import { toHttpError, UnauthorizedError } from '@getstrata/core/errors/http';
 
-    expect(await auth.check()).toBe(false);
-    expect(await auth.user()).toBeNull();
-  });
+import { authFixtureOutcome } from '../helpers/authOutcome';
+import { guestGuardOptions } from '../helpers/devAuthHeaders';
+import { restoreEnvVar } from '../helpers/restoreEnv';
 
-  test("ApiTokenGuard authenticates matching bearer tokens", async () => {
-    const auth = new AuthManager(
-      new ApiTokenGuard({
-        token: "secret-token",
-        user: { id: 1, role: "admin" },
-      }),
-    );
-    const request = new Request("http://example.test", {
-      headers: { authorization: "Bearer secret-token" },
-    });
+describe('AuthManager', () => {
+	test('GuestGuard always resolves null without dev headers', async () => {
+		const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
 
-    expect(await auth.resolve(request)).toEqual({ id: 1, role: "admin" });
-    expect(await auth.check(request)).toBe(true);
-  });
+		expect(await auth.check()).toBe(false);
+		expect(await auth.user()).toBeNull();
+	});
 
-  test("ApiTokenGuard rejects missing or invalid tokens", async () => {
-    const auth = new AuthManager(new ApiTokenGuard({ token: "secret-token", user: { id: 1 } }));
+	test('ApiTokenGuard authenticates matching bearer tokens', async () => {
+		const auth = new AuthManager(
+			new ApiTokenGuard({
+				token: 'secret-token',
+				user: { id: 1, role: 'admin' },
+			}),
+		);
 
-    expect(await auth.check(new Request("http://example.test"))).toBe(false);
-    expect(
-      await auth.check(
-        new Request("http://example.test", {
-          headers: { authorization: "Bearer wrong" },
-        }),
-      ),
-    ).toBe(false);
-  });
+		const request = new Request('http://example.test', {
+			headers: { authorization: 'Bearer secret-token' },
+		});
 
-  test("requireUser throws a transport-neutral failure that HTTP maps to 401", async () => {
-    const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
+		expect(await auth.resolve(request)).toEqual({ id: 1, role: 'admin' });
+		expect(await auth.check(request)).toBe(true);
+	});
 
-    const error = await auth.requireUser().catch((error: unknown) => error);
-    expect(error).toBeInstanceOf(AuthenticationRequiredError);
-    expect(error).not.toBeInstanceOf(UnauthorizedError);
-    expect(error).not.toHaveProperty("status");
-    expect(toHttpError(error)).toBeInstanceOf(UnauthorizedError);
-    expect(toHttpError(error)?.status).toBe(401);
-  });
+	test('ApiTokenGuard rejects missing or invalid tokens', async () => {
+		const auth = new AuthManager(new ApiTokenGuard({ token: 'secret-token', user: { id: 1 } }));
 
-  test("GuestGuard ignores identity headers unless AUTH_DEV_HEADERS is exactly true", () => {
-    const previous = process.env.AUTH_DEV_HEADERS;
-    delete process.env.AUTH_DEV_HEADERS;
-    try {
-      expect(
-        new GuestGuard(guestGuardOptions()).resolve(
-          new Request("http://example.test", {
-            headers: { "x-authenticated-user-id": "7" },
-          }),
-        ),
-      ).toBeNull();
-      process.env.AUTH_DEV_HEADERS = "TRUE";
-      expect(
-        new GuestGuard(guestGuardOptions()).resolve(
-          new Request("http://example.test", {
-            headers: { "x-authenticated-user-id": "7" },
-          }),
-        ),
-      ).toBeNull();
-    } finally {
-      restoreEnvVar("AUTH_DEV_HEADERS", previous);
-    }
-  });
+		expect(await auth.check(new Request('http://example.test'))).toBe(false);
+		expect(
+			await auth.check(
+				new Request('http://example.test', {
+					headers: { authorization: 'Bearer wrong' },
+				}),
+			),
+		).toBe(false);
+	});
 
-  test("GuestGuard treats missing verification header as unverified", () => {
-    const previous = process.env.AUTH_DEV_HEADERS;
-    const previousApp = process.env.APP_ENV;
-    const previousNode = process.env.NODE_ENV;
-    process.env.AUTH_DEV_HEADERS = "true";
-    process.env.APP_ENV = "local";
-    delete process.env.NODE_ENV;
-    try {
-      const user = new GuestGuard(guestGuardOptions()).resolve(
-        new Request("http://example.test", {
-          headers: { "x-authenticated-user-id": "7" },
-        }),
-      );
-      expect(user?.emailVerifiedAt).toBeNull();
-      const verified = new GuestGuard(guestGuardOptions()).resolve(
-        new Request("http://example.test", {
-          headers: {
-            "x-authenticated-user-id": "7",
-            "x-authenticated-email-verified": "true",
-          },
-        }),
-      );
-      expect(verified?.emailVerifiedAt).toEqual(new Date(0));
-    } finally {
-      restoreEnvVar("AUTH_DEV_HEADERS", previous);
-      restoreEnvVar("APP_ENV", previousApp);
-      restoreEnvVar("NODE_ENV", previousNode);
-    }
-  });
+	test('requireUser throws a transport-neutral failure that HTTP maps to 401', async () => {
+		const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
 
-  test("GuestGuard is always null in production even when AUTH_DEV_HEADERS is true", () => {
-    const previous = process.env.AUTH_DEV_HEADERS;
-    const previousApp = process.env.APP_ENV;
-    const previousNode = process.env.NODE_ENV;
-    process.env.AUTH_DEV_HEADERS = "true";
-    delete process.env.NODE_ENV;
-    const request = new Request("http://example.test", {
-      headers: { "x-authenticated-user-id": "7" },
-    });
-    try {
-      process.env.APP_ENV = "production";
-      expect(new GuestGuard(guestGuardOptions()).resolve(request)).toBeNull();
-      process.env.APP_ENV = "staging";
-      expect(new GuestGuard(guestGuardOptions()).resolve(request)).toBeNull();
-    } finally {
-      restoreEnvVar("AUTH_DEV_HEADERS", previous);
-      restoreEnvVar("APP_ENV", previousApp);
-      restoreEnvVar("NODE_ENV", previousNode);
-    }
-  });
+		const error = await auth.requireUser().catch((error: unknown) => error);
 
-  test("failed bearer does not fall back to a session or guest guard", async () => {
-    const sessionGuard = {
-      authenticate() {
-        return authFixtureOutcome(
-          (async () => {
-            return { id: 99, role: "session" };
-          })(),
-        );
-      },
-    };
-    const auth = new AuthManager(new CompositeGuard([sessionGuard]));
-    auth.registerGuard("web", sessionGuard);
-    auth.registerGuard("session", sessionGuard);
+		expect(error).toBeInstanceOf(AuthenticationRequiredError);
+		expect(error).not.toBeInstanceOf(UnauthorizedError);
+		expect(error).not.toHaveProperty('status');
+		expect(toHttpError(error)).toBeInstanceOf(UnauthorizedError);
+		expect(toHttpError(error)?.status).toBe(401);
+	});
 
-    expect(
-      await auth.resolveWithSource(
-        new Request("http://example.test", { headers: { authorization: "Bearer garbage" } }),
-      ),
-    ).toEqual({ user: null, credentialSource: null });
-  });
+	test('GuestGuard ignores identity headers unless AUTH_DEV_HEADERS is exactly true', () => {
+		const previous = process.env.AUTH_DEV_HEADERS;
+
+		delete process.env.AUTH_DEV_HEADERS;
+		try {
+			expect(
+				new GuestGuard(guestGuardOptions()).resolve(
+					new Request('http://example.test', {
+						headers: { 'x-authenticated-user-id': '7' },
+					}),
+				),
+			).toBeNull();
+			process.env.AUTH_DEV_HEADERS = 'TRUE';
+			expect(
+				new GuestGuard(guestGuardOptions()).resolve(
+					new Request('http://example.test', {
+						headers: { 'x-authenticated-user-id': '7' },
+					}),
+				),
+			).toBeNull();
+		} finally {
+			restoreEnvVar('AUTH_DEV_HEADERS', previous);
+		}
+	});
+
+	test('GuestGuard treats missing verification header as unverified', () => {
+		const previous = process.env.AUTH_DEV_HEADERS;
+
+		const previousApp = process.env.APP_ENV;
+
+		const previousNode = process.env.NODE_ENV;
+
+		process.env.AUTH_DEV_HEADERS = 'true';
+		process.env.APP_ENV = 'local';
+		delete process.env.NODE_ENV;
+		try {
+			const user = new GuestGuard(guestGuardOptions()).resolve(
+				new Request('http://example.test', {
+					headers: { 'x-authenticated-user-id': '7' },
+				}),
+			);
+
+			expect(user?.emailVerifiedAt).toBeNull();
+			const verified = new GuestGuard(guestGuardOptions()).resolve(
+				new Request('http://example.test', {
+					headers: {
+						'x-authenticated-user-id': '7',
+						'x-authenticated-email-verified': 'true',
+					},
+				}),
+			);
+
+			expect(verified?.emailVerifiedAt).toEqual(new Date(0));
+		} finally {
+			restoreEnvVar('AUTH_DEV_HEADERS', previous);
+			restoreEnvVar('APP_ENV', previousApp);
+			restoreEnvVar('NODE_ENV', previousNode);
+		}
+	});
+
+	test('GuestGuard is always null in production even when AUTH_DEV_HEADERS is true', () => {
+		const previous = process.env.AUTH_DEV_HEADERS;
+
+		const previousApp = process.env.APP_ENV;
+
+		const previousNode = process.env.NODE_ENV;
+
+		process.env.AUTH_DEV_HEADERS = 'true';
+		delete process.env.NODE_ENV;
+		const request = new Request('http://example.test', {
+			headers: { 'x-authenticated-user-id': '7' },
+		});
+
+		try {
+			process.env.APP_ENV = 'production';
+			expect(new GuestGuard(guestGuardOptions()).resolve(request)).toBeNull();
+			process.env.APP_ENV = 'staging';
+			expect(new GuestGuard(guestGuardOptions()).resolve(request)).toBeNull();
+		} finally {
+			restoreEnvVar('AUTH_DEV_HEADERS', previous);
+			restoreEnvVar('APP_ENV', previousApp);
+			restoreEnvVar('NODE_ENV', previousNode);
+		}
+	});
+
+	test('failed bearer does not fall back to a session or guest guard', async () => {
+		const sessionGuard = {
+			authenticate() {
+				return authFixtureOutcome(
+					(async () => {
+						return { id: 99, role: 'session' };
+					})(),
+				);
+			},
+		};
+
+		const auth = new AuthManager(new CompositeGuard([sessionGuard]));
+
+		auth.registerGuard('web', sessionGuard);
+		auth.registerGuard('session', sessionGuard);
+
+		expect(
+			await auth.resolveWithSource(
+				new Request('http://example.test', { headers: { authorization: 'Bearer garbage' } }),
+			),
+		).toEqual({ user: null, credentialSource: null });
+	});
 });
 
 // Basic one-time proofs must survive repeated user/check/requireUser calls on one Request.
-describe("Basic request resolution", () => {
-  const request = () =>
-    new Request("http://fixture.test", {
-      headers: { authorization: "Basic fixture", "x-mfa-code": "one-use-proof" },
-    });
-  test("shares in-flight resolution within one request and isolates later requests", async () => {
-    let calls = 0;
-    let release = () => {};
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const auth = new AuthManager({ authenticate: () => authFixtureOutcome(null) });
-    auth.registerGuard("basic", {
-      authenticate: () =>
-        authFixtureOutcome(
-          (async () => {
-            calls++;
-            await gate;
-            return { id: calls };
-          })(),
-        ),
-    });
-    const req = request();
-    const results = Promise.all([auth.user(req), auth.check(req), auth.requireUser(req)]);
-    expect(calls).toBe(1);
-    release();
-    expect(await results).toEqual([{ id: 1 }, true, { id: 1 }]);
-    expect(await auth.user(request())).toEqual({ id: 2 });
-  });
-  test("invalidates Basic results after credential, scheme or guard changes", async () => {
-    let calls = 0;
-    const auth = new AuthManager({ authenticate: () => authFixtureOutcome(null) });
-    auth.registerGuard("basic", { authenticate: () => authFixtureOutcome({ id: ++calls }) });
-    const req = request();
-    expect((await auth.user(req))?.id).toBe(1);
-    req.headers.set("x-mfa-code", "another-proof");
-    expect((await auth.user(req))?.id).toBe(2);
-    req.headers.set("authorization", "Basic another");
-    expect((await auth.user(req))?.id).toBe(3);
-    req.headers.set("authorization", "Bearer invalid");
-    expect(await auth.user(req)).toBeNull();
-    req.headers.set("authorization", "Basic another");
-    expect((await auth.user(req))?.id).toBe(4);
-    auth.registerGuard("basic", { authenticate: () => authFixtureOutcome({ id: 99 }) });
-    expect((await auth.user(req))?.id).toBe(99);
-  });
-  test("retains denial only within that request and does not retain infrastructure errors", async () => {
-    let calls = 0;
-    const auth = new AuthManager({ authenticate: () => authFixtureOutcome(null) });
-    auth.registerGuard("basic", {
-      authenticate: () =>
-        authFixtureOutcome(
-          (async () => {
-            calls++;
-            return null;
-          })(),
-        ),
-    });
-    const req = request();
-    expect(await auth.user(req)).toBeNull();
-    expect(await auth.user(req)).toBeNull();
-    expect(calls).toBe(1);
-    expect(await auth.user(request())).toBeNull();
-    expect(calls).toBe(2);
-    let failed = true;
-    auth.registerGuard("basic", {
-      authenticate: () =>
-        authFixtureOutcome(
-          (async () => {
-            if (failed) {
-              failed = false;
-              throw new Error("SQL unavailable");
-            }
-            return { id: 7 };
-          })(),
-        ),
-    });
-    await expect(auth.user(req)).rejects.toThrow("SQL unavailable");
-    expect(await auth.user(req)).toEqual({ id: 7 });
-  });
-  test("an older failed resolution cannot discard a newer credential result", async () => {
-    let calls = 0;
-    let rejectOld = (_error: Error) => {};
-    const old = new Promise<null>((_resolve, reject) => {
-      rejectOld = reject;
-    });
-    const auth = new AuthManager({ authenticate: () => authFixtureOutcome(null) });
-    auth.registerGuard("basic", {
-      authenticate: () => authFixtureOutcome(++calls === 1 ? old : { id: 8 }),
-    });
-    const req = request();
-    const failure = auth.user(req).catch((error: unknown) => error);
-    req.headers.set("x-mfa-code", "new-proof");
-    expect(await auth.user(req)).toEqual({ id: 8 });
-    rejectOld(new Error("old failure"));
-    expect(await failure).toMatchObject({ message: "old failure" });
-    expect(await auth.user(req)).toEqual({ id: 8 });
-    expect(calls).toBe(2);
-  });
+describe('Basic request resolution', () => {
+	const request = () =>
+		new Request('http://fixture.test', {
+			headers: { authorization: 'Basic fixture', 'x-mfa-code': 'one-use-proof' },
+		});
+
+	test('shares in-flight resolution within one request and isolates later requests', async () => {
+		let calls = 0;
+
+		let release = () => {};
+
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+
+		const auth = new AuthManager({ authenticate: () => authFixtureOutcome(null) });
+
+		auth.registerGuard('basic', {
+			authenticate: () =>
+				authFixtureOutcome(
+					(async () => {
+						calls++;
+						await gate;
+
+						return { id: calls };
+					})(),
+				),
+		});
+		const req = request();
+
+		const results = Promise.all([auth.user(req), auth.check(req), auth.requireUser(req)]);
+
+		expect(calls).toBe(1);
+		release();
+		expect(await results).toEqual([{ id: 1 }, true, { id: 1 }]);
+		expect(await auth.user(request())).toEqual({ id: 2 });
+	});
+	test('invalidates Basic results after credential, scheme or guard changes', async () => {
+		let calls = 0;
+
+		const auth = new AuthManager({ authenticate: () => authFixtureOutcome(null) });
+
+		auth.registerGuard('basic', { authenticate: () => authFixtureOutcome({ id: ++calls }) });
+		const req = request();
+
+		expect((await auth.user(req))?.id).toBe(1);
+		req.headers.set('x-mfa-code', 'another-proof');
+		expect((await auth.user(req))?.id).toBe(2);
+		req.headers.set('authorization', 'Basic another');
+		expect((await auth.user(req))?.id).toBe(3);
+		req.headers.set('authorization', 'Bearer invalid');
+		expect(await auth.user(req)).toBeNull();
+		req.headers.set('authorization', 'Basic another');
+		expect((await auth.user(req))?.id).toBe(4);
+		auth.registerGuard('basic', { authenticate: () => authFixtureOutcome({ id: 99 }) });
+		expect((await auth.user(req))?.id).toBe(99);
+	});
+	test('retains denial only within that request and does not retain infrastructure errors', async () => {
+		let calls = 0;
+
+		const auth = new AuthManager({ authenticate: () => authFixtureOutcome(null) });
+
+		auth.registerGuard('basic', {
+			authenticate: () =>
+				authFixtureOutcome(
+					(async () => {
+						calls++;
+
+						return null;
+					})(),
+				),
+		});
+		const req = request();
+
+		expect(await auth.user(req)).toBeNull();
+		expect(await auth.user(req)).toBeNull();
+		expect(calls).toBe(1);
+		expect(await auth.user(request())).toBeNull();
+		expect(calls).toBe(2);
+		let failed = true;
+
+		auth.registerGuard('basic', {
+			authenticate: () =>
+				authFixtureOutcome(
+					(async () => {
+						if (failed) {
+							failed = false;
+							throw new Error('SQL unavailable');
+						}
+
+						return { id: 7 };
+					})(),
+				),
+		});
+		await expect(auth.user(req)).rejects.toThrow('SQL unavailable');
+		expect(await auth.user(req)).toEqual({ id: 7 });
+	});
+	test('an older failed resolution cannot discard a newer credential result', async () => {
+		let calls = 0;
+
+		let rejectOld = (_error: Error) => {};
+
+		const old = new Promise<null>((_resolve, reject) => {
+			rejectOld = reject;
+		});
+
+		const auth = new AuthManager({ authenticate: () => authFixtureOutcome(null) });
+
+		auth.registerGuard('basic', {
+			authenticate: () => authFixtureOutcome(++calls === 1 ? old : { id: 8 }),
+		});
+		const req = request();
+
+		const failure = auth.user(req).catch((error: unknown) => error);
+
+		req.headers.set('x-mfa-code', 'new-proof');
+		expect(await auth.user(req)).toEqual({ id: 8 });
+		rejectOld(new Error('old failure'));
+		expect(await failure).toMatchObject({ message: 'old failure' });
+		expect(await auth.user(req)).toEqual({ id: 8 });
+		expect(calls).toBe(2);
+	});
 });
 
-test("established reader requires identity with the same neutral authentication failure", async () => {
-  const request = new Request("http://example.test");
-  await runWithEstablishedAuth(request, { user: null, credentialSource: null }, async () => {
-    const error = await establishedAuthReader.requireUser(request).catch((error: unknown) => error);
-    expect(error).toBeInstanceOf(AuthenticationRequiredError);
-    expect(error).not.toHaveProperty("status");
-    expect(toHttpError(error)?.status).toBe(401);
-  });
+test('established reader requires identity with the same neutral authentication failure', async () => {
+	const request = new Request('http://example.test');
+
+	await runWithEstablishedAuth(request, { user: null, credentialSource: null }, async () => {
+		const error = await establishedAuthReader.requireUser(request).catch((error: unknown) => error);
+
+		expect(error).toBeInstanceOf(AuthenticationRequiredError);
+		expect(error).not.toHaveProperty('status');
+		expect(toHttpError(error)?.status).toBe(401);
+	});
 });
 
-test("requireUser preserves operational authentication failures", async () => {
-  const error = new Error("directory unavailable");
-  const auth = new AuthManager({
-    authenticate: () => ({ status: "error", user: null, credentialSource: "session", error }),
-  });
-  await expect(auth.requireUser(new Request("http://example.test"))).rejects.toBe(error);
+test('requireUser preserves operational authentication failures', async () => {
+	const error = new Error('directory unavailable');
+
+	const auth = new AuthManager({
+		authenticate: () => ({ status: 'error', user: null, credentialSource: 'session', error }),
+	});
+
+	await expect(auth.requireUser(new Request('http://example.test'))).rejects.toBe(error);
 });

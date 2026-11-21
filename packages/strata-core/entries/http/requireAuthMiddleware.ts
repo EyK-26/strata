@@ -1,1 +1,1 @@
-export * from "../../../../src/core/http/requireAuthMiddleware.ts";
+export * from '../../../../src/core/http/requireAuthMiddleware.ts';

@@ -1,1 +1,1 @@
-export * from "../../../../src/core/auth/guard.ts";
+export * from '../../../../src/core/auth/guard.ts';

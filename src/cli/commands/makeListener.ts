@@ -1,1 +1,1 @@
-export { makeListenerCommand } from "@getstrata/cli/scaffold";
+export { makeListenerCommand } from '@getstrata/cli/scaffold';

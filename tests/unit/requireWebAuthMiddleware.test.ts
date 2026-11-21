@@ -1,73 +1,80 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { currentAuthUser } from "@getstrata/core/auth/authContext";
-import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
-import { intendedUrlCookieOptionsFromEnvironment } from "@getstrata/core/auth/intendedUrlCookie";
-import { UnauthorizedError } from "@getstrata/core/errors/http";
-import { composeMiddleware } from "@getstrata/core/http/middleware";
-import { createRequireWebAuthMiddleware } from "@getstrata/core/http/requireWebAuthMiddleware";
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+
+import { currentAuthUser } from '@getstrata/core/auth/authContext';
+import { AuthManager, GuestGuard } from '@getstrata/core/auth/guard';
+import { intendedUrlCookieOptionsFromEnvironment } from '@getstrata/core/auth/intendedUrlCookie';
+import { UnauthorizedError } from '@getstrata/core/errors/http';
+import { composeMiddleware } from '@getstrata/core/http/middleware';
+import { createRequireWebAuthMiddleware } from '@getstrata/core/http/requireWebAuthMiddleware';
+
 import {
-  enableDevAuthHeaders,
-  guestGuardOptions,
-  restoreDevAuthHeaders,
-} from "../helpers/devAuthHeaders";
+	enableDevAuthHeaders,
+	guestGuardOptions,
+	restoreDevAuthHeaders,
+} from '../helpers/devAuthHeaders';
 
-describe("createRequireWebAuthMiddleware", () => {
-  let previousHeaders: string | undefined;
-  beforeEach(() => {
-    previousHeaders = enableDevAuthHeaders();
-  });
-  afterEach(() => {
-    restoreDevAuthHeaders(previousHeaders);
-  });
-  test("allows authenticated requests through", async () => {
-    const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
-    const handler = composeMiddleware(
-      createRequireWebAuthMiddleware(auth, intendedUrlCookieOptionsFromEnvironment(process.env)),
-    )(async () => {
-      expect(currentAuthUser()?.id).toBe("1");
-      return Response.json({ ok: true });
-    });
+describe('createRequireWebAuthMiddleware', () => {
+	let previousHeaders: string | undefined;
 
-    const response = await handler(
-      new Request("http://example.test/projects/1", {
-        headers: {
-          "x-authenticated-user-id": "1",
-          "x-authenticated-user-role": "member",
-        },
-      }),
-    );
+	beforeEach(() => {
+		previousHeaders = enableDevAuthHeaders();
+	});
+	afterEach(() => {
+		restoreDevAuthHeaders(previousHeaders);
+	});
+	test('allows authenticated requests through', async () => {
+		const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
 
-    expect(response.status).toBe(200);
-  });
+		const handler = composeMiddleware(
+			createRequireWebAuthMiddleware(auth, intendedUrlCookieOptionsFromEnvironment(process.env)),
+		)(async () => {
+			expect(currentAuthUser()?.id).toBe('1');
 
-  test("rejects guests with UnauthorizedError for JSON requests", async () => {
-    const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
-    const handler = composeMiddleware(
-      createRequireWebAuthMiddleware(auth, intendedUrlCookieOptionsFromEnvironment(process.env)),
-    )(async () => Response.json({ ok: true }));
+			return Response.json({ ok: true });
+		});
 
-    await expect(
-      handler(
-        new Request("http://example.test/api/v1/projects/1", {
-          headers: { accept: "application/json" },
-        }),
-      ),
-    ).rejects.toThrow(UnauthorizedError);
-  });
+		const response = await handler(
+			new Request('http://example.test/projects/1', {
+				headers: {
+					'x-authenticated-user-id': '1',
+					'x-authenticated-user-role': 'member',
+				},
+			}),
+		);
 
-  test("redirects guests to login for HTML requests", async () => {
-    const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
-    const handler = composeMiddleware(
-      createRequireWebAuthMiddleware(auth, intendedUrlCookieOptionsFromEnvironment(process.env)),
-    )(async () => Response.json({ ok: true }));
+		expect(response.status).toBe(200);
+	});
 
-    const response = await handler(
-      new Request("http://example.test/forum?page=2", {
-        headers: { accept: "text/html" },
-      }),
-    );
+	test('rejects guests with UnauthorizedError for JSON requests', async () => {
+		const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe("/login?redirect=%2Fforum%3Fpage%3D2");
-  });
+		const handler = composeMiddleware(
+			createRequireWebAuthMiddleware(auth, intendedUrlCookieOptionsFromEnvironment(process.env)),
+		)(async () => Response.json({ ok: true }));
+
+		await expect(
+			handler(
+				new Request('http://example.test/api/v1/projects/1', {
+					headers: { accept: 'application/json' },
+				}),
+			),
+		).rejects.toThrow(UnauthorizedError);
+	});
+
+	test('redirects guests to login for HTML requests', async () => {
+		const auth = new AuthManager(new GuestGuard(guestGuardOptions()));
+
+		const handler = composeMiddleware(
+			createRequireWebAuthMiddleware(auth, intendedUrlCookieOptionsFromEnvironment(process.env)),
+		)(async () => Response.json({ ok: true }));
+
+		const response = await handler(
+			new Request('http://example.test/forum?page=2', {
+				headers: { accept: 'text/html' },
+			}),
+		);
+
+		expect(response.status).toBe(302);
+		expect(response.headers.get('location')).toBe('/login?redirect=%2Fforum%3Fpage%3D2');
+	});
 });

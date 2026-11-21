@@ -13,256 +13,296 @@
  * Run: bun scripts/verify-generated-app.ts
  */
 
-import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { spawn } from "bun";
-import { verifyModelRepositoryRejections } from "../tests/helpers/modelRepositoryTypeContract";
+import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-const ROOT = join(import.meta.dir, "..");
+import { spawn } from 'bun';
+
+import { verifyModelRepositoryRejections } from '../tests/helpers/modelRepositoryTypeContract';
+
+const ROOT = join(import.meta.dir, '..');
+
 const evidenceDirectory = process.env.STRATA_GENERATED_TYPEGATE_EVIDENCE_DIR;
-if (evidenceDirectory) await mkdir(evidenceDirectory);
+
+if (evidenceDirectory) {
+	await mkdir(evidenceDirectory);
+}
+
 let commandSequence = 0;
 
 const PACKAGE_DIRS = [
-  "packages/strata-core",
-  "packages/strata-bootstrap",
-  "packages/strata-cli",
-  "packages/strata-starter",
+	'packages/strata-core',
+	'packages/strata-bootstrap',
+	'packages/strata-cli',
+	'packages/strata-starter',
 ];
 
 /** One case per code path the generator can emit. Keep MySQL and every auth kit covered. */
 const CASES: Array<{ name: string; flags: string[] }> = [
-  {
-    name: "htmx-postgres-cookie-token-redis-smtp",
-    flags: [
-      "--frontend=server-htmx",
-      "--database=postgres",
-      "--auth=cookie-token",
-      "--tenancy=none",
-      "--cache=redis",
-      "--queue=redis",
-      "--mail=smtp",
-      "--mfa",
-      "--email-verification",
-      "--docker",
-      "--docker-services=postgres,redis,mailpit,adminer",
-    ],
-  },
-  {
-    name: "api-mysql-cookie-security-extras",
-    flags: [
-      "--frontend=api",
-      "--database=mysql",
-      "--auth=cookie",
-      "--tenancy=none",
-      "--mfa",
-      "--email-verification",
-    ],
-  },
-  {
-    name: "spa-sqlite-cookie-security-extras",
-    flags: [
-      "--frontend=spa-react",
-      "--database=sqlite",
-      "--auth=cookie",
-      "--tenancy=column",
-      "--mfa",
-      "--email-verification",
-    ],
-  },
-  { name: "api-sqlite-headers", flags: [] },
-  {
-    name: "spa-react-sqlite-token",
-    flags: ["--frontend", "spa-react", "--database", "sqlite", "--auth", "token"],
-  },
-  {
-    name: "htmx-sqlite-cookie",
-    flags: ["--frontend", "server-htmx", "--database", "sqlite", "--auth", "cookie"],
-  },
-  {
-    name: "htmx-postgres-cookie-all-extras",
-    flags: [
-      "--frontend",
-      "server-htmx",
-      "--database",
-      "postgres",
-      "--auth",
-      "cookie-token-jwt",
-      "--tenancy",
-      "rls",
-      "--mfa",
-      "--email-verification",
-      "--scim",
-      "--metrics",
-      "--oauth-github",
-      "--oidc",
-      "--billing",
-      "--webhooks",
-    ],
-  },
-  {
-    name: "api-mysql-token",
-    flags: ["--frontend", "api", "--database", "mysql", "--auth", "token"],
-  },
-  {
-    name: "htmx-mysql-cookie-security-extras",
-    flags: [
-      "--frontend=server-htmx",
-      "--database=mysql",
-      "--auth=cookie",
-      "--tenancy=none",
-      "--mfa",
-      "--email-verification",
-    ],
-  },
-  {
-    name: "api-postgres-jwt-no-tenancy",
-    flags: [
-      "--frontend=api",
-      "--database=postgres",
-      "--auth=jwt",
-      "--tenancy=none",
-      "--email-verification",
-    ],
-  },
-  {
-    name: "hybrid-sqlite-cookie-token",
-    flags: ["--frontend", "hybrid", "--database", "sqlite", "--auth", "cookie-token"],
-  },
+	{
+		name: 'htmx-postgres-cookie-token-redis-smtp',
+		flags: [
+			'--frontend=server-htmx',
+			'--database=postgres',
+			'--auth=cookie-token',
+			'--tenancy=none',
+			'--cache=redis',
+			'--queue=redis',
+			'--mail=smtp',
+			'--mfa',
+			'--email-verification',
+			'--docker',
+			'--docker-services=postgres,redis,mailpit,adminer',
+		],
+	},
+	{
+		name: 'api-mysql-cookie-security-extras',
+		flags: [
+			'--frontend=api',
+			'--database=mysql',
+			'--auth=cookie',
+			'--tenancy=none',
+			'--mfa',
+			'--email-verification',
+		],
+	},
+	{
+		name: 'spa-sqlite-cookie-security-extras',
+		flags: [
+			'--frontend=spa-react',
+			'--database=sqlite',
+			'--auth=cookie',
+			'--tenancy=column',
+			'--mfa',
+			'--email-verification',
+		],
+	},
+	{ name: 'api-sqlite-headers', flags: [] },
+	{
+		name: 'spa-react-sqlite-token',
+		flags: ['--frontend', 'spa-react', '--database', 'sqlite', '--auth', 'token'],
+	},
+	{
+		name: 'htmx-sqlite-cookie',
+		flags: ['--frontend', 'server-htmx', '--database', 'sqlite', '--auth', 'cookie'],
+	},
+	{
+		name: 'htmx-postgres-cookie-all-extras',
+		flags: [
+			'--frontend',
+			'server-htmx',
+			'--database',
+			'postgres',
+			'--auth',
+			'cookie-token-jwt',
+			'--tenancy',
+			'rls',
+			'--mfa',
+			'--email-verification',
+			'--scim',
+			'--metrics',
+			'--oauth-github',
+			'--oidc',
+			'--billing',
+			'--webhooks',
+		],
+	},
+	{
+		name: 'api-mysql-token',
+		flags: ['--frontend', 'api', '--database', 'mysql', '--auth', 'token'],
+	},
+	{
+		name: 'htmx-mysql-cookie-security-extras',
+		flags: [
+			'--frontend=server-htmx',
+			'--database=mysql',
+			'--auth=cookie',
+			'--tenancy=none',
+			'--mfa',
+			'--email-verification',
+		],
+	},
+	{
+		name: 'api-postgres-jwt-no-tenancy',
+		flags: [
+			'--frontend=api',
+			'--database=postgres',
+			'--auth=jwt',
+			'--tenancy=none',
+			'--email-verification',
+		],
+	},
+	{
+		name: 'hybrid-sqlite-cookie-token',
+		flags: ['--frontend', 'hybrid', '--database', 'sqlite', '--auth', 'cookie-token'],
+	},
 ];
 
 async function run(
-  command: string[],
-  cwd: string,
-  env?: Record<string, string>,
+	command: string[],
+	cwd: string,
+	env?: Record<string, string>,
 ): Promise<{ exitCode: number; output: string }> {
-  const proc = spawn(command, {
-    cwd,
-    env: { ...process.env, ...env },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  const result = { exitCode, output: `${stdout}${stderr}` };
-  if (evidenceDirectory)
-    await writeFile(
-      join(evidenceDirectory, `command-${++commandSequence}.json`),
-      JSON.stringify({ command, cwd, ...result }, null, 2),
-    );
-  return result;
+	const proc = spawn(command, {
+		cwd,
+		env: { ...process.env, ...env },
+		stdout: 'pipe',
+		stderr: 'pipe',
+	});
+
+	const [stdout, stderr, exitCode] = await Promise.all([
+		new Response(proc.stdout).text(),
+		new Response(proc.stderr).text(),
+		proc.exited,
+	]);
+
+	const result = { exitCode, output: `${stdout}${stderr}` };
+
+	if (evidenceDirectory) {
+		await writeFile(
+			join(evidenceDirectory, `command-${++commandSequence}.json`),
+			JSON.stringify({ command, cwd, ...result }, null, 2),
+		);
+	}
+
+	return result;
 }
 
 async function packPackages(destination: string): Promise<Record<string, string>> {
-  const tarballs: Record<string, string> = {};
-  for (const dir of PACKAGE_DIRS) {
-    const manifest = JSON.parse(await readFile(join(ROOT, dir, "package.json"), "utf8")) as {
-      name: string;
-    };
-    const packed = await run(
-      ["npm", "pack", "--silent", "--pack-destination", destination],
-      join(ROOT, dir),
-    );
-    if (packed.exitCode !== 0) {
-      throw new Error(`npm pack failed for ${dir}:\n${packed.output}`);
-    }
-    const file = packed.output.trim().split("\n").filter(Boolean).at(-1);
-    if (!file) {
-      throw new Error(`npm pack produced no tarball for ${dir}`);
-    }
-    tarballs[manifest.name] = join(destination, file);
-  }
-  if (evidenceDirectory) {
-    const archives = await Promise.all(
-      Object.entries(tarballs).map(async ([name, path]) => ({
-        name,
-        path,
-        sha256: createHash("sha256")
-          .update(await readFile(path))
-          .digest("hex"),
-      })),
-    );
-    await writeFile(join(evidenceDirectory, "archives.json"), JSON.stringify(archives, null, 2));
-  }
-  return tarballs;
+	const tarballs: Record<string, string> = {};
+
+	for (const dir of PACKAGE_DIRS) {
+		const manifest = JSON.parse(await readFile(join(ROOT, dir, 'package.json'), 'utf8')) as {
+			name: string;
+		};
+
+		const packed = await run(
+			['npm', 'pack', '--silent', '--pack-destination', destination],
+			join(ROOT, dir),
+		);
+
+		if (packed.exitCode !== 0) {
+			throw new Error(`npm pack failed for ${dir}:\n${packed.output}`);
+		}
+
+		const file = packed.output.trim().split('\n').filter(Boolean).at(-1);
+
+		if (!file) {
+			throw new Error(`npm pack produced no tarball for ${dir}`);
+		}
+
+		tarballs[manifest.name] = join(destination, file);
+	}
+
+	if (evidenceDirectory) {
+		const archives = await Promise.all(
+			Object.entries(tarballs).map(async ([name, path]) => ({
+				name,
+				path,
+				sha256: createHash('sha256')
+					.update(await readFile(path))
+					.digest('hex'),
+			})),
+		);
+
+		await writeFile(join(evidenceDirectory, 'archives.json'), JSON.stringify(archives, null, 2));
+	}
+
+	return tarballs;
 }
 
 /** Point the generated app at the packed tarballs instead of the registry. */
 async function useTarballs(appDir: string, tarballs: Record<string, string>): Promise<void> {
-  const path = join(appDir, "package.json");
-  const manifest = JSON.parse(await readFile(path, "utf8")) as {
-    dependencies?: Record<string, string>;
-  };
-  for (const [name, tarball] of Object.entries(tarballs)) {
-    if (manifest.dependencies?.[name]) {
-      manifest.dependencies[name] = `file:${tarball}`;
-    }
-  }
-  await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
+	const path = join(appDir, 'package.json');
+
+	const manifest = JSON.parse(await readFile(path, 'utf8')) as {
+		dependencies?: Record<string, string>;
+	};
+
+	for (const [name, tarball] of Object.entries(tarballs)) {
+		if (manifest.dependencies?.[name]) {
+			manifest.dependencies[name] = `file:${tarball}`;
+		}
+	}
+
+	await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
 // Match the public core/bootstrap peer contract, including declarations emitted by TS 7.
-const TYPESCRIPT_VERSIONS = ["5.9.3", "6.0.3", "7.0.2"] as const;
-// Narrow local acceptance runs keep the default published-package matrix intact.
-const selectedCase = process.argv.find((arg) => arg.startsWith("--case="))?.slice(7);
-const selectedCompiler = process.argv.find((arg) => arg.startsWith("--typescript="))?.slice(13);
-if (selectedCase && !CASES.some(({ name }) => name === selectedCase))
-  throw new Error(`Unknown generated app case: ${selectedCase}`);
-if (selectedCompiler && !TYPESCRIPT_VERSIONS.some((version) => version === selectedCompiler))
-  throw new Error(`Unsupported generated app compiler: ${selectedCompiler}`);
-const cases = selectedCase ? CASES.filter(({ name }) => name === selectedCase) : CASES;
-const compilers = selectedCompiler
-  ? TYPESCRIPT_VERSIONS.filter((version) => version === selectedCompiler)
-  : TYPESCRIPT_VERSIONS;
+const TYPESCRIPT_VERSIONS = ['5.9.3', '6.0.3', '7.0.2'] as const;
 
-const workspace = await mkdtemp(join(tmpdir(), "strata-verify-"));
+// Narrow local acceptance runs keep the default published-package matrix intact.
+const selectedCase = process.argv.find((arg) => arg.startsWith('--case='))?.slice(7);
+
+const selectedCompiler = process.argv.find((arg) => arg.startsWith('--typescript='))?.slice(13);
+
+if (selectedCase && !CASES.some(({ name }) => name === selectedCase)) {
+	throw new Error(`Unknown generated app case: ${selectedCase}`);
+}
+
+if (selectedCompiler && !TYPESCRIPT_VERSIONS.some((version) => version === selectedCompiler)) {
+	throw new Error(`Unsupported generated app compiler: ${selectedCompiler}`);
+}
+
+const cases = selectedCase ? CASES.filter(({ name }) => name === selectedCase) : CASES;
+
+const compilers = selectedCompiler
+	? TYPESCRIPT_VERSIONS.filter((version) => version === selectedCompiler)
+	: TYPESCRIPT_VERSIONS;
+
+const workspace = await mkdtemp(join(tmpdir(), 'strata-verify-'));
+
 const failures: string[] = [];
 
 try {
-  // The generated source is bundled into dist/cli.js. A standalone invocation
-  // must validate the current generator rather than a previous successful build.
-  const built = await run(["bun", "run", "build:starter"], ROOT);
-  if (built.exitCode !== 0) throw new Error(`Starter build failed:\n${built.output}`);
-  const tarballs = await packPackages(workspace);
-  const starterCli = join(ROOT, "packages/strata-starter/dist/cli.js");
+	// The generated source is bundled into dist/cli.js. A standalone invocation
+	// must validate the current generator rather than a previous successful build.
+	const built = await run(['bun', 'run', 'build:starter'], ROOT);
 
-  for (const testCase of cases) {
-    const generated = await run(
-      ["bun", starterCli, testCase.name, "--yes", ...testCase.flags],
-      workspace,
-    );
-    if (generated.exitCode !== 0) {
-      failures.push(`${testCase.name}: generate failed\n${generated.output}`);
-      continue;
-    }
+	if (built.exitCode !== 0) {
+		throw new Error(`Starter build failed:\n${built.output}`);
+	}
 
-    const appDir = join(workspace, testCase.name);
-    await useTarballs(appDir, tarballs);
-    await writeFile(
-      join(appDir, "tsconfig.generated.json"),
-      JSON.stringify(
-        {
-          extends: "./tsconfig.json",
-          compilerOptions: { noUnusedLocals: true, noUnusedParameters: true },
-          // Type-contract probes below intentionally contain unused declarations.
-          exclude: ["src/*.contract.ts"],
-        },
-        null,
-        2,
-      ),
-    );
-    // Exercise the emitted public DI declarations, including rejected mismatches,
-    // outside the monorepo's source-path aliases on every supported compiler.
-    // Every emitted driver consumes the same explicit selected-session SQL surface.
-    await writeFile(
-      join(appDir, "src/database-query.contract.ts"),
-      `import type { DatabaseSession, SqlStatement } from "@getstrata/core/database/session";
+	const tarballs = await packPackages(workspace);
+
+	const starterCli = join(ROOT, 'packages/strata-starter/dist/cli.js');
+
+	for (const testCase of cases) {
+		const generated = await run(
+			['bun', starterCli, testCase.name, '--yes', ...testCase.flags],
+			workspace,
+		);
+
+		if (generated.exitCode !== 0) {
+			failures.push(`${testCase.name}: generate failed\n${generated.output}`);
+			continue;
+		}
+
+		const appDir = join(workspace, testCase.name);
+
+		await useTarballs(appDir, tarballs);
+		await writeFile(
+			join(appDir, 'tsconfig.generated.json'),
+			JSON.stringify(
+				{
+					extends: './tsconfig.json',
+					compilerOptions: { noUnusedLocals: true, noUnusedParameters: true },
+					// Type-contract probes below intentionally contain unused declarations.
+					exclude: ['src/*.contract.ts'],
+				},
+				null,
+				2,
+			),
+		);
+		// Exercise the emitted public DI declarations, including rejected mismatches,
+		// outside the monorepo's source-path aliases on every supported compiler.
+		// Every emitted driver consumes the same explicit selected-session SQL surface.
+		await writeFile(
+			join(appDir, 'src/database-query.contract.ts'),
+			`import type { DatabaseSession, SqlStatement } from "@getstrata/core/database/session";
 import * as generatedDatabase from "./bootstrap/database.ts";
 export async function queryContract(database: DatabaseSession): Promise<void> {
   const statement: SqlStatement = { text: "SELECT 1 AS value WHERE 1 = ?", params: [1] };
@@ -286,10 +326,10 @@ export async function queryContract(database: DatabaseSession): Promise<void> {
   database.execute({ text: "SELECT 1 AS value" });
 }
 `,
-    );
-    await writeFile(
-      join(appDir, "src/after-commit.contract.ts"),
-      `import type { DatabaseSession, TransactionSession } from "@getstrata/core/database/session";
+		);
+		await writeFile(
+			join(appDir, 'src/after-commit.contract.ts'),
+			`import type { DatabaseSession, TransactionSession } from "@getstrata/core/database/session";
 export function commitContract(database: DatabaseSession, transaction: TransactionSession): void {
   const registered: void = transaction.afterCommit(() => {});
   transaction.afterCommit(async () => {});
@@ -302,194 +342,217 @@ export function commitContract(database: DatabaseSession, transaction: Transacti
   database.afterCommit(() => {});
 }
 `,
-    );
-    await writeFile(
-      join(appDir, "src/service-token.contract.ts"),
-      await readFile(join(ROOT, "tests/types/serviceTokens.contract.ts"), "utf8"),
-    );
+		);
+		await writeFile(
+			join(appDir, 'src/service-token.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/serviceTokens.contract.ts'), 'utf8'),
+		);
 
-    await writeFile(
-      join(appDir, "src/route-handler.contract.ts"),
-      await readFile(join(ROOT, "tests/types/routeHandlers.contract.ts"), "utf8"),
-    );
+		await writeFile(
+			join(appDir, 'src/route-handler.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/routeHandlers.contract.ts'), 'utf8'),
+		);
 
-    await writeFile(
-      join(appDir, "src/model-results.contract.ts"),
-      await readFile(join(ROOT, "tests/types/modelResults.contract.ts"), "utf8"),
-    );
+		await writeFile(
+			join(appDir, 'src/model-results.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/modelResults.contract.ts'), 'utf8'),
+		);
 
-    await writeFile(
-      join(appDir, "src/async-write-casts.contract.ts"),
-      await readFile(join(ROOT, "tests/types/asyncWriteCasts.contract.ts"), "utf8"),
-    );
+		await writeFile(
+			join(appDir, 'src/async-write-casts.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/asyncWriteCasts.contract.ts'), 'utf8'),
+		);
 
-    await writeFile(
-      join(appDir, "src/model-definition.contract.ts"),
-      await readFile(join(ROOT, "tests/types/modelDefinition.contract.ts"), "utf8"),
-    );
-    await writeFile(
-      join(appDir, "src/model-repository.contract.ts"),
-      await readFile(join(ROOT, "tests/types/modelRepository.contract.ts"), "utf8"),
-    );
-    await writeFile(
-      join(appDir, "src/transaction-acquisition.contract.ts"),
-      await readFile(join(ROOT, "tests/types/transactionAcquisition.contract.ts"), "utf8"),
-    );
-    await writeFile(
-      join(appDir, "src/legacy-public-retirement.contract.ts"),
-      await readFile(join(ROOT, "tests/types/legacyPublicRetirement.contract.ts"), "utf8"),
-    );
+		await writeFile(
+			join(appDir, 'src/model-definition.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/modelDefinition.contract.ts'), 'utf8'),
+		);
+		await writeFile(
+			join(appDir, 'src/model-repository.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/modelRepository.contract.ts'), 'utf8'),
+		);
+		await writeFile(
+			join(appDir, 'src/transaction-acquisition.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/transactionAcquisition.contract.ts'), 'utf8'),
+		);
+		await writeFile(
+			join(appDir, 'src/legacy-public-retirement.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/legacyPublicRetirement.contract.ts'), 'utf8'),
+		);
 
-    await writeFile(
-      join(appDir, "src/native-http.contract.ts"),
-      await readFile(join(ROOT, "tests/types/nativeHttp.contract.ts"), "utf8"),
-    );
+		await writeFile(
+			join(appDir, 'src/native-http.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/nativeHttp.contract.ts'), 'utf8'),
+		);
 
-    await writeFile(
-      join(appDir, "src/infrastructure-discovery.contract.ts"),
-      await readFile(join(ROOT, "tests/types/infrastructureDiscovery.contract.ts"), "utf8"),
-    );
+		await writeFile(
+			join(appDir, 'src/infrastructure-discovery.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/infrastructureDiscovery.contract.ts'), 'utf8'),
+		);
 
-    await writeFile(
-      join(appDir, "src/model-inputs.contract.ts"),
-      await readFile(join(ROOT, "tests/types/modelInputs.contract.ts"), "utf8"),
-    );
+		await writeFile(
+			join(appDir, 'src/model-inputs.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/modelInputs.contract.ts'), 'utf8'),
+		);
 
-    await writeFile(
-      join(appDir, "src/tracing.contract.ts"),
-      await readFile(join(ROOT, "tests/types/tracing.contract.ts"), "utf8"),
-    );
+		await writeFile(
+			join(appDir, 'src/tracing.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/tracing.contract.ts'), 'utf8'),
+		);
 
-    await writeFile(
-      join(appDir, "src/scheduler.contract.ts"),
-      await readFile(join(ROOT, "tests/types/scheduler.contract.ts"), "utf8"),
-    );
+		await writeFile(
+			join(appDir, 'src/scheduler.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/scheduler.contract.ts'), 'utf8'),
+		);
 
-    await writeFile(
-      join(appDir, "src/quota-policy.contract.ts"),
-      await readFile(join(ROOT, "tests/types/quotaPolicy.contract.ts"), "utf8"),
-    );
+		await writeFile(
+			join(appDir, 'src/quota-policy.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/quotaPolicy.contract.ts'), 'utf8'),
+		);
 
-    await writeFile(
-      join(appDir, "src/row-locks.contract.ts"),
-      await readFile(join(ROOT, "tests/types/rowLocks.contract.ts"), "utf8"),
-    );
+		await writeFile(
+			join(appDir, 'src/row-locks.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/rowLocks.contract.ts'), 'utf8'),
+		);
 
-    await writeFile(
-      join(appDir, "src/conditionalWrites.contract.ts"),
-      await readFile(join(ROOT, "tests/types/conditionalWrites.contract.ts"), "utf8"),
-    );
-    await writeFile(
-      join(appDir, "src/schema-big-id.contract.ts"),
-      await readFile(join(ROOT, "tests/types/schemaBigId.contract.ts"), "utf8"),
-    );
-    await writeFile(
-      join(appDir, "src/outbox-worker.contract.ts"),
-      await readFile(join(ROOT, "tests/types/outboxWorker.contract.ts"), "utf8"),
-    );
-    await writeFile(
-      join(appDir, "src/default-subpath-exports.contract.ts"),
-      await readFile(join(ROOT, "tests/types/defaultSubpathExports.contract.ts"), "utf8"),
-    );
-    await writeFile(
-      join(appDir, "src/class-model-authoring.contract.ts"),
-      await readFile(join(ROOT, "tests/types/classModelAuthoring.contract.ts"), "utf8"),
-    );
-    let scaffolded = false;
-    for (const version of compilers) {
-      const manifestPath = join(appDir, "package.json");
-      const manifest = await Bun.file(manifestPath).json();
-      manifest.devDependencies = { ...manifest.devDependencies, typescript: version };
-      await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+		await writeFile(
+			join(appDir, 'src/conditionalWrites.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/conditionalWrites.contract.ts'), 'utf8'),
+		);
+		await writeFile(
+			join(appDir, 'src/schema-big-id.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/schemaBigId.contract.ts'), 'utf8'),
+		);
+		await writeFile(
+			join(appDir, 'src/outbox-worker.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/outboxWorker.contract.ts'), 'utf8'),
+		);
+		await writeFile(
+			join(appDir, 'src/default-subpath-exports.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/defaultSubpathExports.contract.ts'), 'utf8'),
+		);
+		await writeFile(
+			join(appDir, 'src/class-model-authoring.contract.ts'),
+			await readFile(join(ROOT, 'tests/types/classModelAuthoring.contract.ts'), 'utf8'),
+		);
+		let scaffolded = false;
 
-      const installed = await run(["bun", "install"], appDir);
-      if (installed.exitCode !== 0) {
-        failures.push(`${testCase.name} (TS ${version}): bun install failed\n${installed.output}`);
-        continue;
-      }
+		for (const version of compilers) {
+			const manifestPath = join(appDir, 'package.json');
 
-      const compilerManifestPath = join(appDir, "node_modules/typescript/package.json");
-      const compilerManifest = await Bun.file(compilerManifestPath).json();
-      if (compilerManifest.version !== version) {
-        failures.push(
-          `${testCase.name}: expected TypeScript ${version}, installed ${compilerManifest.version}`,
-        );
-        continue;
-      }
-      if (evidenceDirectory) {
-        const inputDirectory = join(evidenceDirectory, `${testCase.name}-ts-${version}`);
-        await mkdir(inputDirectory);
-        for (const file of ["package.json", "bun.lock", "tsconfig.json"]) {
-          await writeFile(join(inputDirectory, file), await readFile(join(appDir, file)));
-        }
-        await writeFile(
-          join(inputDirectory, "compiler-package.json"),
-          await readFile(compilerManifestPath),
-        );
-      }
+			const manifest = await Bun.file(manifestPath).json();
 
-      if (!scaffolded) {
-        for (const [command, ...args] of [
-          ["make:model", "AuthoringProbe"],
-          ["make:controller", "AuthoringProbeController"],
-          ["make:request", "StoreAuthoringProbeRequest"],
-          ["make:policy", "AuthoringProbePolicy"],
-          ["make:migration", "schema_contract_probe"],
-          ["make:factory", "AuthoringProbe"],
-          ["make:job", "AuthoringProbeJob"],
-          ["make:listener", "AuthoringProbeCreated", "authoring-probes.created"],
-          ["make:view", "authoring-probe/index"],
-          ["make:module", "scaffold-product"],
-        ] as const) {
-          const scaffold = await run(
-            ["bun", "x", "--no-install", "strata", command, ...args],
-            appDir,
-          );
-          const manifest = await Bun.file(join(appDir, "strata.layers.json")).json();
-          const tenantModule =
-            command === "make:module" &&
-            ["column", "rls"].includes(manifest.layers?.tenancy ?? manifest.tenancy);
-          if (tenantModule) {
-            if (scaffold.exitCode === 0 || !scaffold.output.includes("trusted tenant scoping"))
-              failures.push(`${testCase.name}: CLI failed to reject unscoped tenant CRUD`);
-          } else if (scaffold.exitCode !== 0)
-            failures.push(
-              `${testCase.name}: published CLI ${command} scaffold failed\n${scaffold.output}`,
-            );
-        }
-        scaffolded = true;
-      }
-      const clean = await run(
-        ["bun", "x", "--no-install", "tsc", "-p", "tsconfig.generated.json"],
-        appDir,
-      );
-      if (clean.exitCode !== 0)
-        failures.push(
-          `${testCase.name} (TS ${version}): generated app has unused declarations\n${clean.output}`,
-        );
-      const checked = await run(["bun", "run", "check"], appDir);
-      if (checked.exitCode === 0) {
-        if (testCase === CASES[0]) {
-          try {
-            await verifyModelRepositoryRejections(appDir);
-            console.log(`ok   inferred/explicit repository negative contracts (TS ${version})`);
-          } catch (error) {
-            failures.push(
-              `${testCase.name} (TS ${version}): repository negative contracts failed\n${error}`,
-            );
-          }
-        }
-        console.log(`ok   ${testCase.name} (TS ${version})`);
-        continue;
-      }
-      failures.push(`${testCase.name} (TS ${version}): bun run check failed\n${checked.output}`);
-      console.log(`FAIL ${testCase.name} (TS ${version})`);
-    }
-    const modelRuntime = await run(
-      [
-        "bun",
-        "-e",
-        `
+			manifest.devDependencies = { ...manifest.devDependencies, typescript: version };
+			await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+			const installed = await run(['bun', 'install'], appDir);
+
+			if (installed.exitCode !== 0) {
+				failures.push(`${testCase.name} (TS ${version}): bun install failed\n${installed.output}`);
+				continue;
+			}
+
+			const compilerManifestPath = join(appDir, 'node_modules/typescript/package.json');
+
+			const compilerManifest = await Bun.file(compilerManifestPath).json();
+
+			if (compilerManifest.version !== version) {
+				failures.push(
+					`${testCase.name}: expected TypeScript ${version}, installed ${compilerManifest.version}`,
+				);
+				continue;
+			}
+
+			if (evidenceDirectory) {
+				const inputDirectory = join(evidenceDirectory, `${testCase.name}-ts-${version}`);
+
+				await mkdir(inputDirectory);
+				for (const file of ['package.json', 'bun.lock', 'tsconfig.json']) {
+					await writeFile(join(inputDirectory, file), await readFile(join(appDir, file)));
+				}
+
+				await writeFile(
+					join(inputDirectory, 'compiler-package.json'),
+					await readFile(compilerManifestPath),
+				);
+			}
+
+			if (!scaffolded) {
+				for (const [command, ...args] of [
+					['make:model', 'AuthoringProbe'],
+					['make:controller', 'AuthoringProbeController'],
+					['make:request', 'StoreAuthoringProbeRequest'],
+					['make:policy', 'AuthoringProbePolicy'],
+					['make:migration', 'schema_contract_probe'],
+					['make:factory', 'AuthoringProbe'],
+					['make:job', 'AuthoringProbeJob'],
+					['make:listener', 'AuthoringProbeCreated', 'authoring-probes.created'],
+					['make:view', 'authoring-probe/index'],
+					['make:module', 'scaffold-product'],
+				] as const) {
+					const scaffold = await run(
+						['bun', 'x', '--no-install', 'strata', command, ...args],
+						appDir,
+					);
+
+					const manifest = await Bun.file(join(appDir, 'strata.layers.json')).json();
+
+					const tenantModule =
+						command === 'make:module' &&
+						['column', 'rls'].includes(manifest.layers?.tenancy ?? manifest.tenancy);
+
+					if (tenantModule) {
+						if (scaffold.exitCode === 0 || !scaffold.output.includes('trusted tenant scoping')) {
+							failures.push(`${testCase.name}: CLI failed to reject unscoped tenant CRUD`);
+						}
+					} else if (scaffold.exitCode !== 0) {
+						failures.push(
+							`${testCase.name}: published CLI ${command} scaffold failed\n${scaffold.output}`,
+						);
+					}
+				}
+
+				scaffolded = true;
+			}
+
+			const clean = await run(
+				['bun', 'x', '--no-install', 'tsc', '-p', 'tsconfig.generated.json'],
+				appDir,
+			);
+
+			if (clean.exitCode !== 0) {
+				failures.push(
+					`${testCase.name} (TS ${version}): generated app has unused declarations\n${clean.output}`,
+				);
+			}
+
+			const checked = await run(['bun', 'run', 'check'], appDir);
+
+			if (checked.exitCode === 0) {
+				if (testCase === CASES[0]) {
+					try {
+						await verifyModelRepositoryRejections(appDir);
+						console.log(`ok   inferred/explicit repository negative contracts (TS ${version})`);
+					} catch (error) {
+						failures.push(
+							`${testCase.name} (TS ${version}): repository negative contracts failed\n${error}`,
+						);
+					}
+				}
+
+				console.log(`ok   ${testCase.name} (TS ${version})`);
+				continue;
+			}
+
+			failures.push(`${testCase.name} (TS ${version}): bun run check failed\n${checked.output}`);
+			console.log(`FAIL ${testCase.name} (TS ${version})`);
+		}
+
+		const modelRuntime = await run(
+			[
+				'bun',
+				'-e',
+				`
       await import("./src/default-subpath-exports.contract.ts");
       const bootstrap = await import("@getstrata/bootstrap");
       const composition = await import("@getstrata/bootstrap/application");
@@ -581,42 +644,46 @@ export function commitContract(database: DatabaseSession, transaction: Transacti
       if (probeFailures.length === 1) throw probeFailures[0];
       if (probeFailures.length > 1) throw new AggregateError(probeFailures, "Owned model startup and cleanup failed", {cause:probeFailures[0]});
     `,
-      ],
-      appDir,
-    );
-    if (modelRuntime.exitCode !== 0)
-      failures.push(`${testCase.name}: packed model startup failed\n${modelRuntime.output}`);
+			],
+			appDir,
+		);
 
-    const frontendDir = join(appDir, "frontend");
-    if (existsSync(join(frontendDir, "package.json"))) {
-      for (const command of [
-        ["bun", "install"],
-        ["bun", "x", "--no-install", "tsc", "--noEmit", "--noUnusedLocals", "--noUnusedParameters"],
-        ["bun", "run", "build"],
-      ]) {
-        const result = await run(command, frontendDir);
-        if (result.exitCode !== 0) {
-          failures.push(`${testCase.name}: frontend ${command.join(" ")} failed\n${result.output}`);
-          break;
-        }
-      }
-    }
-  }
+		if (modelRuntime.exitCode !== 0) {
+			failures.push(`${testCase.name}: packed model startup failed\n${modelRuntime.output}`);
+		}
+
+		const frontendDir = join(appDir, 'frontend');
+
+		if (existsSync(join(frontendDir, 'package.json'))) {
+			for (const command of [
+				['bun', 'install'],
+				['bun', 'x', '--no-install', 'tsc', '--noEmit', '--noUnusedLocals', '--noUnusedParameters'],
+				['bun', 'run', 'build'],
+			]) {
+				const result = await run(command, frontendDir);
+
+				if (result.exitCode !== 0) {
+					failures.push(`${testCase.name}: frontend ${command.join(' ')} failed\n${result.output}`);
+					break;
+				}
+			}
+		}
+	}
 } finally {
-  if (evidenceDirectory) {
-    await writeFile(join(evidenceDirectory, "workspace.txt"), `${workspace}\n`);
-    console.log(`Retained generated gate workspace: ${workspace}`);
-  } else {
-    await rm(workspace, { recursive: true, force: true });
-  }
+	if (evidenceDirectory) {
+		await writeFile(join(evidenceDirectory, 'workspace.txt'), `${workspace}\n`);
+		console.log(`Retained generated gate workspace: ${workspace}`);
+	} else {
+		await rm(workspace, { recursive: true, force: true });
+	}
 }
 
 if (failures.length > 0) {
-  console.error(`\nGenerated apps must typecheck against published packages:\n`);
-  console.error(failures.join("\n\n"));
-  process.exit(1);
+	console.error(`\nGenerated apps must typecheck against published packages:\n`);
+	console.error(failures.join('\n\n'));
+	process.exit(1);
 }
 
 console.log(
-  `\nGenerated app typecheck gate passed (${cases.length} layer combinations × ${compilers.length} compiler versions).`,
+	`\nGenerated app typecheck gate passed (${cases.length} layer combinations × ${compilers.length} compiler versions).`,
 );

@@ -1,7 +1,7 @@
-import type { StarterFeaturePlan } from "./featurePlan.ts";
+import type { StarterFeaturePlan } from './featurePlan.ts';
 
 function renderSiteCss(): string {
-  return `:root {
+	return `:root {
   color-scheme: light;
   --bg: #f4f1ea;
   --ink: #1c1917;
@@ -143,16 +143,19 @@ code { font-size: 0.9em; }
 }
 
 function renderLayout(plan: StarterFeaturePlan, projectName: string): string {
-  const layers = plan.layers;
-  const kit = plan.decisions.htmlAuth;
-  const guestNav = kit
-    ? `<a href="/login">Sign in</a>
+	const layers = plan.layers;
+
+	const kit = plan.decisions.htmlAuth;
+
+	const guestNav = kit
+		? `<a href="/login">Sign in</a>
         <a href="/register">Create account</a>`
-    : "";
-  const userNav = kit
-    ? `<% if (it.currentUser) { %>
+		: '';
+
+	const userNav = kit
+		? `<% if (it.currentUser) { %>
         <span class="muted"><%= it.currentUser.email %></span>
-        ${layers.extras.mfa ? '<a href="/account/mfa">MFA</a>' : ""}
+        ${layers.extras.mfa ? '<a href="/account/mfa">MFA</a>' : ''}
         <form method="post" action="/logout">
           <input type="hidden" name="_token" value="<%= it.csrfToken %>" />
           <button class="button-secondary" type="submit">Sign out</button>
@@ -160,9 +163,9 @@ function renderLayout(plan: StarterFeaturePlan, projectName: string): string {
       <% } else { %>
         ${guestNav}
       <% } %>`
-    : "";
+		: '';
 
-  return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -193,16 +196,20 @@ function renderLayout(plan: StarterFeaturePlan, projectName: string): string {
 }
 
 function renderHomeView(projectName: string, plan: StarterFeaturePlan): string {
-  const layers = plan.layers;
-  const kit = plan.decisions.htmlAuth;
-  const tokenHint = plan.decisions.token
-    ? '<p class="muted">API token: <code>POST /api/v1/auth/login</code> with email and password.</p>'
-    : "";
-  const jwtHint = plan.decisions.jwt
-    ? '<p class="muted">JWT: <code>POST /api/auth/token</code> with email and password.</p>'
-    : "";
-  const guest = kit
-    ? `<% if (!it.currentUser) { %>
+	const layers = plan.layers;
+
+	const kit = plan.decisions.htmlAuth;
+
+	const tokenHint = plan.decisions.token
+		? '<p class="muted">API token: <code>POST /api/v1/auth/login</code> with email and password.</p>'
+		: '';
+
+	const jwtHint = plan.decisions.jwt
+		? '<p class="muted">JWT: <code>POST /api/auth/token</code> with email and password.</p>'
+		: '';
+
+	const guest = kit
+		? `<% if (!it.currentUser) { %>
   <p class="lede">Sign in or create an account. Edit <code>views/home.eta</code> and <code>public/assets/site.css</code> to restyle this page.</p>
   <div class="actions">
     <a class="button" href="/register">Create account</a>
@@ -212,22 +219,22 @@ function renderHomeView(projectName: string, plan: StarterFeaturePlan): string {
   <p class="lede">You are signed in as <strong><%= it.currentUser.email %></strong>.</p>
   <p>Add routes in <code>src/modules</code>. This homepage is yours to restyle.</p>
 <% } %>`
-    : `<p class="lede">Edit <code>views/home.eta</code> and <code>public/assets/site.css</code> to restyle this page.</p>
+		: `<p class="lede">Edit <code>views/home.eta</code> and <code>public/assets/site.css</code> to restyle this page.</p>
   <p class="muted">Auth stack: <code>${layers.auth}</code>.</p>`;
 
-  const extras = [tokenHint, jwtHint].filter(Boolean).join("\n  ");
+	const extras = [tokenHint, jwtHint].filter(Boolean).join('\n  ');
 
-  return `<section class="section hero">
+	return `<section class="section hero">
   <h1>Welcome to ${projectName}</h1>
   <p><a href="/" hx-get="/" hx-target="#page-content" hx-swap="innerHTML">Refresh this page</a></p>
   ${guest}
-  <p>Health check: <a href="/health"><code>/health</code></a>.</p>${extras ? `\n  ${extras}` : ""}
+  <p>Health check: <a href="/health"><code>/health</code></a>.</p>${extras ? `\n  ${extras}` : ''}
 </section>
 `;
 }
 
 function renderFormView(title: string, fields: string, submit: string, links: string): string {
-  return `<section class="auth-card">
+	return `<section class="auth-card">
   <h1>${title}</h1>
   <% if (it.status) { %>
   <p class="ok"><%= it.status %></p>
@@ -249,8 +256,8 @@ function renderFormView(title: string, fields: string, submit: string, links: st
 `;
 }
 
-function textField(name: string, label: string, type: string, extra = ""): string {
-  return `<label>
+function textField(name: string, label: string, type: string, extra = ''): string {
+	return `<label>
       ${label}
       <% if (it.errors && it.errors.${name}) { %><span class="error"><%= it.errors.${name} %></span><% } %>
       <input type="${type}" name="${name}" value="<%= it.${name} || "" %>" ${extra} />
@@ -258,56 +265,58 @@ function textField(name: string, label: string, type: string, extra = ""): strin
 }
 
 function renderLoginView(plan: StarterFeaturePlan): string {
-  const githubLink = plan.decisions.github
-    ? `
+	const githubLink = plan.decisions.github
+		? `
     <a href="/auth/github">Sign in with GitHub</a>`
-    : "";
-  const oidcLink = plan.decisions.oidc
-    ? `
+		: '';
+
+	const oidcLink = plan.decisions.oidc
+		? `
     <% if (it.oidcLogin) { %><a href="/auth/oidc">Sign in with OIDC</a><% } %>`
-    : "";
-  return renderFormView(
-    "Sign in",
-    `${textField("email", "Email", "email", 'required autocomplete="username"')}
-    ${textField("password", "Password", "password", 'required autocomplete="current-password"')}`,
-    "Sign in",
-    `<a href="/register">Create account</a>
+		: '';
+
+	return renderFormView(
+		'Sign in',
+		`${textField('email', 'Email', 'email', 'required autocomplete="username"')}
+    ${textField('password', 'Password', 'password', 'required autocomplete="current-password"')}`,
+		'Sign in',
+		`<a href="/register">Create account</a>
     <a href="/forgot-password">Forgot password</a>${githubLink}${oidcLink}`,
-  ).replace('action="<%= it.action || "" %>"', 'action="/login"');
+	).replace('action="<%= it.action || "" %>"', 'action="/login"');
 }
 
 function renderRegisterView(): string {
-  return renderFormView(
-    "Create account",
-    `${textField("name", "Name", "text", "required")}
-    ${textField("email", "Email", "email", 'required autocomplete="email"')}
-    ${textField("password", "Password", "password", 'required minlength="8" autocomplete="new-password"')}`,
-    "Create account",
-    `<a href="/login">Already have an account</a>`,
-  ).replace('action="<%= it.action || "" %>"', 'action="/register"');
+	return renderFormView(
+		'Create account',
+		`${textField('name', 'Name', 'text', 'required')}
+    ${textField('email', 'Email', 'email', 'required autocomplete="email"')}
+    ${textField('password', 'Password', 'password', 'required minlength="8" autocomplete="new-password"')}`,
+		'Create account',
+		`<a href="/login">Already have an account</a>`,
+	).replace('action="<%= it.action || "" %>"', 'action="/register"');
 }
 
 function renderForgotPasswordView(): string {
-  return renderFormView(
-    "Forgot password",
-    textField("email", "Email", "email", "required"),
-    "Send reset link",
-    `<a href="/login">Back to sign in</a>`,
-  ).replace('action="<%= it.action || "" %>"', 'action="/forgot-password"');
+	return renderFormView(
+		'Forgot password',
+		textField('email', 'Email', 'email', 'required'),
+		'Send reset link',
+		`<a href="/login">Back to sign in</a>`,
+	).replace('action="<%= it.action || "" %>"', 'action="/forgot-password"');
 }
 
 function renderResetPasswordView(): string {
-  return renderFormView(
-    "Set a new password",
-    `${textField("password", "New password", "password", 'required minlength="8" autocomplete="new-password"')}
+	return renderFormView(
+		'Set a new password',
+		`${textField('password', 'New password', 'password', 'required minlength="8" autocomplete="new-password"')}
     <input type="hidden" name="email" value="<%= it.email || "" %>" />`,
-    "Update password",
-    `<a href="/login">Back to sign in</a>`,
-  ).replace('action="<%= it.action || "" %>"', 'action="<%= it.action %>"');
+		'Update password',
+		`<a href="/login">Back to sign in</a>`,
+	).replace('action="<%= it.action || "" %>"', 'action="<%= it.action %>"');
 }
 
 function renderVerifyEmailView(): string {
-  return `<section class="auth-card">
+	return `<section class="auth-card">
   <h1>Verify your email</h1>
   <p>We sent a signed link to your inbox (or the mail log when <code>MAIL_DRIVER=log</code>).</p>
   <form method="post" action="/email/verification-notification">
@@ -319,37 +328,37 @@ function renderVerifyEmailView(): string {
 }
 
 function renderMfaChallengeView(): string {
-  return renderFormView(
-    "Two-factor code",
-    `${textField("code", "Authenticator or recovery code", "text", 'required autocomplete="one-time-code"')}`,
-    "Continue",
-    `<a href="/login">Cancel</a>`,
-  ).replace('action="<%= it.action || "" %>"', 'action="/login/mfa"');
+	return renderFormView(
+		'Two-factor code',
+		`${textField('code', 'Authenticator or recovery code', 'text', 'required autocomplete="one-time-code"')}`,
+		'Continue',
+		`<a href="/login">Cancel</a>`,
+	).replace('action="<%= it.action || "" %>"', 'action="/login/mfa"');
 }
 
 function renderConfirmPasswordView(): string {
-  return renderFormView(
-    "Confirm your password",
-    textField(
-      "password",
-      "Current password",
-      "password",
-      'required autocomplete="current-password"',
-    ),
-    "Confirm",
-    `<a href="/">Cancel</a>`,
-  ).replace('action="<%= it.action || "" %>"', 'action=""');
+	return renderFormView(
+		'Confirm your password',
+		textField(
+			'password',
+			'Current password',
+			'password',
+			'required autocomplete="current-password"',
+		),
+		'Confirm',
+		`<a href="/">Cancel</a>`,
+	).replace('action="<%= it.action || "" %>"', 'action=""');
 }
 
 function renderMfaSetupView(): string {
-  return `<section class="auth-card">
+	return `<section class="auth-card">
   <h1>Authenticator app</h1>
   <p class="muted">Scan this otpauth URL in your authenticator, then confirm a code. Restyle this page in <code>views/auth/mfa-setup.eta</code>.</p>
   <p><code><%= it.otpauth %></code></p>
   <form method="post" action="/account/mfa">
     <input type="hidden" name="_token" value="<%= it.csrfToken %>" />
     <input type="hidden" name="secret" value="<%= it.secret %>" />
-    ${textField("code", "Confirmation code", "text", "required")}
+    ${textField('code', 'Confirmation code', 'text', 'required')}
     <div class="actions"><button type="submit">Enable MFA</button></div>
   </form>
   <% if (it.recoveryCodes) { %>
@@ -366,15 +375,15 @@ function renderMfaSetupView(): string {
 }
 
 export {
-  renderConfirmPasswordView,
-  renderForgotPasswordView,
-  renderHomeView,
-  renderLayout,
-  renderLoginView,
-  renderMfaChallengeView,
-  renderMfaSetupView,
-  renderRegisterView,
-  renderResetPasswordView,
-  renderSiteCss,
-  renderVerifyEmailView,
+	renderConfirmPasswordView,
+	renderForgotPasswordView,
+	renderHomeView,
+	renderLayout,
+	renderLoginView,
+	renderMfaChallengeView,
+	renderMfaSetupView,
+	renderRegisterView,
+	renderResetPasswordView,
+	renderSiteCss,
+	renderVerifyEmailView,
 };

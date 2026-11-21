@@ -1,482 +1,555 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
-import { createSign, generateKeyPairSync } from "node:crypto";
-import { createOidcClient, oidcAccessTokenHash } from "@getstrata/core/auth/oauth/oidcIdToken";
-import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/testing";
+import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { createSign, generateKeyPairSync } from 'node:crypto';
 
-import { isProductionEnv } from "../../src/core/runtime/appEnv";
+import { createOidcClient, oidcAccessTokenHash } from '@getstrata/core/auth/oauth/oidcIdToken';
+import { resetDnsLookupForTests, setDnsLookupForTests } from '@getstrata/core/testing';
+
+import { isProductionEnv } from '../../src/core/runtime/appEnv';
 
 let client: ReturnType<typeof createOidcClient> | undefined;
+
 function ownedClient() {
-  client ??= createOidcClient({
-    production: isProductionEnv(),
-    allowPrivate: process.env.OIDC_ALLOW_PRIVATE === "true",
-  });
-  return client;
+	client ??= createOidcClient({
+		production: isProductionEnv(),
+		allowPrivate: process.env.OIDC_ALLOW_PRIVATE === 'true',
+	});
+
+	return client;
 }
+
 const loadOidcDiscovery = (issuer: string) => ownedClient().loadDiscovery(issuer);
-const verifyOidcIdToken: ReturnType<typeof createOidcClient>["verifyIdToken"] = (token, options) =>
-  ownedClient().verifyIdToken(token, options);
+
+const verifyOidcIdToken: ReturnType<typeof createOidcClient>['verifyIdToken'] = (token, options) =>
+	ownedClient().verifyIdToken(token, options);
+
 const originalFetch = globalThis.fetch;
-const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-const rsaJwk = publicKey.export({ format: "jwk" });
+
+const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+
+const rsaJwk = publicKey.export({ format: 'jwk' });
 
 function mockPublicDns() {
-  setDnsLookupForTests(async () => [{ address: "1.1.1.1", family: 4 }]);
+	setDnsLookupForTests(async () => [{ address: '1.1.1.1', family: 4 }]);
 }
 
 function signRs256IdToken(
-  payload: Record<string, unknown>,
-  kid: string | undefined = "test-key",
+	payload: Record<string, unknown>,
+	kid: string | undefined = 'test-key',
 ): string {
-  const now = Math.floor(Date.now() / 1000);
-  const body = { iat: now, exp: now + 3600, ...payload };
-  const header = Buffer.from(
-    JSON.stringify({ alg: "RS256", typ: "JWT", ...(kid ? { kid } : {}) }),
-  ).toString("base64url");
-  const data = Buffer.from(JSON.stringify(body)).toString("base64url");
-  const signingInput = `${header}.${data}`;
-  const signature = createSign("RSA-SHA256").update(signingInput).sign(privateKey, "base64url");
-  return `${signingInput}.${signature}`;
+	const now = Math.floor(Date.now() / 1000);
+
+	const body = { iat: now, exp: now + 3600, ...payload };
+
+	const header = Buffer.from(
+		JSON.stringify({ alg: 'RS256', typ: 'JWT', ...(kid ? { kid } : {}) }),
+	).toString('base64url');
+
+	const data = Buffer.from(JSON.stringify(body)).toString('base64url');
+
+	const signingInput = `${header}.${data}`;
+
+	const signature = createSign('RSA-SHA256').update(signingInput).sign(privateKey, 'base64url');
+
+	return `${signingInput}.${signature}`;
 }
 
 function requestPath(input: string | URL | Request): string {
-  return new URL(String(input)).pathname;
+	return new URL(String(input)).pathname;
 }
 
 function mockOidcDocuments(jwks: unknown, discovery: Record<string, unknown> = {}) {
-  globalThis.fetch = mock((input: string | URL | Request) => {
-    const path = requestPath(input);
-    if (path.includes("openid-configuration")) {
-      return Promise.resolve(
-        Response.json({
-          issuer: "https://issuer.example.com",
-          authorization_endpoint: "https://issuer.example.com/oauth/v2/authorize",
-          token_endpoint: "https://issuer.example.com/token",
-          jwks_uri: "https://issuer.example.com/jwks",
-          ...discovery,
-        }),
-      );
-    }
-    return Promise.resolve(Response.json(jwks));
-  }) as unknown as typeof fetch;
+	globalThis.fetch = mock((input: string | URL | Request) => {
+		const path = requestPath(input);
+
+		if (path.includes('openid-configuration')) {
+			return Promise.resolve(
+				Response.json({
+					issuer: 'https://issuer.example.com',
+					authorization_endpoint: 'https://issuer.example.com/oauth/v2/authorize',
+					token_endpoint: 'https://issuer.example.com/token',
+					jwks_uri: 'https://issuer.example.com/jwks',
+					...discovery,
+				}),
+			);
+		}
+
+		return Promise.resolve(Response.json(jwks));
+	}) as unknown as typeof fetch;
 }
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
-  resetDnsLookupForTests();
-  client = undefined;
+	globalThis.fetch = originalFetch;
+	resetDnsLookupForTests();
+	client = undefined;
 });
 
-describe("oidcIdToken", () => {
-  const options = {
-    issuer: "https://issuer.example.com/",
-    clientId: "client-id",
-    nonce: "nonce-1",
-    jwksUri: "https://issuer.example.com/jwks",
-  };
+describe('oidcIdToken', () => {
+	const options = {
+		issuer: 'https://issuer.example.com/',
+		clientId: 'client-id',
+		nonce: 'nonce-1',
+		jwksUri: 'https://issuer.example.com/jwks',
+	};
 
-  test("treats an unparsable issuer as a blocked private host", async () => {
-    const previousEnv = process.env.APP_ENV;
-    const previousNode = process.env.NODE_ENV;
-    process.env.APP_ENV = "local";
-    process.env.NODE_ENV = "test";
-    try {
-      await expect(loadOidcDiscovery("http://[")).rejects.toThrow();
-    } finally {
-      if (previousEnv === undefined) {
-        delete process.env.APP_ENV;
-      } else {
-        process.env.APP_ENV = previousEnv;
-      }
-      if (previousNode === undefined) {
-        delete process.env.NODE_ENV;
-      } else {
-        process.env.NODE_ENV = previousNode;
-      }
-    }
-  });
+	test('treats an unparsable issuer as a blocked private host', async () => {
+		const previousEnv = process.env.APP_ENV;
 
-  test("loads discovery from a loopback issuer outside production", async () => {
-    const previousEnv = process.env.APP_ENV;
-    const previousNode = process.env.NODE_ENV;
-    const previousAllow = process.env.OIDC_ALLOW_PRIVATE;
-    process.env.APP_ENV = "local";
-    process.env.NODE_ENV = "test";
-    delete process.env.OIDC_ALLOW_PRIVATE;
-    mockOidcDocuments({ keys: [] });
-    try {
-      const discovery = await loadOidcDiscovery("http://127.0.0.1:9");
-      expect(discovery.authorization_endpoint).toContain("issuer.example.com");
-    } finally {
-      if (previousEnv === undefined) {
-        delete process.env.APP_ENV;
-      } else {
-        process.env.APP_ENV = previousEnv;
-      }
-      if (previousNode === undefined) {
-        delete process.env.NODE_ENV;
-      } else {
-        process.env.NODE_ENV = previousNode;
-      }
-      if (previousAllow === undefined) {
-        delete process.env.OIDC_ALLOW_PRIVATE;
-      } else {
-        process.env.OIDC_ALLOW_PRIVATE = previousAllow;
-      }
-    }
-  });
+		const previousNode = process.env.NODE_ENV;
 
-  test("blocks a private non-loopback issuer unless OIDC_ALLOW_PRIVATE=true", async () => {
-    const previousEnv = process.env.APP_ENV;
-    const previousNode = process.env.NODE_ENV;
-    const previousAllow = process.env.OIDC_ALLOW_PRIVATE;
-    process.env.APP_ENV = "local";
-    process.env.NODE_ENV = "test";
-    delete process.env.OIDC_ALLOW_PRIVATE;
-    mockOidcDocuments({ keys: [] });
-    try {
-      await expect(loadOidcDiscovery("http://10.0.0.8")).rejects.toThrow("blocked host");
-      process.env.OIDC_ALLOW_PRIVATE = "true";
-      await expect(loadOidcDiscovery("http://10.0.0.8")).rejects.toThrow("blocked host");
-      client = undefined;
-      const discovery = await loadOidcDiscovery("http://10.0.0.8");
-      expect(discovery.token_endpoint).toContain("issuer.example.com");
-    } finally {
-      if (previousEnv === undefined) {
-        delete process.env.APP_ENV;
-      } else {
-        process.env.APP_ENV = previousEnv;
-      }
-      if (previousNode === undefined) {
-        delete process.env.NODE_ENV;
-      } else {
-        process.env.NODE_ENV = previousNode;
-      }
-      if (previousAllow === undefined) {
-        delete process.env.OIDC_ALLOW_PRIVATE;
-      } else {
-        process.env.OIDC_ALLOW_PRIVATE = previousAllow;
-      }
-    }
-  });
+		process.env.APP_ENV = 'local';
+		process.env.NODE_ENV = 'test';
+		try {
+			await expect(loadOidcDiscovery('http://[')).rejects.toThrow();
+		} finally {
+			if (previousEnv === undefined) {
+				delete process.env.APP_ENV;
+			} else {
+				process.env.APP_ENV = previousEnv;
+			}
 
-  test("production ignores loopback discovery and OIDC_ALLOW_PRIVATE", async () => {
-    const previousEnv = process.env.APP_ENV;
-    const previousAllow = process.env.OIDC_ALLOW_PRIVATE;
-    process.env.APP_ENV = "production";
-    process.env.OIDC_ALLOW_PRIVATE = "true";
-    mockOidcDocuments({ keys: [] });
-    try {
-      await expect(loadOidcDiscovery("https://127.0.0.1")).rejects.toThrow("blocked host");
-    } finally {
-      if (previousEnv === undefined) {
-        delete process.env.APP_ENV;
-      } else {
-        process.env.APP_ENV = previousEnv;
-      }
-      if (previousAllow === undefined) {
-        delete process.env.OIDC_ALLOW_PRIVATE;
-      } else {
-        process.env.OIDC_ALLOW_PRIVATE = previousAllow;
-      }
-    }
-  });
+			if (previousNode === undefined) {
+				delete process.env.NODE_ENV;
+			} else {
+				process.env.NODE_ENV = previousNode;
+			}
+		}
+	});
 
-  test("rejects discovery documents that omit required endpoints", async () => {
-    mockPublicDns();
-    mockOidcDocuments(
-      { keys: [] },
-      { jwks_uri: "", token_endpoint: "", authorization_endpoint: "" },
-    );
-    await expect(loadOidcDiscovery("https://issuer.example.com")).rejects.toThrow(
-      "authorization_endpoint, jwks_uri, and token_endpoint",
-    );
-  });
+	test('loads discovery from a loopback issuer outside production', async () => {
+		const previousEnv = process.env.APP_ENV;
 
-  test("reuses discovery and JWKS within the cache TTL", async () => {
-    mockPublicDns();
-    let discoveryCalls = 0;
-    let jwksCalls = 0;
-    const token = signRs256IdToken({
-      sub: "user-1",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      nonce: "nonce-1",
-    });
-    globalThis.fetch = mock((input: string | URL | Request) => {
-      const path = requestPath(input);
-      if (path.includes("openid-configuration")) {
-        discoveryCalls += 1;
-        return Promise.resolve(
-          Response.json({
-            issuer: "https://issuer.example.com",
-            authorization_endpoint: "https://issuer.example.com/oauth/v2/authorize",
-            token_endpoint: "https://issuer.example.com/token",
-            jwks_uri: "https://issuer.example.com/jwks",
-          }),
-        );
-      }
-      jwksCalls += 1;
-      return Promise.resolve(
-        Response.json({ keys: [{ ...rsaJwk, kid: "test-key", alg: "RS256" }] }),
-      );
-    }) as unknown as typeof fetch;
+		const previousNode = process.env.NODE_ENV;
 
-    await loadOidcDiscovery("https://issuer.example.com");
-    await loadOidcDiscovery("https://issuer.example.com/");
-    await verifyOidcIdToken(token, options);
-    await verifyOidcIdToken(token, options);
-    expect(discoveryCalls).toBe(1);
-    expect(jwksCalls).toBe(1);
-  });
+		const previousAllow = process.env.OIDC_ALLOW_PRIVATE;
 
-  test("rejects an empty JWKS document", async () => {
-    mockPublicDns();
-    mockOidcDocuments({ keys: [] });
-    const token = signRs256IdToken({
-      sub: "user-1",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      nonce: "nonce-1",
-    });
-    await expect(verifyOidcIdToken(token, options)).rejects.toThrow("signing keys");
-  });
+		process.env.APP_ENV = 'local';
+		process.env.NODE_ENV = 'test';
+		delete process.env.OIDC_ALLOW_PRIVATE;
+		mockOidcDocuments({ keys: [] });
+		try {
+			const discovery = await loadOidcDiscovery('http://127.0.0.1:9');
 
-  test("rejects a JWKS body that is not a key list", async () => {
-    mockPublicDns();
-    mockOidcDocuments({ keys: "nope" });
-    const token = signRs256IdToken({
-      sub: "user-1",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      nonce: "nonce-1",
-    });
-    await expect(verifyOidcIdToken(token, options)).rejects.toThrow("signing keys");
-  });
+			expect(discovery.authorization_endpoint).toContain('issuer.example.com');
+		} finally {
+			if (previousEnv === undefined) {
+				delete process.env.APP_ENV;
+			} else {
+				process.env.APP_ENV = previousEnv;
+			}
 
-  test("rejects malformed JWT JSON parts", async () => {
-    mockPublicDns();
-    mockOidcDocuments({ keys: [{ ...rsaJwk, kid: "test-key" }] });
-    const junk = Buffer.from("not-json").toString("base64url");
-    await expect(verifyOidcIdToken(`${junk}.${junk}.sig`, options)).rejects.toThrow(
-      "OIDC ID token algorithm must be RS256",
-    );
-  });
+			if (previousNode === undefined) {
+				delete process.env.NODE_ENV;
+			} else {
+				process.env.NODE_ENV = previousNode;
+			}
 
-  test("skips non-RSA JWKs and invalid RSA material", async () => {
-    mockPublicDns();
-    mockOidcDocuments({
-      keys: [
-        { kty: "EC", kid: "test-key", n: "n", e: "e" },
-        { kty: "RSA", kid: "test-key", n: "%%%", e: "AQAB" },
-      ],
-    });
-    const token = signRs256IdToken({
-      sub: "user-1",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      nonce: "nonce-1",
-    });
-    await expect(verifyOidcIdToken(token, options)).rejects.toThrow("signature is invalid");
-  });
+			if (previousAllow === undefined) {
+				delete process.env.OIDC_ALLOW_PRIVATE;
+			} else {
+				process.env.OIDC_ALLOW_PRIVATE = previousAllow;
+			}
+		}
+	});
 
-  test("rejects a token whose signature does not match the JWKS key", async () => {
-    mockPublicDns();
-    mockOidcDocuments({ keys: [{ ...rsaJwk, kid: "test-key" }] });
-    const payload = {
-      sub: "user-1",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      nonce: "nonce-1",
-    };
-    const valid = signRs256IdToken(payload);
-    const { privateKey: otherKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-    const signingInput = valid.slice(0, valid.lastIndexOf("."));
-    const foreignSignature = createSign("RSA-SHA256")
-      .update(signingInput)
-      .sign(otherKey, "base64url");
-    const foreign = `${signingInput}.${foreignSignature}`;
-    expect(foreign).not.toBe(valid);
-    await expect(verifyOidcIdToken(foreign, options)).rejects.toThrow("signature is invalid");
-  });
+	test('blocks a private non-loopback issuer unless OIDC_ALLOW_PRIVATE=true', async () => {
+		const previousEnv = process.env.APP_ENV;
 
-  test("rejects expired and not-yet-valid ID tokens", async () => {
-    mockPublicDns();
-    mockOidcDocuments({ keys: [{ ...rsaJwk, kid: "test-key" }] });
-    const expired = signRs256IdToken({
-      sub: "user-1",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      nonce: "nonce-1",
-      exp: Math.floor(Date.now() / 1000) - 30,
-    });
-    await expect(verifyOidcIdToken(expired, options)).rejects.toThrow("is expired");
+		const previousNode = process.env.NODE_ENV;
 
-    const notYet = signRs256IdToken({
-      sub: "user-1",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      nonce: "nonce-1",
-      nbf: Math.floor(Date.now() / 1000) + 3600,
-    });
-    await expect(verifyOidcIdToken(notYet, options)).rejects.toThrow("not yet valid");
-  });
+		const previousAllow = process.env.OIDC_ALLOW_PRIVATE;
 
-  test("rejects a signed token without a subject", async () => {
-    mockPublicDns();
-    mockOidcDocuments({ keys: [{ ...rsaJwk, kid: "test-key" }] });
-    const token = signRs256IdToken({
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      nonce: "nonce-1",
-    });
-    await expect(verifyOidcIdToken(token, options)).rejects.toThrow("signature is invalid");
-  });
+		process.env.APP_ENV = 'local';
+		process.env.NODE_ENV = 'test';
+		delete process.env.OIDC_ALLOW_PRIVATE;
+		mockOidcDocuments({ keys: [] });
+		try {
+			await expect(loadOidcDiscovery('http://10.0.0.8')).rejects.toThrow('blocked host');
+			process.env.OIDC_ALLOW_PRIVATE = 'true';
+			await expect(loadOidcDiscovery('http://10.0.0.8')).rejects.toThrow('blocked host');
+			client = undefined;
+			const discovery = await loadOidcDiscovery('http://10.0.0.8');
 
-  test("verifies a token against every key when kid is omitted", async () => {
-    mockPublicDns();
-    mockOidcDocuments({
-      keys: [
-        { kty: "EC", kid: "ec-key" },
-        { ...rsaJwk, kid: "other-key" },
-      ],
-    });
-    const token = signRs256IdToken(
-      {
-        sub: "user-1",
-        iss: "https://issuer.example.com",
-        aud: "client-id",
-        nonce: "nonce-1",
-      },
-      "",
-    );
-    await expect(verifyOidcIdToken(token, options)).resolves.toMatchObject({ sub: "user-1" });
-  });
+			expect(discovery.token_endpoint).toContain('issuer.example.com');
+		} finally {
+			if (previousEnv === undefined) {
+				delete process.env.APP_ENV;
+			} else {
+				process.env.APP_ENV = previousEnv;
+			}
 
-  test("refetches JWKS when the token kid is missing from the cache", async () => {
-    mockPublicDns();
-    let jwksCalls = 0;
-    const token = signRs256IdToken({
-      sub: "user-1",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      nonce: "nonce-1",
-    });
-    globalThis.fetch = mock((input: string | URL | Request) => {
-      const path = requestPath(input);
-      if (path.includes("openid-configuration")) {
-        return Promise.resolve(
-          Response.json({
-            issuer: "https://issuer.example.com",
-            authorization_endpoint: "https://issuer.example.com/oauth/v2/authorize",
-            token_endpoint: "https://issuer.example.com/token",
-            jwks_uri: "https://issuer.example.com/jwks",
-          }),
-        );
-      }
-      jwksCalls += 1;
-      if (jwksCalls === 1) {
-        return Promise.resolve(
-          Response.json({ keys: [{ ...rsaJwk, kid: "old-key", alg: "RS256" }] }),
-        );
-      }
-      return Promise.resolve(
-        Response.json({ keys: [{ ...rsaJwk, kid: "test-key", alg: "RS256" }] }),
-      );
-    }) as unknown as typeof fetch;
+			if (previousNode === undefined) {
+				delete process.env.NODE_ENV;
+			} else {
+				process.env.NODE_ENV = previousNode;
+			}
 
-    await expect(verifyOidcIdToken(token, options)).resolves.toMatchObject({ sub: "user-1" });
-    expect(jwksCalls).toBe(2);
-  });
+			if (previousAllow === undefined) {
+				delete process.env.OIDC_ALLOW_PRIVATE;
+			} else {
+				process.env.OIDC_ALLOW_PRIVATE = previousAllow;
+			}
+		}
+	});
 
-  test("rejects a multi-valued aud without azp", async () => {
-    mockPublicDns();
-    mockOidcDocuments({ keys: [{ ...rsaJwk, kid: "test-key" }] });
-    const token = signRs256IdToken({
-      sub: "user-1",
-      iss: "https://issuer.example.com",
-      aud: ["client-id", "other"],
-      nonce: "nonce-1",
-    });
-    await expect(verifyOidcIdToken(token, options)).rejects.toThrow("authorized party mismatch");
-  });
+	test('production ignores loopback discovery and OIDC_ALLOW_PRIVATE', async () => {
+		const previousEnv = process.env.APP_ENV;
 
-  test("rejects a wrong azp even when aud is a single client id", async () => {
-    mockPublicDns();
-    mockOidcDocuments({ keys: [{ ...rsaJwk, kid: "test-key" }] });
-    const token = signRs256IdToken({
-      sub: "user-1",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      azp: "other-client",
-      nonce: "nonce-1",
-    });
-    await expect(verifyOidcIdToken(token, options)).rejects.toThrow("authorized party mismatch");
-  });
+		const previousAllow = process.env.OIDC_ALLOW_PRIVATE;
 
-  test("rejects at_hash when the access token is omitted", async () => {
-    mockPublicDns();
-    mockOidcDocuments({ keys: [{ ...rsaJwk, kid: "test-key" }] });
-    const token = signRs256IdToken({
-      sub: "user-1",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      nonce: "nonce-1",
-      at_hash: oidcAccessTokenHash("access-token"),
-    });
-    await expect(verifyOidcIdToken(token, options)).rejects.toThrow("access token hash mismatch");
-  });
+		process.env.APP_ENV = 'production';
+		process.env.OIDC_ALLOW_PRIVATE = 'true';
+		mockOidcDocuments({ keys: [] });
+		try {
+			await expect(loadOidcDiscovery('https://127.0.0.1')).rejects.toThrow('blocked host');
+		} finally {
+			if (previousEnv === undefined) {
+				delete process.env.APP_ENV;
+			} else {
+				process.env.APP_ENV = previousEnv;
+			}
 
-  test("rejects a wrong at_hash when an access token is present", async () => {
-    mockPublicDns();
-    mockOidcDocuments({ keys: [{ ...rsaJwk, kid: "test-key" }] });
-    const token = signRs256IdToken({
-      sub: "user-1",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      nonce: "nonce-1",
-      at_hash: oidcAccessTokenHash("other-access-token"),
-    });
-    await expect(
-      verifyOidcIdToken(token, { ...options, accessToken: "access-token" }),
-    ).rejects.toThrow("access token hash mismatch");
-  });
+			if (previousAllow === undefined) {
+				delete process.env.OIDC_ALLOW_PRIVATE;
+			} else {
+				process.env.OIDC_ALLOW_PRIVATE = previousAllow;
+			}
+		}
+	});
 
-  test("accepts a matching azp and at_hash pair", async () => {
-    mockPublicDns();
-    mockOidcDocuments({ keys: [{ ...rsaJwk, kid: "test-key" }] });
-    const token = signRs256IdToken({
-      sub: "user-1",
-      iss: "https://issuer.example.com",
-      aud: ["client-id", "other"],
-      azp: "client-id",
-      nonce: "nonce-1",
-      at_hash: oidcAccessTokenHash("access-token"),
-    });
-    await expect(
-      verifyOidcIdToken(token, { ...options, accessToken: "access-token" }),
-    ).resolves.toMatchObject({ sub: "user-1", azp: "client-id" });
-  });
+	test('rejects discovery documents that omit required endpoints', async () => {
+		mockPublicDns();
+		mockOidcDocuments(
+			{ keys: [] },
+			{ jwks_uri: '', token_endpoint: '', authorization_endpoint: '' },
+		);
+		await expect(loadOidcDiscovery('https://issuer.example.com')).rejects.toThrow(
+			'authorization_endpoint, jwks_uri, and token_endpoint',
+		);
+	});
+
+	test('reuses discovery and JWKS within the cache TTL', async () => {
+		mockPublicDns();
+		let discoveryCalls = 0;
+
+		let jwksCalls = 0;
+
+		const token = signRs256IdToken({
+			sub: 'user-1',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			nonce: 'nonce-1',
+		});
+
+		globalThis.fetch = mock((input: string | URL | Request) => {
+			const path = requestPath(input);
+
+			if (path.includes('openid-configuration')) {
+				discoveryCalls += 1;
+
+				return Promise.resolve(
+					Response.json({
+						issuer: 'https://issuer.example.com',
+						authorization_endpoint: 'https://issuer.example.com/oauth/v2/authorize',
+						token_endpoint: 'https://issuer.example.com/token',
+						jwks_uri: 'https://issuer.example.com/jwks',
+					}),
+				);
+			}
+
+			jwksCalls += 1;
+
+			return Promise.resolve(
+				Response.json({ keys: [{ ...rsaJwk, kid: 'test-key', alg: 'RS256' }] }),
+			);
+		}) as unknown as typeof fetch;
+
+		await loadOidcDiscovery('https://issuer.example.com');
+		await loadOidcDiscovery('https://issuer.example.com/');
+		await verifyOidcIdToken(token, options);
+		await verifyOidcIdToken(token, options);
+		expect(discoveryCalls).toBe(1);
+		expect(jwksCalls).toBe(1);
+	});
+
+	test('rejects an empty JWKS document', async () => {
+		mockPublicDns();
+		mockOidcDocuments({ keys: [] });
+		const token = signRs256IdToken({
+			sub: 'user-1',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			nonce: 'nonce-1',
+		});
+
+		await expect(verifyOidcIdToken(token, options)).rejects.toThrow('signing keys');
+	});
+
+	test('rejects a JWKS body that is not a key list', async () => {
+		mockPublicDns();
+		mockOidcDocuments({ keys: 'nope' });
+		const token = signRs256IdToken({
+			sub: 'user-1',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			nonce: 'nonce-1',
+		});
+
+		await expect(verifyOidcIdToken(token, options)).rejects.toThrow('signing keys');
+	});
+
+	test('rejects malformed JWT JSON parts', async () => {
+		mockPublicDns();
+		mockOidcDocuments({ keys: [{ ...rsaJwk, kid: 'test-key' }] });
+		const junk = Buffer.from('not-json').toString('base64url');
+
+		await expect(verifyOidcIdToken(`${junk}.${junk}.sig`, options)).rejects.toThrow(
+			'OIDC ID token algorithm must be RS256',
+		);
+	});
+
+	test('skips non-RSA JWKs and invalid RSA material', async () => {
+		mockPublicDns();
+		mockOidcDocuments({
+			keys: [
+				{ kty: 'EC', kid: 'test-key', n: 'n', e: 'e' },
+				{ kty: 'RSA', kid: 'test-key', n: '%%%', e: 'AQAB' },
+			],
+		});
+		const token = signRs256IdToken({
+			sub: 'user-1',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			nonce: 'nonce-1',
+		});
+
+		await expect(verifyOidcIdToken(token, options)).rejects.toThrow('signature is invalid');
+	});
+
+	test('rejects a token whose signature does not match the JWKS key', async () => {
+		mockPublicDns();
+		mockOidcDocuments({ keys: [{ ...rsaJwk, kid: 'test-key' }] });
+		const payload = {
+			sub: 'user-1',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			nonce: 'nonce-1',
+		};
+
+		const valid = signRs256IdToken(payload);
+
+		const { privateKey: otherKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+
+		const signingInput = valid.slice(0, valid.lastIndexOf('.'));
+
+		const foreignSignature = createSign('RSA-SHA256')
+			.update(signingInput)
+			.sign(otherKey, 'base64url');
+
+		const foreign = `${signingInput}.${foreignSignature}`;
+
+		expect(foreign).not.toBe(valid);
+		await expect(verifyOidcIdToken(foreign, options)).rejects.toThrow('signature is invalid');
+	});
+
+	test('rejects expired and not-yet-valid ID tokens', async () => {
+		mockPublicDns();
+		mockOidcDocuments({ keys: [{ ...rsaJwk, kid: 'test-key' }] });
+		const expired = signRs256IdToken({
+			sub: 'user-1',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			nonce: 'nonce-1',
+			exp: Math.floor(Date.now() / 1000) - 30,
+		});
+
+		await expect(verifyOidcIdToken(expired, options)).rejects.toThrow('is expired');
+
+		const notYet = signRs256IdToken({
+			sub: 'user-1',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			nonce: 'nonce-1',
+			nbf: Math.floor(Date.now() / 1000) + 3600,
+		});
+
+		await expect(verifyOidcIdToken(notYet, options)).rejects.toThrow('not yet valid');
+	});
+
+	test('rejects a signed token without a subject', async () => {
+		mockPublicDns();
+		mockOidcDocuments({ keys: [{ ...rsaJwk, kid: 'test-key' }] });
+		const token = signRs256IdToken({
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			nonce: 'nonce-1',
+		});
+
+		await expect(verifyOidcIdToken(token, options)).rejects.toThrow('signature is invalid');
+	});
+
+	test('verifies a token against every key when kid is omitted', async () => {
+		mockPublicDns();
+		mockOidcDocuments({
+			keys: [
+				{ kty: 'EC', kid: 'ec-key' },
+				{ ...rsaJwk, kid: 'other-key' },
+			],
+		});
+		const token = signRs256IdToken(
+			{
+				sub: 'user-1',
+				iss: 'https://issuer.example.com',
+				aud: 'client-id',
+				nonce: 'nonce-1',
+			},
+			'',
+		);
+
+		await expect(verifyOidcIdToken(token, options)).resolves.toMatchObject({ sub: 'user-1' });
+	});
+
+	test('refetches JWKS when the token kid is missing from the cache', async () => {
+		mockPublicDns();
+		let jwksCalls = 0;
+
+		const token = signRs256IdToken({
+			sub: 'user-1',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			nonce: 'nonce-1',
+		});
+
+		globalThis.fetch = mock((input: string | URL | Request) => {
+			const path = requestPath(input);
+
+			if (path.includes('openid-configuration')) {
+				return Promise.resolve(
+					Response.json({
+						issuer: 'https://issuer.example.com',
+						authorization_endpoint: 'https://issuer.example.com/oauth/v2/authorize',
+						token_endpoint: 'https://issuer.example.com/token',
+						jwks_uri: 'https://issuer.example.com/jwks',
+					}),
+				);
+			}
+
+			jwksCalls += 1;
+
+			if (jwksCalls === 1) {
+				return Promise.resolve(
+					Response.json({ keys: [{ ...rsaJwk, kid: 'old-key', alg: 'RS256' }] }),
+				);
+			}
+
+			return Promise.resolve(
+				Response.json({ keys: [{ ...rsaJwk, kid: 'test-key', alg: 'RS256' }] }),
+			);
+		}) as unknown as typeof fetch;
+
+		await expect(verifyOidcIdToken(token, options)).resolves.toMatchObject({ sub: 'user-1' });
+		expect(jwksCalls).toBe(2);
+	});
+
+	test('rejects a multi-valued aud without azp', async () => {
+		mockPublicDns();
+		mockOidcDocuments({ keys: [{ ...rsaJwk, kid: 'test-key' }] });
+		const token = signRs256IdToken({
+			sub: 'user-1',
+			iss: 'https://issuer.example.com',
+			aud: ['client-id', 'other'],
+			nonce: 'nonce-1',
+		});
+
+		await expect(verifyOidcIdToken(token, options)).rejects.toThrow('authorized party mismatch');
+	});
+
+	test('rejects a wrong azp even when aud is a single client id', async () => {
+		mockPublicDns();
+		mockOidcDocuments({ keys: [{ ...rsaJwk, kid: 'test-key' }] });
+		const token = signRs256IdToken({
+			sub: 'user-1',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			azp: 'other-client',
+			nonce: 'nonce-1',
+		});
+
+		await expect(verifyOidcIdToken(token, options)).rejects.toThrow('authorized party mismatch');
+	});
+
+	test('rejects at_hash when the access token is omitted', async () => {
+		mockPublicDns();
+		mockOidcDocuments({ keys: [{ ...rsaJwk, kid: 'test-key' }] });
+		const token = signRs256IdToken({
+			sub: 'user-1',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			nonce: 'nonce-1',
+			at_hash: oidcAccessTokenHash('access-token'),
+		});
+
+		await expect(verifyOidcIdToken(token, options)).rejects.toThrow('access token hash mismatch');
+	});
+
+	test('rejects a wrong at_hash when an access token is present', async () => {
+		mockPublicDns();
+		mockOidcDocuments({ keys: [{ ...rsaJwk, kid: 'test-key' }] });
+		const token = signRs256IdToken({
+			sub: 'user-1',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			nonce: 'nonce-1',
+			at_hash: oidcAccessTokenHash('other-access-token'),
+		});
+
+		await expect(
+			verifyOidcIdToken(token, { ...options, accessToken: 'access-token' }),
+		).rejects.toThrow('access token hash mismatch');
+	});
+
+	test('accepts a matching azp and at_hash pair', async () => {
+		mockPublicDns();
+		mockOidcDocuments({ keys: [{ ...rsaJwk, kid: 'test-key' }] });
+		const token = signRs256IdToken({
+			sub: 'user-1',
+			iss: 'https://issuer.example.com',
+			aud: ['client-id', 'other'],
+			azp: 'client-id',
+			nonce: 'nonce-1',
+			at_hash: oidcAccessTokenHash('access-token'),
+		});
+
+		await expect(
+			verifyOidcIdToken(token, { ...options, accessToken: 'access-token' }),
+		).resolves.toMatchObject({ sub: 'user-1', azp: 'client-id' });
+	});
 });
 
-test("owned OIDC policies stay isolated after caller and environment mutations", async () => {
-  const previous = process.env.APP_ENV;
-  const permissive = { production: false, allowPrivate: true };
-  const local = createOidcClient(permissive);
-  const production = createOidcClient({ production: true, allowPrivate: true });
-  permissive.production = true;
-  permissive.allowPrivate = false;
-  process.env.APP_ENV = "production";
-  mockOidcDocuments({ keys: [] });
-  try {
-    await expect(local.loadDiscovery("http://127.0.0.1:19")).resolves.toBeDefined();
-    // Another owner cannot reuse the permissive owner's discovery cache.
-    await expect(production.loadDiscovery("http://127.0.0.1:19")).rejects.toThrow();
-    process.env.APP_ENV = "local";
-    await expect(production.loadDiscovery("https://127.0.0.1:20")).rejects.toThrow("blocked host");
-    await expect(local.loadDiscovery("http://127.0.0.1:21")).resolves.toBeDefined();
-  } finally {
-    if (previous === undefined) delete process.env.APP_ENV;
-    else process.env.APP_ENV = previous;
-  }
+test('owned OIDC policies stay isolated after caller and environment mutations', async () => {
+	const previous = process.env.APP_ENV;
+
+	const permissive = { production: false, allowPrivate: true };
+
+	const local = createOidcClient(permissive);
+
+	const production = createOidcClient({ production: true, allowPrivate: true });
+
+	permissive.production = true;
+	permissive.allowPrivate = false;
+	process.env.APP_ENV = 'production';
+	mockOidcDocuments({ keys: [] });
+	try {
+		await expect(local.loadDiscovery('http://127.0.0.1:19')).resolves.toBeDefined();
+		// Another owner cannot reuse the permissive owner's discovery cache.
+		await expect(production.loadDiscovery('http://127.0.0.1:19')).rejects.toThrow();
+		process.env.APP_ENV = 'local';
+		await expect(production.loadDiscovery('https://127.0.0.1:20')).rejects.toThrow('blocked host');
+		await expect(local.loadDiscovery('http://127.0.0.1:21')).resolves.toBeDefined();
+	} finally {
+		if (previous === undefined) {
+			delete process.env.APP_ENV;
+		} else {
+			process.env.APP_ENV = previous;
+		}
+	}
 });

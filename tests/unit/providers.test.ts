@@ -1,105 +1,115 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from 'bun:test';
+
 import {
-  APP_PORT_CONFIG_KEY,
-  CACHE_MAX_ENTRIES_CONFIG_KEY,
-  CACHE_TTL_MS_CONFIG_KEY,
-  CORE_CACHE_TOKEN,
-} from "@getstrata/bootstrap/config";
-import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { createAppContext } from "@getstrata/bootstrap/dependencies";
-import { createServiceToken } from "@getstrata/core/contracts/token";
-import { createDatabaseBindings } from "@getstrata/core/database/bindings";
-import { restoreEnvVar } from "../helpers/restoreEnv";
+	APP_PORT_CONFIG_KEY,
+	CACHE_MAX_ENTRIES_CONFIG_KEY,
+	CACHE_TTL_MS_CONFIG_KEY,
+	CORE_CACHE_TOKEN,
+} from '@getstrata/bootstrap/config';
+import { ConfigStore, ServiceContainer } from '@getstrata/bootstrap/contracts';
+import { createAppContext } from '@getstrata/bootstrap/dependencies';
+import { createServiceToken } from '@getstrata/core/contracts/token';
+import { createDatabaseBindings } from '@getstrata/core/database/bindings';
 
-describe("service container", () => {
-  test("memoizes singleton services and creates transient bindings", () => {
-    const container = new ServiceContainer();
+import { restoreEnvVar } from '../helpers/restoreEnv';
 
-    container.singleton(Singleton, () => ({ marker: Symbol("singleton") }));
-    container.bind(Transient, () => ({ marker: Symbol("transient") }));
+describe('service container', () => {
+	test('memoizes singleton services and creates transient bindings', () => {
+		const container = new ServiceContainer();
 
-    const singletonA = container.resolve<{ marker: symbol }>(Singleton);
-    const singletonB = container.resolve<{ marker: symbol }>(Singleton);
-    const transientA = container.resolve<{ marker: symbol }>(Transient);
-    const transientB = container.resolve<{ marker: symbol }>(Transient);
+		container.singleton(Singleton, () => ({ marker: Symbol('singleton') }));
+		container.bind(Transient, () => ({ marker: Symbol('transient') }));
 
-    expect(singletonA).toBe(singletonB);
-    expect(transientA).not.toBe(transientB);
-    expect(container.has(Singleton)).toBe(true);
-    expect(container.has(Transient)).toBe(true);
-  });
+		const singletonA = container.resolve<{ marker: symbol }>(Singleton);
+
+		const singletonB = container.resolve<{ marker: symbol }>(Singleton);
+
+		const transientA = container.resolve<{ marker: symbol }>(Transient);
+
+		const transientB = container.resolve<{ marker: symbol }>(Transient);
+
+		expect(singletonA).toBe(singletonB);
+		expect(transientA).not.toBe(transientB);
+		expect(container.has(Singleton)).toBe(true);
+		expect(container.has(Transient)).toBe(true);
+	});
 });
 
-describe("config store", () => {
-  test("stores and requires config values", () => {
-    const config = new ConfigStore();
+describe('config store', () => {
+	test('stores and requires config values', () => {
+		const config = new ConfigStore();
 
-    config.set("app.name", "BunTesting");
+		config.set('app.name', 'BunTesting');
 
-    expect(config.get<string>("app.name")).toBe("BunTesting");
-    expect(config.getRequired<string>("app.name")).toBe("BunTesting");
-    expect(() => config.getRequired("missing.key")).toThrow(
-      'Config key "missing.key" is not defined.',
-    );
-  });
+		expect(config.get<string>('app.name')).toBe('BunTesting');
+		expect(config.getRequired<string>('app.name')).toBe('BunTesting');
+		expect(() => config.getRequired('missing.key')).toThrow(
+			'Config key "missing.key" is not defined.',
+		);
+	});
 });
 
-describe("app providers", () => {
-  test("does not run product-app production secret gates", async () => {
-    const previous = process.env.APP_ENV;
-    process.env.APP_ENV = "production";
+describe('app providers', () => {
+	test('does not run product-app production secret gates', async () => {
+		const previous = process.env.APP_ENV;
 
-    try {
-      const context = await createAppContext(undefined, {
-        connection: "main",
-        definition: {
-          providers: [],
-          services: createDatabaseBindings({
-            default: "main",
-            connections: { main: { driver: "sqlite", filename: ":memory:" } },
-          }),
-        },
-      });
-      expect(context).toBeDefined();
-      await context.dispose();
-    } finally {
-      restoreEnvVar("APP_ENV", previous);
-    }
-  });
+		process.env.APP_ENV = 'production';
 
-  test("build the app context from config and core providers", async () => {
-    const previousPort = process.env.PORT;
-    const previousTtl = process.env.CACHE_TTL_MS;
-    const previousMaxEntries = process.env.CACHE_MAX_ENTRIES;
+		try {
+			const context = await createAppContext(undefined, {
+				connection: 'main',
+				definition: {
+					providers: [],
+					services: createDatabaseBindings({
+						default: 'main',
+						connections: { main: { driver: 'sqlite', filename: ':memory:' } },
+					}),
+				},
+			});
 
-    process.env.PORT = "4100";
-    process.env.CACHE_TTL_MS = "2500";
-    process.env.CACHE_MAX_ENTRIES = "25";
+			expect(context).toBeDefined();
+			await context.dispose();
+		} finally {
+			restoreEnvVar('APP_ENV', previous);
+		}
+	});
 
-    try {
-      const context = await createAppContext(undefined, {
-        connection: "main",
-        definition: {
-          providers: [],
-          services: createDatabaseBindings({
-            default: "main",
-            connections: { main: { driver: "sqlite", filename: ":memory:" } },
-          }),
-        },
-      });
+	test('build the app context from config and core providers', async () => {
+		const previousPort = process.env.PORT;
 
-      expect(context.config.getRequired<number>(APP_PORT_CONFIG_KEY)).toBe(4100);
-      expect(context.config.getRequired<number>(CACHE_TTL_MS_CONFIG_KEY)).toBe(2500);
-      expect(context.config.getRequired<number>(CACHE_MAX_ENTRIES_CONFIG_KEY)).toBe(25);
-      expect(context.dependencies.cache).toBe(context.container.resolve(CORE_CACHE_TOKEN));
-      await context.dispose();
-    } finally {
-      restoreEnvVar("PORT", previousPort);
-      restoreEnvVar("CACHE_TTL_MS", previousTtl);
-      restoreEnvVar("CACHE_MAX_ENTRIES", previousMaxEntries);
-    }
-  });
+		const previousTtl = process.env.CACHE_TTL_MS;
+
+		const previousMaxEntries = process.env.CACHE_MAX_ENTRIES;
+
+		process.env.PORT = '4100';
+		process.env.CACHE_TTL_MS = '2500';
+		process.env.CACHE_MAX_ENTRIES = '25';
+
+		try {
+			const context = await createAppContext(undefined, {
+				connection: 'main',
+				definition: {
+					providers: [],
+					services: createDatabaseBindings({
+						default: 'main',
+						connections: { main: { driver: 'sqlite', filename: ':memory:' } },
+					}),
+				},
+			});
+
+			expect(context.config.getRequired<number>(APP_PORT_CONFIG_KEY)).toBe(4100);
+			expect(context.config.getRequired<number>(CACHE_TTL_MS_CONFIG_KEY)).toBe(2500);
+			expect(context.config.getRequired<number>(CACHE_MAX_ENTRIES_CONFIG_KEY)).toBe(25);
+			expect(context.dependencies.cache).toBe(context.container.resolve(CORE_CACHE_TOKEN));
+			await context.dispose();
+		} finally {
+			restoreEnvVar('PORT', previousPort);
+			restoreEnvVar('CACHE_TTL_MS', previousTtl);
+			restoreEnvVar('CACHE_MAX_ENTRIES', previousMaxEntries);
+		}
+	});
 });
 
-const Singleton = createServiceToken<{ marker: symbol }>("singleton");
-const Transient = createServiceToken<{ marker: symbol }>("transient");
+const Singleton = createServiceToken<{ marker: symbol }>('singleton');
+
+const Transient = createServiceToken<{ marker: symbol }>('transient');

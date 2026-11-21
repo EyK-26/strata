@@ -6,37 +6,37 @@ before closing them. Configuration is copied and validated before native effects
 The bindings do not read environment variables.
 
 ```ts
-import { createDatabaseBindings } from "@getstrata/core/database/bindings";
-import { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
-import { createApplication } from "@getstrata/core/runtime/application";
+import { createDatabaseBindings } from '@getstrata/core/database/bindings';
+import { DATABASE_SESSION_TOKEN } from '@getstrata/core/database/tokens';
+import { createApplication } from '@getstrata/core/runtime/application';
 
 const app = createApplication({
-  providers: [],
-  services: createDatabaseBindings({
-    default: "primary",
-    connections: {
-      primary: { driver: "sqlite", filename: "./application.sqlite" },
-    },
-  }),
+	providers: [],
+	services: createDatabaseBindings({
+		default: 'primary',
+		connections: {
+			primary: { driver: 'sqlite', filename: './application.sqlite' },
+		},
+	}),
 });
 
 await app.start();
 try {
-  await app.run(async (scope) => {
-    const db = scope.resolve(DATABASE_SESSION_TOKEN);
-    await db.execute({
-      text: "CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY)",
-      params: [],
-    });
-    await db.transaction(async (tx) => {
-      await tx.execute({ text: "INSERT INTO purchases (id) VALUES (?)", params: [1] });
-      tx.afterCommit(async () => {
-        await db.execute({ text: "SELECT id FROM purchases", params: [] });
-      });
-    });
-  });
+	await app.run(async (scope) => {
+		const db = scope.resolve(DATABASE_SESSION_TOKEN);
+		await db.execute({
+			text: 'CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY)',
+			params: [],
+		});
+		await db.transaction(async (tx) => {
+			await tx.execute({ text: 'INSERT INTO purchases (id) VALUES (?)', params: [1] });
+			tx.afterCommit(async () => {
+				await db.execute({ text: 'SELECT id FROM purchases', params: [] });
+			});
+		});
+	});
 } finally {
-  await app.stop();
+	await app.stop();
 }
 ```
 
@@ -59,7 +59,7 @@ Dialect-dependent helpers from `@getstrata/core/database/query` now require a
 `SqlDialect` as their first argument. Pass the executing session's `dialect`:
 
 ```ts
-import { buildSelectQuery } from "@getstrata/core/database/query";
+import { buildSelectQuery } from '@getstrata/core/database/query';
 
 const statement = buildSelectQuery(db.dialect, notesTable, { where: { id: 42 } });
 const rows = await db.execute(statement);

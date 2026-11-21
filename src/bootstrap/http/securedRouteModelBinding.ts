@@ -1,8 +1,8 @@
 export type {
-  RouteModelAuthorization,
-  RouteModelBindingPorts,
-} from "@getstrata/core/http/securedRouteModelBinding";
+	RouteModelAuthorization,
+	RouteModelBindingPorts,
+} from '@getstrata/core/http/securedRouteModelBinding';
 export {
-  securedBindRouteModel,
-  securedBindRouteModelByKey,
-} from "@getstrata/core/http/securedRouteModelBinding";
+	securedBindRouteModel,
+	securedBindRouteModelByKey,
+} from '@getstrata/core/http/securedRouteModelBinding';

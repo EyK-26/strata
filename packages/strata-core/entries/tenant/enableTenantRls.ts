@@ -1,1 +1,1 @@
-export * from "../../../../src/core/tenant/enableTenantRls.ts";
+export * from '../../../../src/core/tenant/enableTenantRls.ts';

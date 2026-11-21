@@ -1,1 +1,1 @@
-export { makeMigrationCommand } from "@getstrata/cli/scaffold";
+export { makeMigrationCommand } from '@getstrata/cli/scaffold';

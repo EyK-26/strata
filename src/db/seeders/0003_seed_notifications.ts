@@ -1,13 +1,14 @@
-import { appDisplayName } from "@getstrata/core/runtime/appKeyPrefix";
-import type { Seeder } from "./types";
+import { appDisplayName } from '@getstrata/core/runtime/appKeyPrefix';
+
+import type { Seeder } from './types';
 
 const seeder: Seeder = {
-  name: "0003_seed_notifications",
-  async run(db) {
-    const title = `Welcome to ${appDisplayName()}`;
+	name: '0003_seed_notifications',
+	async run(db) {
+		const title = `Welcome to ${appDisplayName()}`;
 
-    await db.unsafe(
-      `
+		await db.unsafe(
+			`
       INSERT INTO notification (user_id, tenant_id, type, title, body, data, read_at, created_at)
       VALUES
         (
@@ -31,9 +32,9 @@ const seeder: Seeder = {
           NOW()
         )
     `,
-      [title, title],
-    );
-  },
+			[title, title],
+		);
+	},
 };
 
 export default seeder;

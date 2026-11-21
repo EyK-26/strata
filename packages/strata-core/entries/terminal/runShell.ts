@@ -1,1 +1,1 @@
-export * from "../../../../src/core/terminal/runShell.ts";
+export * from '../../../../src/core/terminal/runShell.ts';

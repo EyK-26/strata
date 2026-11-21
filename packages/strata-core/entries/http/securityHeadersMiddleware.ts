@@ -1,1 +1,1 @@
-export * from "../../../../src/core/http/securityHeadersMiddleware.ts";
+export * from '../../../../src/core/http/securityHeadersMiddleware.ts';

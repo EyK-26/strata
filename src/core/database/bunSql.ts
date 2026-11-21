@@ -1,4 +1,4 @@
-import { type CreateBunSqlPoolOptions, createNativePostgresPool } from "./postgresNative";
+import { type CreateBunSqlPoolOptions, createNativePostgresPool } from './postgresNative';
 
 const createBunSqlPool = createNativePostgresPool;
 

@@ -1,1 +1,1 @@
-export * from "../../../../src/core/http/parseMultipartUpload.ts";
+export * from '../../../../src/core/http/parseMultipartUpload.ts';

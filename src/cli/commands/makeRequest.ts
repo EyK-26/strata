@@ -1,1 +1,1 @@
-export { makeRequestCommand } from "@getstrata/cli/scaffold";
+export { makeRequestCommand } from '@getstrata/cli/scaffold';

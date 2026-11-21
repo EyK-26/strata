@@ -1,14 +1,15 @@
-import { timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from 'node:crypto';
 
 function timingSafeCompareString(left: string, right: string): boolean {
-  const leftBuffer = Buffer.from(left);
-  const rightBuffer = Buffer.from(right);
+	const leftBuffer = Buffer.from(left);
 
-  if (leftBuffer.length !== rightBuffer.length) {
-    return false;
-  }
+	const rightBuffer = Buffer.from(right);
 
-  return timingSafeEqual(leftBuffer, rightBuffer);
+	if (leftBuffer.length !== rightBuffer.length) {
+		return false;
+	}
+
+	return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 export { timingSafeCompareString };

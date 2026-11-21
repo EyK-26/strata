@@ -1,130 +1,134 @@
-import { describe, expect, test } from "bun:test";
-import { defineEnvSchema, resolveEnv, validateEnv } from "@getstrata/core/config/envSchema";
-import { FRONTEND_MODE_PATTERN } from "@getstrata/core/runtime/frontendMode";
+import { describe, expect, test } from 'bun:test';
 
-describe("validateEnv", () => {
-  test("accepts a valid environment map", () => {
-    expect(() =>
-      validateEnv(
-        defineEnvSchema({
-          DATABASE_URL: { required: true, pattern: /^postgres/ },
-          PORT: { integer: true, minimum: 1, default: "3000" },
-        }),
-        {
-          DATABASE_URL: "postgresql://postgres:postgres@localhost/strata",
-          PORT: "3000",
-        },
-      ),
-    ).not.toThrow();
-  });
+import { defineEnvSchema, resolveEnv, validateEnv } from '@getstrata/core/config/envSchema';
+import { FRONTEND_MODE_PATTERN } from '@getstrata/core/runtime/frontendMode';
 
-  test("throws when a required variable is missing", () => {
-    expect(() =>
-      validateEnv(
-        defineEnvSchema({
-          DATABASE_URL: { required: true },
-        }),
-        {},
-      ),
-    ).toThrow('Missing required environment variable "DATABASE_URL".');
-  });
+describe('validateEnv', () => {
+	test('accepts a valid environment map', () => {
+		expect(() =>
+			validateEnv(
+				defineEnvSchema({
+					DATABASE_URL: { required: true, pattern: /^postgres/ },
+					PORT: { integer: true, minimum: 1, default: '3000' },
+				}),
+				{
+					DATABASE_URL: 'postgresql://postgres:postgres@localhost/strata',
+					PORT: '3000',
+				},
+			),
+		).not.toThrow();
+	});
 
-  test("throws when an integer variable is invalid", () => {
-    expect(() =>
-      validateEnv(
-        defineEnvSchema({
-          PORT: { integer: true, minimum: 1 },
-        }),
-        { PORT: "abc" },
-      ),
-    ).toThrow('Environment variable "PORT" must be an integer >= 1.');
-  });
+	test('throws when a required variable is missing', () => {
+		expect(() =>
+			validateEnv(
+				defineEnvSchema({
+					DATABASE_URL: { required: true },
+				}),
+				{},
+			),
+		).toThrow('Missing required environment variable "DATABASE_URL".');
+	});
 
-  test("applies defaults for optional variables", () => {
-    const resolved = validateEnv(
-      defineEnvSchema({
-        CACHE_TTL_MS: { integer: true, minimum: 0, default: "3600000" },
-      }),
-      {},
-    );
+	test('throws when an integer variable is invalid', () => {
+		expect(() =>
+			validateEnv(
+				defineEnvSchema({
+					PORT: { integer: true, minimum: 1 },
+				}),
+				{ PORT: 'abc' },
+			),
+		).toThrow('Environment variable "PORT" must be an integer >= 1.');
+	});
 
-    expect(resolved.CACHE_TTL_MS).toBe("3600000");
-  });
+	test('applies defaults for optional variables', () => {
+		const resolved = validateEnv(
+			defineEnvSchema({
+				CACHE_TTL_MS: { integer: true, minimum: 0, default: '3600000' },
+			}),
+			{},
+		);
 
-  test("accepts hybrid FRONTEND_MODE from the framework pattern", () => {
-    expect(() =>
-      validateEnv(
-        defineEnvSchema({
-          FRONTEND_MODE: { default: "api", pattern: FRONTEND_MODE_PATTERN },
-        }),
-        { FRONTEND_MODE: "hybrid" },
-      ),
-    ).not.toThrow();
-    expect(() =>
-      validateEnv(
-        defineEnvSchema({
-          FRONTEND_MODE: { default: "api", pattern: FRONTEND_MODE_PATTERN },
-        }),
-        { FRONTEND_MODE: "htmx" },
-      ),
-    ).toThrow('Environment variable "FRONTEND_MODE" has an invalid format.');
-  });
+		expect(resolved.CACHE_TTL_MS).toBe('3600000');
+	});
+
+	test('accepts hybrid FRONTEND_MODE from the framework pattern', () => {
+		expect(() =>
+			validateEnv(
+				defineEnvSchema({
+					FRONTEND_MODE: { default: 'api', pattern: FRONTEND_MODE_PATTERN },
+				}),
+				{ FRONTEND_MODE: 'hybrid' },
+			),
+		).not.toThrow();
+		expect(() =>
+			validateEnv(
+				defineEnvSchema({
+					FRONTEND_MODE: { default: 'api', pattern: FRONTEND_MODE_PATTERN },
+				}),
+				{ FRONTEND_MODE: 'htmx' },
+			),
+		).toThrow('Environment variable "FRONTEND_MODE" has an invalid format.');
+	});
 });
 
-describe("complete integer environment values", () => {
-  test.each(["12junk", "1.5", "1e3", "0x10", "1_000", "1 2", "+", "--1", "Infinity", "NaN"])(
-    "rejects a non-decimal-integer value: %s",
-    (value) => {
-      expect(() => validateEnv({ COUNT: { integer: true } }, { COUNT: value })).toThrow(
-        'Environment variable "COUNT" must be an integer.',
-      );
-    },
-  );
+describe('complete integer environment values', () => {
+	test.each(['12junk', '1.5', '1e3', '0x10', '1_000', '1 2', '+', '--1', 'Infinity', 'NaN'])(
+		'rejects a non-decimal-integer value: %s',
+		(value) => {
+			expect(() => validateEnv({ COUNT: { integer: true } }, { COUNT: value })).toThrow(
+				'Environment variable "COUNT" must be an integer.',
+			);
+		},
+	);
 
-  test.each(["12", "+12", "-12", "0012", "-0", " +0012 \n"])(
-    "preserves a complete signed integer string: %s",
-    (value) => {
-      expect(validateEnv({ COUNT: { integer: true } }, { COUNT: value })).toEqual({ COUNT: value });
-    },
-  );
+	test.each(['12', '+12', '-12', '0012', '-0', ' +0012 \n'])(
+		'preserves a complete signed integer string: %s',
+		(value) => {
+			expect(validateEnv({ COUNT: { integer: true } }, { COUNT: value })).toEqual({ COUNT: value });
+		},
+	);
 
-  test("checks minimum after complete integer validation", () => {
-    expect(validateEnv({ COUNT: { integer: true, minimum: -2 } }, { COUNT: "-2" })).toEqual({
-      COUNT: "-2",
-    });
-    for (const value of ["-3", "-2junk", "-1.5"]) {
-      expect(() =>
-        validateEnv({ COUNT: { integer: true, minimum: -2 } }, { COUNT: value }),
-      ).toThrow('Environment variable "COUNT" must be an integer >= -2.');
-    }
-  });
+	test('checks minimum after complete integer validation', () => {
+		expect(validateEnv({ COUNT: { integer: true, minimum: -2 } }, { COUNT: '-2' })).toEqual({
+			COUNT: '-2',
+		});
+		for (const value of ['-3', '-2junk', '-1.5']) {
+			expect(() =>
+				validateEnv({ COUNT: { integer: true, minimum: -2 } }, { COUNT: value }),
+			).toThrow('Environment variable "COUNT" must be an integer >= -2.');
+		}
+	});
 
-  test("validates default integers and preserves default selection for blank input", () => {
-    const schema = { COUNT: { integer: true, minimum: 0, default: "0012" } };
-    expect(validateEnv(schema, {})).toEqual({ COUNT: "0012" });
-    expect(validateEnv(schema, { COUNT: " \n" })).toEqual({ COUNT: "0012" });
-    expect(() => validateEnv({ COUNT: { integer: true, default: "12junk" } }, {})).toThrow(
-      'Environment variable "COUNT" must be an integer.',
-    );
-  });
+	test('validates default integers and preserves default selection for blank input', () => {
+		const schema = { COUNT: { integer: true, minimum: 0, default: '0012' } };
+
+		expect(validateEnv(schema, {})).toEqual({ COUNT: '0012' });
+		expect(validateEnv(schema, { COUNT: ' \n' })).toEqual({ COUNT: '0012' });
+		expect(() => validateEnv({ COUNT: { integer: true, default: '12junk' } }, {})).toThrow(
+			'Environment variable "COUNT" must be an integer.',
+		);
+	});
 });
 
-describe("resolveEnv typed snapshot", () => {
-  test("resolves integer defaults and optional blanks once", () => {
-    const env = { PORT: " 42 ", EXPIRY: " " };
-    const resolved = resolveEnv(
-      { PORT: { integer: true, default: "3000" }, EXPIRY: { integer: true, minimum: 1 } },
-      env,
-    );
-    env.PORT = "99";
-    expect(resolved.PORT).toBe(42);
-    expect(resolved.EXPIRY).toBeUndefined();
-    expect(Object.isFrozen(resolved)).toBe(true);
-  });
-  test.each(["12junk", "1.5", "9007199254740992"])(
-    "rejects malformed or unsafe integers: %s",
-    (value) => {
-      expect(() => resolveEnv({ TTL: { integer: true, minimum: 1 } }, { TTL: value })).toThrow();
-    },
-  );
+describe('resolveEnv typed snapshot', () => {
+	test('resolves integer defaults and optional blanks once', () => {
+		const env = { PORT: ' 42 ', EXPIRY: ' ' };
+
+		const resolved = resolveEnv(
+			{ PORT: { integer: true, default: '3000' }, EXPIRY: { integer: true, minimum: 1 } },
+			env,
+		);
+
+		env.PORT = '99';
+		expect(resolved.PORT).toBe(42);
+		expect(resolved.EXPIRY).toBeUndefined();
+		expect(Object.isFrozen(resolved)).toBe(true);
+	});
+	test.each(['12junk', '1.5', '9007199254740992'])(
+		'rejects malformed or unsafe integers: %s',
+		(value) => {
+			expect(() => resolveEnv({ TTL: { integer: true, minimum: 1 } }, { TTL: value })).toThrow();
+		},
+	);
 });

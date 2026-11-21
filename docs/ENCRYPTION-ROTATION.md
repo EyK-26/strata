@@ -1,6 +1,5 @@
 # Encryption rotation foundations
 
-
 ## Explicit keyring primitive
 
 `createFieldEncryptionKeyring` is exported from `@getstrata/core/crypto/fieldEncryption`. Supply an active public key ID, a retained map of 1–32 AES-256 keys, a pinned lookup key, and optionally the explicit original key for unidentified enc:v1 ciphertext. Keys are 32-byte Uint8Arrays, copied at construction; the returned API is immutable. Resolve secret material in application infrastructure, never source control. IDs and purposes are 1–64 ASCII letters, digits, underscores or hyphens. IDs are permanent identities: never assign different key material to an existing ID.

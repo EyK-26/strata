@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 3.2.0
+
+Apply code and template styling and formatting
+
 ## 3.1.9
 
 Fix graceful shutdown during the first SQL outbox poll.

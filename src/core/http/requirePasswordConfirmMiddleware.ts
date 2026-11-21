@@ -1,51 +1,56 @@
-import { resolveUserId } from "@getstrata/core/auth/accessControl";
-import { currentAuthUser } from "@getstrata/core/auth/authContext";
+import { resolveUserId } from '@getstrata/core/auth/accessControl';
+import { currentAuthUser } from '@getstrata/core/auth/authContext';
 import {
-  hasFreshPasswordConfirmation,
-  type PasswordConfirmReadOptions,
-} from "@getstrata/core/auth/passwordConfirmCookie";
-import { HttpError, UnauthorizedError } from "@getstrata/core/errors/http";
-import { errorResponse } from "@getstrata/core/http/response";
-import { requestPrefersJson } from "./contentNegotiation";
-import type { Middleware } from "./middleware";
-import { currentRequestMeta } from "./requestMetaContext";
-import { sanitizeInternalPath } from "./safeInternalPath";
+	hasFreshPasswordConfirmation,
+	type PasswordConfirmReadOptions,
+} from '@getstrata/core/auth/passwordConfirmCookie';
+import { HttpError, UnauthorizedError } from '@getstrata/core/errors/http';
+import { errorResponse } from '@getstrata/core/http/response';
 
-const PASSWORD_CONFIRM_MESSAGE = "Password confirmation required.";
-const PASSWORD_CONFIRM_PATH = "/confirm-password";
+import { requestPrefersJson } from './contentNegotiation';
+import type { Middleware } from './middleware';
+import { currentRequestMeta } from './requestMetaContext';
+import { sanitizeInternalPath } from './safeInternalPath';
+
+const PASSWORD_CONFIRM_MESSAGE = 'Password confirmation required.';
+
+const PASSWORD_CONFIRM_PATH = '/confirm-password';
 
 function createRequirePasswordConfirmMiddleware(options: PasswordConfirmReadOptions): Middleware {
-  return async (request: Request, next: () => Promise<Response>) => {
-    const user = currentAuthUser();
-    const json = currentRequestMeta().errorFormat === "json" || requestPrefersJson(request);
+	return async (request: Request, next: () => Promise<Response>) => {
+		const user = currentAuthUser();
 
-    if (!user) {
-      if (json) {
-        return errorResponse(new UnauthorizedError("Authentication required."));
-      }
+		const json = currentRequestMeta().errorFormat === 'json' || requestPrefersJson(request);
 
-      return Response.redirect("/login", 302);
-    }
+		if (!user) {
+			if (json) {
+				return errorResponse(new UnauthorizedError('Authentication required.'));
+			}
 
-    const userId = resolveUserId(user);
+			return Response.redirect('/login', 302);
+		}
 
-    if (hasFreshPasswordConfirmation(request, userId, user.authVersion, options)) {
-      return await next();
-    }
+		const userId = resolveUserId(user);
 
-    if (json) {
-      return errorResponse(new HttpError(423, PASSWORD_CONFIRM_MESSAGE));
-    }
+		if (hasFreshPasswordConfirmation(request, userId, user.authVersion, options)) {
+			return await next();
+		}
 
-    const url = new URL(request.url);
-    const intended = request.method === "GET" ? `${url.pathname}${url.search}` : "/account";
-    const redirect = sanitizeInternalPath(intended, "/account");
+		if (json) {
+			return errorResponse(new HttpError(423, PASSWORD_CONFIRM_MESSAGE));
+		}
 
-    return Response.redirect(
-      `${PASSWORD_CONFIRM_PATH}?redirect=${encodeURIComponent(redirect)}`,
-      302,
-    );
-  };
+		const url = new URL(request.url);
+
+		const intended = request.method === 'GET' ? `${url.pathname}${url.search}` : '/account';
+
+		const redirect = sanitizeInternalPath(intended, '/account');
+
+		return Response.redirect(
+			`${PASSWORD_CONFIRM_PATH}?redirect=${encodeURIComponent(redirect)}`,
+			302,
+		);
+	};
 }
 
 export { createRequirePasswordConfirmMiddleware, PASSWORD_CONFIRM_MESSAGE, PASSWORD_CONFIRM_PATH };

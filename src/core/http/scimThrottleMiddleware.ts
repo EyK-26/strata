@@ -1,89 +1,118 @@
-import { createHash } from "node:crypto";
+import { createHash } from 'node:crypto';
+
 import {
-  BoundedThrottleStore,
-  type MemoryThrottleStorageOptions,
-} from "../runtime/boundedThrottleStore";
-import { readClientIp } from "./clientIp";
-import type { Middleware } from "./middleware";
+	BoundedThrottleStore,
+	type MemoryThrottleStorageOptions,
+} from '../runtime/boundedThrottleStore';
+
+import { readClientIp } from './clientIp';
+import type { Middleware } from './middleware';
 import {
-  createRedisThrottleConsumer,
-  type RedisThrottleClient,
-  redisThrottleKey,
-  type ThrottleIdentityPolicy,
-  throttleUnavailableResponse,
-} from "./throttleMiddleware";
+	createRedisThrottleConsumer,
+	type RedisThrottleClient,
+	redisThrottleKey,
+	type ThrottleIdentityPolicy,
+	throttleUnavailableResponse,
+} from './throttleMiddleware';
 
 interface ScimThrottleOptions extends MemoryThrottleStorageOptions, ThrottleIdentityPolicy {
-  resolveTenant?: (token: string) => number | null;
-  redisUrl?: string;
-  maxAttempts: number;
-  decaySeconds: number;
-  commandTimeoutMs?: number;
-  redisClient?: RedisThrottleClient;
-  keyPrefix?: string;
+	resolveTenant?: (token: string) => number | null;
+	redisUrl?: string;
+	maxAttempts: number;
+	decaySeconds: number;
+	commandTimeoutMs?: number;
+	redisClient?: RedisThrottleClient;
+	keyPrefix?: string;
 }
 
 function resolveScimIdentity(request: Request, trustForwardedFor = false): string {
-  const authorization = request.headers.get("authorization") ?? "";
-  const presented = authorization.startsWith("Bearer ")
-    ? authorization.slice("Bearer ".length).trim()
-    : "";
+	const authorization = request.headers.get('authorization') ?? '';
 
-  if (presented.length > 0) {
-    return createHash("sha256").update(presented).digest("hex");
-  }
+	const presented = authorization.startsWith('Bearer ')
+		? authorization.slice('Bearer '.length).trim()
+		: '';
 
-  return readClientIp(request, { TRUST_FORWARDED_FOR: String(trustForwardedFor) }) ?? "unknown";
+	if (presented.length > 0) {
+		return createHash('sha256').update(presented).digest('hex');
+	}
+
+	return readClientIp(request, { TRUST_FORWARDED_FOR: String(trustForwardedFor) }) ?? 'unknown';
 }
 
 function createScimThrottleMiddleware(options: ScimThrottleOptions) {
-  options = Object.freeze({ ...options });
-  if (!Number.isSafeInteger(options.maxAttempts) || options.maxAttempts < 0)
-    throw new Error("Invalid SCIM throttle limit.");
-  const redisUrl = options.redisUrl?.trim() ?? "";
-  const distributed = Boolean(redisUrl || options.redisClient);
-  const store = distributed ? null : new BoundedThrottleStore(options.decaySeconds * 1000, options);
-  const consume = distributed ? createRedisThrottleConsumer({ ...options, redisUrl }) : null;
+	options = Object.freeze({ ...options });
 
-  let disposed = false;
-  const middleware: Middleware = async (request, next) => {
-    if (disposed) return throttleUnavailableResponse();
-    const identity = resolveScimIdentity(request, options.trustForwardedFor);
-    const token = request.headers.get("authorization")?.startsWith("Bearer ")
-      ? (request.headers.get("authorization")?.slice("Bearer ".length).trim() ?? "")
-      : "";
-    const key = redisThrottleKey(
-      request,
-      options.keyPrefix ?? "scim-throttle:v2",
-      identity,
-      options.resolveTenant?.(token) ?? null,
-      options.namespace,
-    );
-    let attempts: number | null | undefined;
-    try {
-      attempts = consume ? await consume(key, options.decaySeconds) : store?.consume(key);
-    } catch {
-      return throttleUnavailableResponse();
-    }
-    if (disposed) return throttleUnavailableResponse();
-    if (attempts === null || attempts === undefined) return throttleUnavailableResponse();
-    if (attempts > options.maxAttempts)
-      return Response.json(
-        { error: "Too many SCIM requests." },
-        { status: 429, headers: { "retry-after": String(options.decaySeconds) } },
-      );
+	if (!Number.isSafeInteger(options.maxAttempts) || options.maxAttempts < 0) {
+		throw new Error('Invalid SCIM throttle limit.');
+	}
 
-    return await next();
-  };
-  return Object.assign(middleware, {
-    dispose: () => {
-      if (disposed) return;
-      disposed = true;
-      store?.dispose();
-      consume?.dispose();
-    },
-    stats: () => store?.stats(),
-  });
+	const redisUrl = options.redisUrl?.trim() ?? '';
+
+	const distributed = Boolean(redisUrl || options.redisClient);
+
+	const store = distributed ? null : new BoundedThrottleStore(options.decaySeconds * 1000, options);
+
+	const consume = distributed ? createRedisThrottleConsumer({ ...options, redisUrl }) : null;
+
+	let disposed = false;
+
+	const middleware: Middleware = async (request, next) => {
+		if (disposed) {
+			return throttleUnavailableResponse();
+		}
+
+		const identity = resolveScimIdentity(request, options.trustForwardedFor);
+
+		const token = request.headers.get('authorization')?.startsWith('Bearer ')
+			? (request.headers.get('authorization')?.slice('Bearer '.length).trim() ?? '')
+			: '';
+
+		const key = redisThrottleKey(
+			request,
+			options.keyPrefix ?? 'scim-throttle:v2',
+			identity,
+			options.resolveTenant?.(token) ?? null,
+			options.namespace,
+		);
+
+		let attempts: number | null | undefined;
+
+		try {
+			attempts = consume ? await consume(key, options.decaySeconds) : store?.consume(key);
+		} catch {
+			return throttleUnavailableResponse();
+		}
+
+		if (disposed) {
+			return throttleUnavailableResponse();
+		}
+
+		if (attempts === null || attempts === undefined) {
+			return throttleUnavailableResponse();
+		}
+
+		if (attempts > options.maxAttempts) {
+			return Response.json(
+				{ error: 'Too many SCIM requests.' },
+				{ status: 429, headers: { 'retry-after': String(options.decaySeconds) } },
+			);
+		}
+
+		return await next();
+	};
+
+	return Object.assign(middleware, {
+		dispose: () => {
+			if (disposed) {
+				return;
+			}
+
+			disposed = true;
+			store?.dispose();
+			consume?.dispose();
+		},
+		stats: () => store?.stats(),
+	});
 }
 
 export type { ScimThrottleOptions };

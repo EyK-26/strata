@@ -21,6 +21,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function AppShell() {
   const { user, logout } = useAuth();
+
   const [logoutError, setLogoutError] = useState<string | null>(null);
 
   return (

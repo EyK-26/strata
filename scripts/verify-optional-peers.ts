@@ -1,99 +1,119 @@
 #!/usr/bin/env bun
 /** eta, mysql2, and @node-saml/node-saml are optional peers, loaded only through dynamic import(). */
 
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
-const ROOT = join(import.meta.dir, "..");
+const ROOT = join(import.meta.dir, '..');
+
 const errors: string[] = [];
 
 const packageJson = JSON.parse(
-  await readFile(join(ROOT, "packages/strata-core/package.json"), "utf8"),
+	await readFile(join(ROOT, 'packages/strata-core/package.json'), 'utf8'),
 ) as {
-  imports?: Record<string, string | { default: string }>;
-  dependencies?: Record<string, string>;
-  peerDependencies?: Record<string, string>;
-  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+	imports?: Record<string, string | { default: string }>;
+	dependencies?: Record<string, string>;
+	peerDependencies?: Record<string, string>;
+	peerDependenciesMeta?: Record<string, { optional?: boolean }>;
 };
 
-for (const name of ["eta", "mysql2", "@node-saml/node-saml"] as const) {
-  if (packageJson.dependencies?.[name]) {
-    errors.push(`@getstrata/core must not list ${name} in dependencies`);
-  }
-  if (!packageJson.peerDependencies?.[name]) {
-    errors.push(`@getstrata/core is missing optional peer ${name}`);
-  }
-  if (!packageJson.peerDependenciesMeta?.[name]?.optional) {
-    errors.push(`@getstrata/core peer ${name} must be optional`);
-  }
+for (const name of ['eta', 'mysql2', '@node-saml/node-saml'] as const) {
+	if (packageJson.dependencies?.[name]) {
+		errors.push(`@getstrata/core must not list ${name} in dependencies`);
+	}
+
+	if (!packageJson.peerDependencies?.[name]) {
+		errors.push(`@getstrata/core is missing optional peer ${name}`);
+	}
+
+	if (!packageJson.peerDependenciesMeta?.[name]?.optional) {
+		errors.push(`@getstrata/core peer ${name} must be optional`);
+	}
 }
 
-const indexJs = await readFile(join(ROOT, "packages/strata-core/dist/index.js"), "utf8");
+const indexJs = await readFile(join(ROOT, 'packages/strata-core/dist/index.js'), 'utf8');
+
 if (/from\s+["']mysql2/.test(indexJs)) {
-  errors.push("dist/index.js has a static mysql2 import; keep MySQL on database/mysqlConnection");
+	errors.push('dist/index.js has a static mysql2 import; keep MySQL on database/mysqlConnection');
 }
+
 if (/from\s+["']eta["']/.test(indexJs)) {
-  errors.push("dist/index.js has a static eta import; EtaViewEngine must lazy-import eta");
+	errors.push('dist/index.js has a static eta import; EtaViewEngine must lazy-import eta');
 }
+
 if (/from\s+["']@node-saml\/node-saml["']/.test(indexJs)) {
-  errors.push("dist/index.js has a static @node-saml/node-saml import; SAML must lazy-import");
+	errors.push('dist/index.js has a static @node-saml/node-saml import; SAML must lazy-import');
 }
 
 const mysqlEntry = await readFile(
-  join(ROOT, "packages/strata-core/dist/entries/database/mysqlConnection.js"),
-  "utf8",
+	join(ROOT, 'packages/strata-core/dist/entries/database/mysqlConnection.js'),
+	'utf8',
 );
+
 const mysqlIsSharedShim = /export \* from ["'][./]*index\.js["']/.test(mysqlEntry);
+
 if (mysqlIsSharedShim) {
-  const nativeImport = packageJson.imports?.["#strata-mysql-native"];
-  const nativePath = typeof nativeImport === "string" ? nativeImport : nativeImport?.default;
-  const nativeJs = nativePath
-    ? await readFile(join(ROOT, "packages/strata-core", nativePath), "utf8")
-    : indexJs;
-  if (nativePath && !indexJs.includes('"#strata-mysql-native"'))
-    errors.push("Core must use its canonical private MySQL adapter");
-  if (/from\s+["']mysql2/.test(nativeJs))
-    errors.push("Private MySQL adapter has a static mysql2 import");
-  if (!nativeJs.includes('import("mysql2/promise")')) {
-    errors.push("Canonical MySQL adapter must lazy-import mysql2/promise");
-  }
+	const nativeImport = packageJson.imports?.['#strata-mysql-native'];
+
+	const nativePath = typeof nativeImport === 'string' ? nativeImport : nativeImport?.default;
+
+	const nativeJs = nativePath
+		? await readFile(join(ROOT, 'packages/strata-core', nativePath), 'utf8')
+		: indexJs;
+
+	if (nativePath && !indexJs.includes('"#strata-mysql-native"')) {
+		errors.push('Core must use its canonical private MySQL adapter');
+	}
+
+	if (/from\s+["']mysql2/.test(nativeJs)) {
+		errors.push('Private MySQL adapter has a static mysql2 import');
+	}
+
+	if (!nativeJs.includes('import("mysql2/promise")')) {
+		errors.push('Canonical MySQL adapter must lazy-import mysql2/promise');
+	}
 } else {
-  if (!mysqlEntry.includes('import("mysql2/promise")')) {
-    errors.push("database/mysqlConnection must lazy-import mysql2/promise");
-  }
-  if (/from\s+["']mysql2/.test(mysqlEntry)) {
-    errors.push("database/mysqlConnection has a static mysql2 import");
-  }
+	if (!mysqlEntry.includes('import("mysql2/promise")')) {
+		errors.push('database/mysqlConnection must lazy-import mysql2/promise');
+	}
+
+	if (/from\s+["']mysql2/.test(mysqlEntry)) {
+		errors.push('database/mysqlConnection has a static mysql2 import');
+	}
 }
 
 const mysqlTypes = await readFile(
-  join(ROOT, "packages/strata-core/dist/core/database/mysqlConnection.d.ts"),
-  "utf8",
+	join(ROOT, 'packages/strata-core/dist/core/database/mysqlConnection.d.ts'),
+	'utf8',
 );
+
 if (/from\s+["']mysql2/.test(mysqlTypes)) {
-  errors.push("database/mysqlConnection.d.ts must not import mysql2 (keep it an optional peer)");
+	errors.push('database/mysqlConnection.d.ts must not import mysql2 (keep it an optional peer)');
 }
 
-const viewEntry = await readFile(join(ROOT, "packages/strata-core/dist/entries/view.js"), "utf8");
+const viewEntry = await readFile(join(ROOT, 'packages/strata-core/dist/entries/view.js'), 'utf8');
+
 const viewIsSharedShim = /export \* from ["'][./]*index\.js["']/.test(viewEntry);
+
 if (viewIsSharedShim) {
-  if (!indexJs.includes('import("eta")')) {
-    errors.push("shared view shim re-exports the barrel, which must lazy-import eta");
-  }
+	if (!indexJs.includes('import("eta")')) {
+		errors.push('shared view shim re-exports the barrel, which must lazy-import eta');
+	}
 } else {
-  if (!viewEntry.includes('import("eta")')) {
-    errors.push("view entry must lazy-import eta");
-  }
-  if (/from\s+["']eta["']/.test(viewEntry)) {
-    errors.push("view entry has a static eta import");
-  }
+	if (!viewEntry.includes('import("eta")')) {
+		errors.push('view entry must lazy-import eta');
+	}
+
+	if (/from\s+["']eta["']/.test(viewEntry)) {
+		errors.push('view entry has a static eta import');
+	}
 }
 
 if (errors.length > 0) {
-  console.error(`Optional peer verification failed:\n${errors.map((e) => `- ${e}`).join("\n")}`);
-  process.exit(1);
+	console.error(`Optional peer verification failed:\n${errors.map((e) => `- ${e}`).join('\n')}`);
+	process.exit(1);
 }
 
 console.log(
-  "Optional peers OK: eta, mysql2, and @node-saml/node-saml are optional, loaded through import().",
+	'Optional peers OK: eta, mysql2, and @node-saml/node-saml are optional, loaded through import().',
 );

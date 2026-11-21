@@ -1,1 +1,1 @@
-export * from "../../../../../src/core/auth/oauth/oidcProvider.ts";
+export * from '../../../../../src/core/auth/oauth/oidcProvider.ts';

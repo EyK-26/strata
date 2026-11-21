@@ -1,1 +1,1 @@
-export * from "../../../../src/core/database/mysqlConnection.ts";
+export * from '../../../../src/core/database/mysqlConnection.ts';

@@ -1,1 +1,1 @@
-export * from "../../../../src/core/events/outbox/index.ts";
+export * from '../../../../src/core/events/outbox/index.ts';

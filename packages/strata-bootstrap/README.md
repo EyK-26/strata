@@ -17,8 +17,9 @@ bun add @getstrata/bootstrap @getstrata/core
 `defineApp` from `@getstrata/bootstrap/application` takes the application definition and returns `bootstrapApp`, `createApp`, and `createAppServer`. Generated apps keep that definition in `src/bootstrap/createApp.ts`; their HTTP entry point is:
 
 ```typescript
-import { serveApplication } from "@getstrata/bootstrap/application";
-import { createAppServer } from "./createApp.ts";
+import { serveApplication } from '@getstrata/bootstrap/application';
+
+import { createAppServer } from './createApp.ts';
 
 await serveApplication(createAppServer);
 ```

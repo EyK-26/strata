@@ -1,1 +1,1 @@
-export * from "../../../../src/core/auth/basicAuthGuard.ts";
+export * from '../../../../src/core/auth/basicAuthGuard.ts';

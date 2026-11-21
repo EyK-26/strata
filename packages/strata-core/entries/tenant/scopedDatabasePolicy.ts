@@ -1,1 +1,1 @@
-export * from "../../../../src/core/tenant/scopedDatabasePolicy.ts";
+export * from '../../../../src/core/tenant/scopedDatabasePolicy.ts';

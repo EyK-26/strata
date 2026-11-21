@@ -1,1 +1,1 @@
-export * from "../../../../src/core/auth/tokenHash.ts";
+export * from '../../../../src/core/auth/tokenHash.ts';

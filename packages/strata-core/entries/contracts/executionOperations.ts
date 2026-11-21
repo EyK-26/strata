@@ -1,1 +1,1 @@
-export * from "../../../../src/core/contracts/executionOperations.ts";
+export * from '../../../../src/core/contracts/executionOperations.ts';

@@ -1,1 +1,1 @@
-export { makeJobCommand } from "@getstrata/cli/scaffold";
+export { makeJobCommand } from '@getstrata/cli/scaffold';

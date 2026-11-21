@@ -1,1 +1,1 @@
-export * from "../../../../src/core/auth/emailVerification.ts";
+export * from '../../../../src/core/auth/emailVerification.ts';

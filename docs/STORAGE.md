@@ -11,11 +11,11 @@ Native local and Bun S3 drivers also implement `StreamingStorage`. Narrow the co
 when a transfer needs streams:
 
 ```ts
-import { requireStreamingStorage } from "@getstrata/core/storage/storage";
+import { requireStreamingStorage } from '@getstrata/core/storage/storage';
 
 const storage = requireStreamingStorage(context.dependencies.storage);
-await storage.writeStream("reports/export.csv", exportStream);
-const download = await storage.readStream("reports/export.csv");
+await storage.writeStream('reports/export.csv', exportStream);
+const download = await storage.readStream('reports/export.csv');
 // Consume download, or cancel it if it is no longer needed.
 ```
 

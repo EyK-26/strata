@@ -1,128 +1,143 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
-import { resolveEnv } from "../config/envSchema";
-import { requireConfiguredSecret } from "../runtime/appKeyPrefix";
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
+import { resolveEnv } from '../config/envSchema';
+import { requireConfiguredSecret } from '../runtime/appKeyPrefix';
 
 interface JwtPayload {
-  sub: string | number;
-  role?: string;
-  abilities?: string[];
-  emailVerifiedAt?: Date | string | null;
-  authVersion?: number;
-  iat?: number;
-  exp?: number;
-  [key: string]: unknown;
+	sub: string | number;
+	role?: string;
+	abilities?: string[];
+	emailVerifiedAt?: Date | string | null;
+	authVersion?: number;
+	iat?: number;
+	exp?: number;
+	[key: string]: unknown;
 }
 
 interface SignJwtOptions {
-  secret: string;
-  ttlSeconds?: number;
+	secret: string;
+	ttlSeconds?: number;
 }
 
 export function jwtOptionsFromEnvironment(
-  env: Readonly<Record<string, string | undefined>>,
+	env: Readonly<Record<string, string | undefined>>,
 ): SignJwtOptions {
-  const ttl = resolveEnv({ JWT_TTL_SECONDS: { integer: true, minimum: 1, default: "3600" } }, env);
-  return Object.freeze({
-    secret: requireConfiguredSecret(["JWT_SECRET", "SESSION_SECRET"], "jwt-secret", env),
-    ttlSeconds: ttl.JWT_TTL_SECONDS,
-  });
-}
-function resolveJwtSecret(secret: string): string {
-  if (secret?.trim()) {
-    return secret.trim();
-  }
+	const ttl = resolveEnv({ JWT_TTL_SECONDS: { integer: true, minimum: 1, default: '3600' } }, env);
 
-  throw new TypeError("Explicit JWT secret is required.");
+	return Object.freeze({
+		secret: requireConfiguredSecret(['JWT_SECRET', 'SESSION_SECRET'], 'jwt-secret', env),
+		ttlSeconds: ttl.JWT_TTL_SECONDS,
+	});
+}
+
+function resolveJwtSecret(secret: string): string {
+	if (secret?.trim()) {
+		return secret.trim();
+	}
+
+	throw new TypeError('Explicit JWT secret is required.');
 }
 
 function jwtTtlSeconds(override?: number): number {
-  if (override === undefined) return 3600;
-  if (!Number.isSafeInteger(override) || override <= 0)
-    throw new TypeError("JWT ttlSeconds must be a positive safe integer.");
-  return override;
+	if (override === undefined) {
+		return 3600;
+	}
+
+	if (!Number.isSafeInteger(override) || override <= 0) {
+		throw new TypeError('JWT ttlSeconds must be a positive safe integer.');
+	}
+
+	return override;
 }
 
 function encodeJson(value: unknown): string {
-  return Buffer.from(JSON.stringify(value)).toString("base64url");
+	return Buffer.from(JSON.stringify(value)).toString('base64url');
 }
 
 function decodeJson<T>(value: string): T | null {
-  try {
-    return JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as T;
-  } catch {
-    return null;
-  }
+	try {
+		return JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as T;
+	} catch {
+		return null;
+	}
 }
 
 function signPart(headerAndPayload: string, secret: string): string {
-  return createHmac("sha256", secret).update(headerAndPayload).digest("base64url");
+	return createHmac('sha256', secret).update(headerAndPayload).digest('base64url');
 }
 
 function signaturesMatch(left: string, right: string): boolean {
-  const leftBuffer = Buffer.from(left);
-  const rightBuffer = Buffer.from(right);
+	const leftBuffer = Buffer.from(left);
 
-  if (leftBuffer.length !== rightBuffer.length) {
-    return false;
-  }
+	const rightBuffer = Buffer.from(right);
 
-  return timingSafeEqual(leftBuffer, rightBuffer);
+	if (leftBuffer.length !== rightBuffer.length) {
+		return false;
+	}
+
+	return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function signJwt(payload: JwtPayload, options: SignJwtOptions): string {
-  const issuedAt = Date.now() / 1000;
-  const body: JwtPayload = {
-    ...payload,
-    iat: issuedAt,
-    exp: Math.floor(issuedAt) + jwtTtlSeconds(options.ttlSeconds),
-  };
-  const header = encodeJson({ alg: "HS256", typ: "JWT" });
-  const data = encodeJson(body);
-  const unsigned = `${header}.${data}`;
-  const signature = signPart(unsigned, resolveJwtSecret(options.secret));
-  return `${unsigned}.${signature}`;
+	const issuedAt = Date.now() / 1000;
+
+	const body: JwtPayload = {
+		...payload,
+		iat: issuedAt,
+		exp: Math.floor(issuedAt) + jwtTtlSeconds(options.ttlSeconds),
+	};
+
+	const header = encodeJson({ alg: 'HS256', typ: 'JWT' });
+
+	const data = encodeJson(body);
+
+	const unsigned = `${header}.${data}`;
+
+	const signature = signPart(unsigned, resolveJwtSecret(options.secret));
+
+	return `${unsigned}.${signature}`;
 }
 
 function verifyJwt(token: string, secret: string): JwtPayload | null {
-  const parts = token.split(".");
+	const parts = token.split('.');
 
-  if (parts.length !== 3) {
-    return null;
-  }
+	if (parts.length !== 3) {
+		return null;
+	}
 
-  const [header, data, signature] = parts;
+	const [header, data, signature] = parts;
 
-  if (!header || !data || !signature) {
-    return null;
-  }
+	if (!header || !data || !signature) {
+		return null;
+	}
 
-  const expected = signPart(`${header}.${data}`, resolveJwtSecret(secret));
+	const expected = signPart(`${header}.${data}`, resolveJwtSecret(secret));
 
-  if (!signaturesMatch(signature, expected)) {
-    return null;
-  }
+	if (!signaturesMatch(signature, expected)) {
+		return null;
+	}
 
-  const parsedHeader = decodeJson<{ alg?: string; typ?: string }>(header);
+	const parsedHeader = decodeJson<{ alg?: string; typ?: string }>(header);
 
-  if (parsedHeader?.alg !== "HS256") {
-    return null;
-  }
+	if (parsedHeader?.alg !== 'HS256') {
+		return null;
+	}
 
-  const payload = decodeJson<JwtPayload>(data);
+	const payload = decodeJson<JwtPayload>(data);
 
-  if (!payload || payload.sub === undefined || payload.sub === null) {
-    return null;
-  }
+	if (!payload || payload.sub === undefined || payload.sub === null) {
+		return null;
+	}
 
-  if (
-    typeof payload.exp !== "number" ||
-    !Number.isFinite(payload.exp) ||
-    payload.exp * 1000 <= Date.now()
-  ) {
-    return null;
-  }
+	if (
+		typeof payload.exp !== 'number' ||
+		!Number.isFinite(payload.exp) ||
+		payload.exp * 1000 <= Date.now()
+	) {
+		return null;
+	}
 
-  return payload;
+	return payload;
 }
 
 export type { JwtPayload, SignJwtOptions };

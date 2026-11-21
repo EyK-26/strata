@@ -1,1 +1,1 @@
-export * from "../../../../src/core/http/corsMiddleware.ts";
+export * from '../../../../src/core/http/corsMiddleware.ts';

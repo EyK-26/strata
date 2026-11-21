@@ -1,13 +1,15 @@
-import type { StarterFeaturePlan } from "./featurePlan.ts";
+import type { StarterFeaturePlan } from './featurePlan.ts';
 
 /** Consumer instructions follow the selected app, never the framework contributor workspace. */
 export function renderAgentInstructions(projectName: string, plan: StarterFeaturePlan): string {
-  const { layers, decisions, services } = plan;
-  const extras = Object.entries(layers.extras)
-    .filter(([, enabled]) => enabled)
-    .map(([name]) => name)
-    .sort();
-  return `# Building ${projectName}
+	const { layers, decisions, services } = plan;
+
+	const extras = Object.entries(layers.extras)
+		.filter(([, enabled]) => enabled)
+		.map(([name]) => name)
+		.sort();
+
+	return `# Building ${projectName}
 
 This is an application built with Strata, TypeScript and Bun. Build product features
 in this app using the installed public APIs; do not recreate framework internals or
@@ -24,7 +26,7 @@ from .env or commit credentials.
 
 Starting stack: frontend=${layers.frontend}; database=${layers.database}; auth=${layers.auth};
 tenancy=${layers.tenancy}; cache=${layers.cache}; queue=${layers.queue}; mail=${layers.mail}.
-Selected extras: ${extras.join(", ") || "none"}.
+Selected extras: ${extras.join(', ') || 'none'}.
 
 ## Where features belong
 
@@ -34,9 +36,9 @@ Selected extras: ${extras.join(", ") || "none"}.
 - src/policies/: resource access rules when needed.
 - src/models/: model classes; add new classes to src/models/register.ts.
 - src/db/migrations/: explicit schema changes, separate from model declarations.
-${decisions.users ? "- src/db/factories/UserFactory.ts: user test data with explicit credentials and invocation-owned persistence.\n" : ""}- src/db/seed.ts: explicit development-only seed entrypoint.
+${decisions.users ? '- src/db/factories/UserFactory.ts: user test data with explicit credentials and invocation-owned persistence.\n' : ''}- src/db/seed.ts: explicit development-only seed entrypoint.
 - src/config/app.ts and src/bootstrap/: configuration and dependency composition.
-${decisions.serverViews || decisions.mfaViews ? "- views/: Eta templates; use the existing view rendering and escaping helpers.\n" : ""}${decisions.frontendBuild ? `- frontend/: React UI built by Bun; preserve the configured SPA prefix (${layers.spaPrefix}).\n` : ""}
+${decisions.serverViews || decisions.mfaViews ? '- views/: Eta templates; use the existing view rendering and escaping helpers.\n' : ''}${decisions.frontendBuild ? `- frontend/: React UI built by Bun; preserve the configured SPA prefix (${layers.spaPrefix}).\n` : ''}
 Optional folders need not exist until their first feature is added. Larger domains
 may use modules; ordinary CRUD needs no module, forwarding service or repository layer.
 
@@ -76,19 +78,19 @@ and image capabilities through Strata's APIs instead of adding duplicate framewo
 
 ## Access and the selected stack
 
-${layers.auth === "headers" ? "Development header auth is selected. It is not a production login mechanism; adopt an appropriate real guard before exposing private data.\n" : "Keep the generated authentication and account-state checks. Authentication, abilities and resource policies are separate checks; do not bypass them in a new endpoint.\n"}${decisions.cookie ? "Preserve the existing cookie/CSRF handshake and server-side session handling. Do not store session credentials in browser storage or mint cookies in controllers.\n" : ""}${decisions.token || decisions.jwt ? "Preserve bearer-token/JWT verification and expiry. Do not persist bearer credentials in localStorage or sessionStorage, or treat unverified claims as identity.\n" : ""}${decisions.rls ? "PostgreSQL RLS is selected. Keep runtime access on the restricted app role and tenant policy inside the owned transaction; administrative migration credentials never belong in request handlers.\n" : decisions.tenantTable ? "Column tenancy is selected. Explicitly filter tenant-owned reads and writes using the trusted current tenant; a tenant_id column alone does not isolate records.\n" : "No tenancy is selected. Do not invent tenant fields or middleware without adding the corresponding schema and application policy.\n"}${layers.database === "sqlite" ? "SQLite is selected. Use its configured file and portable schema/query APIs; do not assume PostgreSQL RLS or full-text operators are available.\n" : ""}${decisions.redisQueue ? "Redis queued work needs a separate bun run queue:work process. Make job effects idempotent and preserve retry/cancellation semantics.\n" : "The queue is synchronous; HTTP startup does not create a background queue worker.\n"}Only run bun run outbox:work when this application uses SQL durable listeners.
-${layers.mail === "log" ? "Mail is logged locally; configure an actual mail transport before relying on delivered account emails.\n" : "SMTP is selected; use the configured transport and preserve failure/retry handling without logging credentials.\n"}
+${layers.auth === 'headers' ? 'Development header auth is selected. It is not a production login mechanism; adopt an appropriate real guard before exposing private data.\n' : 'Keep the generated authentication and account-state checks. Authentication, abilities and resource policies are separate checks; do not bypass them in a new endpoint.\n'}${decisions.cookie ? 'Preserve the existing cookie/CSRF handshake and server-side session handling. Do not store session credentials in browser storage or mint cookies in controllers.\n' : ''}${decisions.token || decisions.jwt ? 'Preserve bearer-token/JWT verification and expiry. Do not persist bearer credentials in localStorage or sessionStorage, or treat unverified claims as identity.\n' : ''}${decisions.rls ? 'PostgreSQL RLS is selected. Keep runtime access on the restricted app role and tenant policy inside the owned transaction; administrative migration credentials never belong in request handlers.\n' : decisions.tenantTable ? 'Column tenancy is selected. Explicitly filter tenant-owned reads and writes using the trusted current tenant; a tenant_id column alone does not isolate records.\n' : 'No tenancy is selected. Do not invent tenant fields or middleware without adding the corresponding schema and application policy.\n'}${layers.database === 'sqlite' ? 'SQLite is selected. Use its configured file and portable schema/query APIs; do not assume PostgreSQL RLS or full-text operators are available.\n' : ''}${decisions.redisQueue ? 'Redis queued work needs a separate bun run queue:work process. Make job effects idempotent and preserve retry/cancellation semantics.\n' : 'The queue is synchronous; HTTP startup does not create a background queue worker.\n'}Only run bun run outbox:work when this application uses SQL durable listeners.
+${layers.mail === 'log' ? 'Mail is logged locally; configure an actual mail transport before relying on delivered account emails.\n' : 'SMTP is selected; use the configured transport and preserve failure/retry handling without logging credentials.\n'}
 ## Commands and validation
 
 Use the Bun version in .bun-version. Follow README.md for environment setup and
-${services.docker.length ? `selected Docker services (${services.docker.join(", ")}).` : services.local.length ? `local services (${services.local.join(", ")}).` : "local startup; this selection needs no supporting service containers."}
+${services.docker.length ? `selected Docker services (${services.docker.join(', ')}).` : services.local.length ? `local services (${services.local.join(', ')}).` : 'local startup; this selection needs no supporting service containers.'}
 
 \`\`\`sh
 bun install
 bun run check
 bun run db:migrate
 bun run dev
-${decisions.frontendBuild ? "bun run frontend:install\nbun run frontend:build\n" : ""}\`\`\`
+${decisions.frontendBuild ? 'bun run frontend:install\nbun run frontend:build\n' : ''}\`\`\`
 
 Run migrations against the intended development database after reviewing the changes.
 db:fresh is destructive; never use it on shared or production data. Demo seeds are

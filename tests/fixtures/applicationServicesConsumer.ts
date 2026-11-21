@@ -1,31 +1,32 @@
-import assert from "node:assert/strict";
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import * as BootstrapRoot from "@getstrata/bootstrap";
-import * as BootstrapConfig from "@getstrata/bootstrap/config";
-import { CORE_CACHE_TOKEN as bootstrapCacheToken } from "@getstrata/bootstrap/config";
-import { createServiceToken as bootstrapToken } from "@getstrata/bootstrap/contracts";
-import * as ProviderView from "@getstrata/bootstrap/providers/view";
-import { createViewProvider as granularViewProvider } from "@getstrata/bootstrap/providers/view";
-import * as Root from "@getstrata/core";
-import { SimpleCache } from "@getstrata/core/cache/simpleCache";
-import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
-import { CORE_CACHE_TOKEN as cacheToken } from "@getstrata/core/cache/tokens";
-import { configInteger, parseApplicationConfig } from "@getstrata/core/config/applicationConfig";
-import * as Container from "@getstrata/core/contracts/container";
-import * as Execution from "@getstrata/core/contracts/executionContext";
-import * as Services from "@getstrata/core/contracts/services";
-import * as ServiceTokens from "@getstrata/core/contracts/serviceTokens";
-import { CORE_CACHE_TOKEN as serviceToken } from "@getstrata/core/contracts/serviceTokens";
-import * as Tokens from "@getstrata/core/contracts/token";
-import * as Mail from "@getstrata/core/mail/mailer";
-import * as AppQueue from "@getstrata/core/queue/createAppQueue";
-import * as JobRegistries from "@getstrata/core/queue/jobRegistry";
-import * as Runtime from "@getstrata/core/runtime/application";
-import { type CommandScope, createApplication } from "@getstrata/core/runtime/application";
-import * as Storage from "@getstrata/core/storage/storage";
-import * as Views from "@getstrata/core/view";
-import * as ViewTokens from "@getstrata/core/view/tokens";
+import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import * as BootstrapRoot from '@getstrata/bootstrap';
+import * as BootstrapConfig from '@getstrata/bootstrap/config';
+import { CORE_CACHE_TOKEN as bootstrapCacheToken } from '@getstrata/bootstrap/config';
+import { createServiceToken as bootstrapToken } from '@getstrata/bootstrap/contracts';
+import * as ProviderView from '@getstrata/bootstrap/providers/view';
+import { createViewProvider as granularViewProvider } from '@getstrata/bootstrap/providers/view';
+import * as Root from '@getstrata/core';
+import { SimpleCache } from '@getstrata/core/cache/simpleCache';
+import { SimpleCacheStore } from '@getstrata/core/cache/simpleCacheStore';
+import { CORE_CACHE_TOKEN as cacheToken } from '@getstrata/core/cache/tokens';
+import { configInteger, parseApplicationConfig } from '@getstrata/core/config/applicationConfig';
+import * as Container from '@getstrata/core/contracts/container';
+import * as Execution from '@getstrata/core/contracts/executionContext';
+import * as ServiceTokens from '@getstrata/core/contracts/serviceTokens';
+import { CORE_CACHE_TOKEN as serviceToken } from '@getstrata/core/contracts/serviceTokens';
+import * as Services from '@getstrata/core/contracts/services';
+import * as Tokens from '@getstrata/core/contracts/token';
+import * as Mail from '@getstrata/core/mail/mailer';
+import * as AppQueue from '@getstrata/core/queue/createAppQueue';
+import * as JobRegistries from '@getstrata/core/queue/jobRegistry';
+import * as Runtime from '@getstrata/core/runtime/application';
+import { type CommandScope, createApplication } from '@getstrata/core/runtime/application';
+import * as Storage from '@getstrata/core/storage/storage';
+import * as Views from '@getstrata/core/view';
+import * as ViewTokens from '@getstrata/core/view/tokens';
 
 assert.equal(Root.createServiceToken, Tokens.createServiceToken);
 assert.equal(Container.createServiceToken, Tokens.createServiceToken);
@@ -33,487 +34,487 @@ assert.equal(bootstrapToken, Tokens.createServiceToken);
 assert.equal(Root.ServiceContainer, Container.ServiceContainer);
 assert.equal(Root.service, Services.service);
 assert.equal(
-  Root.resourceService,
-  Services.resourceService,
-  "packed managed helper retains canonical identity",
+	Root.resourceService,
+	Services.resourceService,
+	'packed managed helper retains canonical identity',
 );
 assert.equal(Root.valueService, Services.valueService);
 assert.equal(Root.aliasService, Services.aliasService);
 for (const token of [Root.CORE_CACHE_TOKEN, serviceToken, bootstrapCacheToken])
-  assert.equal(token, cacheToken);
+	assert.equal(token, cacheToken);
 assert.equal(Tokens.isServiceToken(cacheToken), true);
 
 // Compare every built-in constant on every SUPPORTED public path that exports it.
 // Keep opaque identities explicit so a newly added constant cannot silently disappear.
 const publicModules: Record<string, Record<string, unknown>> = {
-  core: Root,
-  serviceTokens: ServiceTokens,
-  executionContext: Execution,
-  runtime: Runtime,
-  view: Views,
-  bootstrap: BootstrapRoot,
-  bootstrapConfig: BootstrapConfig,
-  providerView: ProviderView,
-  appQueue: AppQueue,
-  viewTokens: ViewTokens,
-  mail: Mail,
-  storage: Storage,
-  jobRegistries: JobRegistries,
+	core: Root,
+	serviceTokens: ServiceTokens,
+	executionContext: Execution,
+	runtime: Runtime,
+	view: Views,
+	bootstrap: BootstrapRoot,
+	bootstrapConfig: BootstrapConfig,
+	providerView: ProviderView,
+	appQueue: AppQueue,
+	viewTokens: ViewTokens,
+	mail: Mail,
+	storage: Storage,
+	jobRegistries: JobRegistries,
 };
 const opaqueConstants = new Map<string, Array<{ path: string; value: unknown }>>();
 for (const [path, module] of Object.entries(publicModules)) {
-  for (const [name, value] of Object.entries(module)) {
-    if (!name.endsWith("_TOKEN")) continue;
-    if (name in ServiceTokens)
-      assert.equal(value, Reflect.get(ServiceTokens, name), `${name} differs on ${path}`);
-    if (Tokens.isServiceToken(value)) {
-      const entries = opaqueConstants.get(name) ?? [];
-      entries.push({ path, value });
-      opaqueConstants.set(name, entries);
-    }
-  }
+	for (const [name, value] of Object.entries(module)) {
+		if (!name.endsWith('_TOKEN')) continue;
+		if (name in ServiceTokens)
+			assert.equal(value, Reflect.get(ServiceTokens, name), `${name} differs on ${path}`);
+		if (Tokens.isServiceToken(value)) {
+			const entries = opaqueConstants.get(name) ?? [];
+			entries.push({ path, value });
+			opaqueConstants.set(name, entries);
+		}
+	}
 }
 const expectedOpaque = [
-  "CORE_MAIL_TOKEN",
-  "CORE_STORAGE_TOKEN",
-  "CORE_JSON_RESPONSE_POLICY_TOKEN",
-  "CORE_TRACING_RUNTIME_TOKEN",
-  "QUEUE_JOB_REGISTRY_TOKEN",
-  "CORE_CACHE_TOKEN",
-  "CORE_CONFIG_TOKEN",
-  "CORE_QUEUE_TOKEN",
-  "CORE_EVENT_BUS_TOKEN",
-  "CORE_POLICY_GATE_TOKEN",
-  "CORE_AUTH_TOKEN",
-  "CORE_ABILITY_CHECKER_TOKEN",
-  "CORE_AUTH_USER_DIRECTORY_TOKEN",
-  "CORE_VIEW_TOKEN",
-  "FAILED_JOB_SERVICE_TOKEN",
-  "CORE_EXECUTION_CONTEXT_TOKEN",
-  "CORE_HTTP_CLEANUP_TOKEN",
-  "CORE_PUBLIC_TENANCY_TOKEN",
-  "CORE_TENANT_RESOLVER_TOKEN",
-  "CORE_THROTTLE_QUOTA_POLICY_TOKEN",
-  "CORE_VIEW_RENDERER_TOKEN",
-  "CORE_WEB_ERROR_VIEW_TOKEN",
+	'CORE_MAIL_TOKEN',
+	'CORE_STORAGE_TOKEN',
+	'CORE_JSON_RESPONSE_POLICY_TOKEN',
+	'CORE_TRACING_RUNTIME_TOKEN',
+	'QUEUE_JOB_REGISTRY_TOKEN',
+	'CORE_CACHE_TOKEN',
+	'CORE_CONFIG_TOKEN',
+	'CORE_QUEUE_TOKEN',
+	'CORE_EVENT_BUS_TOKEN',
+	'CORE_POLICY_GATE_TOKEN',
+	'CORE_AUTH_TOKEN',
+	'CORE_ABILITY_CHECKER_TOKEN',
+	'CORE_AUTH_USER_DIRECTORY_TOKEN',
+	'CORE_VIEW_TOKEN',
+	'FAILED_JOB_SERVICE_TOKEN',
+	'CORE_EXECUTION_CONTEXT_TOKEN',
+	'CORE_HTTP_CLEANUP_TOKEN',
+	'CORE_PUBLIC_TENANCY_TOKEN',
+	'CORE_TENANT_RESOLVER_TOKEN',
+	'CORE_THROTTLE_QUOTA_POLICY_TOKEN',
+	'CORE_VIEW_RENDERER_TOKEN',
+	'CORE_WEB_ERROR_VIEW_TOKEN',
 ];
 for (const name of expectedOpaque)
-  assert.ok(opaqueConstants.has(name), `${name} missing from public inventory`);
+	assert.ok(opaqueConstants.has(name), `${name} missing from public inventory`);
 for (const [name, entries] of opaqueConstants) {
-  assert.ok(entries.length >= 2, `${name} needs a real cross-path identity comparison`);
-  for (const entry of entries)
-    assert.equal(entry.value, entries[0]?.value, `${name} differs on ${entry.path}`);
+	assert.ok(entries.length >= 2, `${name} needs a real cross-path identity comparison`);
+	for (const entry of entries)
+		assert.equal(entry.value, entries[0]?.value, `${name} differs on ${entry.path}`);
 }
 
-const viewsDirectory = await mkdtemp(join(process.cwd(), "owned-view-identity-"));
+const viewsDirectory = await mkdtemp(join(process.cwd(), 'owned-view-identity-'));
 let viewProvidersResolved = 0;
 try {
-  await writeFile(join(viewsDirectory, "identity.eta"), "<p><%= it.label %></p>");
-  for (const create of [granularViewProvider]) {
-    const container = new Container.ServiceContainer();
-    const config = new Container.ConfigStore();
-    const provider = create({
-      enabled: true,
-      directory: viewsDirectory,
-      layout: false,
-      data: { loadUser: async () => null },
-    });
-    await provider.register?.({
-      container,
-      config,
-      dependencies: { container },
-      invoke: () => {
-        throw new Error("This structural provider test must not invoke persistence.");
-      },
-      onCleanup() {},
-    });
-    const renderer = container.resolve(Root.CORE_VIEW_RENDERER_TOKEN);
-    assert.equal(container.resolve(Views.CORE_VIEW_RENDERER_TOKEN), renderer);
-    assert.equal(
-      await (await renderer.render("identity", { label: "provider-token-identity" })).text(),
-      "<p>provider-token-identity</p>",
-    );
-    viewProvidersResolved++;
-  }
-  // New canonical paths are compared when advertised; old archives do not invent APIs.
-  const manifest = await Bun.file(
-    join(process.cwd(), "node_modules/@getstrata/core/package.json"),
-  ).json();
-  if (manifest.exports?.["./view/tokens"]) {
-    const entry = "@getstrata/core/view/tokens";
-    const canonical = await import(entry);
-    assert.equal(canonical.CORE_VIEW_RENDERER_TOKEN, Root.CORE_VIEW_RENDERER_TOKEN);
-  }
+	await writeFile(join(viewsDirectory, 'identity.eta'), '<p><%= it.label %></p>');
+	for (const create of [granularViewProvider]) {
+		const container = new Container.ServiceContainer();
+		const config = new Container.ConfigStore();
+		const provider = create({
+			enabled: true,
+			directory: viewsDirectory,
+			layout: false,
+			data: { loadUser: async () => null },
+		});
+		await provider.register?.({
+			container,
+			config,
+			dependencies: { container },
+			invoke: () => {
+				throw new Error('This structural provider test must not invoke persistence.');
+			},
+			onCleanup() {},
+		});
+		const renderer = container.resolve(Root.CORE_VIEW_RENDERER_TOKEN);
+		assert.equal(container.resolve(Views.CORE_VIEW_RENDERER_TOKEN), renderer);
+		assert.equal(
+			await (await renderer.render('identity', { label: 'provider-token-identity' })).text(),
+			'<p>provider-token-identity</p>',
+		);
+		viewProvidersResolved++;
+	}
+	// New canonical paths are compared when advertised; old archives do not invent APIs.
+	const manifest = await Bun.file(
+		join(process.cwd(), 'node_modules/@getstrata/core/package.json'),
+	).json();
+	if (manifest.exports?.['./view/tokens']) {
+		const entry = '@getstrata/core/view/tokens';
+		const canonical = await import(entry);
+		assert.equal(canonical.CORE_VIEW_RENDERER_TOKEN, Root.CORE_VIEW_RENDERER_TOKEN);
+	}
 } finally {
-  await rm(viewsDirectory, { recursive: true, force: true });
+	await rm(viewsDirectory, { recursive: true, force: true });
 }
 
 // Real Application owners with physical custom templates, through fresh packed exports.
-const errorViewDirectory = await mkdtemp(join(process.cwd(), "owned-error-view-"));
+const errorViewDirectory = await mkdtemp(join(process.cwd(), 'owned-error-view-'));
 const viewApplications: Awaited<ReturnType<typeof BootstrapRoot.createAppContext>>[] = [];
 try {
-  for (const label of ["packed-first", "packed-second"]) {
-    const directory = join(errorViewDirectory, label);
-    await mkdir(join(directory, "errors"), { recursive: true });
-    await writeFile(
-      join(directory, "errors/error.eta"),
-      "<p><%= it.label %>:<%= it.message %></p>",
-    );
-    const app = await BootstrapRoot.createAppContext(
-      [
-        {
-          name: "packed.view.dependencies",
-          register({ dependencies }) {
-            dependencies.cache = new Root.CacheRepository(new SimpleCacheStore(new SimpleCache()));
-            dependencies.storage = new Storage.StorageManager({
-              put: async (path) => path,
-              get: async () => null,
-              delete: async () => {},
-            });
-          },
-        },
-        granularViewProvider({
-          enabled: true,
-          rootDir: errorViewDirectory,
-          directory: label,
-          layout: false,
-          data: { extra: { label } },
-        }),
-      ],
-      { connection: "main", definition: { services: [], providers: [] } },
-    );
-    viewApplications.push(app);
-    assert.equal(Root.CORE_WEB_ERROR_VIEW_TOKEN, Views.CORE_WEB_ERROR_VIEW_TOKEN);
-    assert.equal(Root.CORE_WEB_ERROR_VIEW_TOKEN, ViewTokens.CORE_WEB_ERROR_VIEW_TOKEN);
-  }
-  const results = await Promise.all(
-    Array.from({ length: 8 }, async (_, index) => {
-      const app = viewApplications[index % 2];
-      assert.ok(app);
-      const response = await Views.htmlErrorResponse(
-        { status: 422, title: "invalid", message: `message${index}` },
-        app.container.resolve(Root.CORE_WEB_ERROR_VIEW_TOKEN),
-      );
-      assert.equal(response.status, 422);
-      assert.equal(response.headers.get("cache-control"), "no-store");
-      return response.text();
-    }),
-  );
-  results.forEach((html, index) => {
-    assert.equal(html, `<p>${index % 2 ? "packed-second" : "packed-first"}:message${index}</p>`);
-  });
-  const safe = await Views.renderWebErrorHtml({ status: 422, title: "safe", message: "<script>" });
-  assert.ok(safe.includes("&lt;script&gt;"));
-  assert.ok(!safe.includes("packed-first") && !safe.includes("packed-second"));
-  assert.equal("configureWebErrorView" in Views, false);
-  assert.equal("configureWebLayoutData" in Views, false);
-  assert.equal("viewProvider" in ProviderView, false);
+	for (const label of ['packed-first', 'packed-second']) {
+		const directory = join(errorViewDirectory, label);
+		await mkdir(join(directory, 'errors'), { recursive: true });
+		await writeFile(
+			join(directory, 'errors/error.eta'),
+			'<p><%= it.label %>:<%= it.message %></p>',
+		);
+		const app = await BootstrapRoot.createAppContext(
+			[
+				{
+					name: 'packed.view.dependencies',
+					register({ dependencies }) {
+						dependencies.cache = new Root.CacheRepository(new SimpleCacheStore(new SimpleCache()));
+						dependencies.storage = new Storage.StorageManager({
+							put: async (path) => path,
+							get: async () => null,
+							delete: async () => {},
+						});
+					},
+				},
+				granularViewProvider({
+					enabled: true,
+					rootDir: errorViewDirectory,
+					directory: label,
+					layout: false,
+					data: { extra: { label } },
+				}),
+			],
+			{ connection: 'main', definition: { services: [], providers: [] } },
+		);
+		viewApplications.push(app);
+		assert.equal(Root.CORE_WEB_ERROR_VIEW_TOKEN, Views.CORE_WEB_ERROR_VIEW_TOKEN);
+		assert.equal(Root.CORE_WEB_ERROR_VIEW_TOKEN, ViewTokens.CORE_WEB_ERROR_VIEW_TOKEN);
+	}
+	const results = await Promise.all(
+		Array.from({ length: 8 }, async (_, index) => {
+			const app = viewApplications[index % 2];
+			assert.ok(app);
+			const response = await Views.htmlErrorResponse(
+				{ status: 422, title: 'invalid', message: `message${index}` },
+				app.container.resolve(Root.CORE_WEB_ERROR_VIEW_TOKEN),
+			);
+			assert.equal(response.status, 422);
+			assert.equal(response.headers.get('cache-control'), 'no-store');
+			return response.text();
+		}),
+	);
+	results.forEach((html, index) => {
+		assert.equal(html, `<p>${index % 2 ? 'packed-second' : 'packed-first'}:message${index}</p>`);
+	});
+	const safe = await Views.renderWebErrorHtml({ status: 422, title: 'safe', message: '<script>' });
+	assert.ok(safe.includes('&lt;script&gt;'));
+	assert.ok(!safe.includes('packed-first') && !safe.includes('packed-second'));
+	assert.equal('configureWebErrorView' in Views, false);
+	assert.equal('configureWebLayoutData' in Views, false);
+	assert.equal('viewProvider' in ProviderView, false);
 } finally {
-  await Promise.all(viewApplications.map((app) => app.dispose()));
-  await rm(errorViewDirectory, { recursive: true, force: true });
+	await Promise.all(viewApplications.map((app) => app.dispose()));
+	await rm(errorViewDirectory, { recursive: true, force: true });
 }
 
 const paths = [];
 for (const entry of [
-  "@getstrata/core",
-  "@getstrata/core/contracts/token",
-  "@getstrata/core/contracts/services",
-  "@getstrata/core/contracts/executionContext",
-  "@getstrata/core/runtime/application",
-  "@getstrata/core/cache/tokens",
-  "@getstrata/bootstrap/contracts",
-  "@getstrata/bootstrap/config",
+	'@getstrata/core',
+	'@getstrata/core/contracts/token',
+	'@getstrata/core/contracts/services',
+	'@getstrata/core/contracts/executionContext',
+	'@getstrata/core/runtime/application',
+	'@getstrata/core/cache/tokens',
+	'@getstrata/bootstrap/contracts',
+	'@getstrata/bootstrap/config',
 ]) {
-  const resolved = await realpath(new URL(import.meta.resolve(entry)));
-  assert.ok(
-    resolved.startsWith(`${process.cwd()}/node_modules/@getstrata/`),
-    `Public entry resolved outside installed archives: ${resolved}`,
-  );
-  paths.push(resolved);
+	const resolved = await realpath(new URL(import.meta.resolve(entry)));
+	assert.ok(
+		resolved.startsWith(`${process.cwd()}/node_modules/@getstrata/`),
+		`Public entry resolved outside installed archives: ${resolved}`,
+	);
+	paths.push(resolved);
 }
 assert.equal(
-  await realpath(join(process.cwd(), "node_modules/@getstrata/core")),
-  join(process.cwd(), "node_modules/@getstrata/core"),
+	await realpath(join(process.cwd(), 'node_modules/@getstrata/core')),
+	join(process.cwd(), 'node_modules/@getstrata/core'),
 );
-const first = Root.createServiceToken<number>("same-label");
-const second = bootstrapToken<number>("same-label");
-const Alias = Tokens.createServiceToken<number>("alias");
-const Result = Tokens.createServiceToken<number>("result");
+const first = Root.createServiceToken<number>('same-label');
+const second = bootstrapToken<number>('same-label');
+const Alias = Tokens.createServiceToken<number>('alias');
+const Result = Tokens.createServiceToken<number>('result');
 const Scoped = Root.createServiceToken<{ context: Runtime.ExecutionContext; result: number }>(
-  "execution",
+	'execution',
 );
-const ContextAlias = Tokens.createServiceToken<Runtime.ExecutionContext>("context alias");
+const ContextAlias = Tokens.createServiceToken<Runtime.ExecutionContext>('context alias');
 let executionFactories = 0;
 const ExecutionResource = Tokens.createServiceToken<{ executionId: string }>(
-  "packed execution resource",
+	'packed execution resource',
 );
 const ExecutionResourceAlias = Tokens.createServiceToken<{ executionId: string }>(
-  "packed execution alias",
+	'packed execution alias',
 );
 const executionResourceEvents: string[] = [];
 const executionResourceOpened: object[] = [];
 const executionResourceClosed: object[] = [];
 assert.equal(Root.CORE_EXECUTION_CONTEXT_TOKEN, Execution.CORE_EXECUTION_CONTEXT_TOKEN);
 assert.equal(Runtime.CORE_EXECUTION_CONTEXT_TOKEN, Execution.CORE_EXECUTION_CONTEXT_TOKEN);
-const Managed = Tokens.createServiceToken<{ count: number }>("packed managed");
-const ManagedAlias = Tokens.createServiceToken<{ count: number }>("packed managed alias");
+const Managed = Tokens.createServiceToken<{ count: number }>('packed managed');
+const ManagedAlias = Tokens.createServiceToken<{ count: number }>('packed managed alias');
 const managedValue = { count: 9 };
 const managedLifecycle: string[] = [];
 let managedOpens = 0;
 const settings = parseApplicationConfig(
-  { PORT: { required: true, integer: true } },
-  { PORT: "42" },
-  (input) => ({ port: configInteger("PORT", input.PORT) }),
+	{ PORT: { required: true, integer: true } },
+	{ PORT: '42' },
+	(input) => ({ port: configInteger('PORT', input.PORT) }),
 );
-const Settings = Tokens.createServiceToken<typeof settings>("settings");
+const Settings = Tokens.createServiceToken<typeof settings>('settings');
 const cache = new Root.CacheRepository(new SimpleCacheStore(new SimpleCache()));
 const sent: Mail.MailMessage[] = [];
 const objects = new Map<string, Uint8Array>();
 const app = createApplication({
-  providers: [],
-  services: [
-    ...BootstrapRoot.createMailBindings({
-      driver: "custom",
-      mail: {
-        async send(message) {
-          sent.push(message);
-        },
-      },
-    }),
-    ...BootstrapRoot.createStorageBindings({
-      driver: "custom",
-      storage: {
-        async put(path, contents) {
-          objects.set(
-            path,
-            typeof contents === "string" ? new TextEncoder().encode(contents) : contents,
-          );
-          return path;
-        },
-        async get(path) {
-          return objects.get(path) ?? null;
-        },
-        async delete(path) {
-          objects.delete(path);
-        },
-      },
-    }),
-    Root.resourceService(Managed, {
-      lifetime: "application",
-      dependencies: [second],
-      create(value): Runtime.ResourceSpec<{ count: number }> {
-        assert.equal(value, 2);
-        return {
-          name: "packed managed",
-          open(): Runtime.OpenOutcome<{ count: number }> {
-            managedOpens++;
-            managedLifecycle.push("open");
-            return { ok: true, value: managedValue };
-          },
-          stop(value) {
-            assert.equal(value, managedValue);
-            managedLifecycle.push("stop");
-          },
-          drain(value) {
-            assert.equal(value, managedValue);
-            managedLifecycle.push("drain");
-          },
-          flush(value) {
-            assert.equal(value, managedValue);
-            managedLifecycle.push("flush");
-          },
-          close(value) {
-            assert.equal(value, managedValue);
-            managedLifecycle.push("close");
-          },
-        };
-      },
-    }),
-    Services.aliasService(ManagedAlias, Managed),
-    Root.valueService(first, 1),
-    Root.aliasService(ContextAlias, Runtime.CORE_EXECUTION_CONTEXT_TOKEN),
-    Services.resourceService(ExecutionResource, {
-      lifetime: "execution",
-      dependencies: [Execution.CORE_EXECUTION_CONTEXT_TOKEN, Managed],
-      create(context, backing): Runtime.ResourceSpec<{ executionId: string }> {
-        assert.equal(backing, managedValue);
-        const handle = { executionId: context.executionId };
-        return {
-          name: "packed execution resource",
-          open() {
-            executionResourceOpened.push(handle);
-            executionResourceEvents.push("open");
-            return { ok: true, value: handle };
-          },
-          close(value, cleanup) {
-            assert.equal(value, handle);
-            assert.equal(cleanup.reason, "execution-complete");
-            assert.notEqual(cleanup.signal, context.signal);
-            executionResourceClosed.push(value);
-            executionResourceEvents.push("close");
-          },
-        };
-      },
-    }),
-    Root.aliasService(ExecutionResourceAlias, ExecutionResource),
-    Services.service(Scoped, {
-      lifetime: "execution",
-      dependencies: [Execution.CORE_EXECUTION_CONTEXT_TOKEN, Result, ExecutionResourceAlias],
-      create: async (context, result, handle) => {
-        assert.equal(handle.executionId, context.executionId);
-        executionFactories++;
-        return { context, result };
-      },
-    }),
-    Services.valueService(second, 2),
-    Services.valueService(Settings, settings),
-    Root.aliasService(Alias, first),
-    Services.valueService(cacheToken, cache),
-    Root.service(Result, {
-      lifetime: "application",
-      dependencies: [Alias, second, Settings],
-      create: (a, b, config) => a + b + config.port,
-    }),
-  ],
-  overrides: [Services.valueService(first, 5)],
+	providers: [],
+	services: [
+		...BootstrapRoot.createMailBindings({
+			driver: 'custom',
+			mail: {
+				async send(message) {
+					sent.push(message);
+				},
+			},
+		}),
+		...BootstrapRoot.createStorageBindings({
+			driver: 'custom',
+			storage: {
+				async put(path, contents) {
+					objects.set(
+						path,
+						typeof contents === 'string' ? new TextEncoder().encode(contents) : contents,
+					);
+					return path;
+				},
+				async get(path) {
+					return objects.get(path) ?? null;
+				},
+				async delete(path) {
+					objects.delete(path);
+				},
+			},
+		}),
+		Root.resourceService(Managed, {
+			lifetime: 'application',
+			dependencies: [second],
+			create(value): Runtime.ResourceSpec<{ count: number }> {
+				assert.equal(value, 2);
+				return {
+					name: 'packed managed',
+					open(): Runtime.OpenOutcome<{ count: number }> {
+						managedOpens++;
+						managedLifecycle.push('open');
+						return { ok: true, value: managedValue };
+					},
+					stop(value) {
+						assert.equal(value, managedValue);
+						managedLifecycle.push('stop');
+					},
+					drain(value) {
+						assert.equal(value, managedValue);
+						managedLifecycle.push('drain');
+					},
+					flush(value) {
+						assert.equal(value, managedValue);
+						managedLifecycle.push('flush');
+					},
+					close(value) {
+						assert.equal(value, managedValue);
+						managedLifecycle.push('close');
+					},
+				};
+			},
+		}),
+		Services.aliasService(ManagedAlias, Managed),
+		Root.valueService(first, 1),
+		Root.aliasService(ContextAlias, Runtime.CORE_EXECUTION_CONTEXT_TOKEN),
+		Services.resourceService(ExecutionResource, {
+			lifetime: 'execution',
+			dependencies: [Execution.CORE_EXECUTION_CONTEXT_TOKEN, Managed],
+			create(context, backing): Runtime.ResourceSpec<{ executionId: string }> {
+				assert.equal(backing, managedValue);
+				const handle = { executionId: context.executionId };
+				return {
+					name: 'packed execution resource',
+					open() {
+						executionResourceOpened.push(handle);
+						executionResourceEvents.push('open');
+						return { ok: true, value: handle };
+					},
+					close(value, cleanup) {
+						assert.equal(value, handle);
+						assert.equal(cleanup.reason, 'execution-complete');
+						assert.notEqual(cleanup.signal, context.signal);
+						executionResourceClosed.push(value);
+						executionResourceEvents.push('close');
+					},
+				};
+			},
+		}),
+		Root.aliasService(ExecutionResourceAlias, ExecutionResource),
+		Services.service(Scoped, {
+			lifetime: 'execution',
+			dependencies: [Execution.CORE_EXECUTION_CONTEXT_TOKEN, Result, ExecutionResourceAlias],
+			create: async (context, result, handle) => {
+				assert.equal(handle.executionId, context.executionId);
+				executionFactories++;
+				return { context, result };
+			},
+		}),
+		Services.valueService(second, 2),
+		Services.valueService(Settings, settings),
+		Root.aliasService(Alias, first),
+		Services.valueService(cacheToken, cache),
+		Root.service(Result, {
+			lifetime: 'application',
+			dependencies: [Alias, second, Settings],
+			create: (a, b, config) => a + b + config.port,
+		}),
+	],
+	overrides: [Services.valueService(first, 5)],
 });
 let saved: CommandScope | undefined;
 let joinedTasks = 0;
 const taskResourceEvents: string[] = [];
 const packedTaskResource = (name: string): Runtime.ResourceSpec<{ name: string }> => {
-  const handle = { name };
-  return {
-    name,
-    open: () => {
-      taskResourceEvents.push(`${name}.open`);
-      return { ok: true, value: handle };
-    },
-    close(value, context) {
-      assert.equal(value, handle);
-      assert.equal(context.reason, "task-complete");
-      taskResourceEvents.push(`${name}.close`);
-    },
-  };
+	const handle = { name };
+	return {
+		name,
+		open: () => {
+			taskResourceEvents.push(`${name}.open`);
+			return { ok: true, value: handle };
+		},
+		close(value, context) {
+			assert.equal(value, handle);
+			assert.equal(context.reason, 'task-complete');
+			taskResourceEvents.push(`${name}.close`);
+		},
+	};
 };
 try {
-  await app.start();
-  assert.equal(executionFactories, 0);
-  const contexts: Runtime.ExecutionContext[] = [];
-  await app.run(async (scope) => {
-    saved = scope;
-    const mail = scope.resolve(Root.CORE_MAIL_TOKEN);
-    assert.equal(mail, scope.resolve(Mail.CORE_MAIL_TOKEN));
-    await mail.send({ to: "fixture@example.test", subject: "packed identity", body: "owned mail" });
-    assert.equal(sent.length, 1);
-    const storage = scope.resolve(Root.CORE_STORAGE_TOKEN);
-    assert.equal(storage, scope.resolve(Storage.CORE_STORAGE_TOKEN));
-    await storage.put("identity.txt", "owned storage");
-    assert.equal(
-      new TextDecoder().decode((await storage.get("identity.txt")) ?? undefined),
-      "owned storage",
-    );
-    assert.equal(await storage.delete("identity.txt"), undefined);
-    const executionHandle = scope.resolve(ExecutionResourceAlias);
-    assert.equal(scope.resolve(ExecutionResource), executionHandle);
-    await scope.acquire(packedTaskResource("root"));
-    assert.equal(scope.resolve(ManagedAlias), managedValue);
-    assert.equal(scope.resolve(Managed), managedValue);
-    assert.equal(executionFactories, 1);
-    assert.equal(scope.resolve(Scoped).context, scope.context);
-    assert.equal(scope.resolve(Scoped).result, 49);
-    assert.equal(scope.resolve(ContextAlias), scope.context);
-    assert.equal(scope.resolve(Root.CORE_EXECUTION_CONTEXT_TOKEN), scope.context);
-    assert.equal(scope.context.signal, scope.signal);
-    contexts.push(scope.context);
-    const childOutcome = await scope.spawn(async (child) => {
-      assert.equal(child.context, scope.context);
-      assert.equal(child.resolve(ExecutionResourceAlias), executionHandle);
-      assert.equal(child.resolve(Scoped), scope.resolve(Scoped));
-      joinedTasks++;
-      await child.acquire(packedTaskResource("child"));
-      return child.spawn((grandchild) => {
-        joinedTasks++;
-        assert.equal(grandchild.resolve(Scoped), child.resolve(Scoped));
-        return 49;
-      });
-    });
-    assert.equal(Object.isFrozen(childOutcome), true);
-    assert.equal(
-      taskResourceEvents.includes("child.close"),
-      true,
-      "packed child cleanup precedes public outcome",
-    );
-    assert.equal(
-      taskResourceEvents.includes("root.close"),
-      false,
-      "packed parent resource survives child outcome",
-    );
-    assert.deepEqual(childOutcome, { ok: true, value: { ok: true, value: 49 } });
-    assert.equal(scope.resolve(Alias), 5);
-    assert.equal(scope.resolve(second), 2);
-    assert.equal(scope.resolve(Result), 49);
-    assert.equal(scope.resolve(Root.CORE_CACHE_TOKEN), cache);
-    assert.equal(scope.resolve(bootstrapCacheToken), cache);
-    assert.equal(await scope.resolve(serviceToken).remember("identity", async () => 7), 7);
-  });
-  assert.throws(() => saved?.resolve(Result));
-  assert.deepEqual(
-    executionResourceEvents,
-    ["open", "close"],
-    "packed execution binding cleanup precedes first run resolution",
-  );
-  assert.deepEqual(
-    taskResourceEvents,
-    ["root.open", "child.open", "child.close", "root.close"],
-    "packed root cleanup precedes run resolution",
-  );
-  await app.run(
-    { kind: "job", actor: { kind: "system", policy: "packed-worker" }, metadata: { packed: true } },
-    (scope) => {
-      assert.equal(executionFactories, 2);
-      assert.equal(scope.resolve(Scoped).context, scope.context);
-      assert.equal(scope.context.actor?.kind, "system");
-      assert.deepEqual(scope.context.metadata, { packed: true });
-      contexts.push(scope.context);
-    },
-  );
-  assert.notEqual(contexts[0], contexts[1]);
-  assert.equal(
-    new Set(executionResourceOpened).size,
-    2,
-    "packed runs own distinct execution resource instances",
-  );
-  assert.equal(executionResourceClosed.length, 2);
-  assert.deepEqual(new Set(executionResourceClosed), new Set(executionResourceOpened));
-  assert.deepEqual(executionResourceEvents, ["open", "close", "open", "close"]);
-  assert.notEqual(contexts[0]?.executionId, contexts[1]?.executionId);
-  assert.equal((await app.stop()).successful, true);
-  assert.equal(managedOpens, 1, "packed aliases share one managed acquisition");
-  assert.deepEqual(managedLifecycle, ["open", "stop", "drain", "flush", "close"]);
-  console.log(
-    JSON.stringify({
-      mixedFactoryIdentity: true,
-      mixedManagedHelperIdentity: true,
-      managedOpens,
-      managedLifecycle,
-      mixedExecutionContextIdentity: true,
-      executionFactories,
-      executionResourceOpens: executionResourceOpened.length,
-      executionResourceEvents,
-      joinedTasks,
-      taskResourceEvents,
-      mixedCacheIdentity: true,
-      opaqueConstants: [...opaqueConstants.keys()].sort(),
-      serviceConstants: Object.keys(ServiceTokens)
-        .filter((name) => name.endsWith("_TOKEN"))
-        .sort(),
-      viewProvidersResolved,
-      resolved: 49,
-      expiredResolver: true,
-      paths,
-    }),
-  );
+	await app.start();
+	assert.equal(executionFactories, 0);
+	const contexts: Runtime.ExecutionContext[] = [];
+	await app.run(async (scope) => {
+		saved = scope;
+		const mail = scope.resolve(Root.CORE_MAIL_TOKEN);
+		assert.equal(mail, scope.resolve(Mail.CORE_MAIL_TOKEN));
+		await mail.send({ to: 'fixture@example.test', subject: 'packed identity', body: 'owned mail' });
+		assert.equal(sent.length, 1);
+		const storage = scope.resolve(Root.CORE_STORAGE_TOKEN);
+		assert.equal(storage, scope.resolve(Storage.CORE_STORAGE_TOKEN));
+		await storage.put('identity.txt', 'owned storage');
+		assert.equal(
+			new TextDecoder().decode((await storage.get('identity.txt')) ?? undefined),
+			'owned storage',
+		);
+		assert.equal(await storage.delete('identity.txt'), undefined);
+		const executionHandle = scope.resolve(ExecutionResourceAlias);
+		assert.equal(scope.resolve(ExecutionResource), executionHandle);
+		await scope.acquire(packedTaskResource('root'));
+		assert.equal(scope.resolve(ManagedAlias), managedValue);
+		assert.equal(scope.resolve(Managed), managedValue);
+		assert.equal(executionFactories, 1);
+		assert.equal(scope.resolve(Scoped).context, scope.context);
+		assert.equal(scope.resolve(Scoped).result, 49);
+		assert.equal(scope.resolve(ContextAlias), scope.context);
+		assert.equal(scope.resolve(Root.CORE_EXECUTION_CONTEXT_TOKEN), scope.context);
+		assert.equal(scope.context.signal, scope.signal);
+		contexts.push(scope.context);
+		const childOutcome = await scope.spawn(async (child) => {
+			assert.equal(child.context, scope.context);
+			assert.equal(child.resolve(ExecutionResourceAlias), executionHandle);
+			assert.equal(child.resolve(Scoped), scope.resolve(Scoped));
+			joinedTasks++;
+			await child.acquire(packedTaskResource('child'));
+			return child.spawn((grandchild) => {
+				joinedTasks++;
+				assert.equal(grandchild.resolve(Scoped), child.resolve(Scoped));
+				return 49;
+			});
+		});
+		assert.equal(Object.isFrozen(childOutcome), true);
+		assert.equal(
+			taskResourceEvents.includes('child.close'),
+			true,
+			'packed child cleanup precedes public outcome',
+		);
+		assert.equal(
+			taskResourceEvents.includes('root.close'),
+			false,
+			'packed parent resource survives child outcome',
+		);
+		assert.deepEqual(childOutcome, { ok: true, value: { ok: true, value: 49 } });
+		assert.equal(scope.resolve(Alias), 5);
+		assert.equal(scope.resolve(second), 2);
+		assert.equal(scope.resolve(Result), 49);
+		assert.equal(scope.resolve(Root.CORE_CACHE_TOKEN), cache);
+		assert.equal(scope.resolve(bootstrapCacheToken), cache);
+		assert.equal(await scope.resolve(serviceToken).remember('identity', async () => 7), 7);
+	});
+	assert.throws(() => saved?.resolve(Result));
+	assert.deepEqual(
+		executionResourceEvents,
+		['open', 'close'],
+		'packed execution binding cleanup precedes first run resolution',
+	);
+	assert.deepEqual(
+		taskResourceEvents,
+		['root.open', 'child.open', 'child.close', 'root.close'],
+		'packed root cleanup precedes run resolution',
+	);
+	await app.run(
+		{ kind: 'job', actor: { kind: 'system', policy: 'packed-worker' }, metadata: { packed: true } },
+		(scope) => {
+			assert.equal(executionFactories, 2);
+			assert.equal(scope.resolve(Scoped).context, scope.context);
+			assert.equal(scope.context.actor?.kind, 'system');
+			assert.deepEqual(scope.context.metadata, { packed: true });
+			contexts.push(scope.context);
+		},
+	);
+	assert.notEqual(contexts[0], contexts[1]);
+	assert.equal(
+		new Set(executionResourceOpened).size,
+		2,
+		'packed runs own distinct execution resource instances',
+	);
+	assert.equal(executionResourceClosed.length, 2);
+	assert.deepEqual(new Set(executionResourceClosed), new Set(executionResourceOpened));
+	assert.deepEqual(executionResourceEvents, ['open', 'close', 'open', 'close']);
+	assert.notEqual(contexts[0]?.executionId, contexts[1]?.executionId);
+	assert.equal((await app.stop()).successful, true);
+	assert.equal(managedOpens, 1, 'packed aliases share one managed acquisition');
+	assert.deepEqual(managedLifecycle, ['open', 'stop', 'drain', 'flush', 'close']);
+	console.log(
+		JSON.stringify({
+			mixedFactoryIdentity: true,
+			mixedManagedHelperIdentity: true,
+			managedOpens,
+			managedLifecycle,
+			mixedExecutionContextIdentity: true,
+			executionFactories,
+			executionResourceOpens: executionResourceOpened.length,
+			executionResourceEvents,
+			joinedTasks,
+			taskResourceEvents,
+			mixedCacheIdentity: true,
+			opaqueConstants: [...opaqueConstants.keys()].sort(),
+			serviceConstants: Object.keys(ServiceTokens)
+				.filter((name) => name.endsWith('_TOKEN'))
+				.sort(),
+			viewProvidersResolved,
+			resolved: 49,
+			expiredResolver: true,
+			paths,
+		}),
+	);
 } finally {
-  await app.stop();
-  await cache.close();
+	await app.stop();
+	await cache.close();
 }

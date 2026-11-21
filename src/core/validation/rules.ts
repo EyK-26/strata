@@ -1,226 +1,256 @@
-import { ValidationError } from "@getstrata/core/errors/http";
+import { ValidationError } from '@getstrata/core/errors/http';
 
 type ValidationRule = (
-  field: string,
-  value: unknown,
-  payload: Record<string, unknown>,
+	field: string,
+	value: unknown,
+	payload: Record<string, unknown>,
 ) => string | undefined;
 
 type ValidationSchema = Record<string, ValidationRule[]>;
 
 function required(): ValidationRule {
-  return (field, value) => {
-    if (
-      value === undefined ||
-      value === null ||
-      (typeof value === "string" && value.trim() === "")
-    ) {
-      return `"${field}" is required.`;
-    }
+	return (field, value) => {
+		if (
+			value === undefined ||
+			value === null ||
+			(typeof value === 'string' && value.trim() === '')
+		) {
+			return `"${field}" is required.`;
+		}
 
-    return undefined;
-  };
+		return undefined;
+	};
 }
 
 function stringRule(): ValidationRule {
-  return (field, value) => {
-    if (value === undefined || value === null) {
-      return undefined;
-    }
+	return (field, value) => {
+		if (value === undefined || value === null) {
+			return undefined;
+		}
 
-    if (typeof value !== "string") {
-      return `"${field}" must be a string.`;
-    }
+		if (typeof value !== 'string') {
+			return `"${field}" must be a string.`;
+		}
 
-    return undefined;
-  };
+		return undefined;
+	};
 }
 
 function minLength(minimum: number): ValidationRule {
-  return (field, value) => {
-    if (typeof value !== "string") {
-      return undefined;
-    }
+	return (field, value) => {
+		if (typeof value !== 'string') {
+			return undefined;
+		}
 
-    if (value.trim().length < minimum) {
-      return `"${field}" must be at least ${minimum} characters.`;
-    }
+		if (value.trim().length < minimum) {
+			return `"${field}" must be at least ${minimum} characters.`;
+		}
 
-    return undefined;
-  };
+		return undefined;
+	};
 }
 
 function maxLength(maximum: number): ValidationRule {
-  return (field, value) => {
-    if (typeof value !== "string") {
-      return undefined;
-    }
+	return (field, value) => {
+		if (typeof value !== 'string') {
+			return undefined;
+		}
 
-    if (value.trim().length > maximum) {
-      return `"${field}" must be at most ${maximum} characters.`;
-    }
+		if (value.trim().length > maximum) {
+			return `"${field}" must be at most ${maximum} characters.`;
+		}
 
-    return undefined;
-  };
+		return undefined;
+	};
 }
 
 function pattern(expression: RegExp): ValidationRule {
-  return (field, value) => {
-    if (typeof value !== "string") {
-      return undefined;
-    }
+	return (field, value) => {
+		if (typeof value !== 'string') {
+			return undefined;
+		}
 
-    if (!expression.test(value.trim())) {
-      return `"${field}" has an invalid format.`;
-    }
+		if (!expression.test(value.trim())) {
+			return `"${field}" has an invalid format.`;
+		}
 
-    return undefined;
-  };
+		return undefined;
+	};
 }
 
 function enumRule<TValue extends string>(allowedValues: readonly TValue[]): ValidationRule {
-  return (field, value) => {
-    if (typeof value !== "string") {
-      return undefined;
-    }
+	return (field, value) => {
+		if (typeof value !== 'string') {
+			return undefined;
+		}
 
-    if (!allowedValues.includes(value as TValue)) {
-      return `"${field}" must be one of: ${allowedValues.join(", ")}.`;
-    }
+		if (!allowedValues.includes(value as TValue)) {
+			return `"${field}" must be one of: ${allowedValues.join(', ')}.`;
+		}
 
-    return undefined;
-  };
+		return undefined;
+	};
 }
 
 function optional(): ValidationRule {
-  return () => undefined;
+	return () => undefined;
 }
 
 interface IntegerValidationOptions {
-  /** Default true preserves whole decimal form strings; false requires JSON numbers. */
-  allowNumericStrings?: boolean;
+	/** Default true preserves whole decimal form strings; false requires JSON numbers. */
+	allowNumericStrings?: boolean;
 }
 
 function integerValue(value: unknown, options: IntegerValidationOptions): number | undefined {
-  if (typeof value === "number") return Number.isSafeInteger(value) ? value : undefined;
-  if (
-    options.allowNumericStrings !== false &&
-    typeof value === "string" &&
-    /^[+-]?\d+$/.test(value.trim())
-  ) {
-    const parsed = Number(value.trim());
-    return Number.isSafeInteger(parsed) ? parsed : undefined;
-  }
-  return undefined;
+	if (typeof value === 'number') {
+		return Number.isSafeInteger(value) ? value : undefined;
+	}
+
+	if (
+		options.allowNumericStrings !== false &&
+		typeof value === 'string' &&
+		/^[+-]?\d+$/.test(value.trim())
+	) {
+		const parsed = Number(value.trim());
+
+		return Number.isSafeInteger(parsed) ? parsed : undefined;
+	}
+
+	return undefined;
 }
 
 function integerRule(options: IntegerValidationOptions = {}): ValidationRule {
-  return (field, value) => {
-    if (value === undefined || value === null || value === "") return undefined;
-    if (integerValue(value, options) === undefined) return `"${field}" must be an integer.`;
-    return undefined;
-  };
+	return (field, value) => {
+		if (value === undefined || value === null || value === '') {
+			return undefined;
+		}
+
+		if (integerValue(value, options) === undefined) {
+			return `"${field}" must be an integer.`;
+		}
+
+		return undefined;
+	};
 }
 
 function emailRule(): ValidationRule {
-  return (field, value) => {
-    if (typeof value !== "string") {
-      return undefined;
-    }
+	return (field, value) => {
+		if (typeof value !== 'string') {
+			return undefined;
+		}
 
-    const normalized = value.trim();
+		const normalized = value.trim();
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
-      return `"${field}" must be a valid email address.`;
-    }
+		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+			return `"${field}" must be a valid email address.`;
+		}
 
-    return undefined;
-  };
+		return undefined;
+	};
 }
 
 function confirmed(fieldName: string): ValidationRule {
-  return (field, value, payload) => {
-    const confirmationKey = `${fieldName}_confirmation`;
-    const confirmation = payload[confirmationKey];
+	return (field, value, payload) => {
+		const confirmationKey = `${fieldName}_confirmation`;
 
-    if (value !== confirmation) {
-      return `"${field}" confirmation does not match.`;
-    }
+		const confirmation = payload[confirmationKey];
 
-    return undefined;
-  };
+		if (value !== confirmation) {
+			return `"${field}" confirmation does not match.`;
+		}
+
+		return undefined;
+	};
 }
 
 function positiveIntegerRule(options: IntegerValidationOptions = {}): ValidationRule {
-  return (field, value) => {
-    if (value === undefined || value === null || value === "") return undefined;
-    const parsed = integerValue(value, options);
-    if (parsed === undefined || parsed <= 0) return `"${field}" must be a positive integer.`;
-    return undefined;
-  };
+	return (field, value) => {
+		if (value === undefined || value === null || value === '') {
+			return undefined;
+		}
+
+		const parsed = integerValue(value, options);
+
+		if (parsed === undefined || parsed <= 0) {
+			return `"${field}" must be a positive integer.`;
+		}
+
+		return undefined;
+	};
 }
 
 function integerRange(
-  minimum: number,
-  maximum: number,
-  options: IntegerValidationOptions = {},
+	minimum: number,
+	maximum: number,
+	options: IntegerValidationOptions = {},
 ): ValidationRule {
-  if (!Number.isSafeInteger(minimum) || !Number.isSafeInteger(maximum) || minimum > maximum)
-    throw new TypeError("Integer range bounds must be safe integers in ascending order.");
-  return (field, value) => {
-    if (value === undefined || value === null || value === "") return undefined;
-    const parsed = integerValue(value, options);
-    if (parsed === undefined || parsed < minimum || parsed > maximum)
-      return `"${field}" must be an integer between ${minimum} and ${maximum}.`;
-    return undefined;
-  };
+	if (!Number.isSafeInteger(minimum) || !Number.isSafeInteger(maximum) || minimum > maximum) {
+		throw new TypeError('Integer range bounds must be safe integers in ascending order.');
+	}
+
+	return (field, value) => {
+		if (value === undefined || value === null || value === '') {
+			return undefined;
+		}
+
+		const parsed = integerValue(value, options);
+
+		if (parsed === undefined || parsed < minimum || parsed > maximum) {
+			return `"${field}" must be an integer between ${minimum} and ${maximum}.`;
+		}
+
+		return undefined;
+	};
 }
 
 function validateObject(payload: unknown, schema: ValidationSchema): Record<string, unknown> {
-  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
-    throw new ValidationError("Request body must be a JSON object.");
-  }
+	if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+		throw new ValidationError('Request body must be a JSON object.');
+	}
 
-  const body = payload as Record<string, unknown>;
-  const errors: Record<string, string[]> = {};
-  const output: Record<string, unknown> = {};
+	const body = payload as Record<string, unknown>;
 
-  for (const [field, rules] of Object.entries(schema)) {
-    const messages = rules
-      .map((rule) => rule(field, body[field], body))
-      .filter((message): message is string => message !== undefined);
+	const errors: Record<string, string[]> = {};
 
-    if (messages.length > 0) {
-      errors[field] = messages;
-      continue;
-    }
+	const output: Record<string, unknown> = {};
 
-    if (field in body && body[field] !== undefined) {
-      const rawValue = body[field];
-      output[field] = typeof rawValue === "string" ? rawValue.trim() : rawValue;
-    }
-  }
+	for (const [field, rules] of Object.entries(schema)) {
+		const messages = rules
+			.map((rule) => rule(field, body[field], body))
+			.filter((message): message is string => message !== undefined);
 
-  if (Object.keys(errors).length > 0) {
-    throw new ValidationError("The given data was invalid.", errors);
-  }
+		if (messages.length > 0) {
+			errors[field] = messages;
+			continue;
+		}
 
-  return output;
+		if (field in body && body[field] !== undefined) {
+			const rawValue = body[field];
+
+			output[field] = typeof rawValue === 'string' ? rawValue.trim() : rawValue;
+		}
+	}
+
+	if (Object.keys(errors).length > 0) {
+		throw new ValidationError('The given data was invalid.', errors);
+	}
+
+	return output;
 }
 
 export type { IntegerValidationOptions, ValidationRule, ValidationSchema };
 export {
-  confirmed,
-  emailRule,
-  enumRule,
-  integerRange,
-  integerRule,
-  maxLength,
-  minLength,
-  optional,
-  pattern,
-  positiveIntegerRule,
-  required,
-  stringRule,
-  validateObject,
+	confirmed,
+	emailRule,
+	enumRule,
+	integerRange,
+	integerRule,
+	maxLength,
+	minLength,
+	optional,
+	pattern,
+	positiveIntegerRule,
+	required,
+	stringRule,
+	validateObject,
 };

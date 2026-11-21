@@ -1,4 +1,4 @@
-import type { DatabaseConnection } from "./connectionContracts";
+import type { DatabaseConnection } from './connectionContracts';
 
 // An isolated CLI process keeps synchronous SQLite I/O off the request event loop.
 // MySQL loads only its resolved optional peer; app config/env files are not loaded.
@@ -36,94 +36,131 @@ process.on('message', async message => {
 `;
 
 interface ReadOnlyObservationOptions {
-  signal: AbortSignal;
-  timeoutMs: number;
+	signal: AbortSignal;
+	timeoutMs: number;
 }
+
 async function observeIsolatedReadOnly<T>(
-  profile:
-    | { driver: "sqlite"; filename: string }
-    | { driver: "mysql"; url: string; module: string },
-  operation: (connection: DatabaseConnection) => Promise<T>,
-  options: ReadOnlyObservationOptions,
+	profile:
+		{ driver: 'sqlite'; filename: string } | { driver: 'mysql'; url: string; module: string },
+	operation: (connection: DatabaseConnection) => Promise<T>,
+	options: ReadOnlyObservationOptions,
 ): Promise<T> {
-  options.signal.throwIfAborted();
-  if (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs < 1 || options.timeoutMs > 5000)
-    throw new TypeError("SQL observation timeout must be between 1 and 5000 milliseconds.");
-  const executable = Bun.which("bun", { PATH: process.env.PATH ?? "" });
-  if (!executable) throw new Error("SQL observations require the Bun CLI on PATH.");
-  let pending: { resolve(rows: unknown[]): void; reject(error: unknown): void } | undefined;
-  let stopped = false;
-  const { promise: aborted, reject: rejectAbort } = Promise.withResolvers<never>();
-  const fail = (error: unknown) => {
-    pending?.reject(error);
-    pending = undefined;
-  };
-  const child = Bun.spawn({
-    cmd: [
-      executable,
-      "--no-env-file",
-      `--config=${process.platform === "win32" ? "NUL" : "/dev/null"}`,
-      "-e",
-      childSource,
-    ],
-    env: {},
-    stdout: "ignore",
-    stderr: "ignore",
-    serialization: "advanced",
-    ipc(message) {
-      const response = message as { ok?: boolean; rows?: unknown[] };
-      const request = pending;
-      pending = undefined;
-      if (response?.ok === true && Array.isArray(response.rows)) request?.resolve(response.rows);
-      else request?.reject(new Error("Read-only SQL observation failed."));
-    },
-  });
-  const exited = child.exited.then(() => {
-    fail(new Error("SQL observation process exited."));
-  });
-  const abort = (reason: unknown) => {
-    stopped = true;
-    child.kill("SIGKILL");
-    fail(reason);
-    rejectAbort(reason);
-  };
-  const onAbort = () => abort(options.signal.reason);
-  options.signal.addEventListener("abort", onAbort, { once: true });
-  const timer = setTimeout(() => abort(new Error("SQL observation timed out.")), options.timeoutMs);
-  const request = (message: object): Promise<unknown[]> => {
-    if (stopped) return Promise.reject(new Error("SQL observation is closed."));
-    if (pending)
-      return Promise.reject(new Error("Concurrent SQL observation queries are not supported."));
-    return new Promise((resolve, reject) => {
-      pending = { resolve, reject };
-      child.send(message);
-    });
-  };
-  try {
-    if (options.signal.aborted) onAbort();
-    const work = (async () => {
-      await request({ init: true, ...profile, timeoutMs: options.timeoutMs });
-      options.signal.throwIfAborted();
-      return operation({
-        async unsafe<TValue>(query: string, params: readonly unknown[] = []) {
-          return (await request({
-            query,
-            params: params.map((value) =>
-              profile.driver === "sqlite" && value instanceof Date ? value.toISOString() : value,
-            ),
-          })) as TValue[];
-        },
-      });
-    })();
-    return await Promise.race([work, aborted]);
-  } finally {
-    stopped = true;
-    clearTimeout(timer);
-    options.signal.removeEventListener("abort", onAbort);
-    child.kill("SIGKILL");
-    fail(new Error("SQL observation is closed."));
-    await exited;
-  }
+	options.signal.throwIfAborted();
+
+	if (
+		!Number.isSafeInteger(options.timeoutMs) ||
+		options.timeoutMs < 1 ||
+		options.timeoutMs > 5000
+	) {
+		throw new TypeError('SQL observation timeout must be between 1 and 5000 milliseconds.');
+	}
+
+	const executable = Bun.which('bun', { PATH: process.env.PATH ?? '' });
+
+	if (!executable) {
+		throw new Error('SQL observations require the Bun CLI on PATH.');
+	}
+
+	let pending: { resolve(rows: unknown[]): void; reject(error: unknown): void } | undefined;
+
+	let stopped = false;
+
+	const { promise: aborted, reject: rejectAbort } = Promise.withResolvers<never>();
+
+	const fail = (error: unknown) => {
+		pending?.reject(error);
+		pending = undefined;
+	};
+
+	const child = Bun.spawn({
+		cmd: [
+			executable,
+			'--no-env-file',
+			`--config=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`,
+			'-e',
+			childSource,
+		],
+		env: {},
+		stdout: 'ignore',
+		stderr: 'ignore',
+		serialization: 'advanced',
+		ipc(message) {
+			const response = message as { ok?: boolean; rows?: unknown[] };
+
+			const request = pending;
+
+			pending = undefined;
+
+			if (response?.ok === true && Array.isArray(response.rows)) {
+				request?.resolve(response.rows);
+			} else {
+				request?.reject(new Error('Read-only SQL observation failed.'));
+			}
+		},
+	});
+
+	const exited = child.exited.then(() => {
+		fail(new Error('SQL observation process exited.'));
+	});
+
+	const abort = (reason: unknown) => {
+		stopped = true;
+		child.kill('SIGKILL');
+		fail(reason);
+		rejectAbort(reason);
+	};
+
+	const onAbort = () => abort(options.signal.reason);
+
+	options.signal.addEventListener('abort', onAbort, { once: true });
+	const timer = setTimeout(() => abort(new Error('SQL observation timed out.')), options.timeoutMs);
+
+	const request = (message: object): Promise<unknown[]> => {
+		if (stopped) {
+			return Promise.reject(new Error('SQL observation is closed.'));
+		}
+
+		if (pending) {
+			return Promise.reject(new Error('Concurrent SQL observation queries are not supported.'));
+		}
+
+		return new Promise((resolve, reject) => {
+			pending = { resolve, reject };
+			child.send(message);
+		});
+	};
+
+	try {
+		if (options.signal.aborted) {
+			onAbort();
+		}
+
+		const work = (async () => {
+			await request({ init: true, ...profile, timeoutMs: options.timeoutMs });
+			options.signal.throwIfAborted();
+
+			return operation({
+				async unsafe<TValue>(query: string, params: readonly unknown[] = []) {
+					return (await request({
+						query,
+						params: params.map((value) =>
+							profile.driver === 'sqlite' && value instanceof Date ? value.toISOString() : value,
+						),
+					})) as TValue[];
+				},
+			});
+		})();
+
+		return await Promise.race([work, aborted]);
+	} finally {
+		stopped = true;
+		clearTimeout(timer);
+		options.signal.removeEventListener('abort', onAbort);
+		child.kill('SIGKILL');
+		fail(new Error('SQL observation is closed.'));
+		await exited;
+	}
 }
 
 export type { ReadOnlyObservationOptions };

@@ -1,108 +1,121 @@
-import { join } from "node:path";
-import type { RouteHandler } from "@getstrata/core/http/middleware";
-import { jsonResponse } from "@getstrata/core/http/response";
-import { isSpaEnabled, isViewsEnabled, readSpaPrefix } from "@getstrata/core/runtime/frontendMode";
-import { assertUrlPathUnderRoot } from "@getstrata/core/security/safePath";
-import type { AppDependencies, AppRouteMap } from "./contracts";
-import { compileRoutePlan } from "./routeCompiler";
-import { publishRoutePlan } from "./routeMetadata";
+import { join } from 'node:path';
 
-const SPA_DIST_DIRECTORY = join(process.cwd(), "frontend/dist");
+import type { RouteHandler } from '@getstrata/core/http/middleware';
+import { jsonResponse } from '@getstrata/core/http/response';
+import { isSpaEnabled, isViewsEnabled, readSpaPrefix } from '@getstrata/core/runtime/frontendMode';
+import { assertUrlPathUnderRoot } from '@getstrata/core/security/safePath';
+
+import type { AppDependencies, AppRouteMap } from './contracts';
+import { compileRoutePlan } from './routeCompiler';
+import { publishRoutePlan } from './routeMetadata';
+
+const SPA_DIST_DIRECTORY = join(process.cwd(), 'frontend/dist');
 
 type SpaRouteOptions = {
-  enabled?: boolean;
-  viewsEnabled?: boolean;
-  prefix?: string;
-  distDirectory?: string;
-  wrap?: (handler: RouteHandler) => RouteHandler;
+	enabled?: boolean;
+	viewsEnabled?: boolean;
+	prefix?: string;
+	distDirectory?: string;
+	wrap?: (handler: RouteHandler) => RouteHandler;
 };
 
 function relativeSpaPath(pathname: string, prefix: string): string {
-  if (pathname === prefix || pathname === `${prefix}/`) {
-    return "";
-  }
-  if (pathname.startsWith(`${prefix}/`)) {
-    return pathname.slice(prefix.length + 1);
-  }
-  return "";
+	if (pathname === prefix || pathname === `${prefix}/`) {
+		return '';
+	}
+
+	if (pathname.startsWith(`${prefix}/`)) {
+		return pathname.slice(prefix.length + 1);
+	}
+
+	return '';
 }
 
 function createSpaDocumentHandler(prefix: string, distDirectory: string): RouteHandler {
-  const indexFilePath = join(distDirectory, "index.html");
+	const indexFilePath = join(distDirectory, 'index.html');
 
-  return async (request: Request) => {
-    const pathname = new URL(request.url).pathname;
-    if (pathname.startsWith("/api/")) {
-      return new Response("Not found", { status: 404 });
-    }
+	return async (request: Request) => {
+		const pathname = new URL(request.url).pathname;
 
-    const relativePath = relativeSpaPath(pathname, prefix);
-    if (relativePath.length > 0) {
-      try {
-        const assetFile = Bun.file(assertUrlPathUnderRoot(distDirectory, relativePath));
-        if (await assetFile.exists()) {
-          return new Response(assetFile);
-        }
-      } catch {
-        return new Response("Not found", { status: 404 });
-      }
-    }
+		if (pathname.startsWith('/api/')) {
+			return new Response('Not found', { status: 404 });
+		}
 
-    const indexFile = Bun.file(indexFilePath);
+		const relativePath = relativeSpaPath(pathname, prefix);
 
-    if (await indexFile.exists()) {
-      return new Response(indexFile, {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
-      });
-    }
+		if (relativePath.length > 0) {
+			try {
+				const assetFile = Bun.file(assertUrlPathUnderRoot(distDirectory, relativePath));
 
-    return jsonResponse(
-      {
-        error: "SPA build not found. Run `bun run frontend:build` in your app.",
-      },
-      { status: 503 },
-    );
-  };
+				if (await assetFile.exists()) {
+					return new Response(assetFile);
+				}
+			} catch {
+				return new Response('Not found', { status: 404 });
+			}
+		}
+
+		const indexFile = Bun.file(indexFilePath);
+
+		if (await indexFile.exists()) {
+			return new Response(indexFile, {
+				headers: { 'Content-Type': 'text/html; charset=utf-8' },
+			});
+		}
+
+		return jsonResponse(
+			{
+				error: 'SPA build not found. Run `bun run frontend:build` in your app.',
+			},
+			{ status: 503 },
+		);
+	};
 }
 
 function createSpaRoutes(
-  _dependencies: AppDependencies,
-  options: SpaRouteOptions = {},
+	_dependencies: AppDependencies,
+	options: SpaRouteOptions = {},
 ): AppRouteMap {
-  const prefix = options.prefix ?? readSpaPrefix();
-  const distDirectory = options.distDirectory ?? SPA_DIST_DIRECTORY;
-  const wrap = options.wrap ?? ((handler: RouteHandler) => handler);
-  const handler = wrap(createSpaDocumentHandler(prefix, distDirectory));
+	const prefix = options.prefix ?? readSpaPrefix();
 
-  const routes: AppRouteMap = {
-    [prefix]: handler,
-    [`${prefix}/`]: handler,
-    [`${prefix}/*`]: handler,
-  };
+	const distDirectory = options.distDirectory ?? SPA_DIST_DIRECTORY;
 
-  if (!(options.viewsEnabled ?? isViewsEnabled())) {
-    routes["/"] = async () => Response.redirect(`${prefix}/`, 302);
-  }
+	const wrap = options.wrap ?? ((handler: RouteHandler) => handler);
 
-  const plan = compileRoutePlan([{ name: "SPA", routes }]);
-  return publishRoutePlan(plan, plan.routes) as AppRouteMap;
+	const handler = wrap(createSpaDocumentHandler(prefix, distDirectory));
+
+	const routes: AppRouteMap = {
+		[prefix]: handler,
+		[`${prefix}/`]: handler,
+		[`${prefix}/*`]: handler,
+	};
+
+	if (!(options.viewsEnabled ?? isViewsEnabled())) {
+		routes['/'] = async () => Response.redirect(`${prefix}/`, 302);
+	}
+
+	const plan = compileRoutePlan([{ name: 'SPA', routes }]);
+
+	return publishRoutePlan(plan, plan.routes) as AppRouteMap;
 }
 
 function mergeSpaRoutes(
-  dependencies: AppDependencies,
-  routes: AppRouteMap,
-  options?: SpaRouteOptions,
+	dependencies: AppDependencies,
+	routes: AppRouteMap,
+	options?: SpaRouteOptions,
 ): AppRouteMap {
-  if (!(options?.enabled ?? isSpaEnabled())) {
-    return routes;
-  }
+	if (!(options?.enabled ?? isSpaEnabled())) {
+		return routes;
+	}
 
-  const spaRoutes = createSpaRoutes(dependencies, options);
-  const plan = compileRoutePlan([
-    { name: "SPA", routes: spaRoutes },
-    { name: "application", routes },
-  ]);
-  return publishRoutePlan(plan, plan.routes) as AppRouteMap;
+	const spaRoutes = createSpaRoutes(dependencies, options);
+
+	const plan = compileRoutePlan([
+		{ name: 'SPA', routes: spaRoutes },
+		{ name: 'application', routes },
+	]);
+
+	return publishRoutePlan(plan, plan.routes) as AppRouteMap;
 }
 
 export type { SpaRouteOptions };

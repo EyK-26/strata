@@ -1,1 +1,1 @@
-export * from "../../../../src/core/auth/passwordConfirmCookie.ts";
+export * from '../../../../src/core/auth/passwordConfirmCookie.ts';

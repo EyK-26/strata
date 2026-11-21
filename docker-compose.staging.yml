@@ -3,12 +3,12 @@ services:
   app:
     environment:
       APP_ENV: staging
-      APP_DEBUG: "false"
-      AUTH_DEV_HEADERS: "false"
+      APP_DEBUG: 'false'
+      AUTH_DEV_HEADERS: 'false'
   worker:
     environment:
       APP_ENV: staging
-      AUTH_DEV_HEADERS: "false"
+      AUTH_DEV_HEADERS: 'false'
   migrate:
     environment:
       APP_ENV: staging

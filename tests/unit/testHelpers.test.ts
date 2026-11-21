@@ -1,67 +1,73 @@
-import { describe, expect, test } from "bun:test";
-import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { createMockCache, createMockDependencies, mockFetch } from "./testHelpers";
+import { describe, expect, test } from 'bun:test';
 
-describe("testHelpers", () => {
-  test("createMockCache default implementation satisfies the cache contract", async () => {
-    const cache = createMockCache();
+import { ServiceContainer } from '@getstrata/bootstrap/contracts';
 
-    expect(await cache.get("key")).toBeUndefined();
-    expect(await cache.remember("key", async () => "remembered")).toBe("remembered");
-    expect(await cache.forget("key")).toBe(true);
-    expect(await cache.flush()).toBeUndefined();
-    expect(await cache.getOrSet("key", async () => "loaded")).toBe("loaded");
-    expect(await cache.invalidate("key")).toBe(true);
-    expect(await cache.invalidateByPrefix("prefix:")).toBe(0);
-    expect(await cache.clear()).toBeUndefined();
-    expect(await cache.size()).toBe(0);
+import { createMockCache, createMockDependencies, mockFetch } from './testHelpers';
 
-    const tagged = cache.tags("reports");
-    expect(await tagged.remember("tagged", async () => "tagged-value")).toBe("tagged-value");
-    expect(await tagged.flush()).toBe(0);
-  });
+describe('testHelpers', () => {
+	test('createMockCache default implementation satisfies the cache contract', async () => {
+		const cache = createMockCache();
 
-  test("createMockCache accepts overrides", async () => {
-    const cache = createMockCache({
-      get: async () => "cached" as never,
-      forget: async () => false,
-      flush: async () => undefined,
-      invalidate: async () => false,
-      invalidateByPrefix: async () => 2,
-      clear: async () => undefined,
-      size: async () => 5,
-    });
+		expect(await cache.get('key')).toBeUndefined();
+		expect(await cache.remember('key', async () => 'remembered')).toBe('remembered');
+		expect(await cache.forget('key')).toBe(true);
+		expect(await cache.flush()).toBeUndefined();
+		expect(await cache.getOrSet('key', async () => 'loaded')).toBe('loaded');
+		expect(await cache.invalidate('key')).toBe(true);
+		expect(await cache.invalidateByPrefix('prefix:')).toBe(0);
+		expect(await cache.clear()).toBeUndefined();
+		expect(await cache.size()).toBe(0);
 
-    expect((await cache.get("key")) as string | undefined).toBe("cached");
-    expect(await cache.remember("key", async () => "remembered")).toBe("remembered");
-    expect(await cache.forget("key")).toBe(false);
-    expect(await cache.flush()).toBeUndefined();
-    expect(await cache.getOrSet("key", async () => "loaded")).toBe("loaded");
-    expect(await cache.invalidate("key")).toBe(false);
-    expect(await cache.invalidateByPrefix("prefix:")).toBe(2);
-    expect(await cache.clear()).toBeUndefined();
-    expect(await cache.size()).toBe(5);
+		const tagged = cache.tags('reports');
 
-    const tagged = cache.tags("reports");
-    expect(await tagged.remember("tagged", async () => "tagged-value")).toBe("tagged-value");
-    expect(await tagged.flush()).toBe(0);
-  });
+		expect(await tagged.remember('tagged', async () => 'tagged-value')).toBe('tagged-value');
+		expect(await tagged.flush()).toBe(0);
+	});
 
-  test("createMockDependencies wraps container, cache, and storage", () => {
-    const container = new ServiceContainer();
-    const cache = createMockCache({ size: async () => 3 });
-    const dependencies = createMockDependencies(container, cache);
+	test('createMockCache accepts overrides', async () => {
+		const cache = createMockCache({
+			get: async () => 'cached' as never,
+			forget: async () => false,
+			flush: async () => undefined,
+			invalidate: async () => false,
+			invalidateByPrefix: async () => 2,
+			clear: async () => undefined,
+			size: async () => 5,
+		});
 
-    expect(dependencies.container).toBe(container);
-    expect(dependencies.cache).toBe(cache);
-    expect(dependencies.storage).toBeDefined();
-  });
+		expect((await cache.get('key')) as string | undefined).toBe('cached');
+		expect(await cache.remember('key', async () => 'remembered')).toBe('remembered');
+		expect(await cache.forget('key')).toBe(false);
+		expect(await cache.flush()).toBeUndefined();
+		expect(await cache.getOrSet('key', async () => 'loaded')).toBe('loaded');
+		expect(await cache.invalidate('key')).toBe(false);
+		expect(await cache.invalidateByPrefix('prefix:')).toBe(2);
+		expect(await cache.clear()).toBeUndefined();
+		expect(await cache.size()).toBe(5);
 
-  test("mockFetch returns the provided implementation as fetch", async () => {
-    const fetchImpl = mockFetch(async () => new Response("ok"));
+		const tagged = cache.tags('reports');
 
-    await expect(fetchImpl("https://example.test")).resolves.toMatchObject({
-      status: 200,
-    });
-  });
+		expect(await tagged.remember('tagged', async () => 'tagged-value')).toBe('tagged-value');
+		expect(await tagged.flush()).toBe(0);
+	});
+
+	test('createMockDependencies wraps container, cache, and storage', () => {
+		const container = new ServiceContainer();
+
+		const cache = createMockCache({ size: async () => 3 });
+
+		const dependencies = createMockDependencies(container, cache);
+
+		expect(dependencies.container).toBe(container);
+		expect(dependencies.cache).toBe(cache);
+		expect(dependencies.storage).toBeDefined();
+	});
+
+	test('mockFetch returns the provided implementation as fetch', async () => {
+		const fetchImpl = mockFetch(async () => new Response('ok'));
+
+		await expect(fetchImpl('https://example.test')).resolves.toMatchObject({
+			status: 200,
+		});
+	});
 });

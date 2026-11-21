@@ -15,34 +15,34 @@ Role creation/rotation takes `LOCK TABLE pg_catalog.pg_authid IN SHARE ROW EXCLU
 An administrator or the provider may create the database and roles separately. Give the migration identity ownership of the application schema/objects (or the specific DDL rights its migrations need). A database owner with `NOCREATEDB NOCREATEROLE NOSUPERUSER NOBYPASSRLS` can then run the existing public migration API without provisioning roles:
 
 ```typescript
-import { SQL } from "bun";
-import { join } from "node:path";
-import { runWithSqlDialect } from "@getstrata/core/database/dialect";
+import { join } from 'node:path';
+
+import { runWithSqlDialect } from '@getstrata/core/database/dialect';
+import { loadMigrationsFromDirectory, migrateDatabase } from '@getstrata/core/database/migrations';
 import {
-  loadMigrationsFromDirectory,
-  migrateDatabase,
-} from "@getstrata/core/database/migrations";
-import {
-  grantPostgresAppRolePrivileges,
-  postgresDatabaseNameFromUrl,
-} from "@getstrata/core/tenant/enableTenantRls";
+	grantPostgresAppRolePrivileges,
+	postgresDatabaseNameFromUrl,
+} from '@getstrata/core/tenant/enableTenantRls';
+import { SQL } from 'bun';
 
 const ownerUrl = process.env.MIGRATION_DATABASE_URL;
 const runtimeUrl = process.env.DATABASE_URL;
-if (!ownerUrl || !runtimeUrl) throw new Error("Explicit migration and runtime URLs required");
+if (!ownerUrl || !runtimeUrl) throw new Error('Explicit migration and runtime URLs required');
 // Both URLs must target the same, already provisioned application database.
 if (postgresDatabaseNameFromUrl(ownerUrl) !== postgresDatabaseNameFromUrl(runtimeUrl))
-  throw new Error("Migration and runtime databases must match");
+	throw new Error('Migration and runtime databases must match');
 const owner = new SQL({ url: ownerUrl, max: 1 });
 try {
-  const migrations = await loadMigrationsFromDirectory(join(import.meta.dir, "migrations"));
-  await runWithSqlDialect("pgsql", () => migrateDatabase(owner, migrations, { advisoryLock: true }));
-  await grantPostgresAppRolePrivileges(owner, {
-    database: postgresDatabaseNameFromUrl(runtimeUrl),
-    role: decodeURIComponent(new URL(runtimeUrl).username),
-  });
+	const migrations = await loadMigrationsFromDirectory(join(import.meta.dir, 'migrations'));
+	await runWithSqlDialect('pgsql', () =>
+		migrateDatabase(owner, migrations, { advisoryLock: true }),
+	);
+	await grantPostgresAppRolePrivileges(owner, {
+		database: postgresDatabaseNameFromUrl(runtimeUrl),
+		role: decodeURIComponent(new URL(runtimeUrl).username),
+	});
 } finally {
-  await owner.close();
+	await owner.close();
 }
 ```
 

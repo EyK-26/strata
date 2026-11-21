@@ -1,84 +1,89 @@
-import { ForbiddenError } from "@getstrata/core/errors/http";
-import type { MembershipLookup, OrganizationMemberRole } from "../contracts/membership";
-import { hasMinimumOrgRole, isGlobalAdmin, resolveUserId } from "./accessControl";
-import { type AuthUser, currentAuthUser } from "./authContext";
+import { ForbiddenError } from '@getstrata/core/errors/http';
+
+import type { MembershipLookup, OrganizationMemberRole } from '../contracts/membership';
+
+import { hasMinimumOrgRole, isGlobalAdmin, resolveUserId } from './accessControl';
+import { type AuthUser, currentAuthUser } from './authContext';
 
 type MembershipRepositoryLike = MembershipLookup;
 
 class MembershipService {
-  constructor(private readonly members: MembershipRepositoryLike) {}
+	constructor(private readonly members: MembershipRepositoryLike) {}
 
-  async listOrganizationIdsForUser(userId: number): Promise<number[]> {
-    const memberships = await this.members.listForUser(userId);
-    return memberships.map((membership) => membership.organization_id);
-  }
+	async listOrganizationIdsForUser(userId: number): Promise<number[]> {
+		const memberships = await this.members.listForUser(userId);
 
-  async getOrgRole(userId: number, organizationId: number): Promise<OrganizationMemberRole | null> {
-    const membership = await this.members.findMembership(userId, organizationId);
-    return membership?.role ?? null;
-  }
+		return memberships.map((membership) => membership.organization_id);
+	}
 
-  async requireOrgAccess(
-    organizationId: number,
-    minimumRole: OrganizationMemberRole = "member",
-    user: AuthUser | null = currentAuthUser(),
-  ): Promise<OrganizationMemberRole> {
-    if (!user) {
-      throw new ForbiddenError("Authentication required.");
-    }
+	async getOrgRole(userId: number, organizationId: number): Promise<OrganizationMemberRole | null> {
+		const membership = await this.members.findMembership(userId, organizationId);
 
-    if (isGlobalAdmin(user)) {
-      return "owner";
-    }
+		return membership?.role ?? null;
+	}
 
-    const role = await this.getOrgRole(resolveUserId(user), organizationId);
+	async requireOrgAccess(
+		organizationId: number,
+		minimumRole: OrganizationMemberRole = 'member',
+		user: AuthUser | null = currentAuthUser(),
+	): Promise<OrganizationMemberRole> {
+		if (!user) {
+			throw new ForbiddenError('Authentication required.');
+		}
 
-    if (!role || !hasMinimumOrgRole(role, minimumRole)) {
-      throw new ForbiddenError("Organization membership required.");
-    }
+		if (isGlobalAdmin(user)) {
+			return 'owner';
+		}
 
-    return role;
-  }
+		const role = await this.getOrgRole(resolveUserId(user), organizationId);
 
-  async filterAccessibleOrganizationIds(
-    organizationIds: number[],
-    user: AuthUser | null = currentAuthUser(),
-  ): Promise<number[]> {
-    if (!user) {
-      return [];
-    }
+		if (!role || !hasMinimumOrgRole(role, minimumRole)) {
+			throw new ForbiddenError('Organization membership required.');
+		}
 
-    if (isGlobalAdmin(user)) {
-      return organizationIds;
-    }
+		return role;
+	}
 
-    const allowed = new Set(await this.listOrganizationIdsForUser(resolveUserId(user)));
-    return organizationIds.filter((organizationId) => allowed.has(organizationId));
-  }
+	async filterAccessibleOrganizationIds(
+		organizationIds: number[],
+		user: AuthUser | null = currentAuthUser(),
+	): Promise<number[]> {
+		if (!user) {
+			return [];
+		}
 
-  async addOwnerOnOrganizationCreate(organizationId: number, userId: number): Promise<void> {
-    await this.members.addMember({
-      organizationId,
-      userId,
-      role: "owner",
-    });
-  }
+		if (isGlobalAdmin(user)) {
+			return organizationIds;
+		}
 
-  listMembersForOrganization(organizationId: number) {
-    return this.members.listForOrganization(organizationId);
-  }
+		const allowed = new Set(await this.listOrganizationIdsForUser(resolveUserId(user)));
 
-  addMember(input: { organizationId: number; userId: number; role?: OrganizationMemberRole }) {
-    return this.members.addMember(input);
-  }
+		return organizationIds.filter((organizationId) => allowed.has(organizationId));
+	}
 
-  removeMember(organizationId: number, userId: number) {
-    return this.members.removeMember(organizationId, userId);
-  }
+	async addOwnerOnOrganizationCreate(organizationId: number, userId: number): Promise<void> {
+		await this.members.addMember({
+			organizationId,
+			userId,
+			role: 'owner',
+		});
+	}
 
-  updateMemberRole(organizationId: number, userId: number, role: OrganizationMemberRole) {
-    return this.members.updateMemberRole(organizationId, userId, role);
-  }
+	listMembersForOrganization(organizationId: number) {
+		return this.members.listForOrganization(organizationId);
+	}
+
+	addMember(input: { organizationId: number; userId: number; role?: OrganizationMemberRole }) {
+		return this.members.addMember(input);
+	}
+
+	removeMember(organizationId: number, userId: number) {
+		return this.members.removeMember(organizationId, userId);
+	}
+
+	updateMemberRole(organizationId: number, userId: number, role: OrganizationMemberRole) {
+		return this.members.updateMemberRole(organizationId, userId, role);
+	}
 }
 
 export type { MembershipRepositoryLike };

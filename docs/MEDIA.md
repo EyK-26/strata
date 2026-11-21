@@ -7,16 +7,16 @@ repository, a global disk facade or a new base controller.
 ## Store a file without buffering it
 
 ```ts
-import { parseMultipartUploadStream } from "@getstrata/core/http/parseMultipartUpload";
-import { requireStreamingStorage } from "@getstrata/core/storage/storage";
+import { parseMultipartUploadStream } from '@getstrata/core/http/parseMultipartUpload';
+import { requireStreamingStorage } from '@getstrata/core/storage/storage';
 
 // Run authentication, CSRF (for browser sessions), authorization and tenant checks first.
-const upload = await parseMultipartUploadStream(request, "document", {
-  maxBytes: 20 * 1024 * 1024,
-  allowUnknownMime: false,
+const upload = await parseMultipartUploadStream(request, 'document', {
+	maxBytes: 20 * 1024 * 1024,
+	allowUnknownMime: false,
 });
 const storage = requireStreamingStorage(dependencies.storage);
-const path = await upload.store(storage, "documents");
+const path = await upload.store(storage, 'documents');
 // Save path + upload.fileName + upload.mimeType with the authorized application record.
 ```
 
@@ -88,15 +88,15 @@ or keep their own explicit multi-file handling.
 ## Transform an image with Bun
 
 ```ts
-import { transformImageContents } from "@getstrata/core/media/imageTransform";
+import { transformImageContents } from '@getstrata/core/media/imageTransform';
 
 const image = await transformImageContents(await upload.bytes(), {
-  contentType: upload.mimeType,
-  width: 800,
-  height: 600,
-  fit: "inside",
-  format: "webp",
-  quality: 80,
+	contentType: upload.mimeType,
+	width: 800,
+	height: 600,
+	fit: 'inside',
+	format: 'webp',
+	quality: 80,
 });
 const key = `thumbnails/${crypto.randomUUID()}.webp`;
 await dependencies.storage.put(key, image.body);

@@ -1,1 +1,1 @@
-export type { Migration, MigrationStatus } from "../../core/database/migrations/types";
+export type { Migration, MigrationStatus } from '../../core/database/migrations/types';

@@ -1,291 +1,306 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from 'bun:test';
+
 import {
-  clearPasswordConfirmCookie,
-  createPasswordConfirmCookie,
-  DEFAULT_PASSWORD_CONFIRM_TTL_SECONDS,
-  hasFreshPasswordConfirmation,
-  PASSWORD_CONFIRM_COOKIE,
-  passwordConfirmCookieName,
-  passwordConfirmOptionsFromEnvironment,
-  passwordConfirmTtlSeconds,
-} from "@getstrata/core/auth/passwordConfirmCookie";
+	clearPasswordConfirmCookie,
+	createPasswordConfirmCookie,
+	DEFAULT_PASSWORD_CONFIRM_TTL_SECONDS,
+	hasFreshPasswordConfirmation,
+	PASSWORD_CONFIRM_COOKIE,
+	passwordConfirmCookieName,
+	passwordConfirmOptionsFromEnvironment,
+	passwordConfirmTtlSeconds,
+} from '@getstrata/core/auth/passwordConfirmCookie';
 
-describe("passwordConfirmCookie", () => {
-  const originalAppEnv = process.env.APP_ENV;
-  const originalSessionSecret = process.env.SESSION_SECRET;
-  const originalOAuthStateSecret = process.env.OAUTH_STATE_SECRET;
-  const originalCookieName = process.env.PASSWORD_CONFIRM_COOKIE_NAME;
-  const originalTimeout = process.env.PASSWORD_CONFIRM_TIMEOUT;
+describe('passwordConfirmCookie', () => {
+	const originalAppEnv = process.env.APP_ENV;
 
-  afterEach(() => {
-    if (originalAppEnv === undefined) {
-      delete process.env.APP_ENV;
-    } else {
-      process.env.APP_ENV = originalAppEnv;
-    }
+	const originalSessionSecret = process.env.SESSION_SECRET;
 
-    if (originalSessionSecret === undefined) {
-      delete process.env.SESSION_SECRET;
-    } else {
-      process.env.SESSION_SECRET = originalSessionSecret;
-    }
+	const originalOAuthStateSecret = process.env.OAUTH_STATE_SECRET;
 
-    if (originalOAuthStateSecret === undefined) {
-      delete process.env.OAUTH_STATE_SECRET;
-    } else {
-      process.env.OAUTH_STATE_SECRET = originalOAuthStateSecret;
-    }
+	const originalCookieName = process.env.PASSWORD_CONFIRM_COOKIE_NAME;
 
-    if (originalCookieName === undefined) {
-      delete process.env.PASSWORD_CONFIRM_COOKIE_NAME;
-    } else {
-      process.env.PASSWORD_CONFIRM_COOKIE_NAME = originalCookieName;
-    }
+	const originalTimeout = process.env.PASSWORD_CONFIRM_TIMEOUT;
 
-    if (originalTimeout === undefined) {
-      delete process.env.PASSWORD_CONFIRM_TIMEOUT;
-    } else {
-      process.env.PASSWORD_CONFIRM_TIMEOUT = originalTimeout;
-    }
-  });
+	afterEach(() => {
+		if (originalAppEnv === undefined) {
+			delete process.env.APP_ENV;
+		} else {
+			process.env.APP_ENV = originalAppEnv;
+		}
 
-  test("creates and reads a signed confirmation cookie", () => {
-    const cookiePair =
-      createPasswordConfirmCookie(
-        42,
-        undefined,
-        passwordConfirmOptionsFromEnvironment(process.env),
-      ).split(";")[0] ?? "";
-    const request = new Request("http://example.test/account/export", {
-      headers: { cookie: cookiePair },
-    });
+		if (originalSessionSecret === undefined) {
+			delete process.env.SESSION_SECRET;
+		} else {
+			process.env.SESSION_SECRET = originalSessionSecret;
+		}
 
-    expect(
-      hasFreshPasswordConfirmation(
-        request,
-        42,
-        undefined,
-        passwordConfirmOptionsFromEnvironment(process.env),
-      ),
-    ).toBe(true);
-    expect(
-      hasFreshPasswordConfirmation(
-        request,
-        7,
-        undefined,
-        passwordConfirmOptionsFromEnvironment(process.env),
-      ),
-    ).toBe(false);
-  });
+		if (originalOAuthStateSecret === undefined) {
+			delete process.env.OAUTH_STATE_SECRET;
+		} else {
+			process.env.OAUTH_STATE_SECRET = originalOAuthStateSecret;
+		}
 
-  test("rejects missing, malformed, expired, and tampered cookies", () => {
-    expect(
-      hasFreshPasswordConfirmation(
-        new Request("http://example.test/account/export"),
-        42,
-        undefined,
-        passwordConfirmOptionsFromEnvironment(process.env),
-      ),
-    ).toBe(false);
+		if (originalCookieName === undefined) {
+			delete process.env.PASSWORD_CONFIRM_COOKIE_NAME;
+		} else {
+			process.env.PASSWORD_CONFIRM_COOKIE_NAME = originalCookieName;
+		}
 
-    expect(
-      hasFreshPasswordConfirmation(
-        new Request("http://example.test/account/export", {
-          headers: { cookie: "strata_session=1.2.deadbeef" },
-        }),
-        42,
-        undefined,
-        passwordConfirmOptionsFromEnvironment(process.env),
-      ),
-    ).toBe(false);
+		if (originalTimeout === undefined) {
+			delete process.env.PASSWORD_CONFIRM_TIMEOUT;
+		} else {
+			process.env.PASSWORD_CONFIRM_TIMEOUT = originalTimeout;
+		}
+	});
 
-    expect(
-      hasFreshPasswordConfirmation(
-        new Request("http://example.test/account/export", {
-          headers: { cookie: "strata_password_confirmed=1.2" },
-        }),
-        1,
-        undefined,
-        passwordConfirmOptionsFromEnvironment(process.env),
-      ),
-    ).toBe(false);
+	test('creates and reads a signed confirmation cookie', () => {
+		const cookiePair =
+			createPasswordConfirmCookie(
+				42,
+				undefined,
+				passwordConfirmOptionsFromEnvironment(process.env),
+			).split(';')[0] ?? '';
 
-    expect(
-      hasFreshPasswordConfirmation(
-        new Request("http://example.test/account/export", {
-          headers: { cookie: "strata_password_confirmed=0.123.deadbeef" },
-        }),
-        1,
-        undefined,
-        passwordConfirmOptionsFromEnvironment(process.env),
-      ),
-    ).toBe(false);
+		const request = new Request('http://example.test/account/export', {
+			headers: { cookie: cookiePair },
+		});
 
-    expect(
-      hasFreshPasswordConfirmation(
-        new Request("http://example.test/account/export", {
-          headers: { cookie: "strata_password_confirmed=1.abc.deadbeef" },
-        }),
-        1,
-        undefined,
-        passwordConfirmOptionsFromEnvironment(process.env),
-      ),
-    ).toBe(false);
+		expect(
+			hasFreshPasswordConfirmation(
+				request,
+				42,
+				undefined,
+				passwordConfirmOptionsFromEnvironment(process.env),
+			),
+		).toBe(true);
+		expect(
+			hasFreshPasswordConfirmation(
+				request,
+				7,
+				undefined,
+				passwordConfirmOptionsFromEnvironment(process.env),
+			),
+		).toBe(false);
+	});
 
-    const expiredConfirmedAt = Date.now() - DEFAULT_PASSWORD_CONFIRM_TTL_SECONDS * 1000 - 1_000;
-    expect(
-      hasFreshPasswordConfirmation(
-        new Request("http://example.test/account/export", {
-          headers: {
-            cookie: `strata_password_confirmed=${encodeURIComponent(`${42}.${expiredConfirmedAt}.deadbeef`)}`,
-          },
-        }),
-        42,
-        undefined,
-        passwordConfirmOptionsFromEnvironment(process.env),
-      ),
-    ).toBe(false);
+	test('rejects missing, malformed, expired, and tampered cookies', () => {
+		expect(
+			hasFreshPasswordConfirmation(
+				new Request('http://example.test/account/export'),
+				42,
+				undefined,
+				passwordConfirmOptionsFromEnvironment(process.env),
+			),
+		).toBe(false);
 
-    const freshConfirmedAt = Date.now();
-    expect(
-      hasFreshPasswordConfirmation(
-        new Request("http://example.test/account/export", {
-          headers: { cookie: `strata_password_confirmed=1.${freshConfirmedAt}.` },
-        }),
-        1,
-        undefined,
-        passwordConfirmOptionsFromEnvironment(process.env),
-      ),
-    ).toBe(false);
+		expect(
+			hasFreshPasswordConfirmation(
+				new Request('http://example.test/account/export', {
+					headers: { cookie: 'strata_session=1.2.deadbeef' },
+				}),
+				42,
+				undefined,
+				passwordConfirmOptionsFromEnvironment(process.env),
+			),
+		).toBe(false);
 
-    const validCookie =
-      createPasswordConfirmCookie(42, undefined, passwordConfirmOptionsFromEnvironment(process.env))
-        .split(";")[0]
-        ?.split("=")[1] ?? "";
-    const decoded = decodeURIComponent(validCookie);
-    const [userIdRaw, confirmedAtRaw, signature] = decoded.split(".");
-    const shortSignature = "ab";
+		expect(
+			hasFreshPasswordConfirmation(
+				new Request('http://example.test/account/export', {
+					headers: { cookie: 'strata_password_confirmed=1.2' },
+				}),
+				1,
+				undefined,
+				passwordConfirmOptionsFromEnvironment(process.env),
+			),
+		).toBe(false);
 
-    expect(
-      hasFreshPasswordConfirmation(
-        new Request("http://example.test/account/export", {
-          headers: {
-            cookie: `strata_password_confirmed=${encodeURIComponent(`${userIdRaw}.${confirmedAtRaw}.${shortSignature}`)}`,
-          },
-        }),
-        42,
-        undefined,
-        passwordConfirmOptionsFromEnvironment(process.env),
-      ),
-    ).toBe(false);
+		expect(
+			hasFreshPasswordConfirmation(
+				new Request('http://example.test/account/export', {
+					headers: { cookie: 'strata_password_confirmed=0.123.deadbeef' },
+				}),
+				1,
+				undefined,
+				passwordConfirmOptionsFromEnvironment(process.env),
+			),
+		).toBe(false);
 
-    const badSignature = `${signature?.slice(0, -1)}${signature?.slice(-1) === "a" ? "b" : "a"}`;
-    expect(
-      hasFreshPasswordConfirmation(
-        new Request("http://example.test/account/export", {
-          headers: {
-            cookie: `strata_password_confirmed=${encodeURIComponent(`${userIdRaw}.${confirmedAtRaw}.${badSignature}`)}`,
-          },
-        }),
-        42,
-        undefined,
-        passwordConfirmOptionsFromEnvironment(process.env),
-      ),
-    ).toBe(false);
-  });
+		expect(
+			hasFreshPasswordConfirmation(
+				new Request('http://example.test/account/export', {
+					headers: { cookie: 'strata_password_confirmed=1.abc.deadbeef' },
+				}),
+				1,
+				undefined,
+				passwordConfirmOptionsFromEnvironment(process.env),
+			),
+		).toBe(false);
 
-  test("adds secure cookie flags in production", () => {
-    process.env.APP_ENV = "production";
-    process.env.SESSION_SECRET = "explicit-production-test-session-secret";
+		const expiredConfirmedAt = Date.now() - DEFAULT_PASSWORD_CONFIRM_TTL_SECONDS * 1000 - 1_000;
 
-    expect(
-      createPasswordConfirmCookie(1, undefined, passwordConfirmOptionsFromEnvironment(process.env)),
-    ).toContain("; Secure");
-    expect(
-      clearPasswordConfirmCookie(passwordConfirmOptionsFromEnvironment(process.env)),
-    ).toContain("; Secure");
-  });
+		expect(
+			hasFreshPasswordConfirmation(
+				new Request('http://example.test/account/export', {
+					headers: {
+						cookie: `strata_password_confirmed=${encodeURIComponent(`${42}.${expiredConfirmedAt}.deadbeef`)}`,
+					},
+				}),
+				42,
+				undefined,
+				passwordConfirmOptionsFromEnvironment(process.env),
+			),
+		).toBe(false);
 
-  test("falls back through session secret environment variables", () => {
-    delete process.env.SESSION_SECRET;
-    process.env.OAUTH_STATE_SECRET = "oauth-secret";
+		const freshConfirmedAt = Date.now();
 
-    const cookie = createPasswordConfirmCookie(
-      7,
-      undefined,
-      passwordConfirmOptionsFromEnvironment(process.env),
-    );
-    expect(
-      hasFreshPasswordConfirmation(
-        new Request("http://example.test/", { headers: { cookie } }),
-        7,
-        undefined,
-        passwordConfirmOptionsFromEnvironment(process.env),
-      ),
-    ).toBe(true);
+		expect(
+			hasFreshPasswordConfirmation(
+				new Request('http://example.test/account/export', {
+					headers: { cookie: `strata_password_confirmed=1.${freshConfirmedAt}.` },
+				}),
+				1,
+				undefined,
+				passwordConfirmOptionsFromEnvironment(process.env),
+			),
+		).toBe(false);
 
-    delete process.env.OAUTH_STATE_SECRET;
-    const fallbackCookie = createPasswordConfirmCookie(
-      8,
-      undefined,
-      passwordConfirmOptionsFromEnvironment(process.env),
-    );
-    expect(
-      hasFreshPasswordConfirmation(
-        new Request("http://example.test/", { headers: { cookie: fallbackCookie } }),
-        8,
-        undefined,
-        passwordConfirmOptionsFromEnvironment(process.env),
-      ),
-    ).toBe(true);
-  });
+		const validCookie =
+			createPasswordConfirmCookie(42, undefined, passwordConfirmOptionsFromEnvironment(process.env))
+				.split(';')[0]
+				?.split('=')[1] ?? '';
 
-  test("defaults to the Strata confirmation cookie name", () => {
-    delete process.env.PASSWORD_CONFIRM_COOKIE_NAME;
+		const decoded = decodeURIComponent(validCookie);
 
-    expect(PASSWORD_CONFIRM_COOKIE).toBe("strata_password_confirmed");
-    expect(passwordConfirmCookieName(process.env)).toBe("strata_password_confirmed");
-    expect(
-      createPasswordConfirmCookie(1, undefined, passwordConfirmOptionsFromEnvironment(process.env)),
-    ).toContain("strata_password_confirmed=");
-    expect(
-      clearPasswordConfirmCookie(passwordConfirmOptionsFromEnvironment(process.env)),
-    ).toContain("strata_password_confirmed=");
-  });
+		const [userIdRaw, confirmedAtRaw, signature] = decoded.split('.');
 
-  test("overrides the confirmation cookie name and TTL", () => {
-    process.env.PASSWORD_CONFIRM_COOKIE_NAME = "acme_confirmed";
-    process.env.PASSWORD_CONFIRM_TIMEOUT = "90";
+		const shortSignature = 'ab';
 
-    expect(passwordConfirmCookieName(process.env)).toBe("acme_confirmed");
-    expect(passwordConfirmTtlSeconds(process.env)).toBe(90);
+		expect(
+			hasFreshPasswordConfirmation(
+				new Request('http://example.test/account/export', {
+					headers: {
+						cookie: `strata_password_confirmed=${encodeURIComponent(`${userIdRaw}.${confirmedAtRaw}.${shortSignature}`)}`,
+					},
+				}),
+				42,
+				undefined,
+				passwordConfirmOptionsFromEnvironment(process.env),
+			),
+		).toBe(false);
 
-    const cookie = createPasswordConfirmCookie(
-      11,
-      undefined,
-      passwordConfirmOptionsFromEnvironment(process.env),
-    );
-    expect(cookie).toContain("acme_confirmed=");
-    expect(cookie).toContain("Max-Age=90");
-    expect(cookie).not.toContain("strata_password_confirmed=");
+		const badSignature = `${signature?.slice(0, -1)}${signature?.slice(-1) === 'a' ? 'b' : 'a'}`;
 
-    expect(
-      hasFreshPasswordConfirmation(
-        new Request("http://example.test/", {
-          headers: { cookie: cookie.split(";")[0] ?? "" },
-        }),
-        11,
-        undefined,
-        passwordConfirmOptionsFromEnvironment(process.env),
-      ),
-    ).toBe(true);
+		expect(
+			hasFreshPasswordConfirmation(
+				new Request('http://example.test/account/export', {
+					headers: {
+						cookie: `strata_password_confirmed=${encodeURIComponent(`${userIdRaw}.${confirmedAtRaw}.${badSignature}`)}`,
+					},
+				}),
+				42,
+				undefined,
+				passwordConfirmOptionsFromEnvironment(process.env),
+			),
+		).toBe(false);
+	});
 
-    process.env.PASSWORD_CONFIRM_COOKIE_NAME = "   ";
-    process.env.PASSWORD_CONFIRM_TIMEOUT = "nope";
-    expect(passwordConfirmCookieName(process.env)).toBe("strata_password_confirmed");
-    expect(() => passwordConfirmTtlSeconds(process.env)).toThrow();
+	test('adds secure cookie flags in production', () => {
+		process.env.APP_ENV = 'production';
+		process.env.SESSION_SECRET = 'explicit-production-test-session-secret';
 
-    process.env.PASSWORD_CONFIRM_TIMEOUT = "0";
-    expect(() => passwordConfirmTtlSeconds(process.env)).toThrow();
-  });
+		expect(
+			createPasswordConfirmCookie(1, undefined, passwordConfirmOptionsFromEnvironment(process.env)),
+		).toContain('; Secure');
+		expect(
+			clearPasswordConfirmCookie(passwordConfirmOptionsFromEnvironment(process.env)),
+		).toContain('; Secure');
+	});
+
+	test('falls back through session secret environment variables', () => {
+		delete process.env.SESSION_SECRET;
+		process.env.OAUTH_STATE_SECRET = 'oauth-secret';
+
+		const cookie = createPasswordConfirmCookie(
+			7,
+			undefined,
+			passwordConfirmOptionsFromEnvironment(process.env),
+		);
+
+		expect(
+			hasFreshPasswordConfirmation(
+				new Request('http://example.test/', { headers: { cookie } }),
+				7,
+				undefined,
+				passwordConfirmOptionsFromEnvironment(process.env),
+			),
+		).toBe(true);
+
+		delete process.env.OAUTH_STATE_SECRET;
+		const fallbackCookie = createPasswordConfirmCookie(
+			8,
+			undefined,
+			passwordConfirmOptionsFromEnvironment(process.env),
+		);
+
+		expect(
+			hasFreshPasswordConfirmation(
+				new Request('http://example.test/', { headers: { cookie: fallbackCookie } }),
+				8,
+				undefined,
+				passwordConfirmOptionsFromEnvironment(process.env),
+			),
+		).toBe(true);
+	});
+
+	test('defaults to the Strata confirmation cookie name', () => {
+		delete process.env.PASSWORD_CONFIRM_COOKIE_NAME;
+
+		expect(PASSWORD_CONFIRM_COOKIE).toBe('strata_password_confirmed');
+		expect(passwordConfirmCookieName(process.env)).toBe('strata_password_confirmed');
+		expect(
+			createPasswordConfirmCookie(1, undefined, passwordConfirmOptionsFromEnvironment(process.env)),
+		).toContain('strata_password_confirmed=');
+		expect(
+			clearPasswordConfirmCookie(passwordConfirmOptionsFromEnvironment(process.env)),
+		).toContain('strata_password_confirmed=');
+	});
+
+	test('overrides the confirmation cookie name and TTL', () => {
+		process.env.PASSWORD_CONFIRM_COOKIE_NAME = 'acme_confirmed';
+		process.env.PASSWORD_CONFIRM_TIMEOUT = '90';
+
+		expect(passwordConfirmCookieName(process.env)).toBe('acme_confirmed');
+		expect(passwordConfirmTtlSeconds(process.env)).toBe(90);
+
+		const cookie = createPasswordConfirmCookie(
+			11,
+			undefined,
+			passwordConfirmOptionsFromEnvironment(process.env),
+		);
+
+		expect(cookie).toContain('acme_confirmed=');
+		expect(cookie).toContain('Max-Age=90');
+		expect(cookie).not.toContain('strata_password_confirmed=');
+
+		expect(
+			hasFreshPasswordConfirmation(
+				new Request('http://example.test/', {
+					headers: { cookie: cookie.split(';')[0] ?? '' },
+				}),
+				11,
+				undefined,
+				passwordConfirmOptionsFromEnvironment(process.env),
+			),
+		).toBe(true);
+
+		process.env.PASSWORD_CONFIRM_COOKIE_NAME = '   ';
+		process.env.PASSWORD_CONFIRM_TIMEOUT = 'nope';
+		expect(passwordConfirmCookieName(process.env)).toBe('strata_password_confirmed');
+		expect(() => passwordConfirmTtlSeconds(process.env)).toThrow();
+
+		process.env.PASSWORD_CONFIRM_TIMEOUT = '0';
+		expect(() => passwordConfirmTtlSeconds(process.env)).toThrow();
+	});
 });

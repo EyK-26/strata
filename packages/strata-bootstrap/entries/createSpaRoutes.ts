@@ -1,1 +1,1 @@
-export * from "../../../src/bootstrap/createSpaRoutes.ts";
+export * from '../../../src/bootstrap/createSpaRoutes.ts';

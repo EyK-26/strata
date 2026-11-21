@@ -1,269 +1,320 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { afterEach, describe, expect, test } from 'bun:test';
+import { existsSync } from 'node:fs';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import {
-  generateProject,
-  resolveOverlayRoot,
-  resolveTemplateRoot,
-} from "../../../packages/strata-starter/src/generate.ts";
+	generateProject,
+	resolveOverlayRoot,
+	resolveTemplateRoot,
+} from '../../../packages/strata-starter/src/generate.ts';
 import {
-  layersFromFlags,
-  parseCreateStrataArgs,
-  usage,
-} from "../../../packages/strata-starter/src/parseArgs.ts";
+	layersFromFlags,
+	parseCreateStrataArgs,
+	usage,
+} from '../../../packages/strata-starter/src/parseArgs.ts';
 
 const tempDirectories: string[] = [];
 
 afterEach(async () => {
-  while (tempDirectories.length > 0) {
-    const directory = tempDirectories.pop();
-    if (directory) {
-      await rm(directory, { recursive: true, force: true });
-    }
-  }
+	while (tempDirectories.length > 0) {
+		const directory = tempDirectories.pop();
+
+		if (directory) {
+			await rm(directory, { recursive: true, force: true });
+		}
+	}
 });
 
 async function tempDir(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "strata-integrations-"));
-  tempDirectories.push(directory);
-  return directory;
+	const directory = await mkdtemp(join(tmpdir(), 'strata-integrations-'));
+
+	tempDirectories.push(directory);
+
+	return directory;
 }
 
 function generateFromArgs(directory: string, argv: string[]): string {
-  const flags = parseCreateStrataArgs(argv);
-  const name = flags.projectName ?? "app";
-  generateProject({
-    projectName: name,
-    targetDir: join(directory, name),
-    layers: layersFromFlags(flags),
-    templateRoot: resolveTemplateRoot(),
-    overlayRoot: resolveOverlayRoot(),
-  });
-  return join(directory, name);
+	const flags = parseCreateStrataArgs(argv);
+
+	const name = flags.projectName ?? 'app';
+
+	generateProject({
+		projectName: name,
+		targetDir: join(directory, name),
+		layers: layersFromFlags(flags),
+		templateRoot: resolveTemplateRoot(),
+		overlayRoot: resolveOverlayRoot(),
+	});
+
+	return join(directory, name);
 }
 
-describe("create-strata integration extras", () => {
-  test("usage lists oauth, billing, and webhook flags", () => {
-    const text = usage();
-    expect(text).toContain("--oauth-github");
-    expect(text).toContain("--oidc");
-    expect(text).toContain("--billing");
-    expect(text).toContain("--webhooks");
-  });
+describe('create-strata integration extras', () => {
+	test('usage lists oauth, billing, and webhook flags', () => {
+		const text = usage();
 
-  test("header auth keeps billing and webhooks and drops GitHub OAuth", () => {
-    const layers = layersFromFlags(
-      parseCreateStrataArgs([
-        "app",
-        "--auth=headers",
-        "--oauth-github",
-        "--billing",
-        "--webhooks",
-        "--yes",
-      ]),
-    );
-    expect(layers.extras.oauthGithub).toBe(false);
-    expect(layers.extras.billing).toBe(true);
-    expect(layers.extras.webhooks).toBe(true);
-  });
+		expect(text).toContain('--oauth-github');
+		expect(text).toContain('--oidc');
+		expect(text).toContain('--billing');
+		expect(text).toContain('--webhooks');
+	});
 
-  test("--oauth-github writes GitHub cookie routes and a login link", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, [
-      "gh-app",
-      "--frontend=server-htmx",
-      "--auth=cookie",
-      "--oauth-github",
-      "--yes",
-    ]);
-    const env = await readFile(join(app, ".env.example"), "utf8");
-    expect(env).toContain("FEATURE_OAUTH=true");
-    expect(env).toContain("GITHUB_REDIRECT_URI=http://localhost:3000/auth/github/callback");
-    expect(env).toMatch(/^OAUTH_STATE_SECRET=.*change-me/m);
-    const auth = await readAuthSources(app);
-    expect(auth).toContain('"/auth/github"');
-    expect(auth).toContain('"/auth/github/callback"');
-    expect(auth).toContain("GitHubOAuthProvider");
-    expect(auth).toContain("completeBrowserSsoLogin");
-    const login = await readFile(join(app, "views/auth/login.eta"), "utf8");
-    expect(login).toContain("/auth/github");
-  });
+	test('header auth keeps billing and webhooks and drops GitHub OAuth', () => {
+		const layers = layersFromFlags(
+			parseCreateStrataArgs([
+				'app',
+				'--auth=headers',
+				'--oauth-github',
+				'--billing',
+				'--webhooks',
+				'--yes',
+			]),
+		);
 
-  test("--oidc writes PKCE cookie routes and does not call getAuthorizationUrl", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, [
-      "oidc-app",
-      "--frontend=server-htmx",
-      "--auth=cookie",
-      "--oidc",
-      "--yes",
-    ]);
-    const env = await readFile(join(app, ".env.example"), "utf8");
-    expect(env).toContain("FEATURE_OAUTH=true");
-    expect(env).toContain("OIDC_ISSUER=http://127.0.0.1:8080");
-    expect(env).toContain("OIDC_REDIRECT_URI=http://localhost:3000/auth/oidc/callback");
-    expect(env).toContain("# OIDC_ALLOW_PRIVATE=true");
-    const auth = await readAuthSources(app);
-    expect(auth).toContain('"/auth/oidc"');
-    expect(auth).toContain('"/auth/oidc/callback"');
-    expect(auth).toContain("createAuthorization");
-    expect(auth).toContain("sealOidcPkceCookie");
-    expect(auth).toContain("readOidcPkceCookie");
-    expect(auth).not.toContain("getAuthorizationUrl");
-    const login = await readFile(join(app, "views/auth/login.eta"), "utf8");
-    expect(login).toContain("it.oidcLogin");
-    expect(login).toContain('href="/auth/oidc"');
-    const composition = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
-    expect(composition).toContain("defineApp({");
-    const config = await readFile(join(app, "src/config/app.ts"), "utf8");
-    expect(config).toContain('"views": true');
-    expect(auth).toContain("profile.email.trim().toLowerCase()");
-  });
+		expect(layers.extras.oauthGithub).toBe(false);
+		expect(layers.extras.billing).toBe(true);
+		expect(layers.extras.webhooks).toBe(true);
+	});
 
-  test("header auth drops --oidc", () => {
-    const layers = layersFromFlags(
-      parseCreateStrataArgs(["app", "--auth=headers", "--oidc", "--yes"]),
-    );
-    expect(layers.extras.oidc).toBe(false);
-  });
+	test('--oauth-github writes GitHub cookie routes and a login link', async () => {
+		const root = await tempDir();
 
-  test("--billing writes the Stripe stub module and migration", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, [
-      "bill-app",
-      "--auth=headers",
-      "--tenancy=column",
-      "--billing",
-      "--yes",
-    ]);
-    expect(existsSync(join(app, "src/http/controllers/BillingController.ts"))).toBe(true);
-    expect(existsSync(join(app, "src/db/migrations/0002_billing_schema.ts"))).toBe(true);
-    const billing =
-      (await readFile(join(app, "src/http/controllers/BillingController.ts"), "utf8")) +
-      (await readFile(join(app, "src/routes/api.ts"), "utf8"));
-    expect(billing).toContain("/billing/webhooks/stripe");
-    expect(billing).toContain("/api/v1/billing/subscription");
-    expect(billing).toContain("verifyStripeWebhookSignature");
-    expect(billing).toContain("kernel.wrapApi");
-    expect(billing).not.toContain("withErrorHandling");
-    expect(billing).toContain("applyStripeWebhook");
-    expect(billing).not.toContain("runWithMigrationBypass(");
-    const hook = await readFile(join(app, "src/billing/applyStripeWebhook.ts"), "utf8");
-    expect(hook).toContain("async function applyStripeWebhook");
-    expect(hook).not.toContain("tenant.plan");
-    const migration = await readFile(join(app, "src/db/migrations/0002_billing_schema.ts"), "utf8");
-    expect(migration).toContain("stripe_webhook_event");
-    expect(migration).toContain("stripe_customer_id");
-    const env = await readFile(join(app, ".env.example"), "utf8");
-    expect(env).toContain("FEATURE_BILLING=true");
-    expect(env).toMatch(/^STRIPE_WEBHOOK_SECRET=.*change-me/m);
-    const api = await readFile(join(app, "docs/API.md"), "utf8");
-    expect(api).toContain("/billing/webhooks/stripe");
-    const composition = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
-    expect(composition).toContain("defineApp({");
-    expect(existsSync(join(app, "src/bootstrap/providers/queue.ts"))).toBe(false);
-  });
+		const app = generateFromArgs(root, [
+			'gh-app',
+			'--frontend=server-htmx',
+			'--auth=cookie',
+			'--oauth-github',
+			'--yes',
+		]);
 
-  test("--webhooks writes webhook.dispatch and an explicit event dispatcher", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, ["hook-app", "--webhooks", "--yes"]);
-    const job = await readFile(join(app, "src/jobs/dispatchOutboundWebhookJob.ts"), "utf8");
-    expect(job).toContain('static override readonly jobName = "webhook.dispatch"');
-    expect(job).toContain("signWebhookBody");
-    expect(job).toContain("const allowPrivate = payload.allowPrivate === true");
-    expect(job).toContain("allowHttp: allowPrivate");
-    expect(job).toContain("payload.allowPrivate === true");
-    expect(job).toContain("VALUES (?, ?, ?, ?, ?, ?)");
-    expect(job).toContain("payload.event");
-    expect(job).toContain("await context.database.execute({");
-    expect(job).toContain("Webhook delivery requires an owned queue invocation.");
-    expect(job).not.toContain("runWithMigrationBypass(");
-    expect(job).not.toContain('"notes.created"');
-    expect(existsSync(join(app, "src/listeners/noteCreatedWebhookListener.ts"))).toBe(false);
-    const dispatcher = await readFile(join(app, "src/webhooks/dispatchWebhook.ts"), "utf8");
-    expect(dispatcher).toContain("dispatchWebhook");
-    expect(dispatcher).toContain("event");
-    expect(dispatcher).toContain("data");
-    expect(dispatcher).not.toContain("Note");
-    expect(existsSync(join(app, "src/db/migrations/0002_webhooks_schema.ts"))).toBe(true);
-    const composition = await readFile(join(app, "src/bootstrap/createApp.ts"), "utf8");
-    expect(composition).toContain("defineApp({");
-    expect(dispatcher).not.toContain("setActiveApplicationContext");
-  });
+		const env = await readFile(join(app, '.env.example'), 'utf8');
 
-  test("postgres webhooks and billing use $1 placeholders", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, [
-      "pg-app",
-      "--database=postgres",
-      "--tenancy=column",
-      "--webhooks",
-      "--billing",
-      "--yes",
-    ]);
-    const job = await readFile(join(app, "src/jobs/dispatchOutboundWebhookJob.ts"), "utf8");
-    expect(job).toContain("VALUES ($1, $2, $3, $4, $5, $6)");
-    expect(job).not.toContain("VALUES (?, ?, ?, ?, ?, ?)");
-    const billing =
-      (await readFile(join(app, "src/http/controllers/BillingController.ts"), "utf8")) +
-      (await readFile(join(app, "src/routes/api.ts"), "utf8"));
-    expect(billing).toContain("tenant_id = $1");
-    const readme = await readFile(join(app, "README.md"), "utf8");
-    expect(readme).toContain("HTML admin and storefront paths are not");
-  });
+		expect(env).toContain('FEATURE_OAUTH=true');
+		expect(env).toContain('GITHUB_REDIRECT_URI=http://localhost:3000/auth/github/callback');
+		expect(env).toMatch(/^OAUTH_STATE_SECRET=.*change-me/m);
+		const auth = await readAuthSources(app);
 
-  test("billing after webhooks uses 0003 for the billing migration", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, ["both-app", "--webhooks", "--billing", "--yes"]);
-    expect(existsSync(join(app, "src/db/migrations/0002_webhooks_schema.ts"))).toBe(true);
-    expect(existsSync(join(app, "src/db/migrations/0003_billing_schema.ts"))).toBe(true);
-  });
+		expect(auth).toContain('"/auth/github"');
+		expect(auth).toContain('"/auth/github/callback"');
+		expect(auth).toContain('GitHubOAuthProvider');
+		expect(auth).toContain('completeBrowserSsoLogin');
+		const login = await readFile(join(app, 'views/auth/login.eta'), 'utf8');
+
+		expect(login).toContain('/auth/github');
+	});
+
+	test('--oidc writes PKCE cookie routes and does not call getAuthorizationUrl', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, [
+			'oidc-app',
+			'--frontend=server-htmx',
+			'--auth=cookie',
+			'--oidc',
+			'--yes',
+		]);
+
+		const env = await readFile(join(app, '.env.example'), 'utf8');
+
+		expect(env).toContain('FEATURE_OAUTH=true');
+		expect(env).toContain('OIDC_ISSUER=http://127.0.0.1:8080');
+		expect(env).toContain('OIDC_REDIRECT_URI=http://localhost:3000/auth/oidc/callback');
+		expect(env).toContain('# OIDC_ALLOW_PRIVATE=true');
+		const auth = await readAuthSources(app);
+
+		expect(auth).toContain('"/auth/oidc"');
+		expect(auth).toContain('"/auth/oidc/callback"');
+		expect(auth).toContain('createAuthorization');
+		expect(auth).toContain('sealOidcPkceCookie');
+		expect(auth).toContain('readOidcPkceCookie');
+		expect(auth).not.toContain('getAuthorizationUrl');
+		const login = await readFile(join(app, 'views/auth/login.eta'), 'utf8');
+
+		expect(login).toContain('it.oidcLogin');
+		expect(login).toContain('href="/auth/oidc"');
+		const composition = await readFile(join(app, 'src/bootstrap/createApp.ts'), 'utf8');
+
+		expect(composition).toContain('defineApp({');
+		const config = await readFile(join(app, 'src/config/app.ts'), 'utf8');
+
+		expect(config).toContain('"views": true');
+		expect(auth).toContain('profile.email.trim().toLowerCase()');
+	});
+
+	test('header auth drops --oidc', () => {
+		const layers = layersFromFlags(
+			parseCreateStrataArgs(['app', '--auth=headers', '--oidc', '--yes']),
+		);
+
+		expect(layers.extras.oidc).toBe(false);
+	});
+
+	test('--billing writes the Stripe stub module and migration', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, [
+			'bill-app',
+			'--auth=headers',
+			'--tenancy=column',
+			'--billing',
+			'--yes',
+		]);
+
+		expect(existsSync(join(app, 'src/http/controllers/BillingController.ts'))).toBe(true);
+		expect(existsSync(join(app, 'src/db/migrations/0002_billing_schema.ts'))).toBe(true);
+		const billing =
+			(await readFile(join(app, 'src/http/controllers/BillingController.ts'), 'utf8')) +
+			(await readFile(join(app, 'src/routes/api.ts'), 'utf8'));
+
+		expect(billing).toContain('/billing/webhooks/stripe');
+		expect(billing).toContain('/api/v1/billing/subscription');
+		expect(billing).toContain('verifyStripeWebhookSignature');
+		expect(billing).toContain('kernel.wrapApi');
+		expect(billing).not.toContain('withErrorHandling');
+		expect(billing).toContain('applyStripeWebhook');
+		expect(billing).not.toContain('runWithMigrationBypass(');
+		const hook = await readFile(join(app, 'src/billing/applyStripeWebhook.ts'), 'utf8');
+
+		expect(hook).toContain('async function applyStripeWebhook');
+		expect(hook).not.toContain('tenant.plan');
+		const migration = await readFile(join(app, 'src/db/migrations/0002_billing_schema.ts'), 'utf8');
+
+		expect(migration).toContain('stripe_webhook_event');
+		expect(migration).toContain('stripe_customer_id');
+		const env = await readFile(join(app, '.env.example'), 'utf8');
+
+		expect(env).toContain('FEATURE_BILLING=true');
+		expect(env).toMatch(/^STRIPE_WEBHOOK_SECRET=.*change-me/m);
+		const api = await readFile(join(app, 'docs/API.md'), 'utf8');
+
+		expect(api).toContain('/billing/webhooks/stripe');
+		const composition = await readFile(join(app, 'src/bootstrap/createApp.ts'), 'utf8');
+
+		expect(composition).toContain('defineApp({');
+		expect(existsSync(join(app, 'src/bootstrap/providers/queue.ts'))).toBe(false);
+	});
+
+	test('--webhooks writes webhook.dispatch and an explicit event dispatcher', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, ['hook-app', '--webhooks', '--yes']);
+
+		const job = await readFile(join(app, 'src/jobs/dispatchOutboundWebhookJob.ts'), 'utf8');
+
+		expect(job).toContain('static override readonly jobName = "webhook.dispatch"');
+		expect(job).toContain('signWebhookBody');
+		expect(job).toContain('const allowPrivate = payload.allowPrivate === true');
+		expect(job).toContain('allowHttp: allowPrivate');
+		expect(job).toContain('payload.allowPrivate === true');
+		expect(job).toContain('VALUES (?, ?, ?, ?, ?, ?)');
+		expect(job).toContain('payload.event');
+		expect(job).toContain('await context.database.execute({');
+		expect(job).toContain('Webhook delivery requires an owned queue invocation.');
+		expect(job).not.toContain('runWithMigrationBypass(');
+		expect(job).not.toContain('"notes.created"');
+		expect(existsSync(join(app, 'src/listeners/noteCreatedWebhookListener.ts'))).toBe(false);
+		const dispatcher = await readFile(join(app, 'src/webhooks/dispatchWebhook.ts'), 'utf8');
+
+		expect(dispatcher).toContain('dispatchWebhook');
+		expect(dispatcher).toContain('event');
+		expect(dispatcher).toContain('data');
+		expect(dispatcher).not.toContain('Note');
+		expect(existsSync(join(app, 'src/db/migrations/0002_webhooks_schema.ts'))).toBe(true);
+		const composition = await readFile(join(app, 'src/bootstrap/createApp.ts'), 'utf8');
+
+		expect(composition).toContain('defineApp({');
+		expect(dispatcher).not.toContain('setActiveApplicationContext');
+	});
+
+	test('postgres webhooks and billing use $1 placeholders', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, [
+			'pg-app',
+			'--database=postgres',
+			'--tenancy=column',
+			'--webhooks',
+			'--billing',
+			'--yes',
+		]);
+
+		const job = await readFile(join(app, 'src/jobs/dispatchOutboundWebhookJob.ts'), 'utf8');
+
+		expect(job).toContain('VALUES ($1, $2, $3, $4, $5, $6)');
+		expect(job).not.toContain('VALUES (?, ?, ?, ?, ?, ?)');
+		const billing =
+			(await readFile(join(app, 'src/http/controllers/BillingController.ts'), 'utf8')) +
+			(await readFile(join(app, 'src/routes/api.ts'), 'utf8'));
+
+		expect(billing).toContain('tenant_id = $1');
+		const readme = await readFile(join(app, 'README.md'), 'utf8');
+
+		expect(readme).toContain('HTML admin and storefront paths are not');
+	});
+
+	test('billing after webhooks uses 0003 for the billing migration', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, ['both-app', '--webhooks', '--billing', '--yes']);
+
+		expect(existsSync(join(app, 'src/db/migrations/0002_webhooks_schema.ts'))).toBe(true);
+		expect(existsSync(join(app, 'src/db/migrations/0003_billing_schema.ts'))).toBe(true);
+	});
 });
 
-test("packaged webhook options retain production private-network restriction and owner snapshot", async () => {
-  const { createApplicationServices, APPLICATION_WEBHOOKS } = await import(
-    "../../../src/bootstrap/application/services"
-  );
-  const { createApplication, defineProvider } = await import("@getstrata/core/runtime/application");
-  for (const APP_ENV of ["local", "production"]) {
-    const environment = {
-      APP_ENV,
-      WEBHOOK_ALLOW_PRIVATE: "true",
-      CACHE_DRIVER: "array",
-      QUEUE_DRIVER: "sync",
-    };
-    const services = createApplicationServices(
-      environment,
-      async () => {
-        throw new Error("No database should be used by webhook configuration.");
-      },
-      process.cwd(),
-    );
-    environment.WEBHOOK_ALLOW_PRIVATE = "false";
-    const application = createApplication({
-      providers: [defineProvider({ name: "webhook.options", services })],
-    });
-    try {
-      await application.start();
-      await application.run((scope) =>
-        expect(scope.resolve(APPLICATION_WEBHOOKS).allowPrivate).toBe(APP_ENV === "local"),
-      );
-    } finally {
-      await application.stop();
-    }
-  }
+test('packaged webhook options retain production private-network restriction and owner snapshot', async () => {
+	const { createApplicationServices, APPLICATION_WEBHOOKS } =
+		await import('../../../src/bootstrap/application/services');
+
+	const { createApplication, defineProvider } = await import('@getstrata/core/runtime/application');
+
+	for (const APP_ENV of ['local', 'production']) {
+		const environment = {
+			APP_ENV,
+			WEBHOOK_ALLOW_PRIVATE: 'true',
+			CACHE_DRIVER: 'array',
+			QUEUE_DRIVER: 'sync',
+		};
+
+		const services = createApplicationServices(
+			environment,
+			async () => {
+				throw new Error('No database should be used by webhook configuration.');
+			},
+			process.cwd(),
+		);
+
+		environment.WEBHOOK_ALLOW_PRIVATE = 'false';
+		const application = createApplication({
+			providers: [defineProvider({ name: 'webhook.options', services })],
+		});
+
+		try {
+			await application.start();
+			await application.run((scope) =>
+				expect(scope.resolve(APPLICATION_WEBHOOKS).allowPrivate).toBe(APP_ENV === 'local'),
+			);
+		} finally {
+			await application.stop();
+		}
+	}
 });
 
 async function readAuthSources(app: string): Promise<string> {
-  const paths = [
-    "src/http/auth/account.ts",
-    "src/http/controllers/AuthController.ts",
-    "src/routes/api.ts",
-    "src/routes/web.ts",
-  ];
-  const web = join(app, "src/http/controllers/AuthWebController.ts");
-  if (existsSync(web)) paths.push("src/http/controllers/AuthWebController.ts");
-  return (await Promise.all(paths.map((path) => readFile(join(app, path), "utf8")))).join("\n");
+	const paths = [
+		'src/http/auth/account.ts',
+		'src/http/controllers/AuthController.ts',
+		'src/routes/api.ts',
+		'src/routes/web.ts',
+	];
+
+	const web = join(app, 'src/http/controllers/AuthWebController.ts');
+
+	if (existsSync(web)) {
+		paths.push('src/http/controllers/AuthWebController.ts');
+	}
+
+	return (await Promise.all(paths.map((path) => readFile(join(app, path), 'utf8')))).join('\n');
 }

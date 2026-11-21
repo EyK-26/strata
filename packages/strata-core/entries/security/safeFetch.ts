@@ -1,1 +1,1 @@
-export * from "../../../../src/core/security/safeFetch.ts";
+export * from '../../../../src/core/security/safeFetch.ts';

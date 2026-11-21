@@ -1,196 +1,239 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { access, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { loadAppCommands, resolveApp, runCli } from "@getstrata/cli";
-import { compileStarterFeatures } from "../../../packages/strata-starter/src/featurePlan.ts";
+import { afterEach, describe, expect, test } from 'bun:test';
+import { access, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { loadAppCommands, resolveApp, runCli } from '@getstrata/cli';
+
+import { compileStarterFeatures } from '../../../packages/strata-starter/src/featurePlan.ts';
 import {
-  generateProject,
-  resolveOverlayRoot,
-  resolveTemplateRoot,
-} from "../../../packages/strata-starter/src/generate.ts";
+	generateProject,
+	resolveOverlayRoot,
+	resolveTemplateRoot,
+} from '../../../packages/strata-starter/src/generate.ts';
 import {
-  layersFromFlags,
-  parseCreateStrataArgs,
-} from "../../../packages/strata-starter/src/parseArgs.ts";
-import { renderCliRegisterTs } from "../../../packages/strata-starter/src/renderCli.ts";
-import { createGeneratedSourceApps } from "../../helpers/generatedSourceApps.ts";
-import { captureConsole, repoRoot } from "./helpers";
+	layersFromFlags,
+	parseCreateStrataArgs,
+} from '../../../packages/strata-starter/src/parseArgs.ts';
+import { renderCliRegisterTs } from '../../../packages/strata-starter/src/renderCli.ts';
+import { createGeneratedSourceApps } from '../../helpers/generatedSourceApps.ts';
+
+import { captureConsole, repoRoot } from './helpers';
 
 const tempDirectories: string[] = [];
 
 afterEach(async () => {
-  process.chdir(repoRoot);
-  while (tempDirectories.length > 0) {
-    const directory = tempDirectories.pop();
-    if (directory) {
-      await rm(directory, { recursive: true, force: true });
-    }
-  }
+	process.chdir(repoRoot);
+	while (tempDirectories.length > 0) {
+		const directory = tempDirectories.pop();
+
+		if (directory) {
+			await rm(directory, { recursive: true, force: true });
+		}
+	}
 });
 
 async function tempDir(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "strata-cli-register-"));
-  tempDirectories.push(directory);
-  return directory;
+	const directory = await mkdtemp(join(tmpdir(), 'strata-cli-register-'));
+
+	tempDirectories.push(directory);
+
+	return directory;
 }
 
 function generateFromArgs(directory: string, argv: string[]): string {
-  const flags = parseCreateStrataArgs(argv);
-  const name = flags.projectName ?? "app";
-  generateProject({
-    projectName: name,
-    targetDir: join(directory, name),
-    layers: layersFromFlags(flags),
-    templateRoot: resolveTemplateRoot(),
-    overlayRoot: resolveOverlayRoot(),
-  });
-  return join(directory, name);
+	const flags = parseCreateStrataArgs(argv);
+
+	const name = flags.projectName ?? 'app';
+
+	generateProject({
+		projectName: name,
+		targetDir: join(directory, name),
+		layers: layersFromFlags(flags),
+		templateRoot: resolveTemplateRoot(),
+		overlayRoot: resolveOverlayRoot(),
+	});
+
+	return join(directory, name);
 }
 
 const PRODUCT_COMMANDS = [
-  "make:model",
-  "make:controller",
-  "make:view",
-  "make:module",
-  "make:policy",
-  "make:job",
-  "make:listener",
-  "make:request",
-  "make:factory",
-  "make:migration",
-  "queue:work",
-  "outbox:work",
-  "queue:failed",
-  "queue:retry",
-  "queue:flush-failed",
-  "openapi:generate",
-  "openapi:validate",
-  "openapi:check",
-  "schedule:run",
+	'make:model',
+	'make:controller',
+	'make:view',
+	'make:module',
+	'make:policy',
+	'make:job',
+	'make:listener',
+	'make:request',
+	'make:factory',
+	'make:migration',
+	'queue:work',
+	'outbox:work',
+	'queue:failed',
+	'queue:retry',
+	'queue:flush-failed',
+	'openapi:generate',
+	'openapi:validate',
+	'openapi:check',
+	'schedule:run',
 ] as const;
 
-describe("generated src/cli/register.ts", () => {
-  test("application commands and scaffold commands are owned by the package", () => {
-    const register = renderCliRegisterTs();
-    for (const command of PRODUCT_COMMANDS) expect(register).not.toContain(`"${command}"`);
-    expect(register).not.toContain("coreProviders");
-  });
+describe('generated src/cli/register.ts', () => {
+	test('application commands and scaffold commands are owned by the package', () => {
+		const register = renderCliRegisterTs();
 
-  test("generate writes register.ts and strata.config points at it", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, ["cli-register", "--yes"]);
-    const register = await readFile(join(app, "src/cli/register.ts"), "utf8");
-    await expect(access(join(app, "src/cli/queueWork.ts"))).rejects.toThrow();
-    const config = await readFile(join(app, "strata.config.ts"), "utf8");
-    const pkg = JSON.parse(await readFile(join(app, "package.json"), "utf8")) as {
-      scripts: Record<string, string>;
-    };
+		for (const command of PRODUCT_COMMANDS) {
+			expect(register).not.toContain(`"${command}"`);
+		}
 
-    expect(config).toContain('application: "./src/bootstrap/createApp.ts"');
-    expect(config).toContain('schedule: "./src/bootstrap/schedule.ts"');
-    expect(register).not.toContain("coreProviders");
-    expect(register).not.toContain("collectProviders");
-    expect(register).not.toContain("@getstrata/bootstrap/context");
-    expect(register).not.toContain("createAppContext");
-    expect(config).toContain('commands: "./src/cli/register.ts"');
-    expect(pkg.scripts["queue:work"]).toBe("strata queue:work");
-    expect(pkg.scripts["outbox:work"]).toBe("strata outbox:work");
-    expect(await readFile(join(app, "src/outbox/registry.ts"), "utf8")).toContain(
-      "DurableListener",
-    );
-    expect(await readFile(join(app, "src/db/migrations/0005_outbox.ts"), "utf8")).toContain(
-      "createOutboxMigration",
-    );
-  });
+		expect(register).not.toContain('coreProviders');
+	});
 
-  test("a new Redis app selects Streams without changing the framework default", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, ["cli-register-streams", "--queue", "redis", "--yes"]);
-    const env = await readFile(join(app, ".env.example"), "utf8");
-    const defaults = await readFile(join(app, "src/config/app.ts"), "utf8");
-    expect(env).toContain("QUEUE_REDIS_TRANSPORT=streams");
-    expect(defaults).toContain('"QUEUE_REDIS_TRANSPORT": "streams"');
-    const readme = await readFile(join(app, "README.md"), "utf8");
-    expect(readme).toContain("Redis jobs need `bun run queue:work` in another terminal");
-    expect(readme).not.toContain("The synchronous queue handles jobs inline");
-  });
+	test('generate writes register.ts and strata.config points at it', async () => {
+		const root = await tempDir();
 
-  test("user-auth generation registers admin provisioning and adds its independent file migration", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, ["admin-register", "--auth", "cookie", "--yes"]);
-    const commands = await loadAppCommands(await resolveApp(app));
-    expect(typeof commands["auth:provision-admin"]).toBe("function");
-    expect(await readFile(join(app, "src/cli/initialAdmin.ts"), "utf8")).toContain(
-      "runInitialAdminCommand",
-    );
-    expect(
-      await readFile(join(app, "src/db/migrations/0004_initial_admin_provisioning.ts"), "utf8"),
-    ).toContain("Cannot discard a completed");
-  });
+		const app = generateFromArgs(root, ['cli-register', '--yes']);
 
-  test("loadAppCommands sees product CLI commands and help lists them", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, ["cli-register-help", "--yes"]);
-    const resolved = await resolveApp(app);
-    const commands = await loadAppCommands(resolved);
+		const register = await readFile(join(app, 'src/cli/register.ts'), 'utf8');
 
-    expect(resolved.commandsModule).toBe(join(app, "src/cli/register.ts"));
-    expect(Object.keys(commands)).toEqual([]);
-    expect(resolved.application).toBe(join(app, "src/bootstrap/createApp.ts"));
+		await expect(access(join(app, 'src/cli/queueWork.ts'))).rejects.toThrow();
+		const config = await readFile(join(app, 'strata.config.ts'), 'utf8');
 
-    const output = captureConsole();
-    try {
-      const code = await runCli({
-        cwd: app,
-        argv: ["help"],
-        skipBoot: true,
-        exitProcess: false,
-      });
-      expect(code).toBe(0);
-    } finally {
-      output.restore();
-    }
+		const pkg = JSON.parse(await readFile(join(app, 'package.json'), 'utf8')) as {
+			scripts: Record<string, string>;
+		};
 
-    const help = output.logs.join("\n");
-    for (const command of PRODUCT_COMMANDS) expect(help).toContain(command);
-    expect(help).toContain("queue:work");
-    expect(help).toContain("outbox:work");
-    expect(help).toContain("dev/start do not start workers");
-    const readme = await readFile(join(app, "README.md"), "utf8");
-    expect(readme).toContain("bunx strata help");
-    expect(readme).toContain("Apps that do not publish durable events do not need this worker");
-    expect(readme).toContain("The synchronous queue handles jobs inline");
-    expect(help).toContain("make:module");
-    expect(help).toContain("schedule:run");
-    expect(help).not.toContain("coreProviders");
-  });
+		expect(config).toContain('application: "./src/bootstrap/createApp.ts"');
+		expect(config).toContain('schedule: "./src/bootstrap/schedule.ts"');
+		expect(register).not.toContain('coreProviders');
+		expect(register).not.toContain('collectProviders');
+		expect(register).not.toContain('@getstrata/bootstrap/context');
+		expect(register).not.toContain('createAppContext');
+		expect(config).toContain('commands: "./src/cli/register.ts"');
+		expect(pkg.scripts['queue:work']).toBe('strata queue:work');
+		expect(pkg.scripts['outbox:work']).toBe('strata outbox:work');
+		expect(await readFile(join(app, 'src/outbox/registry.ts'), 'utf8')).toContain(
+			'DurableListener',
+		);
+		expect(await readFile(join(app, 'src/db/migrations/0005_outbox.ts'), 'utf8')).toContain(
+			'createOutboxMigration',
+		);
+	});
 
-  test("queue:work fails closed without REDIS_URL before booting", async () => {
-    const root = await tempDir();
-    const app = generateFromArgs(root, [
-      "cli-register-redis",
-      "--database=sqlite",
-      "--auth=headers",
-      "--frontend=api",
-      "--yes",
-    ]);
-    await symlink(join(repoRoot, "node_modules"), join(app, "node_modules"), "dir");
-    const configPath = join(app, "tsconfig.json");
-    const config = JSON.parse(await readFile(configPath, "utf8"));
-    const sourceConfig = JSON.parse(await readFile(join(repoRoot, "tsconfig.json"), "utf8"));
-    const paths: Record<string, string[]> = {};
-    for (const [key, values] of Object.entries(sourceConfig.compilerOptions.paths))
-      paths[key] = (values as string[]).map((value) => join(repoRoot, value));
-    paths["@getstrata/core/database/migrations"] = [
-      join(repoRoot, "src/core/database/migrations/runner.ts"),
-    ];
-    config.compilerOptions.paths = paths;
-    await writeFile(configPath, JSON.stringify(config));
-    await writeFile(
-      join(app, "queue-probe.ts"),
-      `import assert from "node:assert/strict";
-import { applicationCommands } from ${JSON.stringify(join(repoRoot, "packages/strata-cli/src/applicationCommands.ts"))};
+	test('a new Redis app selects Streams without changing the framework default', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, ['cli-register-streams', '--queue', 'redis', '--yes']);
+
+		const env = await readFile(join(app, '.env.example'), 'utf8');
+
+		const defaults = await readFile(join(app, 'src/config/app.ts'), 'utf8');
+
+		expect(env).toContain('QUEUE_REDIS_TRANSPORT=streams');
+		expect(defaults).toContain('"QUEUE_REDIS_TRANSPORT": "streams"');
+		const readme = await readFile(join(app, 'README.md'), 'utf8');
+
+		expect(readme).toContain('Redis jobs need `bun run queue:work` in another terminal');
+		expect(readme).not.toContain('The synchronous queue handles jobs inline');
+	});
+
+	test('user-auth generation registers admin provisioning and adds its independent file migration', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, ['admin-register', '--auth', 'cookie', '--yes']);
+
+		const commands = await loadAppCommands(await resolveApp(app));
+
+		expect(typeof commands['auth:provision-admin']).toBe('function');
+		expect(await readFile(join(app, 'src/cli/initialAdmin.ts'), 'utf8')).toContain(
+			'runInitialAdminCommand',
+		);
+		expect(
+			await readFile(join(app, 'src/db/migrations/0004_initial_admin_provisioning.ts'), 'utf8'),
+		).toContain('Cannot discard a completed');
+	});
+
+	test('loadAppCommands sees product CLI commands and help lists them', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, ['cli-register-help', '--yes']);
+
+		const resolved = await resolveApp(app);
+
+		const commands = await loadAppCommands(resolved);
+
+		expect(resolved.commandsModule).toBe(join(app, 'src/cli/register.ts'));
+		expect(Object.keys(commands)).toEqual([]);
+		expect(resolved.application).toBe(join(app, 'src/bootstrap/createApp.ts'));
+
+		const output = captureConsole();
+
+		try {
+			const code = await runCli({
+				cwd: app,
+				argv: ['help'],
+				skipBoot: true,
+				exitProcess: false,
+			});
+
+			expect(code).toBe(0);
+		} finally {
+			output.restore();
+		}
+
+		const help = output.logs.join('\n');
+
+		for (const command of PRODUCT_COMMANDS) {
+			expect(help).toContain(command);
+		}
+
+		expect(help).toContain('queue:work');
+		expect(help).toContain('outbox:work');
+		expect(help).toContain('dev/start do not start workers');
+		const readme = await readFile(join(app, 'README.md'), 'utf8');
+
+		expect(readme).toContain('bunx strata help');
+		expect(readme).toContain('Apps that do not publish durable events do not need this worker');
+		expect(readme).toContain('The synchronous queue handles jobs inline');
+		expect(help).toContain('make:module');
+		expect(help).toContain('schedule:run');
+		expect(help).not.toContain('coreProviders');
+	});
+
+	test('queue:work fails closed without REDIS_URL before booting', async () => {
+		const root = await tempDir();
+
+		const app = generateFromArgs(root, [
+			'cli-register-redis',
+			'--database=sqlite',
+			'--auth=headers',
+			'--frontend=api',
+			'--yes',
+		]);
+
+		await symlink(join(repoRoot, 'node_modules'), join(app, 'node_modules'), 'dir');
+		const configPath = join(app, 'tsconfig.json');
+
+		const config = JSON.parse(await readFile(configPath, 'utf8'));
+
+		const sourceConfig = JSON.parse(await readFile(join(repoRoot, 'tsconfig.json'), 'utf8'));
+
+		const paths: Record<string, string[]> = {};
+
+		for (const [key, values] of Object.entries(sourceConfig.compilerOptions.paths)) {
+			paths[key] = (values as string[]).map((value) => join(repoRoot, value));
+		}
+
+		paths['@getstrata/core/database/migrations'] = [
+			join(repoRoot, 'src/core/database/migrations/runner.ts'),
+		];
+		config.compilerOptions.paths = paths;
+		await writeFile(configPath, JSON.stringify(config));
+		await writeFile(
+			join(app, 'queue-probe.ts'),
+			`import assert from "node:assert/strict";
+import { applicationCommands } from ${JSON.stringify(join(repoRoot, 'packages/strata-cli/src/applicationCommands.ts'))};
 import { resolveApp } from "@getstrata/cli";
 const queueWorkCommand = await applicationCommands(await resolveApp())["queue:work"]!();
 import { bootstrapApp } from "./src/bootstrap/createApp.ts";
@@ -200,49 +243,57 @@ await assert.rejects(bootstrapApp({migrate:false,mode:"worker",onConstructed:()=
 assert.equal(constructed,0,"Missing Redis must reject before the Application is constructed or started");
 console.log("missing-redis-before-application");
 `,
-    );
-    const env: Record<string, string | undefined> = {
-      ...process.env,
-      APP_ENV: "local",
-      NODE_ENV: "test",
-      DATABASE_URL: "sqlite://:memory:",
-      APP_DATABASE_URL: "sqlite://:memory:",
-      CACHE_DRIVER: "array",
-      QUEUE_DRIVER: "sync",
-      SESSION_SECRET: "generator-contracts-fixed-fixture-secret",
-    };
-    delete env.REDIS_URL;
-    const child = Bun.spawn([process.execPath, "queue-probe.ts"], {
-      cwd: app,
-      env,
-      stdout: "pipe",
-      stderr: "pipe",
-      timeout: 10000,
-      killSignal: "SIGKILL",
-    });
-    const [exit, stdout, stderr] = await Promise.all([
-      child.exited,
-      new Response(child.stdout).text(),
-      new Response(child.stderr).text(),
-    ]);
-    expect({ exit, stderr }).toEqual({ exit: 0, stderr: "" });
-    expect(stdout).toContain("missing-redis-before-application");
-  });
+		);
+		const env: Record<string, string | undefined> = {
+			...process.env,
+			APP_ENV: 'local',
+			NODE_ENV: 'test',
+			DATABASE_URL: 'sqlite://:memory:',
+			APP_DATABASE_URL: 'sqlite://:memory:',
+			CACHE_DRIVER: 'array',
+			QUEUE_DRIVER: 'sync',
+			SESSION_SECRET: 'generator-contracts-fixed-fixture-secret',
+		};
 
-  test("all three generated example profiles ship the same CLI registrar as the renderer", async () => {
-    const fixtures = createGeneratedSourceApps();
-    try {
-      for (const app of [fixtures.rls, fixtures.hobby, fixtures.team]) {
-        const { layers } = JSON.parse(await readFile(join(app, "strata.layers.json"), "utf8"));
-        const expectedRegister = renderCliRegisterTs(compileStarterFeatures(layers));
-        const actualRegister = await readFile(join(app, "src/cli/register.ts"), "utf8");
-        await expect(access(join(app, "src/cli/queueWork.ts"))).rejects.toThrow();
-        expect(actualRegister).toBe(expectedRegister);
-        const config = await readFile(join(app, "strata.config.ts"), "utf8");
-        expect(config).toContain('application: "./src/bootstrap/createApp.ts"');
-      }
-    } finally {
-      fixtures.close();
-    }
-  });
+		delete env.REDIS_URL;
+		const child = Bun.spawn([process.execPath, 'queue-probe.ts'], {
+			cwd: app,
+			env,
+			stdout: 'pipe',
+			stderr: 'pipe',
+			timeout: 10000,
+			killSignal: 'SIGKILL',
+		});
+
+		const [exit, stdout, stderr] = await Promise.all([
+			child.exited,
+			new Response(child.stdout).text(),
+			new Response(child.stderr).text(),
+		]);
+
+		expect({ exit, stderr }).toEqual({ exit: 0, stderr: '' });
+		expect(stdout).toContain('missing-redis-before-application');
+	});
+
+	test('all three generated example profiles ship the same CLI registrar as the renderer', async () => {
+		const fixtures = createGeneratedSourceApps();
+
+		try {
+			for (const app of [fixtures.rls, fixtures.hobby, fixtures.team]) {
+				const { layers } = JSON.parse(await readFile(join(app, 'strata.layers.json'), 'utf8'));
+
+				const expectedRegister = renderCliRegisterTs(compileStarterFeatures(layers));
+
+				const actualRegister = await readFile(join(app, 'src/cli/register.ts'), 'utf8');
+
+				await expect(access(join(app, 'src/cli/queueWork.ts'))).rejects.toThrow();
+				expect(actualRegister).toBe(expectedRegister);
+				const config = await readFile(join(app, 'strata.config.ts'), 'utf8');
+
+				expect(config).toContain('application: "./src/bootstrap/createApp.ts"');
+			}
+		} finally {
+			fixtures.close();
+		}
+	});
 });

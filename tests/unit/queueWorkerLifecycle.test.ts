@@ -1,186 +1,201 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
-import { Job } from "@getstrata/core/queue";
-import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test';
+
+import { Job } from '@getstrata/core/queue';
+import { JobRegistry } from '@getstrata/core/queue/jobRegistry';
 
 const jobRegistry = new JobRegistry();
 
 import {
-  QUEUE_HIGH_KEY,
-  QUEUE_LIST_KEY,
-  QUEUE_LOW_KEY,
-  QueueWorker,
-  queueInvalidKey,
-  queueProcessingKey,
-  queueProcessingLeaseKey,
-  reclaimExpiredQueueReservations,
-} from "@getstrata/core/queue/redisQueue";
-import { RedisClient } from "bun";
+	QUEUE_HIGH_KEY,
+	QUEUE_LIST_KEY,
+	QUEUE_LOW_KEY,
+	queueInvalidKey,
+	queueProcessingKey,
+	queueProcessingLeaseKey,
+	QueueWorker,
+	reclaimExpiredQueueReservations,
+} from '@getstrata/core/queue/redisQueue';
+import { RedisClient } from 'bun';
 
-import { createQueuePersistenceFixture } from "../helpers/queuePersistence";
+import { createQueuePersistenceFixture } from '../helpers/queuePersistence';
 
 let persistence: Awaited<ReturnType<typeof createQueuePersistenceFixture>>;
+
 beforeAll(async () => {
-  persistence = await createQueuePersistenceFixture();
+	persistence = await createQueuePersistenceFixture();
 });
 afterAll(async () => {
-  expect((await persistence.application.stop()).successful).toBe(true);
+	expect((await persistence.application.stop()).successful).toBe(true);
 });
 
 afterAll(() => {
-  mock.restore();
+	mock.restore();
 });
 
-describe("QueueWorker lifecycle", () => {
-  const redisUrl = `${process.env.REDIS_URL ?? "redis://localhost:6379"}/15`;
+describe('QueueWorker lifecycle', () => {
+	const redisUrl = `${process.env.REDIS_URL ?? 'redis://localhost:6379'}/15`;
 
-  async function clearQueueKeys(): Promise<void> {
-    const client = new RedisClient(redisUrl);
-    for (const key of [QUEUE_HIGH_KEY, QUEUE_LIST_KEY, QUEUE_LOW_KEY]) {
-      await client.del(key);
-      await client.del(queueInvalidKey(key));
-      await client.del(queueProcessingKey(key));
-      await client.del(queueProcessingLeaseKey(key));
-    }
-    client.close();
-  }
+	async function clearQueueKeys(): Promise<void> {
+		const client = new RedisClient(redisUrl);
 
-  test("requestStop exits the run loop", async () => {
-    const worker = new QueueWorker("redis://invalid", persistence.services, jobRegistry, 1);
-    worker.requestStop();
+		for (const key of [QUEUE_HIGH_KEY, QUEUE_LIST_KEY, QUEUE_LOW_KEY]) {
+			await client.del(key);
+			await client.del(queueInvalidKey(key));
+			await client.del(queueProcessingKey(key));
+			await client.del(queueProcessingLeaseKey(key));
+		}
 
-    await worker.run();
+		client.close();
+	}
 
-    expect(worker.isRunning()).toBe(false);
-  });
+	test('requestStop exits the run loop', async () => {
+		const worker = new QueueWorker('redis://invalid', persistence.services, jobRegistry, 1);
 
-  test("processNext runs a job from the high priority queue", async () => {
-    const messages: string[] = [];
+		worker.requestStop();
 
-    class EchoJob extends Job<{ message: string }> {
-      override async handle(payload: { message: string }): Promise<void> {
-        messages.push(payload.message);
-        expect(await client.llen(queueProcessingKey(QUEUE_HIGH_KEY))).toBe(1);
-      }
-    }
+		await worker.run();
 
-    const echoJob = new EchoJob();
-    jobRegistry.register("test.redis.echo", () => echoJob);
-    jobRegistry.track("test.redis.echo", echoJob);
+		expect(worker.isRunning()).toBe(false);
+	});
 
-    const client = new RedisClient(redisUrl);
-    await clearQueueKeys();
-    await client.lpush(
-      QUEUE_HIGH_KEY,
-      JSON.stringify({
-        name: "test.redis.echo",
-        payload: { message: "from-redis" },
-        attempts: 0,
-      }),
-    );
+	test('processNext runs a job from the high priority queue', async () => {
+		const messages: string[] = [];
 
-    const worker = new QueueWorker(redisUrl, persistence.services, jobRegistry, 1);
+		class EchoJob extends Job<{ message: string }> {
+			override async handle(payload: { message: string }): Promise<void> {
+				messages.push(payload.message);
+				expect(await client.llen(queueProcessingKey(QUEUE_HIGH_KEY))).toBe(1);
+			}
+		}
 
-    await expect(worker.processNext()).resolves.toBe(true);
-    expect(messages).toEqual(["from-redis"]);
-    expect(await client.llen(queueProcessingKey(QUEUE_HIGH_KEY))).toBe(0);
-    client.close();
-  });
+		const echoJob = new EchoJob();
 
-  test("processNext returns false when no jobs are available", async () => {
-    await clearQueueKeys();
+		jobRegistry.register('test.redis.echo', () => echoJob);
+		jobRegistry.track('test.redis.echo', echoJob);
 
-    const worker = new QueueWorker(redisUrl, persistence.services, jobRegistry, 1);
+		const client = new RedisClient(redisUrl);
 
-    await expect(worker.processNext()).resolves.toBe(false);
-  }, 10000);
+		await clearQueueKeys();
+		await client.lpush(
+			QUEUE_HIGH_KEY,
+			JSON.stringify({
+				name: 'test.redis.echo',
+				payload: { message: 'from-redis' },
+				attempts: 0,
+			}),
+		);
 
-  test("processNext logs failures from runQueueJob", async () => {
-    const errorLogs: unknown[] = [];
-    const originalConsoleError = console.error;
+		const worker = new QueueWorker(redisUrl, persistence.services, jobRegistry, 1);
 
-    console.error = (...args: unknown[]) => {
-      errorLogs.push(args);
-    };
+		await expect(worker.processNext()).resolves.toBe(true);
+		expect(messages).toEqual(['from-redis']);
+		expect(await client.llen(queueProcessingKey(QUEUE_HIGH_KEY))).toBe(0);
+		client.close();
+	});
 
-    try {
-      class FailingJob extends Job<Record<string, never>> {
-        override async handle(): Promise<void> {
-          throw new Error("boom");
-        }
-      }
+	test('processNext returns false when no jobs are available', async () => {
+		await clearQueueKeys();
 
-      const failingJob = new FailingJob();
-      jobRegistry.register("test.redis.fail", () => failingJob);
-      jobRegistry.track("test.redis.fail", failingJob);
+		const worker = new QueueWorker(redisUrl, persistence.services, jobRegistry, 1);
 
-      const client = new RedisClient(redisUrl);
-      await clearQueueKeys();
-      await client.lpush(
-        QUEUE_HIGH_KEY,
-        JSON.stringify({ name: "test.redis.fail", payload: {}, attempts: 0 }),
-      );
+		await expect(worker.processNext()).resolves.toBe(false);
+	}, 10000);
 
-      const worker = new QueueWorker(redisUrl, persistence.services, jobRegistry, 1);
+	test('processNext logs failures from runQueueJob', async () => {
+		const errorLogs: unknown[] = [];
 
-      await expect(worker.processNext()).resolves.toBe(true);
-      expect(errorLogs.some((entry) => String(entry).includes("[QueueWorker] Job failed:"))).toBe(
-        true,
-      );
-    } finally {
-      console.error = originalConsoleError;
-    }
-  });
+		const originalConsoleError = console.error;
 
-  test("processNext quarantines unknown job names without calling runQueueJob", async () => {
-    const errorLogs: unknown[] = [];
-    const originalConsoleError = console.error;
+		console.error = (...args: unknown[]) => {
+			errorLogs.push(args);
+		};
 
-    console.error = (...args: unknown[]) => {
-      errorLogs.push(args);
-    };
+		try {
+			class FailingJob extends Job<Record<string, never>> {
+				override async handle(): Promise<void> {
+					throw new Error('boom');
+				}
+			}
 
-    try {
-      const client = new RedisClient(redisUrl);
-      await clearQueueKeys();
-      await client.lpush(
-        QUEUE_HIGH_KEY,
-        JSON.stringify({ name: "missing.job", payload: {}, attempts: 0 }),
-      );
+			const failingJob = new FailingJob();
 
-      const worker = new QueueWorker(redisUrl, persistence.services, jobRegistry, 1);
+			jobRegistry.register('test.redis.fail', () => failingJob);
+			jobRegistry.track('test.redis.fail', failingJob);
 
-      await expect(worker.processNext()).resolves.toBe(true);
-      expect(await client.llen(queueInvalidKey(QUEUE_HIGH_KEY))).toBe(1);
-      expect(errorLogs.some((entry) => String(entry).includes("Ignoring unknown job name"))).toBe(
-        true,
-      );
-      expect(errorLogs.some((entry) => String(entry).includes("[QueueWorker] Job failed:"))).toBe(
-        false,
-      );
-    } finally {
-      console.error = originalConsoleError;
-    }
-  });
+			const client = new RedisClient(redisUrl);
 
-  test("reclaims an unacked reservation and leaves a fresh lease in processing", async () => {
-    await clearQueueKeys();
-    const client = new RedisClient(redisUrl);
-    const payload = JSON.stringify({ name: "missing.job", payload: {}, attempts: 0 });
-    const processingKey = queueProcessingKey(QUEUE_HIGH_KEY);
-    const leaseKey = queueProcessingLeaseKey(QUEUE_HIGH_KEY);
+			await clearQueueKeys();
+			await client.lpush(
+				QUEUE_HIGH_KEY,
+				JSON.stringify({ name: 'test.redis.fail', payload: {}, attempts: 0 }),
+			);
 
-    try {
-      await client.lpush(processingKey, payload);
-      await client.hset(leaseKey, payload, String(Date.now()));
-      expect(await reclaimExpiredQueueReservations(client)).toBe(0);
-      expect(await client.llen(processingKey)).toBe(1);
+			const worker = new QueueWorker(redisUrl, persistence.services, jobRegistry, 1);
 
-      await client.hset(leaseKey, payload, String(Date.now() - 120_000));
-      expect(await reclaimExpiredQueueReservations(client)).toBe(1);
-      expect(await client.llen(processingKey)).toBe(0);
-      expect(await client.llen(QUEUE_HIGH_KEY)).toBe(1);
-    } finally {
-      client.close();
-    }
-  });
+			await expect(worker.processNext()).resolves.toBe(true);
+			expect(errorLogs.some((entry) => String(entry).includes('[QueueWorker] Job failed:'))).toBe(
+				true,
+			);
+		} finally {
+			console.error = originalConsoleError;
+		}
+	});
+
+	test('processNext quarantines unknown job names without calling runQueueJob', async () => {
+		const errorLogs: unknown[] = [];
+
+		const originalConsoleError = console.error;
+
+		console.error = (...args: unknown[]) => {
+			errorLogs.push(args);
+		};
+
+		try {
+			const client = new RedisClient(redisUrl);
+
+			await clearQueueKeys();
+			await client.lpush(
+				QUEUE_HIGH_KEY,
+				JSON.stringify({ name: 'missing.job', payload: {}, attempts: 0 }),
+			);
+
+			const worker = new QueueWorker(redisUrl, persistence.services, jobRegistry, 1);
+
+			await expect(worker.processNext()).resolves.toBe(true);
+			expect(await client.llen(queueInvalidKey(QUEUE_HIGH_KEY))).toBe(1);
+			expect(errorLogs.some((entry) => String(entry).includes('Ignoring unknown job name'))).toBe(
+				true,
+			);
+			expect(errorLogs.some((entry) => String(entry).includes('[QueueWorker] Job failed:'))).toBe(
+				false,
+			);
+		} finally {
+			console.error = originalConsoleError;
+		}
+	});
+
+	test('reclaims an unacked reservation and leaves a fresh lease in processing', async () => {
+		await clearQueueKeys();
+		const client = new RedisClient(redisUrl);
+
+		const payload = JSON.stringify({ name: 'missing.job', payload: {}, attempts: 0 });
+
+		const processingKey = queueProcessingKey(QUEUE_HIGH_KEY);
+
+		const leaseKey = queueProcessingLeaseKey(QUEUE_HIGH_KEY);
+
+		try {
+			await client.lpush(processingKey, payload);
+			await client.hset(leaseKey, payload, String(Date.now()));
+			expect(await reclaimExpiredQueueReservations(client)).toBe(0);
+			expect(await client.llen(processingKey)).toBe(1);
+
+			await client.hset(leaseKey, payload, String(Date.now() - 120_000));
+			expect(await reclaimExpiredQueueReservations(client)).toBe(1);
+			expect(await client.llen(processingKey)).toBe(0);
+			expect(await client.llen(QUEUE_HIGH_KEY)).toBe(1);
+		} finally {
+			client.close();
+		}
+	});
 });

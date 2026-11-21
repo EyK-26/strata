@@ -1,1 +1,1 @@
-export * from "../../../../src/core/http/flashMiddleware.ts";
+export * from '../../../../src/core/http/flashMiddleware.ts';

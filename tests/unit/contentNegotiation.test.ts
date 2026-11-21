@@ -1,77 +1,81 @@
-import { describe, expect, test } from "bun:test";
-import { requestPrefersJson } from "@getstrata/core/http/contentNegotiation";
+import { describe, expect, test } from 'bun:test';
+
+import { requestPrefersJson } from '@getstrata/core/http/contentNegotiation';
 
 for (const headers of [
-  new Headers({ Accept: "text/html" }),
-  new Headers({ Accept: "application/json" }),
-  new Headers({ "HX-Request": "true" }),
-])
-  test("invalid native request URL metadata uses a safe JSON error fallback", () => {
-    const request = new Request("http://example.test/form", { headers });
-    Object.defineProperty(request, "url", { value: "/form" });
-    expect(requestPrefersJson(request)).toBe(true);
-  });
+	new Headers({ Accept: 'text/html' }),
+	new Headers({ Accept: 'application/json' }),
+	new Headers({ 'HX-Request': 'true' }),
+]) {
+	test('invalid native request URL metadata uses a safe JSON error fallback', () => {
+		const request = new Request('http://example.test/form', { headers });
 
-describe("requestPrefersJson", () => {
-  test("treats API paths as JSON by default", () => {
-    const request = new Request("http://example.test/api/v1/organizations");
+		Object.defineProperty(request, 'url', { value: '/form' });
+		expect(requestPrefersJson(request)).toBe(true);
+	});
+}
 
-    expect(requestPrefersJson(request)).toBe(true);
-  });
+describe('requestPrefersJson', () => {
+	test('treats API paths as JSON by default', () => {
+		const request = new Request('http://example.test/api/v1/organizations');
 
-  test("treats HTML accept headers as non-JSON", () => {
-    const request = new Request("http://example.test/organizations", {
-      headers: { accept: "text/html" },
-    });
+		expect(requestPrefersJson(request)).toBe(true);
+	});
 
-    expect(requestPrefersJson(request)).toBe(false);
-  });
+	test('treats HTML accept headers as non-JSON', () => {
+		const request = new Request('http://example.test/organizations', {
+			headers: { accept: 'text/html' },
+		});
 
-  test("API paths stay JSON even when Accept is HTML", () => {
-    const request = new Request("http://example.test/api/apply/me", {
-      headers: { accept: "text/html" },
-    });
+		expect(requestPrefersJson(request)).toBe(false);
+	});
 
-    expect(requestPrefersJson(request)).toBe(true);
-  });
+	test('API paths stay JSON even when Accept is HTML', () => {
+		const request = new Request('http://example.test/api/apply/me', {
+			headers: { accept: 'text/html' },
+		});
 
-  test("treats HTMX requests as non-JSON", () => {
-    const request = new Request("http://example.test/organizations", {
-      headers: { "HX-Request": "true" },
-    });
+		expect(requestPrefersJson(request)).toBe(true);
+	});
 
-    expect(requestPrefersJson(request)).toBe(false);
-  });
+	test('treats HTMX requests as non-JSON', () => {
+		const request = new Request('http://example.test/organizations', {
+			headers: { 'HX-Request': 'true' },
+		});
 
-  test("defaults to JSON when request is missing", () => {
-    expect(requestPrefersJson()).toBe(true);
-  });
+		expect(requestPrefersJson(request)).toBe(false);
+	});
 
-  test("treats JSON accept headers as JSON", () => {
-    const request = new Request("http://example.test/organizations", {
-      headers: { accept: "application/json" },
-    });
+	test('defaults to JSON when request is missing', () => {
+		expect(requestPrefersJson()).toBe(true);
+	});
 
-    expect(requestPrefersJson(request)).toBe(true);
-  });
+	test('treats JSON accept headers as JSON', () => {
+		const request = new Request('http://example.test/organizations', {
+			headers: { accept: 'application/json' },
+		});
 
-  test("treats form submissions as non-JSON", () => {
-    const urlEncoded = new Request("http://example.test/organizations", {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-    });
-    const multipart = new Request("http://example.test/organizations", {
-      method: "POST",
-      headers: { "content-type": "multipart/form-data; boundary=abc" },
-    });
+		expect(requestPrefersJson(request)).toBe(true);
+	});
 
-    expect(requestPrefersJson(urlEncoded)).toBe(false);
-    expect(requestPrefersJson(multipart)).toBe(false);
-  });
+	test('treats form submissions as non-JSON', () => {
+		const urlEncoded = new Request('http://example.test/organizations', {
+			method: 'POST',
+			headers: { 'content-type': 'application/x-www-form-urlencoded' },
+		});
 
-  test("treats non-API HTML routes as non-JSON by default", () => {
-    const request = new Request("http://example.test/organizations");
+		const multipart = new Request('http://example.test/organizations', {
+			method: 'POST',
+			headers: { 'content-type': 'multipart/form-data; boundary=abc' },
+		});
 
-    expect(requestPrefersJson(request)).toBe(false);
-  });
+		expect(requestPrefersJson(urlEncoded)).toBe(false);
+		expect(requestPrefersJson(multipart)).toBe(false);
+	});
+
+	test('treats non-API HTML routes as non-JSON by default', () => {
+		const request = new Request('http://example.test/organizations');
+
+		expect(requestPrefersJson(request)).toBe(false);
+	});
 });

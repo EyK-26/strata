@@ -1,546 +1,617 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
-import { createSign, generateKeyPairSync } from "node:crypto";
-import { signJwt } from "@getstrata/core/auth/jwt";
-import { oidcAccessTokenHash } from "@getstrata/core/auth/oauth/oidcIdToken";
-import { createOidcHandshake, OidcProvider } from "@getstrata/core/auth/oauth/oidcProvider";
-import { resetDnsLookupForTests, setDnsLookupForTests } from "@getstrata/core/testing";
+import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { createSign, generateKeyPairSync } from 'node:crypto';
+
+import { signJwt } from '@getstrata/core/auth/jwt';
+import { oidcAccessTokenHash } from '@getstrata/core/auth/oauth/oidcIdToken';
+import { createOidcHandshake, OidcProvider } from '@getstrata/core/auth/oauth/oidcProvider';
+import { resetDnsLookupForTests, setDnsLookupForTests } from '@getstrata/core/testing';
 
 const originalFetch = globalThis.fetch;
 
-const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-const rsaJwk = publicKey.export({ format: "jwk" });
+const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+
+const rsaJwk = publicKey.export({ format: 'jwk' });
+
 const JWKS = {
-  keys: [{ ...rsaJwk, kid: "test-key", use: "sig", alg: "RS256" }],
+	keys: [{ ...rsaJwk, kid: 'test-key', use: 'sig', alg: 'RS256' }],
 };
 
 function mockPublicDns() {
-  setDnsLookupForTests(async () => [{ address: "1.1.1.1", family: 4 }]);
+	setDnsLookupForTests(async () => [{ address: '1.1.1.1', family: 4 }]);
 }
 
-function signRs256IdToken(payload: Record<string, unknown>, kid = "test-key"): string {
-  const now = Math.floor(Date.now() / 1000);
-  const body = {
-    iat: now,
-    exp: now + 3600,
-    email_verified: true,
-    at_hash: oidcAccessTokenHash("access-token"),
-    ...payload,
-  };
-  const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT", kid })).toString(
-    "base64url",
-  );
-  const data = Buffer.from(JSON.stringify(body)).toString("base64url");
-  const signingInput = `${header}.${data}`;
-  const signature = createSign("RSA-SHA256").update(signingInput).sign(privateKey, "base64url");
-  return `${signingInput}.${signature}`;
+function signRs256IdToken(payload: Record<string, unknown>, kid = 'test-key'): string {
+	const now = Math.floor(Date.now() / 1000);
+
+	const body = {
+		iat: now,
+		exp: now + 3600,
+		email_verified: true,
+		at_hash: oidcAccessTokenHash('access-token'),
+		...payload,
+	};
+
+	const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid })).toString(
+		'base64url',
+	);
+
+	const data = Buffer.from(JSON.stringify(body)).toString('base64url');
+
+	const signingInput = `${header}.${data}`;
+
+	const signature = createSign('RSA-SHA256').update(signingInput).sign(privateKey, 'base64url');
+
+	return `${signingInput}.${signature}`;
 }
 
 function requestPath(input: string | URL | Request): string {
-  return new URL(String(input)).pathname;
+	return new URL(String(input)).pathname;
 }
 
 function mockOidcNetwork(idToken?: string, tokenBody?: Record<string, unknown>) {
-  globalThis.fetch = mock((input: string | URL | Request) => {
-    const path = requestPath(input);
-    if (path.includes("openid-configuration")) {
-      return Promise.resolve(
-        Response.json({
-          issuer: "https://issuer.example.com",
-          authorization_endpoint: "https://issuer.example.com/oauth/v2/authorize",
-          token_endpoint: "https://issuer.example.com/token",
-          jwks_uri: "https://issuer.example.com/jwks",
-        }),
-      );
-    }
-    if (path === "/jwks") {
-      return Promise.resolve(Response.json(JWKS));
-    }
-    return Promise.resolve(
-      Response.json(tokenBody ?? { access_token: "access-token", id_token: idToken }),
-    );
-  }) as unknown as typeof fetch;
+	globalThis.fetch = mock((input: string | URL | Request) => {
+		const path = requestPath(input);
+
+		if (path.includes('openid-configuration')) {
+			return Promise.resolve(
+				Response.json({
+					issuer: 'https://issuer.example.com',
+					authorization_endpoint: 'https://issuer.example.com/oauth/v2/authorize',
+					token_endpoint: 'https://issuer.example.com/token',
+					jwks_uri: 'https://issuer.example.com/jwks',
+				}),
+			);
+		}
+
+		if (path === '/jwks') {
+			return Promise.resolve(Response.json(JWKS));
+		}
+
+		return Promise.resolve(
+			Response.json(tokenBody ?? { access_token: 'access-token', id_token: idToken }),
+		);
+	}) as unknown as typeof fetch;
 }
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
-  resetDnsLookupForTests();
+	globalThis.fetch = originalFetch;
+	resetDnsLookupForTests();
 });
 
-describe("OidcProvider", () => {
-  const options = {
-    name: "oidc-test",
-    issuer: "https://issuer.example.com/",
-    clientId: "client-id",
-    clientSecret: "client-secret",
-    redirectUri: "https://app.example.com/callback",
-  };
+describe('OidcProvider', () => {
+	const options = {
+		name: 'oidc-test',
+		issuer: 'https://issuer.example.com/',
+		clientId: 'client-id',
+		clientSecret: 'client-secret',
+		redirectUri: 'https://app.example.com/callback',
+	};
 
-  test("refuses getAuthorizationUrl so PKCE cannot be discarded", () => {
-    const provider = new OidcProvider(options);
-    expect(() => provider.getAuthorizationUrl("state-123")).toThrow("createAuthorization");
-  });
+	test('refuses getAuthorizationUrl so PKCE cannot be discarded', () => {
+		const provider = new OidcProvider(options);
 
-  test("builds an authorization url from discovery", async () => {
-    mockPublicDns();
-    mockOidcNetwork();
-    const provider = new OidcProvider(options);
-    const url = new URL((await provider.createAuthorization("state-123")).url);
+		expect(() => provider.getAuthorizationUrl('state-123')).toThrow('createAuthorization');
+	});
 
-    expect(url.origin).toBe("https://issuer.example.com");
-    expect(url.pathname).toBe("/oauth/v2/authorize");
-    expect(url.searchParams.get("client_id")).toBe("client-id");
-    expect(url.searchParams.get("scope")).toBe("openid email profile");
-    expect(url.searchParams.get("state")).toBe("state-123");
-    expect(url.searchParams.get("nonce")).toBeTruthy();
-    expect(url.searchParams.get("code_challenge")).toBeTruthy();
-    expect(url.searchParams.get("code_challenge_method")).toBe("S256");
-    expect(url.searchParams.get("redirect_uri")).toBe(options.redirectUri);
+	test('builds an authorization url from discovery', async () => {
+		mockPublicDns();
+		mockOidcNetwork();
+		const provider = new OidcProvider(options);
 
-    const webUrl = new URL(
-      (
-        await provider.createAuthorization(
-          "state-123",
-          "https://app.example.com/oauth/oidc/callback",
-        )
-      ).url,
-    );
-    expect(webUrl.searchParams.get("redirect_uri")).toBe(
-      "https://app.example.com/oauth/oidc/callback",
-    );
-  });
+		const url = new URL((await provider.createAuthorization('state-123')).url);
 
-  test("builds an authorization url with custom scopes", async () => {
-    mockPublicDns();
-    mockOidcNetwork();
-    const provider = new OidcProvider({
-      ...options,
-      scopes: ["openid", "groups"],
-    });
+		expect(url.origin).toBe('https://issuer.example.com');
+		expect(url.pathname).toBe('/oauth/v2/authorize');
+		expect(url.searchParams.get('client_id')).toBe('client-id');
+		expect(url.searchParams.get('scope')).toBe('openid email profile');
+		expect(url.searchParams.get('state')).toBe('state-123');
+		expect(url.searchParams.get('nonce')).toBeTruthy();
+		expect(url.searchParams.get('code_challenge')).toBeTruthy();
+		expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+		expect(url.searchParams.get('redirect_uri')).toBe(options.redirectUri);
 
-    const url = new URL((await provider.createAuthorization("state-456")).url);
+		const webUrl = new URL(
+			(
+				await provider.createAuthorization(
+					'state-123',
+					'https://app.example.com/oauth/oidc/callback',
+				)
+			).url,
+		);
 
-    expect(url.searchParams.get("scope")).toBe("openid groups");
-  });
+		expect(webUrl.searchParams.get('redirect_uri')).toBe(
+			'https://app.example.com/oauth/oidc/callback',
+		);
+	});
 
-  test("createAuthorization returns a handshake with PKCE and nonce", async () => {
-    mockPublicDns();
-    mockOidcNetwork();
-    const provider = new OidcProvider(options);
-    const { url, handshake } = await provider.createAuthorization("fixed-state");
-    const parsed = new URL(url);
-    expect(handshake.state).toBe("fixed-state");
-    expect(handshake.nonce).toHaveLength(48);
-    expect(handshake.codeVerifier.length).toBeGreaterThan(20);
-    expect(parsed.searchParams.get("nonce")).toBe(handshake.nonce);
-    expect(createOidcHandshake().codeVerifier).not.toBe(handshake.codeVerifier);
-  });
+	test('builds an authorization url with custom scopes', async () => {
+		mockPublicDns();
+		mockOidcNetwork();
+		const provider = new OidcProvider({
+			...options,
+			scopes: ['openid', 'groups'],
+		});
 
-  test("exchanges a code using an override redirect uri", async () => {
-    mockPublicDns();
-    let tokenBody = "";
-    const handshake = createOidcHandshake();
-    const idToken = signRs256IdToken({
-      sub: "user-web",
-      iss: "https://issuer.example.com",
-      aud: ["client-id", "other"],
-      azp: "client-id",
-      nonce: handshake.nonce,
-      email: "web@example.com",
-      name: "Web OIDC",
-    });
+		const url = new URL((await provider.createAuthorization('state-456')).url);
 
-    globalThis.fetch = mock((input: string | URL | Request, init?: RequestInit) => {
-      const path = requestPath(input);
-      if (path.includes("openid-configuration")) {
-        return Promise.resolve(
-          Response.json({
-            issuer: "https://issuer.example.com",
-            authorization_endpoint: "https://issuer.example.com/oauth/v2/authorize",
-            token_endpoint: "https://issuer.example.com/token",
-            jwks_uri: "https://issuer.example.com/jwks",
-          }),
-        );
-      }
-      if (path === "/jwks") {
-        return Promise.resolve(Response.json(JWKS));
-      }
-      tokenBody = String(init?.body ?? "");
-      return Promise.resolve(Response.json({ access_token: "access-token", id_token: idToken }));
-    }) as unknown as typeof fetch;
+		expect(url.searchParams.get('scope')).toBe('openid groups');
+	});
 
-    const provider = new OidcProvider(options);
-    await provider.exchangeCode(
-      "auth-code",
-      "https://app.example.com/oauth/oidc/callback",
-      handshake,
-    );
+	test('createAuthorization returns a handshake with PKCE and nonce', async () => {
+		mockPublicDns();
+		mockOidcNetwork();
+		const provider = new OidcProvider(options);
 
-    expect(tokenBody).toContain(encodeURIComponent("https://app.example.com/oauth/oidc/callback"));
-    expect(tokenBody).toContain("code_verifier");
-  });
+		const { url, handshake } = await provider.createAuthorization('fixed-state');
 
-  test("exchanges a code for a profile from a signed ID token", async () => {
-    mockPublicDns();
-    const handshake = createOidcHandshake();
-    const idToken = signRs256IdToken({
-      sub: "user-1",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      nonce: handshake.nonce,
-      email: "user@example.com",
-      name: "OIDC User",
-    });
-    mockOidcNetwork(idToken);
+		const parsed = new URL(url);
 
-    const provider = new OidcProvider(options);
-    const profile = await provider.exchangeCode("auth-code", options.redirectUri, handshake);
+		expect(handshake.state).toBe('fixed-state');
+		expect(handshake.nonce).toHaveLength(48);
+		expect(handshake.codeVerifier.length).toBeGreaterThan(20);
+		expect(parsed.searchParams.get('nonce')).toBe(handshake.nonce);
+		expect(createOidcHandshake().codeVerifier).not.toBe(handshake.codeVerifier);
+	});
 
-    expect(profile).toEqual({
-      providerUserId: "user-1",
-      email: "user@example.com",
-      name: "OIDC User",
-    });
-  });
+	test('exchanges a code using an override redirect uri', async () => {
+		mockPublicDns();
+		let tokenBody = '';
 
-  test("falls back to sub when the ID token omits name", async () => {
-    mockPublicDns();
-    const handshake = createOidcHandshake();
-    const idToken = signRs256IdToken({
-      sub: "user-3",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      nonce: handshake.nonce,
-      email: "noname@example.com",
-    });
-    mockOidcNetwork(idToken);
+		const handshake = createOidcHandshake();
 
-    const provider = new OidcProvider(options);
-    await expect(
-      provider.exchangeCode("auth-code", options.redirectUri, handshake),
-    ).resolves.toEqual({
-      providerUserId: "user-3",
-      email: "noname@example.com",
-      name: "user-3",
-    });
-  });
+		const idToken = signRs256IdToken({
+			sub: 'user-web',
+			iss: 'https://issuer.example.com',
+			aud: ['client-id', 'other'],
+			azp: 'client-id',
+			nonce: handshake.nonce,
+			email: 'web@example.com',
+			name: 'Web OIDC',
+		});
 
-  test("rejects an ID token without an email address", async () => {
-    mockPublicDns();
-    const handshake = createOidcHandshake();
-    const idToken = signRs256IdToken({
-      sub: "user-2",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      nonce: handshake.nonce,
-    });
-    mockOidcNetwork(idToken);
-    const provider = new OidcProvider(options);
-    await expect(
-      provider.exchangeCode("auth-code", options.redirectUri, handshake),
-    ).rejects.toThrow("did not include an email address");
-  });
+		globalThis.fetch = mock((input: string | URL | Request, init?: RequestInit) => {
+			const path = requestPath(input);
 
-  test("rejects an ID token whose email is not verified", async () => {
-    mockPublicDns();
-    const handshake = createOidcHandshake();
-    const idToken = signRs256IdToken({
-      sub: "user-2",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      nonce: handshake.nonce,
-      email: "user@example.com",
-      email_verified: false,
-    });
-    mockOidcNetwork(idToken);
-    const provider = new OidcProvider(options);
-    await expect(
-      provider.exchangeCode("auth-code", options.redirectUri, handshake),
-    ).rejects.toThrow("email is not verified");
-  });
+			if (path.includes('openid-configuration')) {
+				return Promise.resolve(
+					Response.json({
+						issuer: 'https://issuer.example.com',
+						authorization_endpoint: 'https://issuer.example.com/oauth/v2/authorize',
+						token_endpoint: 'https://issuer.example.com/token',
+						jwks_uri: 'https://issuer.example.com/jwks',
+					}),
+				);
+			}
 
-  test("rejects an unsigned userinfo-only token response", async () => {
-    mockPublicDns();
-    mockOidcNetwork(undefined, { access_token: "access-token" });
+			if (path === '/jwks') {
+				return Promise.resolve(Response.json(JWKS));
+			}
 
-    const provider = new OidcProvider(options);
-    await expect(provider.exchangeCode("auth-code")).rejects.toThrow("PKCE handshake");
-  });
+			tokenBody = String(init?.body ?? '');
 
-  test("validates a signed ID token when a handshake is present", async () => {
-    mockPublicDns();
-    const handshake = createOidcHandshake();
-    const idToken = signRs256IdToken({
-      sub: "user-jwt",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      nonce: handshake.nonce,
-      email: "jwt@example.com",
-      name: "JWT User",
-    });
-    mockOidcNetwork(idToken);
+			return Promise.resolve(Response.json({ access_token: 'access-token', id_token: idToken }));
+		}) as unknown as typeof fetch;
 
-    const provider = new OidcProvider(options);
-    await expect(
-      provider.exchangeCode("auth-code", options.redirectUri, handshake),
-    ).resolves.toEqual({
-      providerUserId: "user-jwt",
-      email: "jwt@example.com",
-      name: "JWT User",
-    });
-  });
+		const provider = new OidcProvider(options);
 
-  test("rejects a handshake that omits the ID token", async () => {
-    mockPublicDns();
-    const handshake = createOidcHandshake();
-    mockOidcNetwork(undefined, { access_token: "access-token" });
+		await provider.exchangeCode(
+			'auth-code',
+			'https://app.example.com/oauth/oidc/callback',
+			handshake,
+		);
 
-    const provider = new OidcProvider(options);
-    await expect(
-      provider.exchangeCode("auth-code", options.redirectUri, handshake),
-    ).rejects.toThrow("did not return an ID token");
-  });
+		expect(tokenBody).toContain(encodeURIComponent('https://app.example.com/oauth/oidc/callback'));
+		expect(tokenBody).toContain('code_verifier');
+	});
 
-  test("rejects a handshake without a verifiable ID token", async () => {
-    mockPublicDns();
-    const handshake = createOidcHandshake();
-    mockOidcNetwork("not-a-jwt");
+	test('exchanges a code for a profile from a signed ID token', async () => {
+		mockPublicDns();
+		const handshake = createOidcHandshake();
 
-    const provider = new OidcProvider(options);
-    await expect(
-      provider.exchangeCode("auth-code", options.redirectUri, handshake),
-    ).rejects.toThrow("OIDC ID token signature is invalid");
-  });
+		const idToken = signRs256IdToken({
+			sub: 'user-1',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			nonce: handshake.nonce,
+			email: 'user@example.com',
+			name: 'OIDC User',
+		});
 
-  test("rejects HS256 ID tokens", async () => {
-    mockPublicDns();
-    const handshake = createOidcHandshake();
-    const idToken = signJwt(
-      {
-        sub: "user-jwt",
-        iss: "https://issuer.example.com",
-        aud: "client-id",
-        nonce: handshake.nonce,
-        email: "jwt@example.com",
-      },
-      { secret: "client-secret" },
-    );
-    mockOidcNetwork(idToken);
-    const provider = new OidcProvider(options);
-    await expect(
-      provider.exchangeCode("auth-code", options.redirectUri, handshake),
-    ).rejects.toThrow("OIDC ID token algorithm must be RS256");
-  });
+		mockOidcNetwork(idToken);
 
-  test("rejects claim mismatches on a signed ID token", async () => {
-    mockPublicDns();
-    const handshake = createOidcHandshake();
-    const provider = new OidcProvider(options);
-    const cases = [
-      {
-        claims: {
-          sub: "user-jwt",
-          iss: "https://other-issuer.example.com",
-          aud: "client-id",
-          nonce: handshake.nonce,
-          email: "jwt@example.com",
-        },
-        error: "issuer mismatch",
-      },
-      {
-        claims: {
-          sub: "user-jwt",
-          iss: "https://issuer.example.com",
-          aud: "other-client",
-          nonce: handshake.nonce,
-          email: "jwt@example.com",
-        },
-        error: "audience mismatch",
-      },
-      {
-        claims: {
-          sub: "user-jwt",
-          iss: "https://issuer.example.com",
-          aud: "client-id",
-          nonce: "wrong-nonce",
-          email: "jwt@example.com",
-        },
-        error: "nonce mismatch",
-      },
-    ] as const;
+		const provider = new OidcProvider(options);
 
-    for (const item of cases) {
-      mockOidcNetwork(signRs256IdToken(item.claims));
-      await expect(
-        provider.exchangeCode("auth-code", options.redirectUri, handshake),
-      ).rejects.toThrow(item.error);
-    }
-  });
+		const profile = await provider.exchangeCode('auth-code', options.redirectUri, handshake);
 
-  test("rejects a nonce-less ID token when a handshake is present", async () => {
-    mockPublicDns();
-    const handshake = createOidcHandshake();
-    const noNonce = signRs256IdToken({
-      sub: "user-jwt",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      email: "jwt@example.com",
-    });
-    mockOidcNetwork(noNonce);
-    const provider = new OidcProvider(options);
-    await expect(
-      provider.exchangeCode("auth-code", options.redirectUri, handshake),
-    ).rejects.toThrow("nonce mismatch");
-  });
+		expect(profile).toEqual({
+			providerUserId: 'user-1',
+			email: 'user@example.com',
+			name: 'OIDC User',
+		});
+	});
 
-  test("rejects a nonce-less ID token", async () => {
-    mockPublicDns();
-    const noNonce = signRs256IdToken({
-      sub: "user-jwt",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-    });
-    mockOidcNetwork(noNonce);
-    const provider = new OidcProvider(options);
-    await expect(provider.exchangeCode("auth-code")).rejects.toThrow("PKCE handshake");
-  });
+	test('falls back to sub when the ID token omits name', async () => {
+		mockPublicDns();
+		const handshake = createOidcHandshake();
 
-  test("throws when token exchange does not return an access token", async () => {
-    mockPublicDns();
-    mockOidcNetwork(undefined, { error: "invalid_grant" });
+		const idToken = signRs256IdToken({
+			sub: 'user-3',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			nonce: handshake.nonce,
+			email: 'noname@example.com',
+		});
 
-    const provider = new OidcProvider(options);
+		mockOidcNetwork(idToken);
 
-    await expect(provider.exchangeCode("bad-code")).rejects.toThrow("PKCE handshake");
-  });
+		const provider = new OidcProvider(options);
 
-  test("rejects a multi-valued aud without azp", async () => {
-    mockPublicDns();
-    const handshake = createOidcHandshake();
-    const idToken = signRs256IdToken({
-      sub: "user-azp",
-      iss: "https://issuer.example.com",
-      aud: ["client-id", "other"],
-      nonce: handshake.nonce,
-      email: "azp@example.com",
-    });
-    mockOidcNetwork(idToken);
-    const provider = new OidcProvider(options);
-    await expect(
-      provider.exchangeCode("auth-code", options.redirectUri, handshake),
-    ).rejects.toThrow("authorized party mismatch");
-  });
+		await expect(
+			provider.exchangeCode('auth-code', options.redirectUri, handshake),
+		).resolves.toEqual({
+			providerUserId: 'user-3',
+			email: 'noname@example.com',
+			name: 'user-3',
+		});
+	});
 
-  test("rejects a wrong azp", async () => {
-    mockPublicDns();
-    const handshake = createOidcHandshake();
-    const idToken = signRs256IdToken({
-      sub: "user-azp",
-      iss: "https://issuer.example.com",
-      aud: ["client-id", "other"],
-      azp: "other-client",
-      nonce: handshake.nonce,
-      email: "azp@example.com",
-    });
-    mockOidcNetwork(idToken);
-    const provider = new OidcProvider(options);
-    await expect(
-      provider.exchangeCode("auth-code", options.redirectUri, handshake),
-    ).rejects.toThrow("authorized party mismatch");
-  });
+	test('rejects an ID token without an email address', async () => {
+		mockPublicDns();
+		const handshake = createOidcHandshake();
 
-  test("rejects a wrong at_hash", async () => {
-    mockPublicDns();
-    const handshake = createOidcHandshake();
-    const idToken = signRs256IdToken({
-      sub: "user-hash",
-      iss: "https://issuer.example.com",
-      aud: "client-id",
-      nonce: handshake.nonce,
-      email: "hash@example.com",
-      at_hash: oidcAccessTokenHash("other-access-token"),
-    });
-    mockOidcNetwork(idToken);
-    const provider = new OidcProvider(options);
-    await expect(
-      provider.exchangeCode("auth-code", options.redirectUri, handshake),
-    ).rejects.toThrow("access token hash mismatch");
-  });
+		const idToken = signRs256IdToken({
+			sub: 'user-2',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			nonce: handshake.nonce,
+		});
 
-  test("accepts a valid azp and at_hash pair", async () => {
-    mockPublicDns();
-    const handshake = createOidcHandshake();
-    const idToken = signRs256IdToken({
-      sub: "user-pair",
-      iss: "https://issuer.example.com",
-      aud: ["client-id", "other"],
-      azp: "client-id",
-      nonce: handshake.nonce,
-      email: "pair@example.com",
-      name: "Pair User",
-    });
-    mockOidcNetwork(idToken);
-    const provider = new OidcProvider(options);
-    await expect(
-      provider.exchangeCode("auth-code", options.redirectUri, handshake),
-    ).resolves.toEqual({
-      providerUserId: "user-pair",
-      email: "pair@example.com",
-      name: "Pair User",
-    });
-  });
+		mockOidcNetwork(idToken);
+		const provider = new OidcProvider(options);
+
+		await expect(
+			provider.exchangeCode('auth-code', options.redirectUri, handshake),
+		).rejects.toThrow('did not include an email address');
+	});
+
+	test('rejects an ID token whose email is not verified', async () => {
+		mockPublicDns();
+		const handshake = createOidcHandshake();
+
+		const idToken = signRs256IdToken({
+			sub: 'user-2',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			nonce: handshake.nonce,
+			email: 'user@example.com',
+			email_verified: false,
+		});
+
+		mockOidcNetwork(idToken);
+		const provider = new OidcProvider(options);
+
+		await expect(
+			provider.exchangeCode('auth-code', options.redirectUri, handshake),
+		).rejects.toThrow('email is not verified');
+	});
+
+	test('rejects an unsigned userinfo-only token response', async () => {
+		mockPublicDns();
+		mockOidcNetwork(undefined, { access_token: 'access-token' });
+
+		const provider = new OidcProvider(options);
+
+		await expect(provider.exchangeCode('auth-code')).rejects.toThrow('PKCE handshake');
+	});
+
+	test('validates a signed ID token when a handshake is present', async () => {
+		mockPublicDns();
+		const handshake = createOidcHandshake();
+
+		const idToken = signRs256IdToken({
+			sub: 'user-jwt',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			nonce: handshake.nonce,
+			email: 'jwt@example.com',
+			name: 'JWT User',
+		});
+
+		mockOidcNetwork(idToken);
+
+		const provider = new OidcProvider(options);
+
+		await expect(
+			provider.exchangeCode('auth-code', options.redirectUri, handshake),
+		).resolves.toEqual({
+			providerUserId: 'user-jwt',
+			email: 'jwt@example.com',
+			name: 'JWT User',
+		});
+	});
+
+	test('rejects a handshake that omits the ID token', async () => {
+		mockPublicDns();
+		const handshake = createOidcHandshake();
+
+		mockOidcNetwork(undefined, { access_token: 'access-token' });
+
+		const provider = new OidcProvider(options);
+
+		await expect(
+			provider.exchangeCode('auth-code', options.redirectUri, handshake),
+		).rejects.toThrow('did not return an ID token');
+	});
+
+	test('rejects a handshake without a verifiable ID token', async () => {
+		mockPublicDns();
+		const handshake = createOidcHandshake();
+
+		mockOidcNetwork('not-a-jwt');
+
+		const provider = new OidcProvider(options);
+
+		await expect(
+			provider.exchangeCode('auth-code', options.redirectUri, handshake),
+		).rejects.toThrow('OIDC ID token signature is invalid');
+	});
+
+	test('rejects HS256 ID tokens', async () => {
+		mockPublicDns();
+		const handshake = createOidcHandshake();
+
+		const idToken = signJwt(
+			{
+				sub: 'user-jwt',
+				iss: 'https://issuer.example.com',
+				aud: 'client-id',
+				nonce: handshake.nonce,
+				email: 'jwt@example.com',
+			},
+			{ secret: 'client-secret' },
+		);
+
+		mockOidcNetwork(idToken);
+		const provider = new OidcProvider(options);
+
+		await expect(
+			provider.exchangeCode('auth-code', options.redirectUri, handshake),
+		).rejects.toThrow('OIDC ID token algorithm must be RS256');
+	});
+
+	test('rejects claim mismatches on a signed ID token', async () => {
+		mockPublicDns();
+		const handshake = createOidcHandshake();
+
+		const provider = new OidcProvider(options);
+
+		const cases = [
+			{
+				claims: {
+					sub: 'user-jwt',
+					iss: 'https://other-issuer.example.com',
+					aud: 'client-id',
+					nonce: handshake.nonce,
+					email: 'jwt@example.com',
+				},
+				error: 'issuer mismatch',
+			},
+			{
+				claims: {
+					sub: 'user-jwt',
+					iss: 'https://issuer.example.com',
+					aud: 'other-client',
+					nonce: handshake.nonce,
+					email: 'jwt@example.com',
+				},
+				error: 'audience mismatch',
+			},
+			{
+				claims: {
+					sub: 'user-jwt',
+					iss: 'https://issuer.example.com',
+					aud: 'client-id',
+					nonce: 'wrong-nonce',
+					email: 'jwt@example.com',
+				},
+				error: 'nonce mismatch',
+			},
+		] as const;
+
+		for (const item of cases) {
+			mockOidcNetwork(signRs256IdToken(item.claims));
+			await expect(
+				provider.exchangeCode('auth-code', options.redirectUri, handshake),
+			).rejects.toThrow(item.error);
+		}
+	});
+
+	test('rejects a nonce-less ID token when a handshake is present', async () => {
+		mockPublicDns();
+		const handshake = createOidcHandshake();
+
+		const noNonce = signRs256IdToken({
+			sub: 'user-jwt',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			email: 'jwt@example.com',
+		});
+
+		mockOidcNetwork(noNonce);
+		const provider = new OidcProvider(options);
+
+		await expect(
+			provider.exchangeCode('auth-code', options.redirectUri, handshake),
+		).rejects.toThrow('nonce mismatch');
+	});
+
+	test('rejects a nonce-less ID token', async () => {
+		mockPublicDns();
+		const noNonce = signRs256IdToken({
+			sub: 'user-jwt',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+		});
+
+		mockOidcNetwork(noNonce);
+		const provider = new OidcProvider(options);
+
+		await expect(provider.exchangeCode('auth-code')).rejects.toThrow('PKCE handshake');
+	});
+
+	test('throws when token exchange does not return an access token', async () => {
+		mockPublicDns();
+		mockOidcNetwork(undefined, { error: 'invalid_grant' });
+
+		const provider = new OidcProvider(options);
+
+		await expect(provider.exchangeCode('bad-code')).rejects.toThrow('PKCE handshake');
+	});
+
+	test('rejects a multi-valued aud without azp', async () => {
+		mockPublicDns();
+		const handshake = createOidcHandshake();
+
+		const idToken = signRs256IdToken({
+			sub: 'user-azp',
+			iss: 'https://issuer.example.com',
+			aud: ['client-id', 'other'],
+			nonce: handshake.nonce,
+			email: 'azp@example.com',
+		});
+
+		mockOidcNetwork(idToken);
+		const provider = new OidcProvider(options);
+
+		await expect(
+			provider.exchangeCode('auth-code', options.redirectUri, handshake),
+		).rejects.toThrow('authorized party mismatch');
+	});
+
+	test('rejects a wrong azp', async () => {
+		mockPublicDns();
+		const handshake = createOidcHandshake();
+
+		const idToken = signRs256IdToken({
+			sub: 'user-azp',
+			iss: 'https://issuer.example.com',
+			aud: ['client-id', 'other'],
+			azp: 'other-client',
+			nonce: handshake.nonce,
+			email: 'azp@example.com',
+		});
+
+		mockOidcNetwork(idToken);
+		const provider = new OidcProvider(options);
+
+		await expect(
+			provider.exchangeCode('auth-code', options.redirectUri, handshake),
+		).rejects.toThrow('authorized party mismatch');
+	});
+
+	test('rejects a wrong at_hash', async () => {
+		mockPublicDns();
+		const handshake = createOidcHandshake();
+
+		const idToken = signRs256IdToken({
+			sub: 'user-hash',
+			iss: 'https://issuer.example.com',
+			aud: 'client-id',
+			nonce: handshake.nonce,
+			email: 'hash@example.com',
+			at_hash: oidcAccessTokenHash('other-access-token'),
+		});
+
+		mockOidcNetwork(idToken);
+		const provider = new OidcProvider(options);
+
+		await expect(
+			provider.exchangeCode('auth-code', options.redirectUri, handshake),
+		).rejects.toThrow('access token hash mismatch');
+	});
+
+	test('accepts a valid azp and at_hash pair', async () => {
+		mockPublicDns();
+		const handshake = createOidcHandshake();
+
+		const idToken = signRs256IdToken({
+			sub: 'user-pair',
+			iss: 'https://issuer.example.com',
+			aud: ['client-id', 'other'],
+			azp: 'client-id',
+			nonce: handshake.nonce,
+			email: 'pair@example.com',
+			name: 'Pair User',
+		});
+
+		mockOidcNetwork(idToken);
+		const provider = new OidcProvider(options);
+
+		await expect(
+			provider.exchangeCode('auth-code', options.redirectUri, handshake),
+		).resolves.toEqual({
+			providerUserId: 'user-pair',
+			email: 'pair@example.com',
+			name: 'Pair User',
+		});
+	});
 });
 
-test("OIDC discovery rejects missing endpoint configuration before exchanging a code", async () => {
-  mockPublicDns();
-  globalThis.fetch = Object.assign(
-    mock(() => Promise.resolve(Response.json({ issuer: "https://issuer.example.com" }))),
-    { preconnect: originalFetch.preconnect },
-  );
-  const provider = new OidcProvider({
-    name: "missing-endpoint",
-    issuer: "https://issuer.example.com",
-    clientId: "client",
-    clientSecret: "secret",
-    redirectUri: "https://app.example.com/callback",
-  });
-  await expect(provider.createAuthorization("state")).rejects.toThrow(
-    "discovery document did not include",
-  );
+test('OIDC discovery rejects missing endpoint configuration before exchanging a code', async () => {
+	mockPublicDns();
+	globalThis.fetch = Object.assign(
+		mock(() => Promise.resolve(Response.json({ issuer: 'https://issuer.example.com' }))),
+		{ preconnect: originalFetch.preconnect },
+	);
+	const provider = new OidcProvider({
+		name: 'missing-endpoint',
+		issuer: 'https://issuer.example.com',
+		clientId: 'client',
+		clientSecret: 'secret',
+		redirectUri: 'https://app.example.com/callback',
+	});
+
+	await expect(provider.createAuthorization('state')).rejects.toThrow(
+		'discovery document did not include',
+	);
 });
 
-test("OIDC token exchange rejects a response with no access token", async () => {
-  mockPublicDns();
-  mockOidcNetwork(undefined, {});
-  const provider = new OidcProvider({
-    name: "missing-token",
-    issuer: "https://issuer.example.com",
-    clientId: "client",
-    clientSecret: "secret",
-    redirectUri: "https://app.example.com/callback",
-  });
-  await expect(provider.exchangeCode("code", undefined, createOidcHandshake())).rejects.toThrow(
-    "token exchange failed",
-  );
+test('OIDC token exchange rejects a response with no access token', async () => {
+	mockPublicDns();
+	mockOidcNetwork(undefined, {});
+	const provider = new OidcProvider({
+		name: 'missing-token',
+		issuer: 'https://issuer.example.com',
+		clientId: 'client',
+		clientSecret: 'secret',
+		redirectUri: 'https://app.example.com/callback',
+	});
+
+	await expect(provider.exchangeCode('code', undefined, createOidcHandshake())).rejects.toThrow(
+		'token exchange failed',
+	);
 });
 
-test("provider discovery caches are private to their owner", async () => {
-  mockPublicDns();
-  mockOidcNetwork();
-  const options = {
-    name: "isolated",
-    issuer: "https://issuer.example.com",
-    clientId: "client",
-    clientSecret: "secret",
-    redirectUri: "https://app.example.com/callback",
-  };
-  const first = new OidcProvider(options);
-  await first.createAuthorization("state");
-  globalThis.fetch = Object.assign(
-    mock(() => Promise.resolve(Response.json({ issuer: options.issuer }))),
-    { preconnect: originalFetch.preconnect },
-  );
-  await first.createAuthorization("state");
-  await expect(new OidcProvider(options).createAuthorization("state")).rejects.toThrow(
-    "did not include",
-  );
+test('provider discovery caches are private to their owner', async () => {
+	mockPublicDns();
+	mockOidcNetwork();
+	const options = {
+		name: 'isolated',
+		issuer: 'https://issuer.example.com',
+		clientId: 'client',
+		clientSecret: 'secret',
+		redirectUri: 'https://app.example.com/callback',
+	};
+
+	const first = new OidcProvider(options);
+
+	await first.createAuthorization('state');
+	globalThis.fetch = Object.assign(
+		mock(() => Promise.resolve(Response.json({ issuer: options.issuer }))),
+		{ preconnect: originalFetch.preconnect },
+	);
+	await first.createAuthorization('state');
+	await expect(new OidcProvider(options).createAuthorization('state')).rejects.toThrow(
+		'did not include',
+	);
 });

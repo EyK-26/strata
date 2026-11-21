@@ -1,200 +1,236 @@
 import {
-  type AnyServiceToken,
-  assertServiceToken,
-  type ServiceToken,
-} from "@getstrata/core/contracts/token";
-import type { ResourceSpec } from "./application";
+	type AnyServiceToken,
+	assertServiceToken,
+	type ServiceToken,
+} from '@getstrata/core/contracts/token';
 
-type ServiceLifetime = "application" | "execution";
-const serviceDeclarationType: unique symbol = Symbol("ServiceDeclaration");
+import type { ResourceSpec } from './application';
+
+type ServiceLifetime = 'application' | 'execution';
+
+const serviceDeclarationType: unique symbol = Symbol('ServiceDeclaration');
+
 interface DeclarationBrand {
-  readonly [serviceDeclarationType]: object;
+	readonly [serviceDeclarationType]: object;
 }
+
 type DependencyValues<D extends readonly AnyServiceToken[]> = {
-  [K in keyof D]: D[K] extends ServiceToken<infer T> ? T : never;
+	[K in keyof D]: D[K] extends ServiceToken<infer T> ? T : never;
 };
+
 type CallableThenPayload<T> = T extends unknown
-  ? "then" extends keyof T
-    ? [Extract<T["then"], (...args: never[]) => unknown>] extends [never]
-      ? never
-      : T
-    : never
-  : never;
+	? 'then' extends keyof T
+		? [Extract<T['then'], (...args: never[]) => unknown>] extends [never]
+			? never
+			: T
+		: never
+	: never;
+
 type NonPromisePayload<T> = unknown extends T
-  ? unknown
-  : [Extract<T, PromiseLike<unknown>> | CallableThenPayload<T>] extends [never]
-    ? unknown
-    : never;
+	? unknown
+	: [Extract<T, PromiseLike<unknown>> | CallableThenPayload<T>] extends [never]
+		? unknown
+		: never;
 
 interface ServiceOptions<T, D extends readonly AnyServiceToken[]> {
-  readonly lifetime: ServiceLifetime;
-  readonly dependencies: D;
-  /** Async initialization yields T; PromiseLike<T> is not itself a service payload. */
-  readonly create: (...dependencies: DependencyValues<D>) => NoInfer<T> | Promise<NoInfer<T>>;
+	readonly lifetime: ServiceLifetime;
+	readonly dependencies: D;
+	/** Async initialization yields T; PromiseLike<T> is not itself a service payload. */
+	readonly create: (...dependencies: DependencyValues<D>) => NoInfer<T> | Promise<NoInfer<T>>;
 }
 
 interface FactoryServiceDeclaration extends DeclarationBrand {
-  readonly kind: "factory";
-  readonly token: AnyServiceToken;
-  readonly lifetime: ServiceLifetime;
-  readonly dependencies: readonly AnyServiceToken[];
-  /** Erased assembly signature; callers use the typed service helper. */
-  readonly create: (...dependencies: never[]) => unknown;
+	readonly kind: 'factory';
+	readonly token: AnyServiceToken;
+	readonly lifetime: ServiceLifetime;
+	readonly dependencies: readonly AnyServiceToken[];
+	/** Erased assembly signature; callers use the typed service helper. */
+	readonly create: (...dependencies: never[]) => unknown;
 }
 
 interface ResourceServiceOptions<T, D extends readonly AnyServiceToken[]> {
-  readonly lifetime: ServiceLifetime;
-  readonly dependencies: D;
-  /** Assemble a resource-free descriptor; acquisition belongs in ResourceSpec.open. */
-  readonly create: (...dependencies: DependencyValues<D>) => ResourceSpec<NoInfer<T>>;
+	readonly lifetime: ServiceLifetime;
+	readonly dependencies: D;
+	/** Assemble a resource-free descriptor; acquisition belongs in ResourceSpec.open. */
+	readonly create: (...dependencies: DependencyValues<D>) => ResourceSpec<NoInfer<T>>;
 }
 
 interface ResourceServiceDeclaration extends DeclarationBrand {
-  readonly kind: "resource";
-  readonly token: AnyServiceToken;
-  readonly lifetime: ServiceLifetime;
-  readonly dependencies: readonly AnyServiceToken[];
-  /** Erased assembly signature; callers use the typed resourceService helper. */
-  readonly create: (...dependencies: never[]) => unknown;
+	readonly kind: 'resource';
+	readonly token: AnyServiceToken;
+	readonly lifetime: ServiceLifetime;
+	readonly dependencies: readonly AnyServiceToken[];
+	/** Erased assembly signature; callers use the typed resourceService helper. */
+	readonly create: (...dependencies: never[]) => unknown;
 }
 
 interface ValueServiceDeclaration extends DeclarationBrand {
-  readonly kind: "value";
-  readonly token: AnyServiceToken;
-  readonly lifetime: "application";
-  /** Caller-owned service values are neither copied nor deep-frozen. */
-  readonly value: unknown;
+	readonly kind: 'value';
+	readonly token: AnyServiceToken;
+	readonly lifetime: 'application';
+	/** Caller-owned service values are neither copied nor deep-frozen. */
+	readonly value: unknown;
 }
 
 interface AliasServiceDeclaration extends DeclarationBrand {
-  readonly kind: "alias";
-  readonly token: AnyServiceToken;
-  readonly target: AnyServiceToken;
+	readonly kind: 'alias';
+	readonly token: AnyServiceToken;
+	readonly target: AnyServiceToken;
 }
 
 type ServiceDeclaration =
-  | FactoryServiceDeclaration
-  | ResourceServiceDeclaration
-  | ValueServiceDeclaration
-  | AliasServiceDeclaration;
+	| FactoryServiceDeclaration
+	| ResourceServiceDeclaration
+	| ValueServiceDeclaration
+	| AliasServiceDeclaration;
 
 /** Authenticate original helper output; copied/spread fields cannot forge this identity. */
 function isServiceDeclaration(value: unknown): value is ServiceDeclaration {
-  if (value === null || typeof value !== "object") return false;
-  const brand = Object.getOwnPropertyDescriptor(value, serviceDeclarationType);
-  return Object.isFrozen(value) && brand !== undefined && "value" in brand && brand.value === value;
+	if (value === null || typeof value !== 'object') {
+		return false;
+	}
+
+	const brand = Object.getOwnPropertyDescriptor(value, serviceDeclarationType);
+
+	return Object.isFrozen(value) && brand !== undefined && 'value' in brand && brand.value === value;
 }
 
 function declaration<T extends object>(value: T): Readonly<T> & DeclarationBrand {
-  Object.defineProperty(value, serviceDeclarationType, { value });
-  return Object.freeze(value) as Readonly<T> & DeclarationBrand;
+	Object.defineProperty(value, serviceDeclarationType, { value });
+
+	return Object.freeze(value) as Readonly<T> & DeclarationBrand;
 }
 
 /** PromiseLike payloads are not values; inspect descriptors without invoking then getters. */
 function assertServicePayload(value: unknown): void {
-  if (value === null || (typeof value !== "object" && typeof value !== "function")) return;
-  let current: object | null = value;
-  const visited = new Set<object>();
-  while (current !== null) {
-    if (visited.has(current)) throw new TypeError("Unsupported service payload prototype shape.");
-    visited.add(current);
-    const then = Object.getOwnPropertyDescriptor(current, "then");
-    if (then) {
-      if (!("value" in then) || typeof then.value === "function") {
-        throw new TypeError("PromiseLike service payloads are unsupported.");
-      }
-      return;
-    }
-    current = Object.getPrototypeOf(current);
-  }
+	if (value === null || (typeof value !== 'object' && typeof value !== 'function')) {
+		return;
+	}
+
+	let current: object | null = value;
+
+	const visited = new Set<object>();
+
+	while (current !== null) {
+		if (visited.has(current)) {
+			throw new TypeError('Unsupported service payload prototype shape.');
+		}
+
+		visited.add(current);
+		const then = Object.getOwnPropertyDescriptor(current, 'then');
+
+		if (then) {
+			if (!('value' in then) || typeof then.value === 'function') {
+				throw new TypeError('PromiseLike service payloads are unsupported.');
+			}
+
+			return;
+		}
+
+		current = Object.getPrototypeOf(current);
+	}
 }
 
 function service<T, const D extends readonly AnyServiceToken[]>(
-  token: ServiceToken<T> & NonPromisePayload<T>,
-  options: ServiceOptions<T, D>,
+	token: ServiceToken<T> & NonPromisePayload<T>,
+	options: ServiceOptions<T, D>,
 ): FactoryServiceDeclaration {
-  assertServiceToken(token);
-  if (options.lifetime !== "application" && options.lifetime !== "execution") {
-    throw new TypeError("Unsupported service lifetime declaration.");
-  }
-  if (!Array.isArray(options.dependencies) || typeof options.create !== "function") {
-    throw new TypeError("Services must declare a dependency tuple and factory.");
-  }
-  for (const dependency of options.dependencies) assertServiceToken(dependency);
-  return declaration({
-    kind: "factory",
-    token,
-    lifetime: options.lifetime,
-    dependencies: Object.freeze([...options.dependencies]),
-    create: options.create,
-  });
+	assertServiceToken(token);
+
+	if (options.lifetime !== 'application' && options.lifetime !== 'execution') {
+		throw new TypeError('Unsupported service lifetime declaration.');
+	}
+
+	if (!Array.isArray(options.dependencies) || typeof options.create !== 'function') {
+		throw new TypeError('Services must declare a dependency tuple and factory.');
+	}
+
+	for (const dependency of options.dependencies) {
+		assertServiceToken(dependency);
+	}
+
+	return declaration({
+		kind: 'factory',
+		token,
+		lifetime: options.lifetime,
+		dependencies: Object.freeze([...options.dependencies]),
+		create: options.create,
+	});
 }
 
 function valueService<T>(
-  token: ServiceToken<T> & NonPromisePayload<T>,
-  value: NoInfer<T>,
+	token: ServiceToken<T> & NonPromisePayload<T>,
+	value: NoInfer<T>,
 ): ValueServiceDeclaration {
-  assertServiceToken(token);
-  assertServicePayload(value);
-  return declaration({
-    kind: "value",
-    token,
-    lifetime: "application",
-    value,
-  });
+	assertServiceToken(token);
+	assertServicePayload(value);
+
+	return declaration({
+		kind: 'value',
+		token,
+		lifetime: 'application',
+		value,
+	});
 }
 
 function resourceService<T, const D extends readonly AnyServiceToken[]>(
-  token: ServiceToken<T> & NonPromisePayload<T>,
-  options: ResourceServiceOptions<T, D>,
+	token: ServiceToken<T> & NonPromisePayload<T>,
+	options: ResourceServiceOptions<T, D>,
 ): ResourceServiceDeclaration {
-  assertServiceToken(token);
-  if (options.lifetime !== "application" && options.lifetime !== "execution") {
-    throw new TypeError("Unsupported resource service lifetime declaration.");
-  }
-  if (!Array.isArray(options.dependencies) || typeof options.create !== "function") {
-    throw new TypeError("Resource services must declare a dependency tuple and factory.");
-  }
-  for (const dependency of options.dependencies) assertServiceToken(dependency);
-  return declaration({
-    kind: "resource",
-    token,
-    lifetime: options.lifetime,
-    dependencies: Object.freeze([...options.dependencies]),
-    create: options.create,
-  });
+	assertServiceToken(token);
+
+	if (options.lifetime !== 'application' && options.lifetime !== 'execution') {
+		throw new TypeError('Unsupported resource service lifetime declaration.');
+	}
+
+	if (!Array.isArray(options.dependencies) || typeof options.create !== 'function') {
+		throw new TypeError('Resource services must declare a dependency tuple and factory.');
+	}
+
+	for (const dependency of options.dependencies) {
+		assertServiceToken(dependency);
+	}
+
+	return declaration({
+		kind: 'resource',
+		token,
+		lifetime: options.lifetime,
+		dependencies: Object.freeze([...options.dependencies]),
+		create: options.create,
+	});
 }
 
 function aliasService<T>(
-  aliasToken: ServiceToken<T> & NonPromisePayload<T>,
-  targetToken: ServiceToken<NoInfer<T>>,
+	aliasToken: ServiceToken<T> & NonPromisePayload<T>,
+	targetToken: ServiceToken<NoInfer<T>>,
 ): AliasServiceDeclaration {
-  assertServiceToken(aliasToken);
-  assertServiceToken(targetToken);
-  return declaration({
-    kind: "alias",
-    token: aliasToken,
-    target: targetToken,
-  });
+	assertServiceToken(aliasToken);
+	assertServiceToken(targetToken);
+
+	return declaration({
+		kind: 'alias',
+		token: aliasToken,
+		target: targetToken,
+	});
 }
 
 export type {
-  AliasServiceDeclaration,
-  DependencyValues,
-  FactoryServiceDeclaration,
-  NonPromisePayload,
-  ResourceServiceDeclaration,
-  ResourceServiceOptions,
-  ServiceDeclaration,
-  ServiceLifetime,
-  ServiceOptions,
-  ValueServiceDeclaration,
+	AliasServiceDeclaration,
+	DependencyValues,
+	FactoryServiceDeclaration,
+	NonPromisePayload,
+	ResourceServiceDeclaration,
+	ResourceServiceOptions,
+	ServiceDeclaration,
+	ServiceLifetime,
+	ServiceOptions,
+	ValueServiceDeclaration,
 };
 export {
-  aliasService,
-  assertServicePayload,
-  isServiceDeclaration,
-  resourceService,
-  service,
-  valueService,
+	aliasService,
+	assertServicePayload,
+	isServiceDeclaration,
+	resourceService,
+	service,
+	valueService,
 };

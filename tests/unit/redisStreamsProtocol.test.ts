@@ -1,270 +1,410 @@
-import { describe, expect, test } from "bun:test";
+import { RedisClient } from 'bun';
+import { describe, expect, spyOn, test } from 'bun:test';
+
+import { Job } from '@getstrata/core/queue';
+import { JobRegistry } from '@getstrata/core/queue/jobRegistry';
+
 import {
-  ensureStreamGroup,
-  migrateLegacyQueueToStreams,
-  pollStreamPriorities,
-  readStreamCancellation,
-  readStreamEntry,
-  readStreamTime,
-  reserveStreamJob,
-  scheduleStreamRetry,
-  watchStreamDeadline,
-} from "../../src/core/queue/redisStreams";
+	ensureStreamGroup,
+	migrateLegacyQueueToStreams,
+	pollStreamPriorities,
+	readStreamCancellation,
+	readStreamEntry,
+	readStreamTime,
+	RedisStreamsQueue,
+	RedisStreamsWorker,
+	reserveStreamJob,
+	scheduleStreamRetry,
+	watchStreamDeadline,
+} from '../../src/core/queue/redisStreams';
+
+test('streams dispatch requires a registered job before contacting Redis', async () => {
+	class UnknownJob extends Job {
+		async handle() {
+			throw new Error('Unregistered job must not run');
+		}
+	}
+
+	const queue = new RedisStreamsQueue('redis://127.0.0.1:1', new JobRegistry());
+
+	try {
+		await expect(queue.dispatch(new UnknownJob(), {})).rejects.toThrow('Job is not registered');
+	} finally {
+		queue.close();
+	}
+});
+
+test('stopping a Streams worker during group initialization prevents the first poll', async () => {
+	const initializing = Promise.withResolvers<void>();
+
+	const release = Promise.withResolvers<string>();
+
+	const send = spyOn(RedisClient.prototype, 'send').mockImplementation(async (command) => {
+		if (command === 'EVAL') {
+			return 1;
+		}
+
+		expect(command).toBe('XGROUP');
+		initializing.resolve();
+
+		return release.promise;
+	});
+
+	const unexpected = () => {
+		throw new Error('Stopping worker must not admit a job');
+	};
+
+	const worker = new RedisStreamsWorker(
+		'redis://127.0.0.1:1',
+		{ recordFailure: unexpected, runAttempt: unexpected },
+		new JobRegistry(),
+		1,
+		['fixture'],
+	);
+
+	try {
+		const running = worker.processNext();
+
+		await initializing.promise;
+		worker.requestStop();
+		release.resolve('OK');
+		expect(await running).toBe(false);
+		expect(send.mock.calls.map(([command]) => command)).toEqual(['EVAL', 'XGROUP']);
+	} finally {
+		release.resolve('OK');
+		worker.close();
+		send.mockRestore();
+	}
+});
 
 function replies(values: unknown[]) {
-  return {
-    send: async () => {
-      if (!values.length) throw new Error("Unexpected protocol call");
-      return values.shift();
-    },
-  };
+	return {
+		send: async () => {
+			if (!values.length) {
+				throw new Error('Unexpected protocol call');
+			}
+
+			return values.shift();
+		},
+	};
 }
 
-describe("Streams protocol boundaries", () => {
-  test("missing and unexpected cancellation states fail closed", async () => {
-    for (const state of [null, "unknown"])
-      await expect(readStreamCancellation(replies([state]) as never, "control")).rejects.toThrow(
-        "control state",
-      );
-    expect(await readStreamCancellation(replies(["active"]) as never, "control")).toBe(false);
-    expect(await readStreamCancellation(replies(["cancelled"]) as never, "control")).toBe(true);
-  });
-  test("deadline clock rejects malformed Redis replies", async () => {
-    for (const value of [
-      null,
-      [],
-      [null, "0"],
-      ["1", null],
-      ["", "0"],
-      ["1", "bad"],
-      ["bad", "0"],
-      ["-1", "0"],
-      ["1", "1000000"],
-      ["1", "-1"],
-      ["1.5", "0"],
-      [String(Number.MAX_SAFE_INTEGER), "0"],
-    ])
-      await expect(readStreamTime(replies([value]) as never)).rejects.toThrow("TIME response");
-    expect(await readStreamTime(replies([["10", "250000"]]) as never)).toBe(10250);
-  });
-  test("deadline watch rechecks the clock and propagates infrastructure failures", async () => {
-    let expired = false;
-    const clock = replies([
-      ["0", "1000"],
-      ["1", "0"],
-    ]);
-    const stop = watchStreamDeadline(
-      clock as never,
-      10,
-      1,
-      () => {
-        expired = true;
-      },
-      () => {
-        throw new Error("Unexpected clock failure");
-      },
-    );
-    try {
-      await Bun.sleep(25);
-      expect(expired).toBe(true);
-    } finally {
-      stop();
-    }
-    let failed = false;
-    const stopFailure = watchStreamDeadline(
-      replies([]) as never,
-      1,
-      1,
-      () => {},
-      () => {
-        failed = true;
-      },
-    );
-    try {
-      await Bun.sleep(10);
-      expect(failed).toBe(true);
-    } finally {
-      stopFailure();
-    }
-  });
-  test("deadline cleanup suppresses in-flight clock results and errors", async () => {
-    for (const reject of [false, true]) {
-      let settle: () => void = () => {};
-      const clock = {
-        send: async () =>
-          await new Promise((resolve, fail) => {
-            settle = () => (reject ? fail(new Error("Closed connection")) : resolve(["1", "0"]));
-          }),
-      };
-      let callbacks = 0;
-      const stop = watchStreamDeadline(
-        clock as never,
-        1,
-        1,
-        () => {
-          callbacks++;
-        },
-        () => {
-          callbacks++;
-        },
-      );
-      await Bun.sleep(10);
-      stop();
-      settle();
-      await Bun.sleep(5);
-      expect(callbacks).toBe(0);
-    }
-  });
-  test("rejects retry delays that cannot be represented safely before accessing Redis", async () => {
-    for (const delay of [-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER])
-      await expect(
-        scheduleStreamRetry(
-          replies([]) as never,
-          "key",
-          { id: "1-0", owner: "owner", payload: "{}" },
-          { name: "job", payload: {} },
-          delay,
-        ),
-      ).rejects.toThrow("Invalid Streams retry delay");
-  });
-  test("rejects invalid entry framing and retains missing payloads for quarantine", () => {
-    for (const value of [null, [], [1, []], ["1-0", null]])
-      expect(() => readStreamEntry(value, "owner")).toThrow("Invalid Redis stream entry");
-    expect(readStreamEntry(["1-0", ["other", "field"]], "owner")).toEqual({
-      id: "1-0",
-      owner: "owner",
-      payload: "",
-    });
-    expect(readStreamEntry(["1-0", ["payload", 3]], "owner")?.payload).toBe("");
-  });
-  test("rejects invalid claim and read replies instead of treating corruption as an empty queue", async () => {
-    for (const value of [null, [], [1, []], ["0-0", null]])
-      await expect(reserveStreamJob(replies([value]) as never, "key", "owner")).rejects.toThrow(
-        "XAUTOCLAIM response",
-      );
-    for (const value of [{}, [], [[]], [["key", null]]])
-      await expect(
-        reserveStreamJob(replies([["0-0", []], value]) as never, "key", "owner"),
-      ).rejects.toThrow("XREADGROUP response");
-    expect(await reserveStreamJob(replies([["10-0", []], null]) as never, "key", "owner")).toEqual({
-      reservation: null,
-      cursor: "10-0",
-    });
-    expect(
-      await reserveStreamJob(
-        replies([["0-0", []], [["key", [["1-0", ["payload", "{}"]]]]]]) as never,
-        "key",
-        "owner",
-      ),
-    ).toEqual({ cursor: "0-0", reservation: { id: "1-0", owner: "owner", payload: "{}" } });
-  });
-  test("only BUSYGROUP is accepted during concurrent group initialization", async () => {
-    let calls = 0;
-    const busy = {
-      send: async () => {
-        if (++calls === 2) throw new Error("BUSYGROUP group exists");
-        return 1;
-      },
-    };
-    await expect(ensureStreamGroup(busy as never, "key")).resolves.toBeUndefined();
-    const fail = {
-      send: async () => {
-        throw new Error("Connection unavailable");
-      },
-    };
-    await expect(ensureStreamGroup(fail as never, "key")).rejects.toThrow("Connection unavailable");
-    calls = 0;
-    const createFail = {
-      send: async () => {
-        if (++calls === 2) throw new Error("WRONGTYPE stream");
-        return 1;
-      },
-    };
-    await expect(ensureStreamGroup(createFail as never, "key")).rejects.toThrow("WRONGTYPE");
-  });
+test('a hit on an empty priority key is rejected before job admission', async () => {
+	const protocol = replies([1, 'OK', ['1', '1', '1-0', 'payload', '0-0']]);
+
+	const send = spyOn(RedisClient.prototype, 'send').mockImplementation(protocol.send);
+
+	const unexpected = () => {
+		throw new Error('An empty queue key must not admit a job');
+	};
+
+	const worker = new RedisStreamsWorker(
+		'redis://127.0.0.1:1',
+		{ recordFailure: unexpected, runAttempt: unexpected },
+		new JobRegistry(),
+		0,
+		[''],
+	);
+
+	try {
+		await expect(worker.processNext()).rejects.toThrow('Invalid Redis stream poll response');
+		expect(send.mock.calls.map(([command]) => command)).toEqual(['EVAL', 'XGROUP', 'EVAL']);
+	} finally {
+		worker.close();
+		send.mockRestore();
+	}
 });
 
-describe("pollStreamPriorities", () => {
-  test("reads an empty priority set and a hit from one reply", async () => {
-    const idle = replies([["0", "4-0", "0-0"]]);
-    await expect(
-      pollStreamPriorities(idle as never, ["high", "low"], "owner", ["0-0", "0-0"]),
-    ).resolves.toEqual({
-      cursors: ["4-0", "0-0"],
-      hit: null,
-    });
+describe('Streams protocol boundaries', () => {
+	test('missing and unexpected cancellation states fail closed', async () => {
+		for (const state of [null, 'unknown']) {
+			await expect(readStreamCancellation(replies([state]) as never, 'control')).rejects.toThrow(
+				'control state',
+			);
+		}
 
-    const hit = replies([["1", "1", "9-1", '{"id":1}', "8-0", "0-0"]]);
-    await expect(
-      pollStreamPriorities(hit as never, ["high", "low"], "owner", ["0-0", "0-0"]),
-    ).resolves.toEqual({
-      cursors: ["8-0", "0-0"],
-      hit: { index: 0, reservation: { id: "9-1", owner: "owner", payload: '{"id":1}' } },
-    });
-  });
+		expect(await readStreamCancellation(replies(['active']) as never, 'control')).toBe(false);
+		expect(await readStreamCancellation(replies(['cancelled']) as never, 'control')).toBe(true);
+	});
+	test('deadline clock rejects malformed Redis replies', async () => {
+		for (const value of [
+			null,
+			[],
+			[null, '0'],
+			['1', null],
+			['', '0'],
+			['1', 'bad'],
+			['bad', '0'],
+			['-1', '0'],
+			['1', '1000000'],
+			['1', '-1'],
+			['1.5', '0'],
+			[String(Number.MAX_SAFE_INTEGER), '0'],
+		]) {
+			await expect(readStreamTime(replies([value]) as never)).rejects.toThrow('TIME response');
+		}
 
-  test("rejects a reply that does not match the priority count", async () => {
-    await expect(
-      pollStreamPriorities(replies([null]) as never, ["high"], "owner", ["0-0"]),
-    ).rejects.toThrow("stream poll response");
-    await expect(
-      pollStreamPriorities(replies([["0"]]) as never, ["high"], "owner", ["0-0"]),
-    ).rejects.toThrow("stream poll response");
-    await expect(
-      pollStreamPriorities(
-        replies([["1", "2", "9-1", "body", "0-0"]]) as never,
-        ["high"],
-        "owner",
-        ["0-0"],
-      ),
-    ).rejects.toThrow("stream poll response");
-  });
+		expect(await readStreamTime(replies([['10', '250000']]) as never)).toBe(10250);
+	});
+	test('deadline watch rechecks the clock and propagates infrastructure failures', async () => {
+		let expired = false;
+
+		const clock = replies([
+			['0', '1000'],
+			['1', '0'],
+		]);
+
+		const stop = watchStreamDeadline(
+			clock as never,
+			10,
+			1,
+			() => {
+				expired = true;
+			},
+			() => {
+				throw new Error('Unexpected clock failure');
+			},
+		);
+
+		try {
+			await Bun.sleep(25);
+			expect(expired).toBe(true);
+		} finally {
+			stop();
+		}
+		let failed = false;
+
+		const stopFailure = watchStreamDeadline(
+			replies([]) as never,
+			1,
+			1,
+			() => {},
+			() => {
+				failed = true;
+			},
+		);
+
+		try {
+			await Bun.sleep(10);
+			expect(failed).toBe(true);
+		} finally {
+			stopFailure();
+		}
+	});
+	test('deadline cleanup suppresses in-flight clock results and errors', async () => {
+		for (const reject of [false, true]) {
+			let settle: () => void = () => {};
+
+			const clock = {
+				send: async () =>
+					await new Promise((resolve, fail) => {
+						settle = () => (reject ? fail(new Error('Closed connection')) : resolve(['1', '0']));
+					}),
+			};
+
+			let callbacks = 0;
+
+			const stop = watchStreamDeadline(
+				clock as never,
+				1,
+				1,
+				() => {
+					callbacks++;
+				},
+				() => {
+					callbacks++;
+				},
+			);
+
+			await Bun.sleep(10);
+			stop();
+			settle();
+			await Bun.sleep(5);
+			expect(callbacks).toBe(0);
+		}
+	});
+	test('rejects retry delays that cannot be represented safely before accessing Redis', async () => {
+		for (const delay of [-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER]) {
+			await expect(
+				scheduleStreamRetry(
+					replies([]) as never,
+					'key',
+					{ id: '1-0', owner: 'owner', payload: '{}' },
+					{ name: 'job', payload: {} },
+					delay,
+				),
+			).rejects.toThrow('Invalid Streams retry delay');
+		}
+	});
+	test('rejects invalid entry framing and retains missing payloads for quarantine', () => {
+		for (const value of [null, [], [1, []], ['1-0', null]]) {
+			expect(() => readStreamEntry(value, 'owner')).toThrow('Invalid Redis stream entry');
+		}
+
+		expect(readStreamEntry(['1-0', ['other', 'field']], 'owner')).toEqual({
+			id: '1-0',
+			owner: 'owner',
+			payload: '',
+		});
+		expect(readStreamEntry(['1-0', ['payload', 3]], 'owner')?.payload).toBe('');
+	});
+	test('rejects invalid claim and read replies instead of treating corruption as an empty queue', async () => {
+		for (const value of [null, [], [1, []], ['0-0', null]]) {
+			await expect(reserveStreamJob(replies([value]) as never, 'key', 'owner')).rejects.toThrow(
+				'XAUTOCLAIM response',
+			);
+		}
+
+		for (const value of [{}, [], [[]], [['key', null]]]) {
+			await expect(
+				reserveStreamJob(replies([['0-0', []], value]) as never, 'key', 'owner'),
+			).rejects.toThrow('XREADGROUP response');
+		}
+
+		expect(await reserveStreamJob(replies([['10-0', []], null]) as never, 'key', 'owner')).toEqual({
+			reservation: null,
+			cursor: '10-0',
+		});
+		expect(
+			await reserveStreamJob(
+				replies([['0-0', []], [['key', [['1-0', ['payload', '{}']]]]]]) as never,
+				'key',
+				'owner',
+			),
+		).toEqual({ cursor: '0-0', reservation: { id: '1-0', owner: 'owner', payload: '{}' } });
+	});
+	test('only BUSYGROUP is accepted during concurrent group initialization', async () => {
+		let calls = 0;
+
+		const busy = {
+			send: async () => {
+				if (++calls === 2) {
+					throw new Error('BUSYGROUP group exists');
+				}
+
+				return 1;
+			},
+		};
+
+		await expect(ensureStreamGroup(busy as never, 'key')).resolves.toBeUndefined();
+		const fail = {
+			send: async () => {
+				throw new Error('Connection unavailable');
+			},
+		};
+
+		await expect(ensureStreamGroup(fail as never, 'key')).rejects.toThrow('Connection unavailable');
+		calls = 0;
+		const createFail = {
+			send: async () => {
+				if (++calls === 2) {
+					throw new Error('WRONGTYPE stream');
+				}
+
+				return 1;
+			},
+		};
+
+		await expect(ensureStreamGroup(createFail as never, 'key')).rejects.toThrow('WRONGTYPE');
+	});
 });
 
-test("unknown hit flags and truncated claimed entries cannot be delivered", async () => {
-  for (const response of [
-    ["unknown", "1", "9-1", "body", "0-0"],
-    ["1", "1", "9-1", "body"],
-  ])
-    await expect(
-      pollStreamPriorities(replies([response]) as never, ["only"], "owner", ["0-0"]),
-    ).rejects.toThrow("stream poll response");
+describe('pollStreamPriorities', () => {
+	test('reads an empty priority set and a hit from one reply', async () => {
+		const idle = replies([['0', '4-0', '0-0']]);
+
+		await expect(
+			pollStreamPriorities(idle as never, ['high', 'low'], 'owner', ['0-0', '0-0']),
+		).resolves.toEqual({
+			cursors: ['4-0', '0-0'],
+			hit: null,
+		});
+
+		const hit = replies([['1', '1', '9-1', '{"id":1}', '8-0', '0-0']]);
+
+		await expect(
+			pollStreamPriorities(hit as never, ['high', 'low'], 'owner', ['0-0', '0-0']),
+		).resolves.toEqual({
+			cursors: ['8-0', '0-0'],
+			hit: { index: 0, reservation: { id: '9-1', owner: 'owner', payload: '{"id":1}' } },
+		});
+	});
+
+	test('rejects a reply that does not match the priority count', async () => {
+		await expect(
+			pollStreamPriorities(replies([null]) as never, ['high'], 'owner', ['0-0']),
+		).rejects.toThrow('stream poll response');
+		await expect(
+			pollStreamPriorities(replies([['0']]) as never, ['high'], 'owner', ['0-0']),
+		).rejects.toThrow('stream poll response');
+		await expect(
+			pollStreamPriorities(
+				replies([['1', '2', '9-1', 'body', '0-0']]) as never,
+				['high'],
+				'owner',
+				['0-0'],
+			),
+		).rejects.toThrow('stream poll response');
+	});
 });
 
-test("maintenance conversion captures keys and batch size before asynchronous Redis work", async () => {
-  const keys = ["owner-high", "owner-default", "owner-low"];
-  const options = { maintenance: true as const, batchSize: 3, queueKeys: keys };
-  const observed: string[][] = [];
-  const client = {
-    async send(_command: string, args: string[]) {
-      observed.push(args);
-      if (observed.length === 1) {
-        keys[1] = "foreign-default";
-        options.batchSize = 999;
-      }
-      return 1;
-    },
-  };
-  expect(await migrateLegacyQueueToStreams(client as never, options)).toBe(3);
-  expect(observed.map((args) => [args[2], args.at(-1)])).toEqual([
-    ["owner-high", "3"],
-    ["owner-default", "3"],
-    ["owner-low", "3"],
-  ]);
+test('unknown hit flags and truncated claimed entries cannot be delivered', async () => {
+	for (const response of [
+		['unknown', '1', '9-1', 'body', '0-0'],
+		['1', '1', '9-1', 'body'],
+	]) {
+		await expect(
+			pollStreamPriorities(replies([response]) as never, ['only'], 'owner', ['0-0']),
+		).rejects.toThrow('stream poll response');
+	}
 });
 
-test("claimed Streams entries preserve their owner and reclaim cursor without admitting a fresh entry", async () => {
-  let reads = 0;
-  const client = {
-    async send() {
-      reads++;
-      if (reads !== 1) throw new Error("A recovered reservation must not also read fresh work");
-      return ["42-7", [["9-3", ["payload", '{"name":"recovered","payload":{}}']]]];
-    },
-  };
-  expect(await reserveStreamJob(client as never, "owned-key", "new-owner", "1-0", 200)).toEqual({
-    cursor: "42-7",
-    reservation: { id: "9-3", owner: "new-owner", payload: '{"name":"recovered","payload":{}}' },
-  });
-  expect(reads).toBe(1);
+test('maintenance conversion captures keys and batch size before asynchronous Redis work', async () => {
+	const keys = ['owner-high', 'owner-default', 'owner-low'];
+
+	const options = { maintenance: true as const, batchSize: 3, queueKeys: keys };
+
+	const observed: string[][] = [];
+
+	const client = {
+		async send(_command: string, args: string[]) {
+			observed.push(args);
+
+			if (observed.length === 1) {
+				keys[1] = 'foreign-default';
+				options.batchSize = 999;
+			}
+
+			return 1;
+		},
+	};
+
+	expect(await migrateLegacyQueueToStreams(client as never, options)).toBe(3);
+	expect(observed.map((args) => [args[2], args.at(-1)])).toEqual([
+		['owner-high', '3'],
+		['owner-default', '3'],
+		['owner-low', '3'],
+	]);
+});
+
+test('claimed Streams entries preserve their owner and reclaim cursor without admitting a fresh entry', async () => {
+	let reads = 0;
+
+	const client = {
+		async send() {
+			reads++;
+
+			if (reads !== 1) {
+				throw new Error('A recovered reservation must not also read fresh work');
+			}
+
+			return ['42-7', [['9-3', ['payload', '{"name":"recovered","payload":{}}']]]];
+		},
+	};
+
+	expect(await reserveStreamJob(client as never, 'owned-key', 'new-owner', '1-0', 200)).toEqual({
+		cursor: '42-7',
+		reservation: { id: '9-3', owner: 'new-owner', payload: '{"name":"recovered","payload":{}}' },
+	});
+	expect(reads).toBe(1);
 });

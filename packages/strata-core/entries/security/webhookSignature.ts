@@ -1,1 +1,1 @@
-export * from "../../../../src/core/security/webhookSignature.ts";
+export * from '../../../../src/core/security/webhookSignature.ts';

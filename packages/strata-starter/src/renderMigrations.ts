@@ -1,63 +1,70 @@
-import { generatedRlsBootstrapSql } from "../../../src/core/tenant/enableTenantRls.ts";
-import type { StarterFeaturePlan } from "./featurePlan.ts";
-import type { DatabaseLayer } from "./types.ts";
+import { generatedRlsBootstrapSql } from '../../../src/core/tenant/enableTenantRls.ts';
+
+import type { StarterFeaturePlan } from './featurePlan.ts';
+import type { DatabaseLayer } from './types.ts';
 
 function ensureImport(plan: StarterFeaturePlan): string {
-  return plan.decisions.ensureDatabase
-    ? `import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";\n`
-    : "";
+	return plan.decisions.ensureDatabase
+		? `import { ensureAppDatabase } from "../bootstrap/ensureDatabase.ts";\n`
+		: '';
 }
 
 function ensureCall(plan: StarterFeaturePlan, provision = true): string {
-  return plan.decisions.ensureDatabase
-    ? `  await ensureAppDatabase({ provision: ${provision}, environment });\n`
-    : "";
+	return plan.decisions.ensureDatabase
+		? `\n  await ensureAppDatabase({ provision: ${provision}, environment });\n\n`
+		: '';
 }
 
 function dialectFragments(database: DatabaseLayer) {
-  if (database === "sqlite") {
-    return {
-      id: "INTEGER PRIMARY KEY AUTOINCREMENT",
-      text: "TEXT",
-      keyText: "TEXT",
-      defaultText: "TEXT",
-      timestamp: "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP",
-      timestampNull: "TEXT",
-      bool: "INTEGER NOT NULL DEFAULT 0",
-    };
-  }
-  if (database === "mysql") {
-    return {
-      id: "INT AUTO_INCREMENT PRIMARY KEY",
-      text: "TEXT",
-      // MySQL rejects TEXT in a key specification without a length (errno 1170)
-      // and refuses a DEFAULT on any TEXT column (ER_BLOB_CANT_HAVE_DEFAULT).
-      keyText: "VARCHAR(255)",
-      defaultText: "VARCHAR(1024)",
-      timestamp: "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
-      timestampNull: "DATETIME NULL",
-      bool: "TINYINT(1) NOT NULL DEFAULT 0",
-    };
-  }
-  return {
-    id: "SERIAL PRIMARY KEY",
-    text: "TEXT",
-    keyText: "TEXT",
-    defaultText: "TEXT",
-    timestamp: "TIMESTAMPTZ NOT NULL DEFAULT NOW()",
-    timestampNull: "TIMESTAMPTZ",
-    bool: "BOOLEAN NOT NULL DEFAULT FALSE",
-  };
+	if (database === 'sqlite') {
+		return {
+			id: 'INTEGER PRIMARY KEY AUTOINCREMENT',
+			text: 'TEXT',
+			keyText: 'TEXT',
+			defaultText: 'TEXT',
+			timestamp: 'TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP',
+			timestampNull: 'TEXT',
+			bool: 'INTEGER NOT NULL DEFAULT 0',
+		};
+	}
+
+	if (database === 'mysql') {
+		return {
+			id: 'INT AUTO_INCREMENT PRIMARY KEY',
+			text: 'TEXT',
+			// MySQL rejects TEXT in a key specification without a length (errno 1170)
+			// and refuses a DEFAULT on any TEXT column (ER_BLOB_CANT_HAVE_DEFAULT).
+			keyText: 'VARCHAR(255)',
+			defaultText: 'VARCHAR(1024)',
+			timestamp: 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
+			timestampNull: 'DATETIME NULL',
+			bool: 'TINYINT(1) NOT NULL DEFAULT 0',
+		};
+	}
+
+	return {
+		id: 'SERIAL PRIMARY KEY',
+		text: 'TEXT',
+		keyText: 'TEXT',
+		defaultText: 'TEXT',
+		timestamp: 'TIMESTAMPTZ NOT NULL DEFAULT NOW()',
+		timestampNull: 'TIMESTAMPTZ',
+		bool: 'BOOLEAN NOT NULL DEFAULT FALSE',
+	};
 }
 
 function starterSchemaStatements(plan: StarterFeaturePlan): string[] {
-  const layers = plan.layers;
-  const d = dialectFragments(layers.database);
-  const statements: string[] = [];
-  const mfaOn = plan.decisions.mfa;
-  const payloadType = layers.database === "postgres" ? "JSONB NOT NULL" : `${d.text} NOT NULL`;
+	const layers = plan.layers;
 
-  statements.push(`CREATE TABLE IF NOT EXISTS failed_job (
+	const d = dialectFragments(layers.database);
+
+	const statements: string[] = [];
+
+	const mfaOn = plan.decisions.mfa;
+
+	const payloadType = layers.database === 'postgres' ? 'JSONB NOT NULL' : `${d.text} NOT NULL`;
+
+	statements.push(`CREATE TABLE IF NOT EXISTS failed_job (
     id ${d.id},
     job_name ${d.keyText} NOT NULL,
     job_id ${d.text},
@@ -67,21 +74,23 @@ function starterSchemaStatements(plan: StarterFeaturePlan): string[] {
     failed_at ${d.timestamp}
   )`);
 
-  if (plan.decisions.schemaTenants) {
-    statements.push(`CREATE TABLE IF NOT EXISTS tenant (
+	if (plan.decisions.schemaTenants) {
+		statements.push(`CREATE TABLE IF NOT EXISTS tenant (
     id ${d.id},
     slug ${d.keyText} NOT NULL UNIQUE
   )`);
-  }
+	}
 
-  if (plan.decisions.users) {
-    const tenantColumn = plan.decisions.schemaTenants
-      ? "\n    tenant_id INTEGER NOT NULL DEFAULT 1,"
-      : "";
-    const mfaColumns = mfaOn
-      ? `\n    mfa_secret ${d.text},\n    mfa_enabled ${d.bool},\n    mfa_recovery_codes ${d.text},`
-      : "";
-    statements.push(`CREATE TABLE IF NOT EXISTS users (
+	if (plan.decisions.users) {
+		const tenantColumn = plan.decisions.schemaTenants
+			? '\n    tenant_id INTEGER NOT NULL DEFAULT 1,'
+			: '';
+
+		const mfaColumns = mfaOn
+			? `\n    mfa_secret ${d.text},\n    mfa_enabled ${d.bool},\n    mfa_recovery_codes ${d.text},`
+			: '';
+
+		statements.push(`CREATE TABLE IF NOT EXISTS users (
     id ${d.id},
     name ${d.text} NOT NULL,
     email ${d.keyText} NOT NULL UNIQUE,
@@ -91,7 +100,7 @@ function starterSchemaStatements(plan: StarterFeaturePlan): string[] {
     email_verified_at ${d.timestampNull},
     created_at ${d.timestamp}
   )`);
-    statements.push(`CREATE TABLE IF NOT EXISTS auth_one_time_tokens (
+		statements.push(`CREATE TABLE IF NOT EXISTS auth_one_time_tokens (
     id ${d.id},
     purpose ${d.keyText} NOT NULL,
     user_id INTEGER NOT NULL,
@@ -99,10 +108,10 @@ function starterSchemaStatements(plan: StarterFeaturePlan): string[] {
     expires_at ${d.timestamp},
     consumed_at ${d.timestampNull}
   )`);
-  }
+	}
 
-  if (plan.decisions.cookie) {
-    statements.push(`CREATE TABLE IF NOT EXISTS sessions (
+	if (plan.decisions.cookie) {
+		statements.push(`CREATE TABLE IF NOT EXISTS sessions (
     id ${d.keyText} PRIMARY KEY,
     user_id INTEGER NOT NULL,
     expires_at ${d.timestamp},
@@ -111,19 +120,21 @@ function starterSchemaStatements(plan: StarterFeaturePlan): string[] {
     last_active_at ${d.timestamp},
     created_at ${d.timestamp}
   )`);
-    if (layers.database === "postgres") {
-      statements.push(
-        "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
-      );
-    }
-    statements.push(`CREATE TABLE IF NOT EXISTS auth_saml_assertions (
+
+		if (layers.database === 'postgres') {
+			statements.push(
+				'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()',
+			);
+		}
+
+		statements.push(`CREATE TABLE IF NOT EXISTS auth_saml_assertions (
     assertion_id ${d.keyText} PRIMARY KEY,
     consumed_at ${d.timestamp}
   )`);
-  }
+	}
 
-  if (plan.decisions.token) {
-    statements.push(`CREATE TABLE IF NOT EXISTS api_tokens (
+	if (plan.decisions.token) {
+		statements.push(`CREATE TABLE IF NOT EXISTS api_tokens (
     id ${d.id},
     user_id INTEGER NOT NULL,
     name ${d.text} NOT NULL,
@@ -133,45 +144,57 @@ function starterSchemaStatements(plan: StarterFeaturePlan): string[] {
     last_used_at ${d.timestampNull},
     created_at ${d.timestamp}
   )`);
-  }
+	}
 
-  const rlsOn = plan.decisions.rls;
-  if (rlsOn) {
-    const rlsTables = plan.decisions.users ? ["users"] : [];
-    const userOwnedTables: string[] = [];
-    if (plan.decisions.users) {
-      userOwnedTables.push("auth_one_time_tokens");
-    }
-    if (plan.decisions.cookie) {
-      userOwnedTables.push("sessions");
-    }
-    if (plan.decisions.token) {
-      userOwnedTables.push("api_tokens");
-    }
-    statements.push(generatedRlsBootstrapSql(rlsTables, userOwnedTables).trim());
-  }
+	const rlsOn = plan.decisions.rls;
 
-  return statements;
+	if (rlsOn) {
+		const rlsTables = plan.decisions.users ? ['users'] : [];
+
+		const userOwnedTables: string[] = [];
+
+		if (plan.decisions.users) {
+			userOwnedTables.push('auth_one_time_tokens');
+		}
+
+		if (plan.decisions.cookie) {
+			userOwnedTables.push('sessions');
+		}
+
+		if (plan.decisions.token) {
+			userOwnedTables.push('api_tokens');
+		}
+
+		statements.push(generatedRlsBootstrapSql(rlsTables, userOwnedTables).trim());
+	}
+
+	return statements;
 }
 
 function renderStarterSchemaMigration(plan: StarterFeaturePlan): string {
-  const layers = plan.layers;
-  const statements = starterSchemaStatements(plan);
-  const cascade = layers.database === "sqlite" ? "" : " CASCADE";
-  const upCalls = statements
-    .map((sql) => `    await db.unsafe(${JSON.stringify(sql)});`)
-    .join("\n");
-  const downCalls = dropTables(plan)
-    .map((table) => `    await db.unsafe("DROP TABLE IF EXISTS ${table}${cascade}");`)
-    .join("\n");
+	const layers = plan.layers;
 
-  return `import type { Migration } from "@getstrata/core/database/migrations/types";
+	const statements = starterSchemaStatements(plan);
+
+	const cascade = layers.database === 'sqlite' ? '' : ' CASCADE';
+
+	const upCalls = statements
+		.map((sql) => `    await db.unsafe(${JSON.stringify(sql)});`)
+		.join('\n');
+
+	const downCalls = dropTables(plan)
+		.map((table) => `    await db.unsafe("DROP TABLE IF EXISTS ${table}${cascade}");`)
+		.join('\n');
+
+	return `import type { Migration } from "@getstrata/core/database/migrations/types";
 
 const migration: Migration = {
   name: "0001_starter_schema",
+
   async up(db) {
 ${upCalls}
   },
+
   async down(db) {
 ${downCalls}
   },
@@ -182,7 +205,7 @@ export default migration;
 }
 
 function renderMigrationRuntimeTs(_plan: StarterFeaturePlan): string {
-  return `import { join } from "node:path";
+	return `import { join } from "node:path";
 import { loadMigrationsFromDirectory } from "@getstrata/core/database/migrations";
 import type { MigrationDatabase } from "@getstrata/core/database/migrations/types";
 import { withMigrationDatabase as runMigrationDatabase } from "@getstrata/bootstrap/databaseCommands";
@@ -194,38 +217,52 @@ export function loadStarterMigrations() {
 
 export function withMigrationDatabase<T>(operation: (db: MigrationDatabase) => Promise<T>, controls: { grantRuntimePrivileges?: boolean; environment?: Readonly<Record<string, string | undefined>> } = {}): Promise<T> {
   const environment = databaseEnvironment(controls.environment ?? process.env);
+
   return runMigrationDatabase(databaseOptions(environment), operation, { ...controls, environment });
 }
 `;
 }
 
 function renderMigrateTs(plan: StarterFeaturePlan): string {
-  const usersOn = plan.decisions.users;
-  const verifyOn = plan.decisions.emailVerification;
-  const rlsOn = plan.decisions.rls;
-  const imports = usersOn
-    ? `import { createUserFactory } from "./factories/UserFactory.ts";
+	const usersOn = plan.decisions.users;
+
+	const verifyOn = plan.decisions.emailVerification;
+
+	const rlsOn = plan.decisions.rls;
+
+	const imports = usersOn
+		? `import { createUserFactory } from "./factories/UserFactory.ts";
 import { User } from "../models/User.ts";
 `
-    : "";
-  const tenant = plan.decisions.schemaTenants
-    ? `
+		: '';
+
+	const tenant = plan.decisions.schemaTenants
+		? `
     const [tenant] = await selected.execute<{count:string|number}>({text:"SELECT COUNT(*) AS count FROM tenant",params:[]});
-    if (Number(tenant?.count ?? 0) === 0) await selected.execute({text:\`INSERT INTO tenant (slug) VALUES (\${selected.dialect.placeholder(1)})\`,params:["default"]});`
-    : "";
-  const users = usersOn
-    ? `
-    const users = selected.model(User);
-    if ((await users.query().value("id")) === null) {
-      const factory = await createUserFactory("StrataDemo!ChangeMe", ${plan.decisions.schemaTenants ? "1, " : ""}async values => (await users.create(values)).toObject());
-      await factory.create({name:"Demo User",email:"demo@example.com",is_admin:false${verifyOn ? ",email_verified_at:selected.dialect.timestampValue(new Date())" : ""}});
-      await factory.create({name:"Admin User",email:"admin@example.test",is_admin:true${verifyOn ? ",email_verified_at:selected.dialect.timestampValue(new Date())" : ""}});
+
+    if (Number(tenant?.count ?? 0) === 0) {
+      await selected.execute({text:\`INSERT INTO tenant (slug) VALUES (\${selected.dialect.placeholder(1)})\`,params:["default"]});
     }`
-    : "";
-  const run = rlsOn
-    ? `policy.run(database, {kind:"bypass"}, writeSeed)`
-    : `database.transaction(writeSeed)`;
-  return `${imports}${ensureImport(plan)}import { createApplication } from "@getstrata/core/runtime/application";
+		: '';
+
+	const users = usersOn
+		? `
+
+    const users = selected.model(User);
+
+    if ((await users.query().value("id")) === null) {
+      const factory = await createUserFactory("StrataDemo!ChangeMe", ${plan.decisions.schemaTenants ? '1, ' : ''}async values => (await users.create(values)).toObject());
+
+      await factory.create({name:"Demo User",email:"demo@example.com",is_admin:false${verifyOn ? ',email_verified_at:selected.dialect.timestampValue(new Date())' : ''}});
+      await factory.create({name:"Admin User",email:"admin@example.test",is_admin:true${verifyOn ? ',email_verified_at:selected.dialect.timestampValue(new Date())' : ''}});
+    }`
+		: '';
+
+	const run = rlsOn
+		? `policy.run(database, {kind:"bypass"}, writeSeed)`
+		: `database.transaction(writeSeed)`;
+
+	return `${imports}${ensureImport(plan)}import { createApplication } from "@getstrata/core/runtime/application";
 import { createDatabaseBindings } from "@getstrata/core/database/bindings";
 import type { DatabaseSession, TransactionSession } from "@getstrata/core/database/session";
 import { createPersistenceInvocation } from "@getstrata/bootstrap/persistenceInvocation";
@@ -237,15 +274,23 @@ import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime
 /** An explicit development-only command owns its own canonical Application. */
 export async function seed(input: Readonly<Record<string, string | undefined>> = process.env) {
   const environment = databaseEnvironment(input);
-  if (isProductionEnv(environment)) throw new Error("Demo seeding is disabled in production and staging.");
+
+  if (isProductionEnv(environment)) {
+    throw new Error("Demo seeding is disabled in production and staging.");
+  }
+
 ${ensureCall(plan)}  const connection = databaseOptions(environment);
-  const application = createApplication({providers:[],services:createDatabaseBindings({default:"main",connections:{main:connection},models:[${usersOn ? "User" : ""}]})});
+
+  const application = createApplication({providers:[],services:createDatabaseBindings({default:"main",connections:{main:connection},models:[${usersOn ? 'User' : ''}]})});
+
   await application.start();
   try {
     const invoke = createPersistenceInvocation(application, "main");
-    await invoke({kind:"command",actor:{kind:"system",policy:"starter-demo-seed"}}, ({database${rlsOn ? ",policy" : ""}}) => {
-      const writeSeed = async (${usersOn || plan.decisions.schemaTenants ? "selected" : "_selected"}: DatabaseSession | TransactionSession) => {${tenant}${users}
+
+    await invoke({kind:"command",actor:{kind:"system",policy:"starter-demo-seed"}}, ({database${rlsOn ? ',policy' : ''}}) => {
+      const writeSeed = async (${usersOn || plan.decisions.schemaTenants ? 'selected' : '_selected'}: DatabaseSession | TransactionSession) => {${tenant}${users}
       };
+
       return ${run};
     });
   } finally {
@@ -255,7 +300,7 @@ ${ensureCall(plan)}  const connection = databaseOptions(environment);
 
 export async function migrate(input: Readonly<Record<string, string | undefined>> = process.env) {
   const environment = databaseEnvironment(input);
-${ensureCall(plan)}  await withMigrationDatabase(async (db) => {
+${ensureCall(plan) || '\n'}  await withMigrationDatabase(async (db) => {
     await migrateDatabase(db, await loadStarterMigrations());
   }, { environment });
 }
@@ -268,33 +313,42 @@ if (import.meta.main) {
 }
 
 function dropTables(plan: StarterFeaturePlan): string[] {
-  const ordered: string[] = ["failed_job"];
-  if (plan.decisions.token) {
-    ordered.push("api_tokens");
-  }
-  if (plan.decisions.cookie) {
-    ordered.push("sessions");
-    ordered.push("auth_saml_assertions");
-  }
-  if (plan.decisions.users) {
-    ordered.push("auth_one_time_tokens");
-    ordered.push("users");
-  }
-  if (plan.decisions.schemaTenants) {
-    ordered.push("tenant");
-  }
-  return ordered;
+	const ordered: string[] = ['failed_job'];
+
+	if (plan.decisions.token) {
+		ordered.push('api_tokens');
+	}
+
+	if (plan.decisions.cookie) {
+		ordered.push('sessions');
+		ordered.push('auth_saml_assertions');
+	}
+
+	if (plan.decisions.users) {
+		ordered.push('auth_one_time_tokens');
+		ordered.push('users');
+	}
+
+	if (plan.decisions.schemaTenants) {
+		ordered.push('tenant');
+	}
+
+	return ordered;
 }
 
 function renderFreshTs(plan: StarterFeaturePlan): string {
-  return `${ensureImport(plan)}import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
+	return `${ensureImport(plan)}import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
 import { freshDatabase } from "@getstrata/core/database/migrations";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 import { databaseEnvironment } from "../bootstrap/database.ts";
 
 export async function fresh(input: Readonly<Record<string, string | undefined>> = process.env) {
   const environment = databaseEnvironment(input);
-  if (isProductionEnv(environment)) throw new Error("migrate:fresh is only available in development/test environments.");
+
+  if (isProductionEnv(environment)) {
+    throw new Error("migrate:fresh is only available in development/test environments.");
+  }
+
 ${ensureCall(plan)}  await withMigrationDatabase(async (db) => {
     await freshDatabase(db, await loadStarterMigrations(), { destructive: true, environment });
   }, { environment });
@@ -309,7 +363,7 @@ if (import.meta.main) {
 }
 
 function renderSeedTs(): string {
-  return `import { seed } from "./migrate.ts";
+	return `import { seed } from "./migrate.ts";
 
 export { seed };
 
@@ -321,19 +375,22 @@ if (import.meta.main) {
 }
 
 function renderStatusTs(plan: StarterFeaturePlan): string {
-  const layers = plan.layers;
-  return `${ensureImport(plan)}import { getMigrationStatus } from "@getstrata/core/database/migrations";
+	const layers = plan.layers;
+
+	return `${ensureImport(plan)}import { getMigrationStatus } from "@getstrata/core/database/migrations";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 import { databaseEnvironment } from "../bootstrap/database.ts";
 
 export async function status(input: Readonly<Record<string, string | undefined>> = process.env) {
   const environment = databaseEnvironment(input);
-${ensureCall(plan, false)}  const rows = await withMigrationDatabase(async (db) => {
+${ensureCall(plan, false) || '\n'}  const rows = await withMigrationDatabase(async (db) => {
     return getMigrationStatus(db, await loadStarterMigrations());
-  }, { environment${layers.database === "postgres" ? ", grantRuntimePrivileges: false" : ""} });
+  }, { environment${layers.database === 'postgres' ? ', grantRuntimePrivileges: false' : ''} });
+
   console.log("Migrations:");
   for (const row of rows) {
     const batch = row.batch == null ? "" : \` (batch \${row.batch})\`;
+
     console.log(\`- [\${row.status}] \${row.name}\${batch}\`);
   }
 }
@@ -346,19 +403,20 @@ if (import.meta.main) {
 }
 
 function renderRollbackTs(plan: StarterFeaturePlan): string {
-  return `${ensureImport(plan)}import { rollbackDatabase } from "@getstrata/core/database/migrations";
+	return `${ensureImport(plan)}import { rollbackDatabase } from "@getstrata/core/database/migrations";
 import { loadStarterMigrations, withMigrationDatabase } from "./migrationRuntime.ts";
 import { databaseEnvironment } from "../bootstrap/database.ts";
 
 export async function rollback(input: Readonly<Record<string, string | undefined>> = process.env) {
   const environment = databaseEnvironment(input);
-${ensureCall(plan, false)}  const rolledBack = await withMigrationDatabase(async (db) => {
+${ensureCall(plan, false) || '\n'}  const rolledBack = await withMigrationDatabase(async (db) => {
     return rollbackDatabase(db, await loadStarterMigrations(), {
       onMigration: (name) => {
         console.log(\`rolled back \${name}\`);
       },
     });
   }, { environment });
+
   if (rolledBack === 0) {
     console.log("Nothing to roll back.");
   }
@@ -373,31 +431,34 @@ if (import.meta.main) {
 }
 
 function renderAccountStateMigration(plan: StarterFeaturePlan): string {
-  const driver = plan.decisions.sqlDriver;
-  return `import { createAccountStateMigration } from "@getstrata/core/auth/accountStateMigration";
+	const driver = plan.decisions.sqlDriver;
+
+	return `import { createAccountStateMigration } from "@getstrata/core/auth/accountStateMigration";
 
 export default createAccountStateMigration("0006_account_state", "${driver}", { sessions: ${plan.decisions.cookie} });
 `;
 }
 
 function renderOutboxMigration(plan: StarterFeaturePlan): string {
-  const driver = plan.decisions.sqlDriver;
-  const rls = plan.decisions.rls;
-  return `import { createOutboxMigration } from "@getstrata/core/events/outbox";
+	const driver = plan.decisions.sqlDriver;
+
+	const rls = plan.decisions.rls;
+
+	return `import { createOutboxMigration } from "@getstrata/core/events/outbox";
 
 export default createOutboxMigration("0005_outbox", "${driver}", { rls: ${rls} });
 `;
 }
 
 export {
-  dialectFragments,
-  renderAccountStateMigration,
-  renderFreshTs,
-  renderMigrateTs,
-  renderMigrationRuntimeTs,
-  renderOutboxMigration,
-  renderRollbackTs,
-  renderSeedTs,
-  renderStarterSchemaMigration,
-  renderStatusTs,
+	dialectFragments,
+	renderAccountStateMigration,
+	renderFreshTs,
+	renderMigrateTs,
+	renderMigrationRuntimeTs,
+	renderOutboxMigration,
+	renderRollbackTs,
+	renderSeedTs,
+	renderStarterSchemaMigration,
+	renderStatusTs,
 };

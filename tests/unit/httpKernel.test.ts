@@ -1,769 +1,883 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import {
-  CORE_AUTH_TOKEN,
-  CORE_CONFIG_TOKEN,
-  CORE_HTTP_CLEANUP_TOKEN,
-  CORE_THROTTLE_QUOTA_POLICY_TOKEN,
-  REDIS_URL_CONFIG_KEY,
-} from "@getstrata/bootstrap/config";
-import type { AppDependencies } from "@getstrata/bootstrap/contracts";
-import { ConfigStore, ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { createHttpKernel } from "@getstrata/bootstrap/httpKernel";
-import { wrapWebLogin } from "@getstrata/bootstrap/web/routing";
-import { establishedAuthReader } from "@getstrata/core/auth/authReader";
-import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
-import {
-  createPasswordConfirmCookie,
-  passwordConfirmOptionsFromEnvironment,
-} from "@getstrata/core/auth/passwordConfirmCookie";
-import { CacheRepository } from "@getstrata/core/cache/repository";
-import { SimpleCache } from "@getstrata/core/cache/simpleCache";
-import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
-import {
-  CORE_ABILITY_CHECKER_TOKEN,
-  CORE_TRACING_RUNTIME_TOKEN,
-} from "@getstrata/core/contracts/serviceTokens";
-import { ForbiddenError } from "@getstrata/core/errors/http";
-import {
-  csrfTokenOptionsFromEnvironment,
-  resolveCsrfTokenForRequest,
-} from "@getstrata/core/http/csrfToken";
-import { runWithRequestMeta } from "@getstrata/core/http/requestMetaContext";
-import { temporarySignedUrl } from "@getstrata/core/http/signedUrl";
-import { requireConfiguredSecret } from "@getstrata/core/runtime/appKeyPrefix";
-import { resetMemoryLoginThrottleForTests } from "@getstrata/core/testing";
-import { createTracingRuntime } from "@getstrata/core/tracing/tracingMiddleware";
-import { InMemorySpanExporter } from "@opentelemetry/sdk-trace-base";
-import {
-  enableDevAuthHeaders,
-  guestGuardOptions,
-  restoreDevAuthHeaders,
-} from "../helpers/devAuthHeaders";
-import { restoreEnvVar } from "../helpers/restoreEnv";
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
-import { createMockDependencies } from "./testHelpers";
+import {
+	CORE_AUTH_TOKEN,
+	CORE_CONFIG_TOKEN,
+	CORE_HTTP_CLEANUP_TOKEN,
+	CORE_THROTTLE_QUOTA_POLICY_TOKEN,
+	REDIS_URL_CONFIG_KEY,
+} from '@getstrata/bootstrap/config';
+import type { AppDependencies } from '@getstrata/bootstrap/contracts';
+import { ConfigStore, ServiceContainer } from '@getstrata/bootstrap/contracts';
+import { createHttpKernel } from '@getstrata/bootstrap/httpKernel';
+import { wrapWebLogin } from '@getstrata/bootstrap/web/routing';
+import { establishedAuthReader } from '@getstrata/core/auth/authReader';
+import { AuthManager, GuestGuard } from '@getstrata/core/auth/guard';
+import {
+	createPasswordConfirmCookie,
+	passwordConfirmOptionsFromEnvironment,
+} from '@getstrata/core/auth/passwordConfirmCookie';
+import { CacheRepository } from '@getstrata/core/cache/repository';
+import { SimpleCache } from '@getstrata/core/cache/simpleCache';
+import { SimpleCacheStore } from '@getstrata/core/cache/simpleCacheStore';
+import {
+	CORE_ABILITY_CHECKER_TOKEN,
+	CORE_TRACING_RUNTIME_TOKEN,
+} from '@getstrata/core/contracts/serviceTokens';
+import { ForbiddenError } from '@getstrata/core/errors/http';
+import {
+	csrfTokenOptionsFromEnvironment,
+	resolveCsrfTokenForRequest,
+} from '@getstrata/core/http/csrfToken';
+import { runWithRequestMeta } from '@getstrata/core/http/requestMetaContext';
+import { temporarySignedUrl } from '@getstrata/core/http/signedUrl';
+import { requireConfiguredSecret } from '@getstrata/core/runtime/appKeyPrefix';
+import { resetMemoryLoginThrottleForTests } from '@getstrata/core/testing';
+import { createTracingRuntime } from '@getstrata/core/tracing/tracingMiddleware';
+import { InMemorySpanExporter } from '@opentelemetry/sdk-trace-base';
+
+import {
+	enableDevAuthHeaders,
+	guestGuardOptions,
+	restoreDevAuthHeaders,
+} from '../helpers/devAuthHeaders';
+import { restoreEnvVar } from '../helpers/restoreEnv';
+
+import { createMockDependencies } from './testHelpers';
 
 function createKernelDependencies(config?: ConfigStore): AppDependencies {
-  const container = new ServiceContainer();
-  container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard(guestGuardOptions())));
+	const container = new ServiceContainer();
 
-  if (config) {
-    container.set(CORE_CONFIG_TOKEN, config);
-  }
+	container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard(guestGuardOptions())));
 
-  return createMockDependencies(
-    container,
-    new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
-  );
+	if (config) {
+		container.set(CORE_CONFIG_TOKEN, config);
+	}
+
+	return createMockDependencies(
+		container,
+		new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
+	);
 }
 
-describe("HttpKernel", () => {
-  let previousHeaders: string | undefined;
-  beforeEach(() => {
-    previousHeaders = enableDevAuthHeaders();
-  });
-  afterEach(() => {
-    restoreDevAuthHeaders(previousHeaders);
-  });
-  test("response tracing uses only the runtime installed in this application container", async () => {
-    const exporterA = new InMemorySpanExporter();
-    const exporterB = new InMemorySpanExporter();
-    const runtimeA = createTracingRuntime({
-      exporter: exporterA,
-      serviceName: "kernel-a",
-      env: { OTEL_SDK_DISABLED: "false" },
-    });
-    const runtimeB = createTracingRuntime({
-      exporter: exporterB,
-      serviceName: "kernel-b",
-      env: { OTEL_SDK_DISABLED: "false" },
-    });
-    try {
-      const dependenciesA = createKernelDependencies();
-      const dependenciesB = createKernelDependencies();
-      dependenciesA.container.set(CORE_TRACING_RUNTIME_TOKEN, runtimeA);
-      dependenciesB.container.set(CORE_TRACING_RUNTIME_TOKEN, runtimeB);
-      const handlerA = createHttpKernel(dependenciesA).wrapPublicDocument(
-        async () => new Response("a"),
-      );
-      const handlerB = createHttpKernel(dependenciesB).wrapPublicDocument(
-        async () => new Response("b"),
-      );
-      const [responseA, responseB] = await Promise.all([
-        handlerA(new Request("http://a")),
-        handlerB(new Request("http://b")),
-      ]);
-      expect(responseA.headers.get("x-trace-id")).toHaveLength(32);
-      expect(responseB.headers.get("x-trace-id")).toHaveLength(32);
-      await runtimeA.forceFlush();
-      expect(exporterA.getFinishedSpans()).toHaveLength(1);
-      expect(exporterB.getFinishedSpans()).toHaveLength(0);
-      await runtimeA.shutdown();
-      await handlerB(new Request("http://b/next"));
-      await runtimeB.forceFlush();
-      expect(exporterB.getFinishedSpans()).toHaveLength(2);
-      const untraced = createHttpKernel(createKernelDependencies()).wrapPublicDocument(
-        async () => new Response(),
-      );
-      expect((await untraced(new Request("http://untraced"))).headers.get("x-trace-id")).toBeNull();
-    } finally {
-      await Promise.allSettled([runtimeA.shutdown(), runtimeB.shutdown()]);
-    }
-  });
-
-  test("API quota DI works in local mode without weakening login/register protection", async () => {
-    const config = new ConfigStore();
-    config.set(REDIS_URL_CONFIG_KEY, "");
-    const dependencies = createKernelDependencies(config);
-    dependencies.container.set(CORE_THROTTLE_QUOTA_POLICY_TOKEN, () => 0);
-    const kernel = createHttpKernel(dependencies);
-    const response = await kernel.wrap(
-      "api",
-      async () => new Response("bypass"),
-    )(new Request("http://example.test/a", { headers: { accept: "application/json" } }));
-    expect(response.status).toBe(429);
-    expect(
-      (
-        await kernel.wrapLogin(async () => new Response("ok"))(
-          new Request("http://example.test/login"),
-        )
-      ).status,
-    ).toBe(200);
-    expect(
-      (
-        await kernel.wrapRegister(async () => new Response("ok"))(
-          new Request("http://example.test/register"),
-        )
-      ).status,
-    ).toBe(200);
-  });
-
-  test("kernel cleanup completes even if a custom throttle cleanup fails", () => {
-    const kernel = createHttpKernel(createKernelDependencies());
-    let cleaned = 0;
-    const middleware = async (_request: Request, next: () => Promise<Response>) => await next();
-    kernel.ownThrottle(
-      Object.assign(middleware.bind(null), {
-        dispose: () => {
-          cleaned++;
-        },
-      }),
-    );
-    kernel.ownThrottle(
-      Object.assign(middleware.bind(null), {
-        dispose: () => {
-          throw new Error("custom");
-        },
-      }),
-    );
-    expect(() => kernel.dispose()).toThrow("HTTP throttle cleanup failed");
-    expect(cleaned).toBe(1);
-    kernel.dispose();
-    const late = Object.assign(middleware.bind(null), {
-      dispose: () => {
-        cleaned++;
-      },
-    });
-    expect(() => kernel.ownThrottle(late)).toThrow("disposed");
-    expect(cleaned).toBe(2);
-  });
-
-  test.skipIf(!process.env.REDIS_URL)(
-    "kernel also disposes distributed API admission",
-    async () => {
-      const config = new ConfigStore();
-      config.set(REDIS_URL_CONFIG_KEY, process.env.REDIS_URL);
-      const kernel = createHttpKernel(createKernelDependencies(config));
-      const handler = kernel.wrap("api", async () => new Response("ok"));
-      const request = new Request("http://example.test/a", {
-        headers: { accept: "application/json" },
-      });
-      try {
-        expect((await handler(request)).status).toBe(200);
-        kernel.dispose();
-        expect((await handler(request)).status).toBe(503);
-      } finally {
-        kernel.dispose();
-      }
-    },
-  );
-
-  test("registered kernel cleanup disposes local route throttles and closes admission", async () => {
-    const config = new ConfigStore();
-    config.set(REDIS_URL_CONFIG_KEY, "");
-    const dependencies = createKernelDependencies(config);
-    const cleanups: Array<() => void> = [];
-    dependencies.container.set(CORE_HTTP_CLEANUP_TOKEN, (cleanup) => {
-      cleanups.push(cleanup);
-    });
-    const kernel = createHttpKernel(dependencies);
-    const handler = kernel.wrap("api", async () => new Response("ok"));
-    const request = new Request("http://example.test/a", {
-      headers: { accept: "application/json" },
-    });
-    expect((await handler(request)).status).toBe(200);
-    expect(cleanups).toHaveLength(1);
-    for (const cleanup of cleanups) cleanup();
-    kernel.dispose();
-    expect((await handler(request)).status).toBe(503);
-    expect(() => kernel.wrapLogin(async () => new Response("bypass"))).toThrow("disposed");
-  });
-
-  test("global response policy observes one explicit authentication before business work", async () => {
-    const dependencies = createKernelDependencies();
-    let calls = 0;
-    dependencies.container.set(CORE_AUTH_TOKEN, {
-      ...establishedAuthReader,
-      authenticate: async () => {
-        calls++;
-        return {
-          status: "authenticated",
-          user: { id: 1, role: "admin" },
-          credentialSource: "session",
-        };
-      },
-      resolveWithSource: async () => {
-        calls++;
-        return { user: { id: 1, role: "admin" }, credentialSource: "session" };
-      },
-    });
-    const kernel = createHttpKernel(dependencies);
-    const response = await kernel.wrapWebGlobalAdmin(async () => new Response("ok"))(
-      new Request("http://example.test/admin", {
-        headers: { "x-request-id": "kernel-owned-request" },
-      }),
-    );
-    expect(response.status).toBe(200);
-    expect(response.headers.get("x-request-id")).toBe("kernel-owned-request");
-    expect(calls).toBe(1);
-  });
-
-  test("skips api throttle middleware when config is not registered", () => {
-    const kernel = createHttpKernel(createKernelDependencies());
-
-    expect(kernel.group("api")).toHaveLength(1);
-  });
-
-  test("falls back to memory throttle middleware when redis url is missing", () => {
-    const config = new ConfigStore();
-    config.set(REDIS_URL_CONFIG_KEY, "");
-    const kernel = createHttpKernel(createKernelDependencies(config));
-
-    expect(kernel.group("api")).toHaveLength(2);
-  });
-
-  test("wrapLogin keys JSON login on parsed email, not a missing body", async () => {
-    const previousMax = process.env.LOGIN_RATE_LIMIT_PER_WINDOW;
-    const previousWindow = process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS;
-    process.env.LOGIN_RATE_LIMIT_PER_WINDOW = "1";
-    process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS = "60";
-    resetMemoryLoginThrottleForTests();
-
-    try {
-      const kernel = createHttpKernel(createKernelDependencies());
-      const handler = kernel.wrapLogin(async (request) => {
-        const body = (await request.json()) as { email?: string };
-        return Response.json({ ok: true, email: body.email ?? null });
-      });
-
-      await runWithRequestMeta({ ipAddress: "203.0.113.41", userAgent: null }, async () => {
-        const missing = await handler(
-          new Request("http://example.test/api/v1/auth/login", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({}),
-          }),
-        );
-        expect(missing.status).toBe(200);
-        expect(await missing.json()).toEqual({ ok: true, email: null });
-
-        const demo = await handler(
-          new Request("http://example.test/api/v1/auth/login", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ email: "demo@example.com" }),
-          }),
-        );
-        expect(demo.status).toBe(200);
-
-        const demoAgain = await handler(
-          new Request("http://example.test/api/v1/auth/login", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ email: "demo@example.com" }),
-          }),
-        );
-        expect(demoAgain.status).toBe(429);
-
-        const other = await handler(
-          new Request("http://example.test/api/v1/auth/login", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ email: "other@example.com" }),
-          }),
-        );
-        expect(other.status).toBe(200);
-      });
-    } finally {
-      restoreEnvVar("LOGIN_RATE_LIMIT_PER_WINDOW", previousMax);
-      restoreEnvVar("LOGIN_RATE_LIMIT_WINDOW_SECONDS", previousWindow);
-      resetMemoryLoginThrottleForTests();
-    }
-  });
-
-  test("wrapWeb applies the web middleware group when views are enabled", async () => {
-    const previous = process.env.FRONTEND_MODE;
-    process.env.FRONTEND_MODE = "server-htmx";
-
-    try {
-      const kernel = createHttpKernel(createKernelDependencies());
-      const handler = kernel.wrapWeb(async () => new Response("ok"));
-
-      const getResponse = await handler(new Request("http://example.test/organizations"));
-      expect(getResponse.status).toBe(200);
-      expect(getResponse.headers.get("set-cookie")).toContain("strata_csrf=");
-
-      const postResponse = await handler(
-        new Request("http://example.test/organizations", { method: "POST" }),
-      );
-      expect(postResponse.status).toBe(403);
-      expect(await postResponse.text()).toContain("Invalid or missing CSRF token.");
-    } finally {
-      restoreEnvVar("FRONTEND_MODE", previous);
-    }
-  });
-
-  test("wrap api maps CSRF failures to JSON 403", async () => {
-    const previous = process.env.FRONTEND_MODE;
-    process.env.FRONTEND_MODE = "api";
-
-    try {
-      const kernel = createHttpKernel(createKernelDependencies());
-      const handler = kernel.wrap("api", async () => Response.json({ ok: true }));
-      const response = await handler(
-        new Request("http://example.test/api/v1/auth/login", { method: "POST" }),
-      );
-      expect(response.status).toBe(403);
-      expect(response.headers.get("content-type")).toContain("json");
-      expect(await response.json()).toEqual({ error: "Invalid or missing CSRF token." });
-
-      const get = kernel.wrap("api", async (request) =>
-        Response.json({
-          token: resolveCsrfTokenForRequest(request, csrfTokenOptionsFromEnvironment(process.env)),
-        }),
-      );
-      const issued = await runWithRequestMeta({ ipAddress: null, userAgent: null }, async () =>
-        get(new Request("http://example.test/api/v1/auth/csrf")),
-      );
-      const issuedBody = (await issued.json()) as { token: string };
-      const cookie = issued.headers.getSetCookie()[0]?.split(";")[0] ?? "";
-      expect(decodeURIComponent(cookie.slice(cookie.indexOf("=") + 1))).toBe(issuedBody.token);
-      const allowed = await handler(
-        new Request("http://example.test/api/v1/auth/login", {
-          method: "POST",
-          headers: { cookie, "x-csrf-token": issuedBody.token, origin: "http://example.test" },
-        }),
-      );
-      expect(allowed.status).toBe(200);
-      expect(await allowed.json()).toEqual({ ok: true });
-    } finally {
-      restoreEnvVar("FRONTEND_MODE", previous);
-    }
-  });
-
-  test("wrapApi maps thrown HTTP errors to JSON status codes", async () => {
-    const previous = process.env.FRONTEND_MODE;
-    process.env.FRONTEND_MODE = "api";
-
-    try {
-      const kernel = createHttpKernel(createKernelDependencies());
-      const handler = kernel.wrapApi(async () => {
-        throw new ForbiddenError("reports:export required");
-      });
-
-      const response = await handler(
-        new Request("http://example.test/api/reports", {
-          headers: {
-            accept: "application/json",
-            "x-authenticated-user-id": "1",
-            "x-authenticated-user-role": "admin",
-          },
-        }),
-      );
-
-      expect(response.status).toBe(403);
-      expect(await response.json()).toEqual({ error: "reports:export required" });
-    } finally {
-      restoreEnvVar("FRONTEND_MODE", previous);
-    }
-  });
-
-  test("wrapApi stays JSON in hybrid even without an Accept header", async () => {
-    const previous = process.env.FRONTEND_MODE;
-    process.env.FRONTEND_MODE = "hybrid";
-
-    try {
-      const kernel = createHttpKernel(createKernelDependencies());
-      const handler = kernel.wrapApi(async () => {
-        throw new ForbiddenError("reports:export required");
-      });
-
-      const response = await handler(
-        new Request("http://example.test/api/reports", {
-          headers: {
-            "x-authenticated-user-id": "1",
-            "x-authenticated-user-role": "admin",
-          },
-        }),
-      );
-
-      expect(response.status).toBe(403);
-      expect(response.headers.get("content-type")).toContain("json");
-      expect(await response.json()).toEqual({ error: "reports:export required" });
-    } finally {
-      restoreEnvVar("FRONTEND_MODE", previous);
-    }
-  });
-
-  test("wrapWebLogin applies the web group so CSRF failures become HTML 403", async () => {
-    const previous = process.env.FRONTEND_MODE;
-    process.env.FRONTEND_MODE = "server-htmx";
-
-    try {
-      const kernel = createHttpKernel(createKernelDependencies());
-      const handler = wrapWebLogin(
-        kernel,
-        async () => new Response("ok"),
-        async () => new Response("slow", { status: 429 }),
-      );
-
-      const postResponse = await handler(
-        new Request("http://example.test/login", { method: "POST" }),
-      );
-      expect(postResponse.status).toBe(403);
-      expect(await postResponse.text()).toContain("Invalid or missing CSRF token.");
-    } finally {
-      restoreEnvVar("FRONTEND_MODE", previous);
-    }
-  });
-
-  test("wrapWebLogin replaces JSON 429 with the HTML throttle handler", async () => {
-    const previous = process.env.FRONTEND_MODE;
-    process.env.FRONTEND_MODE = "server-htmx";
-
-    try {
-      const kernel = createHttpKernel(createKernelDependencies());
-      const handler = wrapWebLogin(
-        kernel,
-        async () => new Response("json-slow", { status: 429 }),
-        async () => new Response("html-slow", { status: 429 }),
-      );
-
-      const response = await handler(new Request("http://example.test/login"));
-      expect(response.status).toBe(429);
-      expect(await response.text()).toBe("html-slow");
-    } finally {
-      restoreEnvVar("FRONTEND_MODE", previous);
-    }
-  });
-
-  test("wrapWebLogin keeps JSON 429 for JSON login clients", async () => {
-    const previous = process.env.FRONTEND_MODE;
-    process.env.FRONTEND_MODE = "server-htmx";
-
-    try {
-      const kernel = createHttpKernel(createKernelDependencies());
-      const handler = wrapWebLogin(
-        kernel,
-        async () => new Response("json-slow", { status: 429 }),
-        async () => new Response("html-slow", { status: 429 }),
-      );
-
-      const response = await handler(
-        new Request("http://example.test/login", {
-          headers: { accept: "application/json" },
-        }),
-      );
-      expect(response.status).toBe(429);
-      expect(await response.text()).toBe("json-slow");
-    } finally {
-      restoreEnvVar("FRONTEND_MODE", previous);
-    }
-  });
-
-  test("wrapSigned rejects unsigned URLs and allows valid ones", async () => {
-    const previousMode = process.env.FRONTEND_MODE;
-    const previousSecret = process.env.SIGNED_URL_SECRET;
-    process.env.FRONTEND_MODE = "server-htmx";
-    process.env.SIGNED_URL_SECRET = "test-signed-url-secret";
-
-    try {
-      const kernel = createHttpKernel(createKernelDependencies());
-      const handler = kernel.wrapWeb(kernel.wrapSigned(async () => new Response("ok")));
-
-      const unsigned = await handler(new Request("http://example.test/reset-password"));
-      expect(unsigned.status).toBe(403);
-      expect(await unsigned.text()).toContain("Invalid or expired signed URL.");
-
-      const signed = await handler(
-        new Request(
-          `http://example.test${temporarySignedUrl("/reset-password", 120, { email: "a@strata.test" }, requireConfiguredSecret(["SIGNED_URL_SECRET", "SESSION_SECRET", "OAUTH_STATE_SECRET"], "signed-url-secret", process.env))}`,
-        ),
-      );
-      expect(signed.status).toBe(200);
-    } finally {
-      restoreEnvVar("FRONTEND_MODE", previousMode);
-      restoreEnvVar("SIGNED_URL_SECRET", previousSecret);
-    }
-  });
-
-  test("wrapWebGuest redirects signed-in users and lets guests through", async () => {
-    const previous = process.env.FRONTEND_MODE;
-    process.env.FRONTEND_MODE = "server-htmx";
-
-    try {
-      const kernel = createHttpKernel(createKernelDependencies());
-      const handler = kernel.wrapWebGuest(async () => new Response("login"));
-
-      const guest = await handler(new Request("http://example.test/login"));
-      expect(guest.status).toBe(200);
-      expect(await guest.text()).toBe("login");
-
-      const signedIn = await handler(
-        new Request("http://example.test/login", {
-          headers: { "x-authenticated-user-id": "1" },
-        }),
-      );
-      expect(signedIn.status).toBe(302);
-      expect(signedIn.headers.get("Location")).toBe("/");
-    } finally {
-      restoreEnvVar("FRONTEND_MODE", previous);
-    }
-  });
-
-  test("wrapWebGuest accepts an async home resolver", async () => {
-    const previous = process.env.FRONTEND_MODE;
-    process.env.FRONTEND_MODE = "server-htmx";
-
-    try {
-      const kernel = createHttpKernel(createKernelDependencies());
-      const handler = kernel.wrapWebGuest(
-        async () => new Response("login"),
-        async (user) => {
-          return `/organizations/${user.id}`;
-        },
-      );
-
-      const signedIn = await handler(
-        new Request("http://example.test/login", {
-          headers: { "x-authenticated-user-id": "7" },
-        }),
-      );
-      expect(signedIn.status).toBe(302);
-      expect(signedIn.headers.get("Location")).toBe("/organizations/7");
-    } finally {
-      restoreEnvVar("FRONTEND_MODE", previous);
-    }
-  });
-
-  test("wrapWebGuest sends unverified sessions to the verify notice", async () => {
-    const previousMode = process.env.FRONTEND_MODE;
-    const previousVerify = process.env.FEATURE_EMAIL_VERIFICATION;
-    process.env.FRONTEND_MODE = "server-htmx";
-    process.env.FEATURE_EMAIL_VERIFICATION = "true";
-
-    try {
-      const kernel = createHttpKernel(createKernelDependencies());
-      const handler = kernel.wrapWebGuest(async () => new Response("login"));
-
-      const unverified = await handler(
-        new Request("http://example.test/login", {
-          headers: {
-            "x-authenticated-user-id": "9",
-            "x-authenticated-email-verified": "false",
-          },
-        }),
-      );
-
-      expect(unverified.status).toBe(302);
-      expect(unverified.headers.get("Location")).toBe("/email/verify");
-      expect(unverified.headers.get("Set-Cookie") ?? "").not.toContain("strata_intended=");
-    } finally {
-      restoreEnvVar("FRONTEND_MODE", previousMode);
-      restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previousVerify);
-    }
-  });
-
-  test("wrapWebAuthenticated redirects unverified HTML users when verification is required", async () => {
-    const previousMode = process.env.FRONTEND_MODE;
-    const previousVerify = process.env.FEATURE_EMAIL_VERIFICATION;
-    process.env.FRONTEND_MODE = "server-htmx";
-    process.env.FEATURE_EMAIL_VERIFICATION = "true";
-
-    try {
-      const kernel = createHttpKernel(createKernelDependencies());
-      const handler = kernel.wrapWebAuthenticated(async () => new Response("ok"));
-
-      const unverified = await handler(
-        new Request("http://example.test/organizations", {
-          headers: {
-            "x-authenticated-user-id": "9",
-            "x-authenticated-email-verified": "false",
-          },
-        }),
-      );
-
-      expect(unverified.status).toBe(302);
-      expect(unverified.headers.get("Location")).toBe("/email/verify");
-      expect(
-        (unverified.headers.getSetCookie?.() ?? [unverified.headers.get("Set-Cookie") ?? ""]).some(
-          (cookie) => cookie.includes("strata_intended="),
-        ),
-      ).toBe(true);
-
-      const verified = await handler(
-        new Request("http://example.test/organizations", {
-          headers: {
-            "x-authenticated-user-id": "1",
-            "x-authenticated-email-verified": "true",
-          },
-        }),
-      );
-      expect(verified.status).toBe(200);
-    } finally {
-      restoreEnvVar("FRONTEND_MODE", previousMode);
-      restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previousVerify);
-    }
-  });
-
-  test("wrapWebPasswordConfirm redirects HTML and returns JSON 423 until confirmed", async () => {
-    const previous = process.env.FRONTEND_MODE;
-    process.env.FRONTEND_MODE = "server-htmx";
-
-    try {
-      const kernel = createHttpKernel(createKernelDependencies());
-      const handler = kernel.wrapWebPasswordConfirm(async () => new Response("ok"));
-
-      const unconfirmed = await handler(
-        new Request("http://example.test/account/export", {
-          headers: { "x-authenticated-user-id": "1" },
-        }),
-      );
-      expect(unconfirmed.status).toBe(302);
-      expect(unconfirmed.headers.get("Location")).toBe(
-        "/confirm-password?redirect=%2Faccount%2Fexport",
-      );
-
-      const jsonUnconfirmed = await handler(
-        new Request("http://example.test/account/export", {
-          headers: {
-            accept: "application/json",
-            "x-authenticated-user-id": "1",
-          },
-        }),
-      );
-      expect(jsonUnconfirmed.status).toBe(423);
-      expect(await jsonUnconfirmed.json()).toEqual({
-        error: "Password confirmation required.",
-      });
-
-      const confirmed = await handler(
-        new Request("http://example.test/account/export", {
-          headers: {
-            "x-authenticated-user-id": "1",
-            cookie: createPasswordConfirmCookie(
-              1,
-              undefined,
-              passwordConfirmOptionsFromEnvironment(process.env),
-            ),
-          },
-        }),
-      );
-      expect(confirmed.status).toBe(200);
-      expect(await confirmed.text()).toBe("ok");
-    } finally {
-      restoreEnvVar("FRONTEND_MODE", previous);
-    }
-  });
-
-  test("wrapVerified returns JSON 403 for unverified API users", async () => {
-    const previous = process.env.FEATURE_EMAIL_VERIFICATION;
-    process.env.FEATURE_EMAIL_VERIFICATION = "true";
-
-    try {
-      const kernel = createHttpKernel(createKernelDependencies());
-      const handler = kernel.wrapVerified(async () => Response.json({ ok: true }));
-
-      const unverified = await handler(
-        new Request("http://example.test/api/v1/organizations", {
-          headers: {
-            accept: "application/json",
-            "x-authenticated-user-id": "9",
-            "x-authenticated-email-verified": "false",
-          },
-        }),
-      );
-
-      expect(unverified.status).toBe(403);
-      expect(await unverified.json()).toEqual({
-        error: "Your email address is not verified.",
-      });
-    } finally {
-      restoreEnvVar("FEATURE_EMAIL_VERIFICATION", previous);
-    }
-  });
-
-  test("wrapAuthenticated applies require-auth middleware", async () => {
-    const kernel = createHttpKernel(createKernelDependencies());
-    const handler = kernel.wrapAuthenticated(async () => Response.json({ ok: true }));
-
-    const response = await handler(new Request("http://example.test/protected"));
-
-    expect(response.status).toBe(401);
-  });
-
-  test("wrapAbility rejects guests before ability checks", async () => {
-    const dependencies = createKernelDependencies();
-    dependencies.container.set(CORE_ABILITY_CHECKER_TOKEN, {
-      requireAbility: () => {
-        throw new ForbiddenError("Token ability required.");
-      },
-      tokenCan: () => false,
-    });
-
-    const kernel = createHttpKernel(dependencies);
-    const handler = kernel.wrapAbility("projects:delete", async () => Response.json({ ok: true }));
-
-    const guestResponse = await handler(new Request("http://example.test/projects/1"));
-    expect(guestResponse.status).toBe(401);
-  });
+describe('HttpKernel', () => {
+	let previousHeaders: string | undefined;
+
+	beforeEach(() => {
+		previousHeaders = enableDevAuthHeaders();
+	});
+	afterEach(() => {
+		restoreDevAuthHeaders(previousHeaders);
+	});
+	test('response tracing uses only the runtime installed in this application container', async () => {
+		const exporterA = new InMemorySpanExporter();
+
+		const exporterB = new InMemorySpanExporter();
+
+		const runtimeA = createTracingRuntime({
+			exporter: exporterA,
+			serviceName: 'kernel-a',
+			env: { OTEL_SDK_DISABLED: 'false' },
+		});
+
+		const runtimeB = createTracingRuntime({
+			exporter: exporterB,
+			serviceName: 'kernel-b',
+			env: { OTEL_SDK_DISABLED: 'false' },
+		});
+
+		try {
+			const dependenciesA = createKernelDependencies();
+
+			const dependenciesB = createKernelDependencies();
+
+			dependenciesA.container.set(CORE_TRACING_RUNTIME_TOKEN, runtimeA);
+			dependenciesB.container.set(CORE_TRACING_RUNTIME_TOKEN, runtimeB);
+			const handlerA = createHttpKernel(dependenciesA).wrapPublicDocument(
+				async () => new Response('a'),
+			);
+
+			const handlerB = createHttpKernel(dependenciesB).wrapPublicDocument(
+				async () => new Response('b'),
+			);
+
+			const [responseA, responseB] = await Promise.all([
+				handlerA(new Request('http://a')),
+				handlerB(new Request('http://b')),
+			]);
+
+			expect(responseA.headers.get('x-trace-id')).toHaveLength(32);
+			expect(responseB.headers.get('x-trace-id')).toHaveLength(32);
+			await runtimeA.forceFlush();
+			expect(exporterA.getFinishedSpans()).toHaveLength(1);
+			expect(exporterB.getFinishedSpans()).toHaveLength(0);
+			await runtimeA.shutdown();
+			await handlerB(new Request('http://b/next'));
+			await runtimeB.forceFlush();
+			expect(exporterB.getFinishedSpans()).toHaveLength(2);
+			const untraced = createHttpKernel(createKernelDependencies()).wrapPublicDocument(
+				async () => new Response(),
+			);
+
+			expect((await untraced(new Request('http://untraced'))).headers.get('x-trace-id')).toBeNull();
+		} finally {
+			await Promise.allSettled([runtimeA.shutdown(), runtimeB.shutdown()]);
+		}
+	});
+
+	test('API quota DI works in local mode without weakening login/register protection', async () => {
+		const config = new ConfigStore();
+
+		config.set(REDIS_URL_CONFIG_KEY, '');
+		const dependencies = createKernelDependencies(config);
+
+		dependencies.container.set(CORE_THROTTLE_QUOTA_POLICY_TOKEN, () => 0);
+		const kernel = createHttpKernel(dependencies);
+
+		const response = await kernel.wrap(
+			'api',
+			async () => new Response('bypass'),
+		)(new Request('http://example.test/a', { headers: { accept: 'application/json' } }));
+
+		expect(response.status).toBe(429);
+		expect(
+			(
+				await kernel.wrapLogin(async () => new Response('ok'))(
+					new Request('http://example.test/login'),
+				)
+			).status,
+		).toBe(200);
+		expect(
+			(
+				await kernel.wrapRegister(async () => new Response('ok'))(
+					new Request('http://example.test/register'),
+				)
+			).status,
+		).toBe(200);
+	});
+
+	test('kernel cleanup completes even if a custom throttle cleanup fails', () => {
+		const kernel = createHttpKernel(createKernelDependencies());
+
+		let cleaned = 0;
+
+		const middleware = async (_request: Request, next: () => Promise<Response>) => await next();
+
+		kernel.ownThrottle(
+			Object.assign(middleware.bind(null), {
+				dispose: () => {
+					cleaned++;
+				},
+			}),
+		);
+		kernel.ownThrottle(
+			Object.assign(middleware.bind(null), {
+				dispose: () => {
+					throw new Error('custom');
+				},
+			}),
+		);
+		expect(() => kernel.dispose()).toThrow('HTTP throttle cleanup failed');
+		expect(cleaned).toBe(1);
+		kernel.dispose();
+		const late = Object.assign(middleware.bind(null), {
+			dispose: () => {
+				cleaned++;
+			},
+		});
+
+		expect(() => kernel.ownThrottle(late)).toThrow('disposed');
+		expect(cleaned).toBe(2);
+	});
+
+	test.skipIf(!process.env.REDIS_URL)(
+		'kernel also disposes distributed API admission',
+		async () => {
+			const config = new ConfigStore();
+
+			config.set(REDIS_URL_CONFIG_KEY, process.env.REDIS_URL);
+			const kernel = createHttpKernel(createKernelDependencies(config));
+
+			const handler = kernel.wrap('api', async () => new Response('ok'));
+
+			const request = new Request('http://example.test/a', {
+				headers: { accept: 'application/json' },
+			});
+
+			try {
+				expect((await handler(request)).status).toBe(200);
+				kernel.dispose();
+				expect((await handler(request)).status).toBe(503);
+			} finally {
+				kernel.dispose();
+			}
+		},
+	);
+
+	test('registered kernel cleanup disposes local route throttles and closes admission', async () => {
+		const config = new ConfigStore();
+
+		config.set(REDIS_URL_CONFIG_KEY, '');
+		const dependencies = createKernelDependencies(config);
+
+		const cleanups: Array<() => void> = [];
+
+		dependencies.container.set(CORE_HTTP_CLEANUP_TOKEN, (cleanup) => {
+			cleanups.push(cleanup);
+		});
+		const kernel = createHttpKernel(dependencies);
+
+		const handler = kernel.wrap('api', async () => new Response('ok'));
+
+		const request = new Request('http://example.test/a', {
+			headers: { accept: 'application/json' },
+		});
+
+		expect((await handler(request)).status).toBe(200);
+		expect(cleanups).toHaveLength(1);
+		for (const cleanup of cleanups) {
+			cleanup();
+		}
+
+		kernel.dispose();
+		expect((await handler(request)).status).toBe(503);
+		expect(() => kernel.wrapLogin(async () => new Response('bypass'))).toThrow('disposed');
+	});
+
+	test('global response policy observes one explicit authentication before business work', async () => {
+		const dependencies = createKernelDependencies();
+
+		let calls = 0;
+
+		dependencies.container.set(CORE_AUTH_TOKEN, {
+			...establishedAuthReader,
+			authenticate: async () => {
+				calls++;
+
+				return {
+					status: 'authenticated',
+					user: { id: 1, role: 'admin' },
+					credentialSource: 'session',
+				};
+			},
+			resolveWithSource: async () => {
+				calls++;
+
+				return { user: { id: 1, role: 'admin' }, credentialSource: 'session' };
+			},
+		});
+		const kernel = createHttpKernel(dependencies);
+
+		const response = await kernel.wrapWebGlobalAdmin(async () => new Response('ok'))(
+			new Request('http://example.test/admin', {
+				headers: { 'x-request-id': 'kernel-owned-request' },
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('x-request-id')).toBe('kernel-owned-request');
+		expect(calls).toBe(1);
+	});
+
+	test('skips api throttle middleware when config is not registered', () => {
+		const kernel = createHttpKernel(createKernelDependencies());
+
+		expect(kernel.group('api')).toHaveLength(1);
+	});
+
+	test('falls back to memory throttle middleware when redis url is missing', () => {
+		const config = new ConfigStore();
+
+		config.set(REDIS_URL_CONFIG_KEY, '');
+		const kernel = createHttpKernel(createKernelDependencies(config));
+
+		expect(kernel.group('api')).toHaveLength(2);
+	});
+
+	test('wrapLogin keys JSON login on parsed email, not a missing body', async () => {
+		const previousMax = process.env.LOGIN_RATE_LIMIT_PER_WINDOW;
+
+		const previousWindow = process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS;
+
+		process.env.LOGIN_RATE_LIMIT_PER_WINDOW = '1';
+		process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS = '60';
+		resetMemoryLoginThrottleForTests();
+
+		try {
+			const kernel = createHttpKernel(createKernelDependencies());
+
+			const handler = kernel.wrapLogin(async (request) => {
+				const body = (await request.json()) as { email?: string };
+
+				return Response.json({ ok: true, email: body.email ?? null });
+			});
+
+			await runWithRequestMeta({ ipAddress: '203.0.113.41', userAgent: null }, async () => {
+				const missing = await handler(
+					new Request('http://example.test/api/v1/auth/login', {
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({}),
+					}),
+				);
+
+				expect(missing.status).toBe(200);
+				expect(await missing.json()).toEqual({ ok: true, email: null });
+
+				const demo = await handler(
+					new Request('http://example.test/api/v1/auth/login', {
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ email: 'demo@example.com' }),
+					}),
+				);
+
+				expect(demo.status).toBe(200);
+
+				const demoAgain = await handler(
+					new Request('http://example.test/api/v1/auth/login', {
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ email: 'demo@example.com' }),
+					}),
+				);
+
+				expect(demoAgain.status).toBe(429);
+
+				const other = await handler(
+					new Request('http://example.test/api/v1/auth/login', {
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ email: 'other@example.com' }),
+					}),
+				);
+
+				expect(other.status).toBe(200);
+			});
+		} finally {
+			restoreEnvVar('LOGIN_RATE_LIMIT_PER_WINDOW', previousMax);
+			restoreEnvVar('LOGIN_RATE_LIMIT_WINDOW_SECONDS', previousWindow);
+			resetMemoryLoginThrottleForTests();
+		}
+	});
+
+	test('wrapWeb applies the web middleware group when views are enabled', async () => {
+		const previous = process.env.FRONTEND_MODE;
+
+		process.env.FRONTEND_MODE = 'server-htmx';
+
+		try {
+			const kernel = createHttpKernel(createKernelDependencies());
+
+			const handler = kernel.wrapWeb(async () => new Response('ok'));
+
+			const getResponse = await handler(new Request('http://example.test/organizations'));
+
+			expect(getResponse.status).toBe(200);
+			expect(getResponse.headers.get('set-cookie')).toContain('strata_csrf=');
+
+			const postResponse = await handler(
+				new Request('http://example.test/organizations', { method: 'POST' }),
+			);
+
+			expect(postResponse.status).toBe(403);
+			expect(await postResponse.text()).toContain('Invalid or missing CSRF token.');
+		} finally {
+			restoreEnvVar('FRONTEND_MODE', previous);
+		}
+	});
+
+	test('wrap api maps CSRF failures to JSON 403', async () => {
+		const previous = process.env.FRONTEND_MODE;
+
+		process.env.FRONTEND_MODE = 'api';
+
+		try {
+			const kernel = createHttpKernel(createKernelDependencies());
+
+			const handler = kernel.wrap('api', async () => Response.json({ ok: true }));
+
+			const response = await handler(
+				new Request('http://example.test/api/v1/auth/login', { method: 'POST' }),
+			);
+
+			expect(response.status).toBe(403);
+			expect(response.headers.get('content-type')).toContain('json');
+			expect(await response.json()).toEqual({ error: 'Invalid or missing CSRF token.' });
+
+			const get = kernel.wrap('api', async (request) =>
+				Response.json({
+					token: resolveCsrfTokenForRequest(request, csrfTokenOptionsFromEnvironment(process.env)),
+				}),
+			);
+
+			const issued = await runWithRequestMeta({ ipAddress: null, userAgent: null }, async () =>
+				get(new Request('http://example.test/api/v1/auth/csrf')),
+			);
+
+			const issuedBody = (await issued.json()) as { token: string };
+
+			const cookie = issued.headers.getSetCookie()[0]?.split(';')[0] ?? '';
+
+			expect(decodeURIComponent(cookie.slice(cookie.indexOf('=') + 1))).toBe(issuedBody.token);
+			const allowed = await handler(
+				new Request('http://example.test/api/v1/auth/login', {
+					method: 'POST',
+					headers: { cookie, 'x-csrf-token': issuedBody.token, origin: 'http://example.test' },
+				}),
+			);
+
+			expect(allowed.status).toBe(200);
+			expect(await allowed.json()).toEqual({ ok: true });
+		} finally {
+			restoreEnvVar('FRONTEND_MODE', previous);
+		}
+	});
+
+	test('wrapApi maps thrown HTTP errors to JSON status codes', async () => {
+		const previous = process.env.FRONTEND_MODE;
+
+		process.env.FRONTEND_MODE = 'api';
+
+		try {
+			const kernel = createHttpKernel(createKernelDependencies());
+
+			const handler = kernel.wrapApi(async () => {
+				throw new ForbiddenError('reports:export required');
+			});
+
+			const response = await handler(
+				new Request('http://example.test/api/reports', {
+					headers: {
+						accept: 'application/json',
+						'x-authenticated-user-id': '1',
+						'x-authenticated-user-role': 'admin',
+					},
+				}),
+			);
+
+			expect(response.status).toBe(403);
+			expect(await response.json()).toEqual({ error: 'reports:export required' });
+		} finally {
+			restoreEnvVar('FRONTEND_MODE', previous);
+		}
+	});
+
+	test('wrapApi stays JSON in hybrid even without an Accept header', async () => {
+		const previous = process.env.FRONTEND_MODE;
+
+		process.env.FRONTEND_MODE = 'hybrid';
+
+		try {
+			const kernel = createHttpKernel(createKernelDependencies());
+
+			const handler = kernel.wrapApi(async () => {
+				throw new ForbiddenError('reports:export required');
+			});
+
+			const response = await handler(
+				new Request('http://example.test/api/reports', {
+					headers: {
+						'x-authenticated-user-id': '1',
+						'x-authenticated-user-role': 'admin',
+					},
+				}),
+			);
+
+			expect(response.status).toBe(403);
+			expect(response.headers.get('content-type')).toContain('json');
+			expect(await response.json()).toEqual({ error: 'reports:export required' });
+		} finally {
+			restoreEnvVar('FRONTEND_MODE', previous);
+		}
+	});
+
+	test('wrapWebLogin applies the web group so CSRF failures become HTML 403', async () => {
+		const previous = process.env.FRONTEND_MODE;
+
+		process.env.FRONTEND_MODE = 'server-htmx';
+
+		try {
+			const kernel = createHttpKernel(createKernelDependencies());
+
+			const handler = wrapWebLogin(
+				kernel,
+				async () => new Response('ok'),
+				async () => new Response('slow', { status: 429 }),
+			);
+
+			const postResponse = await handler(
+				new Request('http://example.test/login', { method: 'POST' }),
+			);
+
+			expect(postResponse.status).toBe(403);
+			expect(await postResponse.text()).toContain('Invalid or missing CSRF token.');
+		} finally {
+			restoreEnvVar('FRONTEND_MODE', previous);
+		}
+	});
+
+	test('wrapWebLogin replaces JSON 429 with the HTML throttle handler', async () => {
+		const previous = process.env.FRONTEND_MODE;
+
+		process.env.FRONTEND_MODE = 'server-htmx';
+
+		try {
+			const kernel = createHttpKernel(createKernelDependencies());
+
+			const handler = wrapWebLogin(
+				kernel,
+				async () => new Response('json-slow', { status: 429 }),
+				async () => new Response('html-slow', { status: 429 }),
+			);
+
+			const response = await handler(new Request('http://example.test/login'));
+
+			expect(response.status).toBe(429);
+			expect(await response.text()).toBe('html-slow');
+		} finally {
+			restoreEnvVar('FRONTEND_MODE', previous);
+		}
+	});
+
+	test('wrapWebLogin keeps JSON 429 for JSON login clients', async () => {
+		const previous = process.env.FRONTEND_MODE;
+
+		process.env.FRONTEND_MODE = 'server-htmx';
+
+		try {
+			const kernel = createHttpKernel(createKernelDependencies());
+
+			const handler = wrapWebLogin(
+				kernel,
+				async () => new Response('json-slow', { status: 429 }),
+				async () => new Response('html-slow', { status: 429 }),
+			);
+
+			const response = await handler(
+				new Request('http://example.test/login', {
+					headers: { accept: 'application/json' },
+				}),
+			);
+
+			expect(response.status).toBe(429);
+			expect(await response.text()).toBe('json-slow');
+		} finally {
+			restoreEnvVar('FRONTEND_MODE', previous);
+		}
+	});
+
+	test('wrapSigned rejects unsigned URLs and allows valid ones', async () => {
+		const previousMode = process.env.FRONTEND_MODE;
+
+		const previousSecret = process.env.SIGNED_URL_SECRET;
+
+		process.env.FRONTEND_MODE = 'server-htmx';
+		process.env.SIGNED_URL_SECRET = 'test-signed-url-secret';
+
+		try {
+			const kernel = createHttpKernel(createKernelDependencies());
+
+			const handler = kernel.wrapWeb(kernel.wrapSigned(async () => new Response('ok')));
+
+			const unsigned = await handler(new Request('http://example.test/reset-password'));
+
+			expect(unsigned.status).toBe(403);
+			expect(await unsigned.text()).toContain('Invalid or expired signed URL.');
+
+			const signed = await handler(
+				new Request(
+					`http://example.test${temporarySignedUrl('/reset-password', 120, { email: 'a@strata.test' }, requireConfiguredSecret(['SIGNED_URL_SECRET', 'SESSION_SECRET', 'OAUTH_STATE_SECRET'], 'signed-url-secret', process.env))}`,
+				),
+			);
+
+			expect(signed.status).toBe(200);
+		} finally {
+			restoreEnvVar('FRONTEND_MODE', previousMode);
+			restoreEnvVar('SIGNED_URL_SECRET', previousSecret);
+		}
+	});
+
+	test('wrapWebGuest redirects signed-in users and lets guests through', async () => {
+		const previous = process.env.FRONTEND_MODE;
+
+		process.env.FRONTEND_MODE = 'server-htmx';
+
+		try {
+			const kernel = createHttpKernel(createKernelDependencies());
+
+			const handler = kernel.wrapWebGuest(async () => new Response('login'));
+
+			const guest = await handler(new Request('http://example.test/login'));
+
+			expect(guest.status).toBe(200);
+			expect(await guest.text()).toBe('login');
+
+			const signedIn = await handler(
+				new Request('http://example.test/login', {
+					headers: { 'x-authenticated-user-id': '1' },
+				}),
+			);
+
+			expect(signedIn.status).toBe(302);
+			expect(signedIn.headers.get('Location')).toBe('/');
+		} finally {
+			restoreEnvVar('FRONTEND_MODE', previous);
+		}
+	});
+
+	test('wrapWebGuest accepts an async home resolver', async () => {
+		const previous = process.env.FRONTEND_MODE;
+
+		process.env.FRONTEND_MODE = 'server-htmx';
+
+		try {
+			const kernel = createHttpKernel(createKernelDependencies());
+
+			const handler = kernel.wrapWebGuest(
+				async () => new Response('login'),
+				async (user) => {
+					return `/organizations/${user.id}`;
+				},
+			);
+
+			const signedIn = await handler(
+				new Request('http://example.test/login', {
+					headers: { 'x-authenticated-user-id': '7' },
+				}),
+			);
+
+			expect(signedIn.status).toBe(302);
+			expect(signedIn.headers.get('Location')).toBe('/organizations/7');
+		} finally {
+			restoreEnvVar('FRONTEND_MODE', previous);
+		}
+	});
+
+	test('wrapWebGuest sends unverified sessions to the verify notice', async () => {
+		const previousMode = process.env.FRONTEND_MODE;
+
+		const previousVerify = process.env.FEATURE_EMAIL_VERIFICATION;
+
+		process.env.FRONTEND_MODE = 'server-htmx';
+		process.env.FEATURE_EMAIL_VERIFICATION = 'true';
+
+		try {
+			const kernel = createHttpKernel(createKernelDependencies());
+
+			const handler = kernel.wrapWebGuest(async () => new Response('login'));
+
+			const unverified = await handler(
+				new Request('http://example.test/login', {
+					headers: {
+						'x-authenticated-user-id': '9',
+						'x-authenticated-email-verified': 'false',
+					},
+				}),
+			);
+
+			expect(unverified.status).toBe(302);
+			expect(unverified.headers.get('Location')).toBe('/email/verify');
+			expect(unverified.headers.get('Set-Cookie') ?? '').not.toContain('strata_intended=');
+		} finally {
+			restoreEnvVar('FRONTEND_MODE', previousMode);
+			restoreEnvVar('FEATURE_EMAIL_VERIFICATION', previousVerify);
+		}
+	});
+
+	test('wrapWebAuthenticated redirects unverified HTML users when verification is required', async () => {
+		const previousMode = process.env.FRONTEND_MODE;
+
+		const previousVerify = process.env.FEATURE_EMAIL_VERIFICATION;
+
+		process.env.FRONTEND_MODE = 'server-htmx';
+		process.env.FEATURE_EMAIL_VERIFICATION = 'true';
+
+		try {
+			const kernel = createHttpKernel(createKernelDependencies());
+
+			const handler = kernel.wrapWebAuthenticated(async () => new Response('ok'));
+
+			const unverified = await handler(
+				new Request('http://example.test/organizations', {
+					headers: {
+						'x-authenticated-user-id': '9',
+						'x-authenticated-email-verified': 'false',
+					},
+				}),
+			);
+
+			expect(unverified.status).toBe(302);
+			expect(unverified.headers.get('Location')).toBe('/email/verify');
+			expect(
+				(unverified.headers.getSetCookie?.() ?? [unverified.headers.get('Set-Cookie') ?? '']).some(
+					(cookie) => cookie.includes('strata_intended='),
+				),
+			).toBe(true);
+
+			const verified = await handler(
+				new Request('http://example.test/organizations', {
+					headers: {
+						'x-authenticated-user-id': '1',
+						'x-authenticated-email-verified': 'true',
+					},
+				}),
+			);
+
+			expect(verified.status).toBe(200);
+		} finally {
+			restoreEnvVar('FRONTEND_MODE', previousMode);
+			restoreEnvVar('FEATURE_EMAIL_VERIFICATION', previousVerify);
+		}
+	});
+
+	test('wrapWebPasswordConfirm redirects HTML and returns JSON 423 until confirmed', async () => {
+		const previous = process.env.FRONTEND_MODE;
+
+		process.env.FRONTEND_MODE = 'server-htmx';
+
+		try {
+			const kernel = createHttpKernel(createKernelDependencies());
+
+			const handler = kernel.wrapWebPasswordConfirm(async () => new Response('ok'));
+
+			const unconfirmed = await handler(
+				new Request('http://example.test/account/export', {
+					headers: { 'x-authenticated-user-id': '1' },
+				}),
+			);
+
+			expect(unconfirmed.status).toBe(302);
+			expect(unconfirmed.headers.get('Location')).toBe(
+				'/confirm-password?redirect=%2Faccount%2Fexport',
+			);
+
+			const jsonUnconfirmed = await handler(
+				new Request('http://example.test/account/export', {
+					headers: {
+						accept: 'application/json',
+						'x-authenticated-user-id': '1',
+					},
+				}),
+			);
+
+			expect(jsonUnconfirmed.status).toBe(423);
+			expect(await jsonUnconfirmed.json()).toEqual({
+				error: 'Password confirmation required.',
+			});
+
+			const confirmed = await handler(
+				new Request('http://example.test/account/export', {
+					headers: {
+						'x-authenticated-user-id': '1',
+						cookie: createPasswordConfirmCookie(
+							1,
+							undefined,
+							passwordConfirmOptionsFromEnvironment(process.env),
+						),
+					},
+				}),
+			);
+
+			expect(confirmed.status).toBe(200);
+			expect(await confirmed.text()).toBe('ok');
+		} finally {
+			restoreEnvVar('FRONTEND_MODE', previous);
+		}
+	});
+
+	test('wrapVerified returns JSON 403 for unverified API users', async () => {
+		const previous = process.env.FEATURE_EMAIL_VERIFICATION;
+
+		process.env.FEATURE_EMAIL_VERIFICATION = 'true';
+
+		try {
+			const kernel = createHttpKernel(createKernelDependencies());
+
+			const handler = kernel.wrapVerified(async () => Response.json({ ok: true }));
+
+			const unverified = await handler(
+				new Request('http://example.test/api/v1/organizations', {
+					headers: {
+						accept: 'application/json',
+						'x-authenticated-user-id': '9',
+						'x-authenticated-email-verified': 'false',
+					},
+				}),
+			);
+
+			expect(unverified.status).toBe(403);
+			expect(await unverified.json()).toEqual({
+				error: 'Your email address is not verified.',
+			});
+		} finally {
+			restoreEnvVar('FEATURE_EMAIL_VERIFICATION', previous);
+		}
+	});
+
+	test('wrapAuthenticated applies require-auth middleware', async () => {
+		const kernel = createHttpKernel(createKernelDependencies());
+
+		const handler = kernel.wrapAuthenticated(async () => Response.json({ ok: true }));
+
+		const response = await handler(new Request('http://example.test/protected'));
+
+		expect(response.status).toBe(401);
+	});
+
+	test('wrapAbility rejects guests before ability checks', async () => {
+		const dependencies = createKernelDependencies();
+
+		dependencies.container.set(CORE_ABILITY_CHECKER_TOKEN, {
+			requireAbility: () => {
+				throw new ForbiddenError('Token ability required.');
+			},
+			tokenCan: () => false,
+		});
+
+		const kernel = createHttpKernel(dependencies);
+
+		const handler = kernel.wrapAbility('projects:delete', async () => Response.json({ ok: true }));
+
+		const guestResponse = await handler(new Request('http://example.test/projects/1'));
+
+		expect(guestResponse.status).toBe(401);
+	});
 });
 
-test("web error boundaries default to production redaction without HTTP persistence options", async () => {
-  const config = new ConfigStore();
-  config.set("http.features", { viewsEnabled: true });
-  const dependencies = createKernelDependencies(config);
-  dependencies.container = new ServiceContainer();
-  dependencies.container.set(CORE_CONFIG_TOKEN, config);
-  const { CORE_WEB_ERROR_VIEW_TOKEN } = await import("@getstrata/core/view/tokens");
-  dependencies.container.set(
-    CORE_WEB_ERROR_VIEW_TOKEN,
-    async (input) => `<html>fixture error view: ${input.message}</html>`,
-  );
-  const kernel = createHttpKernel(dependencies);
-  const { withMiddleware } = await import("@getstrata/core/http/routeMiddleware");
-  const handler = withMiddleware(...kernel.globalMiddleware("web"))(async () => {
-    throw new Error("private backend credential");
-  });
-  try {
-    const response = await handler(
-      new Request("https://fixture.example/", { headers: { accept: "text/html" } }),
-    );
-    expect(response.status).toBe(500);
-    const body = await response.text();
-    expect(body).toContain("fixture error view");
-    expect(body).not.toContain("private backend credential");
-  } finally {
-    kernel.dispose();
-  }
+test('web error boundaries default to production redaction without HTTP persistence options', async () => {
+	const config = new ConfigStore();
+
+	config.set('http.features', { viewsEnabled: true });
+	const dependencies = createKernelDependencies(config);
+
+	dependencies.container = new ServiceContainer();
+	dependencies.container.set(CORE_CONFIG_TOKEN, config);
+	const { CORE_WEB_ERROR_VIEW_TOKEN } = await import('@getstrata/core/view/tokens');
+
+	dependencies.container.set(
+		CORE_WEB_ERROR_VIEW_TOKEN,
+		async (input) => `<html>fixture error view: ${input.message}</html>`,
+	);
+	const kernel = createHttpKernel(dependencies);
+
+	const { withMiddleware } = await import('@getstrata/core/http/routeMiddleware');
+
+	const handler = withMiddleware(...kernel.globalMiddleware('web'))(async () => {
+		throw new Error('private backend credential');
+	});
+
+	try {
+		const response = await handler(
+			new Request('https://fixture.example/', { headers: { accept: 'text/html' } }),
+		);
+
+		expect(response.status).toBe(500);
+		const body = await response.text();
+
+		expect(body).toContain('fixture error view');
+		expect(body).not.toContain('private backend credential');
+	} finally {
+		kernel.dispose();
+	}
 });

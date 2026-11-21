@@ -1,59 +1,60 @@
-import { timingSafeCompareString } from "./timingSafeCompare";
+import { timingSafeCompareString } from './timingSafeCompare';
 
 function parseScimTenantTokens(raw: string | undefined): Map<number, string> {
-  const tokens = new Map<number, string>();
+	const tokens = new Map<number, string>();
 
-  if (!raw?.trim()) {
-    return tokens;
-  }
+	if (!raw?.trim()) {
+		return tokens;
+	}
 
-  for (const entry of raw.split(",")) {
-    const [tenantPart, tokenPart] = entry.split(":");
+	for (const entry of raw.split(',')) {
+		const [tenantPart, tokenPart] = entry.split(':');
 
-    if (!tenantPart || !tokenPart) {
-      continue;
-    }
+		if (!tenantPart || !tokenPart) {
+			continue;
+		}
 
-    const tenantId = Number.parseInt(tenantPart.trim(), 10);
-    const token = tokenPart.trim();
+		const tenantId = Number.parseInt(tenantPart.trim(), 10);
 
-    if (Number.isInteger(tenantId) && tenantId > 0 && token.length > 0) {
-      tokens.set(tenantId, token);
-    }
-  }
+		const token = tokenPart.trim();
 
-  return tokens;
+		if (Number.isInteger(tenantId) && tenantId > 0 && token.length > 0) {
+			tokens.set(tenantId, token);
+		}
+	}
+
+	return tokens;
 }
 
 function resolveScimTenantFromToken(
-  token: string,
-  env: Readonly<Record<string, string | undefined>>,
+	token: string,
+	env: Readonly<Record<string, string | undefined>>,
 ): number | null {
-  const presented = token.trim();
+	const presented = token.trim();
 
-  if (presented.length === 0) {
-    return null;
-  }
+	if (presented.length === 0) {
+		return null;
+	}
 
-  const tenantTokens = parseScimTenantTokens(env.SCIM_TENANT_TOKENS);
+	const tenantTokens = parseScimTenantTokens(env.SCIM_TENANT_TOKENS);
 
-  for (const [tenantId, expectedToken] of tenantTokens) {
-    if (timingSafeCompareString(presented, expectedToken)) {
-      return tenantId;
-    }
-  }
+	for (const [tenantId, expectedToken] of tenantTokens) {
+		if (timingSafeCompareString(presented, expectedToken)) {
+			return tenantId;
+		}
+	}
 
-  const fallbackToken = env.SCIM_BEARER_TOKEN?.trim() ?? "";
+	const fallbackToken = env.SCIM_BEARER_TOKEN?.trim() ?? '';
 
-  if (fallbackToken.length === 0) {
-    return null;
-  }
+	if (fallbackToken.length === 0) {
+		return null;
+	}
 
-  if (timingSafeCompareString(presented, fallbackToken)) {
-    return 1;
-  }
+	if (timingSafeCompareString(presented, fallbackToken)) {
+		return 1;
+	}
 
-  return null;
+	return null;
 }
 
 export { parseScimTenantTokens, resolveScimTenantFromToken };

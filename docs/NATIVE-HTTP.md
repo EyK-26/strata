@@ -3,36 +3,35 @@
 `createWebServer` keeps Strata's native route conversion, CORS preflights, request metadata, public assets and fallback handler composition. Its `native` option exposes Bun's typed TCP server configuration, including hostname, TLS, idleTimeout, reusePort, development, id, error and WebSocket handlers. Port remains the top-level option. `fetch`, `routes`, `port` and `unix` inside `native` are rejected at runtime as well as excluded from its type. This API does not expose Unix-domain listening; it requires a TCP port.
 
 ```ts
-import { createWebServer } from "@getstrata/bootstrap/web/server";
+import { createWebServer } from '@getstrata/bootstrap/web/server';
 
 const server = createWebServer<{ userId: number }>({
-  port: 3000,
-  native: {
-    hostname: "0.0.0.0",
-    idleTimeout: 30,
-    maxRequestBodySize: 1_048_576,
-    development: false,
-    websocket: {
-      message(socket, message) {
-        socket.send(`${socket.data.userId}:${message}`);
-      },
-    },
-  },
-  onRequest(request, nativeServer) {
-    // Runs once on native routes, synthesized preflights, assets and fallback.
-    // Returning a Response short-circuits dispatch.
-    if (request.headers.has("x-maintenance"))
-      return new Response("Unavailable", { status: 503 });
-    nativeServer.timeout(request, 30);
-  },
-  handle(request, nativeServer) {
-    // Authenticate/authorize and validate origins in the application first.
-    if (new URL(request.url).pathname === "/socket") {
-      if (nativeServer.upgrade(request, { data: { userId: 1 } })) return undefined;
-      return new Response("Upgrade failed", { status: 400 });
-    }
-    return new Response("Hello");
-  },
+	port: 3000,
+	native: {
+		hostname: '0.0.0.0',
+		idleTimeout: 30,
+		maxRequestBodySize: 1_048_576,
+		development: false,
+		websocket: {
+			message(socket, message) {
+				socket.send(`${socket.data.userId}:${message}`);
+			},
+		},
+	},
+	onRequest(request, nativeServer) {
+		// Runs once on native routes, synthesized preflights, assets and fallback.
+		// Returning a Response short-circuits dispatch.
+		if (request.headers.has('x-maintenance')) return new Response('Unavailable', { status: 503 });
+		nativeServer.timeout(request, 30);
+	},
+	handle(request, nativeServer) {
+		// Authenticate/authorize and validate origins in the application first.
+		if (new URL(request.url).pathname === '/socket') {
+			if (nativeServer.upgrade(request, { data: { userId: 1 } })) return undefined;
+			return new Response('Upgrade failed', { status: 400 });
+		}
+		return new Response('Hello');
+	},
 });
 ```
 

@@ -1,1 +1,1 @@
-export * from "../../src/bootstrap/public-api";
+export * from '../../src/bootstrap/public-api';

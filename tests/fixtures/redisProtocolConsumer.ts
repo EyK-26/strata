@@ -1,70 +1,71 @@
 /** Public installed APIs and native Bun Redis; no client or timer substitute. */
-import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
-import type { InitializedAppContext } from "@getstrata/bootstrap/context";
-import { createCacheStore } from "@getstrata/core/cache/createCacheStore";
-import { CacheRepository } from "@getstrata/core/cache/repository";
-import type { Application, TransportDefinition } from "@getstrata/core/contracts/application";
-import { DATABASE_SESSION_TOKEN } from "@getstrata/core/database/tokens";
-import { Job, type JobContext } from "@getstrata/core/queue";
-import type { QueueServices } from "@getstrata/core/queue/createAppQueue";
-import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
-import { resolveQueueRuntimeConfig } from "@getstrata/core/queue/queueConfig";
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+
+import type { InitializedAppContext } from '@getstrata/bootstrap/context';
+import { createCacheStore } from '@getstrata/core/cache/createCacheStore';
+import { CacheRepository } from '@getstrata/core/cache/repository';
+import type { Application, TransportDefinition } from '@getstrata/core/contracts/application';
+import { DATABASE_SESSION_TOKEN } from '@getstrata/core/database/tokens';
+import { Job, type JobContext } from '@getstrata/core/queue';
+import type { QueueServices } from '@getstrata/core/queue/createAppQueue';
+import { JobRegistry } from '@getstrata/core/queue/jobRegistry';
+import { resolveQueueRuntimeConfig } from '@getstrata/core/queue/queueConfig';
 
 const jobRegistry = new JobRegistry();
 
 import {
-  createQueueWorkerTransport,
-  type QueueWorkerTransport,
-} from "@getstrata/core/queue/queueWorkerTransport";
+	createQueueWorkerTransport,
+	type QueueWorkerTransport,
+} from '@getstrata/core/queue/queueWorkerTransport';
 import {
-  QUEUE_LIST_KEY,
-  QueueWorker,
-  queueKeyForPriority,
-  queueProcessingKey,
-  RedisQueue,
-  RedisStreamsQueue,
-  RedisStreamsWorker,
-  reserveQueueJob,
-  streamQueueKey,
-  updateQueueReservation,
-} from "@getstrata/core/queue/redisQueue";
-import { appKeyPrefix } from "@getstrata/core/runtime/appKeyPrefix";
-import { RedisSchedulerLeaseStore } from "@getstrata/core/scheduler/schedule";
-import { RedisClient } from "bun";
+	QUEUE_LIST_KEY,
+	queueKeyForPriority,
+	queueProcessingKey,
+	QueueWorker,
+	RedisQueue,
+	RedisStreamsQueue,
+	RedisStreamsWorker,
+	reserveQueueJob,
+	streamQueueKey,
+	updateQueueReservation,
+} from '@getstrata/core/queue/redisQueue';
+import { appKeyPrefix } from '@getstrata/core/runtime/appKeyPrefix';
+import { RedisSchedulerLeaseStore } from '@getstrata/core/scheduler/schedule';
+import { RedisClient } from 'bun';
 
 const url = process.env.REDIS_URL;
 const scope = process.env.APP_KEY_PREFIX;
-assert.ok(url, "Use the explicit dedicated Redis fixture URL.");
-assert.ok(scope && /^strata-protocol-[0-9a-f-]{36}$/.test(scope), "Use a fresh owned namespace.");
+assert.ok(url, 'Use the explicit dedicated Redis fixture URL.');
+assert.ok(scope && /^strata-protocol-[0-9a-f-]{36}$/.test(scope), 'Use a fresh owned namespace.');
 const queueRuntime = resolveQueueRuntimeConfig({
-  APP_KEY_PREFIX: scope,
-  QUEUE_REDIS_TRANSPORT: "lists",
+	APP_KEY_PREFIX: scope,
+	QUEUE_REDIS_TRANSPORT: 'lists',
 });
 const application: {
-  createApp(options: {
-    migrate: false;
-    mode: "command";
-    transports: readonly TransportDefinition[];
-  }): Promise<{
-    context: InitializedAppContext;
-    application: Application;
-    queueServices: QueueServices;
-  }>;
-} = await import(new URL("../bootstrap/createApp.ts", import.meta.url).href);
+	createApp(options: {
+		migrate: false;
+		mode: 'command';
+		transports: readonly TransportDefinition[];
+	}): Promise<{
+		context: InitializedAppContext;
+		application: Application;
+		queueServices: QueueServices;
+	}>;
+} = await import(new URL('../bootstrap/createApp.ts', import.meta.url).href);
 const observer = new RedisClient(url);
-const taskId = "public-protocol";
+const taskId = 'public-protocol';
 // Ownership receipt for cleanup only; every lease operation uses the public store.
-const taskHash = createHash("sha256")
-  .update(JSON.stringify([scope, taskId]))
-  .digest("hex");
+const taskHash = createHash('sha256')
+	.update(JSON.stringify([scope, taskId]))
+	.digest('hex');
 const ownedPatterns = [`${scope}:*`, `scheduler:{${taskHash}}:*`];
 const marker = `qualification-unrelated-${crypto.randomUUID()}`;
 let scopeOwned = false;
 let markerOwned = false;
 let app:
-  | { context: InitializedAppContext; application: Application; queueServices: QueueServices }
-  | undefined;
+	| { context: InitializedAppContext; application: Application; queueServices: QueueServices }
+	| undefined;
 let list: RedisQueue | undefined;
 let streams: RedisStreamsQueue | undefined;
 let listWorker: QueueWorkerTransport | undefined;
@@ -73,299 +74,299 @@ let cacheA: CacheRepository | undefined;
 let cacheB: CacheRepository | undefined;
 let leases: RedisSchedulerLeaseStore | undefined;
 async function ownedKeys(): Promise<string[]> {
-  const keys = (await Promise.all(ownedPatterns.map((pattern) => observer.keys(pattern)))).flat();
-  return [...new Set(keys)].sort();
+	const keys = (await Promise.all(ownedPatterns.map((pattern) => observer.keys(pattern)))).flat();
+	return [...new Set(keys)].sort();
 }
 let failure: unknown;
 let failed = false;
 const cleanupErrors: unknown[] = [];
 try {
-  assert.deepEqual(
-    await ownedKeys(),
-    [],
-    "Capture an empty namespace before admitting owned work.",
-  );
-  scopeOwned = true;
-  assert.equal(await observer.get(marker), null);
-  console.log(
-    `OWNED_REDIS_RECEIPT ${JSON.stringify({ scope, patterns: ownedPatterns, marker, emptyNamespace: true })}`,
-  );
-  markerOwned = true;
-  await observer.set(marker, "preserve");
-  const selected = () => {
-    if (!app) throw Error("Application queue services not ready");
-    return app.queueServices;
-  };
-  const services: QueueServices = {
-    recordFailure: (input) => selected().recordFailure(input),
-    listRecent: (limit) => selected().listRecent(limit),
-    retry: (...args) => selected().retry(...args),
-    delete: (id) => selected().delete(id),
-    flush: () => selected().flush(),
-    runAttempt: (...args) => selected().runAttempt(...args),
-  };
-  listWorker = createQueueWorkerTransport({
-    registry: jobRegistry,
-    name: "qualification.list-worker",
-    redisUrl: url,
-    queueServices: services,
-    runtime: queueRuntime,
-    createWorker: (redis, services) =>
-      new QueueWorker(
-        redis,
-        services,
-        jobRegistry,
-        5,
-        queueRuntime.queueKeys,
-        undefined,
-        queueRuntime.visibilityMs,
-      ),
-  });
-  streamWorker = createQueueWorkerTransport({
-    registry: jobRegistry,
-    name: "qualification.stream-worker",
-    redisUrl: url,
-    queueServices: services,
-    runtime: { ...queueRuntime, transport: "streams" },
-    createWorker: (redis, services) =>
-      new RedisStreamsWorker(
-        redis,
-        services,
-        jobRegistry,
-        5,
-        queueRuntime.queueKeys,
-        undefined,
-        queueRuntime.visibilityMs,
-      ),
-  });
-  app = await application.createApp({
-    migrate: false,
-    mode: "command",
-    transports: [listWorker.transport, streamWorker.transport],
-  });
-  assert.equal(appKeyPrefix(), scope);
-  const effects: string[] = [];
-  class ProtocolJob extends Job<{ kind: string }> {
-    override async handle(payload: { kind: string }): Promise<void> {
-      effects.push(payload.kind);
-    }
-  }
-  const job = new ProtocolJob();
-  const jobName = `qualification.protocol.${crypto.randomUUID()}`;
-  jobRegistry.register(jobName, () => job);
-  jobRegistry.track(jobName, job);
-  list = new RedisQueue(url, jobRegistry, queueRuntime.queueKeys);
-  const queueKey = queueKeyForPriority(job.priority, queueRuntime.queueKeys);
-  assert.equal(QUEUE_LIST_KEY, "strata:queue:default");
-  assert.equal(queueKey, `${scope}:queue:default`);
-  assert.ok(queueKey.startsWith(`${scope}:`));
-  await list.dispatch(job, { kind: "list" });
-  assert.equal(await listWorker.processNext(), true);
-  assert.deepEqual(effects, ["list"]);
-  await list.dispatch(job, { kind: "reservation" });
-  const reservation = await reserveQueueJob(
-    observer,
-    queueKey,
-    "owned-consumer",
-    queueRuntime.visibilityMs,
-  );
-  assert.ok(reservation);
-  assert.equal(
-    await updateQueueReservation(
-      observer,
-      queueKey,
-      { ...reservation, owner: "stale" },
-      "ack",
-      queueRuntime.visibilityMs,
-    ),
-    false,
-  );
-  assert.equal(
-    await updateQueueReservation(
-      observer,
-      queueKey,
-      reservation,
-      "renew",
-      queueRuntime.visibilityMs,
-    ),
-    true,
-  );
-  assert.equal(
-    await updateQueueReservation(observer, queueKey, reservation, "ack", queueRuntime.visibilityMs),
-    true,
-  );
-  assert.equal(
-    await updateQueueReservation(observer, queueKey, reservation, "ack", queueRuntime.visibilityMs),
-    false,
-  );
-  assert.equal(await observer.llen(queueProcessingKey(queueKey)), 0);
+	assert.deepEqual(
+		await ownedKeys(),
+		[],
+		'Capture an empty namespace before admitting owned work.',
+	);
+	scopeOwned = true;
+	assert.equal(await observer.get(marker), null);
+	console.log(
+		`OWNED_REDIS_RECEIPT ${JSON.stringify({ scope, patterns: ownedPatterns, marker, emptyNamespace: true })}`,
+	);
+	markerOwned = true;
+	await observer.set(marker, 'preserve');
+	const selected = () => {
+		if (!app) throw Error('Application queue services not ready');
+		return app.queueServices;
+	};
+	const services: QueueServices = {
+		recordFailure: (input) => selected().recordFailure(input),
+		listRecent: (limit) => selected().listRecent(limit),
+		retry: (...args) => selected().retry(...args),
+		delete: (id) => selected().delete(id),
+		flush: () => selected().flush(),
+		runAttempt: (...args) => selected().runAttempt(...args),
+	};
+	listWorker = createQueueWorkerTransport({
+		registry: jobRegistry,
+		name: 'qualification.list-worker',
+		redisUrl: url,
+		queueServices: services,
+		runtime: queueRuntime,
+		createWorker: (redis, services) =>
+			new QueueWorker(
+				redis,
+				services,
+				jobRegistry,
+				5,
+				queueRuntime.queueKeys,
+				undefined,
+				queueRuntime.visibilityMs,
+			),
+	});
+	streamWorker = createQueueWorkerTransport({
+		registry: jobRegistry,
+		name: 'qualification.stream-worker',
+		redisUrl: url,
+		queueServices: services,
+		runtime: { ...queueRuntime, transport: 'streams' },
+		createWorker: (redis, services) =>
+			new RedisStreamsWorker(
+				redis,
+				services,
+				jobRegistry,
+				5,
+				queueRuntime.queueKeys,
+				undefined,
+				queueRuntime.visibilityMs,
+			),
+	});
+	app = await application.createApp({
+		migrate: false,
+		mode: 'command',
+		transports: [listWorker.transport, streamWorker.transport],
+	});
+	assert.equal(appKeyPrefix(), scope);
+	const effects: string[] = [];
+	class ProtocolJob extends Job<{ kind: string }> {
+		override async handle(payload: { kind: string }): Promise<void> {
+			effects.push(payload.kind);
+		}
+	}
+	const job = new ProtocolJob();
+	const jobName = `qualification.protocol.${crypto.randomUUID()}`;
+	jobRegistry.register(jobName, () => job);
+	jobRegistry.track(jobName, job);
+	list = new RedisQueue(url, jobRegistry, queueRuntime.queueKeys);
+	const queueKey = queueKeyForPriority(job.priority, queueRuntime.queueKeys);
+	assert.equal(QUEUE_LIST_KEY, 'strata:queue:default');
+	assert.equal(queueKey, `${scope}:queue:default`);
+	assert.ok(queueKey.startsWith(`${scope}:`));
+	await list.dispatch(job, { kind: 'list' });
+	assert.equal(await listWorker.processNext(), true);
+	assert.deepEqual(effects, ['list']);
+	await list.dispatch(job, { kind: 'reservation' });
+	const reservation = await reserveQueueJob(
+		observer,
+		queueKey,
+		'owned-consumer',
+		queueRuntime.visibilityMs,
+	);
+	assert.ok(reservation);
+	assert.equal(
+		await updateQueueReservation(
+			observer,
+			queueKey,
+			{ ...reservation, owner: 'stale' },
+			'ack',
+			queueRuntime.visibilityMs,
+		),
+		false,
+	);
+	assert.equal(
+		await updateQueueReservation(
+			observer,
+			queueKey,
+			reservation,
+			'renew',
+			queueRuntime.visibilityMs,
+		),
+		true,
+	);
+	assert.equal(
+		await updateQueueReservation(observer, queueKey, reservation, 'ack', queueRuntime.visibilityMs),
+		true,
+	);
+	assert.equal(
+		await updateQueueReservation(observer, queueKey, reservation, 'ack', queueRuntime.visibilityMs),
+		false,
+	);
+	assert.equal(await observer.llen(queueProcessingKey(queueKey)), 0);
 
-  streams = new RedisStreamsQueue(url, jobRegistry, queueRuntime.queueKeys);
-  const jobId = await streams.enqueue(
-    job,
-    { kind: "streams" },
-    { cancellable: true, timeoutMs: 60_000 },
-  );
-  assert.ok(jobId.startsWith(`${streamQueueKey(queueKey)}/`));
-  assert.equal(await streamWorker.processNext(), true);
-  assert.deepEqual(effects, ["list", "streams"]);
-  assert.equal(Number(await observer.send("XLEN", [streamQueueKey(queueKey)])), 0);
-  assert.equal(await streams.cancel(jobId), false);
+	streams = new RedisStreamsQueue(url, jobRegistry, queueRuntime.queueKeys);
+	const jobId = await streams.enqueue(
+		job,
+		{ kind: 'streams' },
+		{ cancellable: true, timeoutMs: 60_000 },
+	);
+	assert.ok(jobId.startsWith(`${streamQueueKey(queueKey)}/`));
+	assert.equal(await streamWorker.processNext(), true);
+	assert.deepEqual(effects, ['list', 'streams']);
+	assert.equal(Number(await observer.send('XLEN', [streamQueueKey(queueKey)])), 0);
+	assert.equal(await streams.cancel(jobId), false);
 
-  cacheA = new CacheRepository(
-    createCacheStore({
-      driver: "redis",
-      redisUrl: url,
-      ttlMs: 60_000,
-      maxEntries: 10,
-      namespace: `${scope}:cache:v3:`,
-    }),
-  );
-  cacheB = new CacheRepository(
-    createCacheStore({
-      driver: "redis",
-      redisUrl: url,
-      ttlMs: 60_000,
-      maxEntries: 10,
-      namespace: `${scope}:cache:v3:`,
-    }),
-  );
-  let fills = 0;
-  assert.deepEqual(
-    await cacheA.tags("group").remember("filled", async () => ({ value: ++fills })),
-    { value: 1 },
-  );
-  assert.deepEqual(
-    await cacheB.tags("group").remember("filled", async () => ({ value: ++fills })),
-    { value: 1 },
-  );
-  assert.equal(fills, 1);
-  assert.equal(await cacheB.tags("group").flush(), 1);
-  assert.equal(await cacheA.get("filled"), undefined);
-  await cacheA.getOrSet("owned?item=one", async () => 1);
-  await cacheA.getOrSet("owned?item=two", async () => 2);
-  assert.equal(await cacheB.invalidateByPrefix("owned"), 2);
-  assert.equal(await cacheA.size(), 0);
+	cacheA = new CacheRepository(
+		createCacheStore({
+			driver: 'redis',
+			redisUrl: url,
+			ttlMs: 60_000,
+			maxEntries: 10,
+			namespace: `${scope}:cache:v3:`,
+		}),
+	);
+	cacheB = new CacheRepository(
+		createCacheStore({
+			driver: 'redis',
+			redisUrl: url,
+			ttlMs: 60_000,
+			maxEntries: 10,
+			namespace: `${scope}:cache:v3:`,
+		}),
+	);
+	let fills = 0;
+	assert.deepEqual(
+		await cacheA.tags('group').remember('filled', async () => ({ value: ++fills })),
+		{ value: 1 },
+	);
+	assert.deepEqual(
+		await cacheB.tags('group').remember('filled', async () => ({ value: ++fills })),
+		{ value: 1 },
+	);
+	assert.equal(fills, 1);
+	assert.equal(await cacheB.tags('group').flush(), 1);
+	assert.equal(await cacheA.get('filled'), undefined);
+	await cacheA.getOrSet('owned?item=one', async () => 1);
+	await cacheA.getOrSet('owned?item=two', async () => 2);
+	assert.equal(await cacheB.invalidateByPrefix('owned'), 2);
+	assert.equal(await cacheA.size(), 0);
 
-  leases = new RedisSchedulerLeaseStore({ redisUrl: url, namespace: scope });
-  const owner = { taskId, occurrenceId: "one", token: crypto.randomUUID() };
-  const stale = { ...owner, token: crypto.randomUUID() };
-  assert.equal(await leases.acquire(owner, 60_000), true);
-  assert.equal(await leases.acquire(stale, 60_000), false);
-  assert.equal(await leases.renew(stale, 60_000), false);
-  assert.equal(await leases.complete(stale, 60_000), false);
-  await leases.release(stale);
-  assert.equal(await leases.renew(owner, 60_000), true);
-  assert.equal(await leases.complete(owner, 60_000), true);
-  assert.equal(await leases.acquire(owner, 60_000), false);
+	leases = new RedisSchedulerLeaseStore({ redisUrl: url, namespace: scope });
+	const owner = { taskId, occurrenceId: 'one', token: crypto.randomUUID() };
+	const stale = { ...owner, token: crypto.randomUUID() };
+	assert.equal(await leases.acquire(owner, 60_000), true);
+	assert.equal(await leases.acquire(stale, 60_000), false);
+	assert.equal(await leases.renew(stale, 60_000), false);
+	assert.equal(await leases.complete(stale, 60_000), false);
+	await leases.release(stale);
+	assert.equal(await leases.renew(owner, 60_000), true);
+	assert.equal(await leases.complete(owner, 60_000), true);
+	assert.equal(await leases.acquire(owner, 60_000), false);
 
-  await app.application.run((scope) =>
-    scope.resolve(DATABASE_SESSION_TOKEN).execute({
-      text: "CREATE TABLE queue_drain_effects (transport TEXT PRIMARY KEY)",
-      params: [],
-    }),
-  );
-  const admitted = {
-    lists: Promise.withResolvers<void>(),
-    streams: Promise.withResolvers<void>(),
-  };
-  const release = Promise.withResolvers<void>();
-  const committed = new Set<string>();
-  class DrainJob extends Job<{ transport: keyof typeof admitted }> {
-    override async handle(
-      { transport }: { transport: keyof typeof admitted },
-      context?: JobContext,
-    ) {
-      assert.ok(context?.database);
-      admitted[transport].resolve();
-      await release.promise;
-      await context.database.transaction((database) =>
-        database.execute({
-          text: "INSERT INTO queue_drain_effects (transport) VALUES (?)",
-          params: [transport],
-        }),
-      );
-      committed.add(transport);
-    }
-  }
-  const drainJob = new DrainJob();
-  const drainName = "qualification.protocol.drain";
-  jobRegistry.register(drainName, () => drainJob);
-  jobRegistry.track(drainName, drainJob);
-  const polls: Promise<boolean>[] = [];
-  const enter = async (
-    transport: keyof typeof admitted,
-    queue: RedisQueue | RedisStreamsQueue,
-    worker: QueueWorkerTransport,
-  ) => {
-    await queue.dispatch(drainJob, { transport });
-    const poll = worker.processNext();
-    polls.push(poll);
-    await Promise.race([
-      admitted[transport].promise,
-      poll.then(() => assert.fail(`${transport} must enter before shutdown`)),
-    ]);
-  };
-  try {
-    await enter("streams", streams, streamWorker);
-    await enter("lists", list, listWorker);
-    const stopping = app.application.stop();
-    assert.equal(app.application.state.phase, "stopping");
-    await assert.rejects(
-      app.application.run(() => {}),
-      /APPLICATION_NOT_READY/,
-    );
-    release.resolve();
-    assert.deepEqual(await Promise.all(polls), [true, true]);
-    assert.equal((await stopping).successful, true);
-    assert.deepEqual([...committed].sort(), ["lists", "streams"]);
-    assert.equal(await observer.llen(queueProcessingKey(queueKey)), 0);
-    assert.equal(Number(await observer.send("XLEN", [streamQueueKey(queueKey)])), 0);
-  } finally {
-    release.resolve();
-    await Promise.allSettled(polls);
-  }
+	await app.application.run((scope) =>
+		scope.resolve(DATABASE_SESSION_TOKEN).execute({
+			text: 'CREATE TABLE queue_drain_effects (transport TEXT PRIMARY KEY)',
+			params: [],
+		}),
+	);
+	const admitted = {
+		lists: Promise.withResolvers<void>(),
+		streams: Promise.withResolvers<void>(),
+	};
+	const release = Promise.withResolvers<void>();
+	const committed = new Set<string>();
+	class DrainJob extends Job<{ transport: keyof typeof admitted }> {
+		override async handle(
+			{ transport }: { transport: keyof typeof admitted },
+			context?: JobContext,
+		) {
+			assert.ok(context?.database);
+			admitted[transport].resolve();
+			await release.promise;
+			await context.database.transaction((database) =>
+				database.execute({
+					text: 'INSERT INTO queue_drain_effects (transport) VALUES (?)',
+					params: [transport],
+				}),
+			);
+			committed.add(transport);
+		}
+	}
+	const drainJob = new DrainJob();
+	const drainName = 'qualification.protocol.drain';
+	jobRegistry.register(drainName, () => drainJob);
+	jobRegistry.track(drainName, drainJob);
+	const polls: Promise<boolean>[] = [];
+	const enter = async (
+		transport: keyof typeof admitted,
+		queue: RedisQueue | RedisStreamsQueue,
+		worker: QueueWorkerTransport,
+	) => {
+		await queue.dispatch(drainJob, { transport });
+		const poll = worker.processNext();
+		polls.push(poll);
+		await Promise.race([
+			admitted[transport].promise,
+			poll.then(() => assert.fail(`${transport} must enter before shutdown`)),
+		]);
+	};
+	try {
+		await enter('streams', streams, streamWorker);
+		await enter('lists', list, listWorker);
+		const stopping = app.application.stop();
+		assert.equal(app.application.state.phase, 'stopping');
+		await assert.rejects(
+			app.application.run(() => {}),
+			/APPLICATION_NOT_READY/,
+		);
+		release.resolve();
+		assert.deepEqual(await Promise.all(polls), [true, true]);
+		assert.equal((await stopping).successful, true);
+		assert.deepEqual([...committed].sort(), ['lists', 'streams']);
+		assert.equal(await observer.llen(queueProcessingKey(queueKey)), 0);
+		assert.equal(Number(await observer.send('XLEN', [streamQueueKey(queueKey)])), 0);
+	} finally {
+		release.resolve();
+		await Promise.allSettled(polls);
+	}
 } catch (error) {
-  failed = true;
-  failure = error;
+	failed = true;
+	failure = error;
 } finally {
-  const cleanups: Array<() => unknown | Promise<unknown>> = [
-    () => list?.close(),
-    () => streams?.close(),
-    () => cacheA?.close(),
-    () => cacheB?.close(),
-    () => leases?.close(),
-    async () => {
-      const result = await app?.application.stop();
-      if (result) assert.ok(result.successful, "Application cleanup must be confirmed");
-    },
-    async () => {
-      if (!scopeOwned) return;
-      const keys = await ownedKeys();
-      if (keys.length) await observer.del(...keys);
-      assert.deepEqual(await ownedKeys(), [], "All owned Redis protocol keys must be removed.");
-    },
-    async () => {
-      if (markerOwned) assert.equal(await observer.get(marker), "preserve");
-    },
-    async () => {
-      if (markerOwned) await observer.del(marker);
-    },
-    () => observer.close(),
-  ];
-  for (const cleanup of cleanups) {
-    try {
-      await cleanup();
-    } catch (error) {
-      cleanupErrors.push(error);
-    }
-  }
+	const cleanups: Array<() => unknown | Promise<unknown>> = [
+		() => list?.close(),
+		() => streams?.close(),
+		() => cacheA?.close(),
+		() => cacheB?.close(),
+		() => leases?.close(),
+		async () => {
+			const result = await app?.application.stop();
+			if (result) assert.ok(result.successful, 'Application cleanup must be confirmed');
+		},
+		async () => {
+			if (!scopeOwned) return;
+			const keys = await ownedKeys();
+			if (keys.length) await observer.del(...keys);
+			assert.deepEqual(await ownedKeys(), [], 'All owned Redis protocol keys must be removed.');
+		},
+		async () => {
+			if (markerOwned) assert.equal(await observer.get(marker), 'preserve');
+		},
+		async () => {
+			if (markerOwned) await observer.del(marker);
+		},
+		() => observer.close(),
+	];
+	for (const cleanup of cleanups) {
+		try {
+			await cleanup();
+		} catch (error) {
+			cleanupErrors.push(error);
+		}
+	}
 }
 if (failed || cleanupErrors.length)
-  throw new AggregateError(
-    [...(failed ? [failure] : []), ...cleanupErrors],
-    "Installed Redis protocol contract or owned cleanup failed.",
-  );
+	throw new AggregateError(
+		[...(failed ? [failure] : []), ...cleanupErrors],
+		'Installed Redis protocol contract or owned cleanup failed.',
+	);
 console.log(
-  "PASS installed native Redis list/Streams delivery and ACK, cache coordination and scheduler fencing; owned keys restored and unrelated marker preserved",
+	'PASS installed native Redis list/Streams delivery and ACK, cache coordination and scheduler fencing; owned keys restored and unrelated marker preserved',
 );

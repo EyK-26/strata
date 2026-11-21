@@ -1,1 +1,1 @@
-export * from "../../../src/bootstrap/jobDiscoveryState.ts";
+export * from '../../../src/bootstrap/jobDiscoveryState.ts';

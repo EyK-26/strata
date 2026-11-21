@@ -1,1 +1,1 @@
-export * from "../../../src/bootstrap/httpKernel.ts";
+export * from '../../../src/bootstrap/httpKernel.ts';

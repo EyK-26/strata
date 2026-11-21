@@ -1,15 +1,17 @@
-import { describe, expect, test } from "bun:test";
-import { createCsrfProtection } from "@getstrata/core/http/csrfProtection";
+import { describe, expect, test } from 'bun:test';
 
-describe("createCsrfProtection", () => {
-  test("generates and verifies tokens with Bun.CSRF", () => {
-    const csrf = createCsrfProtection("unit-test-secret");
+import { createCsrfProtection } from '@getstrata/core/http/csrfProtection';
 
-    const token = csrf.generate("guest");
-    expect(typeof token).toBe("string");
-    expect(token.length).toBeGreaterThan(10);
-    expect(csrf.verify(token)).toBe(true);
-    expect(csrf.verify("not-a-token")).toBe(false);
-    expect(csrf.verify(undefined)).toBe(false);
-  });
+describe('createCsrfProtection', () => {
+	test('generates and verifies tokens with Bun.CSRF', () => {
+		const csrf = createCsrfProtection('unit-test-secret');
+
+		const token = csrf.generate('guest');
+
+		expect(typeof token).toBe('string');
+		expect(token.length).toBeGreaterThan(10);
+		expect(csrf.verify(token)).toBe(true);
+		expect(csrf.verify('not-a-token')).toBe(false);
+		expect(csrf.verify(undefined)).toBe(false);
+	});
 });

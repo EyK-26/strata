@@ -4,525 +4,547 @@
  * Run: bun scripts/sync-package-subpaths.ts
  */
 
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join, relative } from "node:path";
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { dirname, join, relative } from 'node:path';
+
 import {
-  bootstrapSubpathExternalFlags,
-  CORE_SHARED_SUBPATH_SET,
-  CORE_STANDALONE_SUBPATHS,
-  coreSubpathExternalFlags,
-} from "./core-shared-subpaths.ts";
+	bootstrapSubpathExternalFlags,
+	CORE_SHARED_SUBPATH_SET,
+	CORE_STANDALONE_SUBPATHS,
+	coreSubpathExternalFlags,
+} from './core-shared-subpaths.ts';
+import { renderSubpathEntry } from './subpath-entry.ts';
 
-import { renderSubpathEntry } from "./subpath-entry.ts";
-
-const ROOT = join(import.meta.dir, "..");
+const ROOT = join(import.meta.dir, '..');
 
 const CORE_SUBPATHS = [
-  "testing",
-  "auth/accountState",
-  "auth/accountStateMigration",
-  "auth/accessControl",
-  "auth/abilityChecker",
-  "auth/authContext",
-  "auth/authReader",
-  "auth/authOutcome",
-  "auth/abilityCatalog",
-  "auth/emailVerification",
-  "auth/guard",
-  "auth/jwt",
-  "auth/jwtGuard",
-  "auth/basicAuthGuard",
-  "auth/tokenAbilityChecker",
-  "auth/membershipContext",
-  "auth/membershipMiddleware",
-  "auth/membershipScope",
-  "auth/membershipService",
-  "auth/oauth/oidcProvider",
-  "auth/oauth/providers",
-  "auth/oauth/samlProvider",
-  "auth/oauth/types",
-  "auth/saml/samlServiceProvider",
-  "auth/password",
-  "auth/passwordLogin",
-  "auth/pendingMfaCookie",
-  "auth/oneTimeToken",
-  "auth/intendedUrlCookie",
-  "auth/passwordConfirmCookie",
-  "auth/policy",
-  "auth/scimAuthMiddleware",
-  "auth/sessionCookie",
-  "auth/sessionGuard",
-  "auth/tokenHash",
-  "audit/exportAuditLogs",
-  "audit/siemFormatter",
-  "admin/formatValue",
-  "admin/registry",
-  "admin/types",
-  "cache/tags",
-  "cache/tokens",
-  "cache/createCacheStore",
-  "cache/repository",
-  "cache/simpleCache",
-  "cache/simpleCacheStore",
-  "config/envSchema",
-  "config/applicationConfig",
-  "contracts/token",
-  "contracts/application",
-  "contracts/services",
-  "contracts/executionContext",
-  "contracts/executionOperations",
-  "contracts/executionOwnership",
-  "contracts/serviceTokens",
-  "contracts/authUserDirectory",
-  "contracts/container",
-  "contracts/di",
-  "contracts/persistence",
-  "contracts/membership",
-  "crypto/fieldEncryption",
-  "crypto/fieldEncryptionRotation",
-  "crypto/mfaSecret",
-  "database",
-  "database/acquisitionMetrics",
-  "database/baseRepository",
-  "database/bindings",
-  "database/definitions",
-  "database/ownedReadOnlyObservation",
-  "database/session",
-  "database/tokens",
-  "database/bunSql",
-  "database/connection",
-  "database/connectionContext",
-  "database/dialect",
-  "database/mysqlConnection",
-  "database/errors",
-  "database/factory",
-  "database/migrations",
-  "database/migrations/types",
-  "database/model",
-  "database/query",
-  "database/relationships",
-  "database/repositoryQuery",
-  "database/seeders",
-  "database/seeders/types",
-  "database/schema",
-  "database/sqliteConnection",
-  "database/table",
-  "database/types",
-  "database/whereBuilder",
-  "errors/http",
-  "events",
-  "events/outbox",
-  "http",
-  "http/authMiddleware",
-  "http/authorizeMiddleware",
-  "http/bodySizeLimitMiddleware",
-  "http/clientIp",
-  "http/cookies",
-  "http/contentNegotiation",
-  "http/contentSecurityPolicy",
-  "http/conditionalResponse",
-  "http/corsMiddleware",
-  "http/csrfMiddleware",
-  "http/csrfProtection",
-  "http/csrfToken",
-  "http/etag",
-  "http/flashSession",
-  "http/flashMiddleware",
-  "http/formRequest",
-  "http/middleware",
-  "http/metricsMiddleware",
-  "http/loginThrottleMiddleware",
-  "http/memoryThrottleMiddleware",
-  "http/pagination",
-  "http/parseFormBody",
-  "http/parseMultipartUpload",
-  "http/requireAbilityMiddleware",
-  "http/requireAuthMiddleware",
-  "http/requireGlobalAdminMiddleware",
-  "http/requireWebAuthMiddleware",
-  "http/requireVerifiedMiddleware",
-  "http/requirePasswordConfirmMiddleware",
-  "http/resources",
-  "http/response",
-  "http/route",
-  "http/routeMiddleware",
-  "http/routeModelBinding",
-  "http/safeInternalPath",
-  "http/signedUrl",
-  "http/statelessAuth",
-  "http/scimThrottleMiddleware",
-  "http/securityHeadersMiddleware",
-  "http/securedRouteModelBinding",
-  "http/requestMetaContext",
-  "http/webErrorResponse",
-  "http/webFormRequest",
-  "http/throttleMiddleware",
-  "http/uploads",
-  "http/validation",
-  "jobs/exportAuditLogsJob",
-  "jobs/invalidateCacheTagsJob",
-  "lifecycle/gracefulShutdown",
-  "logging/logger",
-  "logging/requestLoggingMiddleware",
-  "mail/mailer",
-  "mail/markdownMail",
-  "mail/markdownMailable",
-  "mail/sanitizeMailHtml",
-  "media/imageTransform",
-  "metrics/prometheus",
-  "notifications",
-  "openapi/generator",
-  "openapi/registeredRoute",
-  "openapi/validate",
-  "pagination",
-  "queue",
-  "queue/createAppQueue",
-  "queue/failedJobRepository",
-  "queue/failedJobService",
-  "queue/jobRegistry",
-  "queue/jobRunner",
-  "queue/queueConfig",
-  "queue/queueHandoff",
-  "queue/queueMetrics",
-  "queue/queueServices",
-  "queue/queueWorkerTransport",
-  "queue/publicQueue",
-  "queue/redisQueue",
-  "queue/types",
-  "runtime/appEnv",
-  "runtime/appKeyPrefix",
-  "runtime/application",
-  "runtime/frontendMode",
-  "runtime/asyncContextStore",
-  "scheduler/schedule",
-  "scheduler/osCron",
-  "security/oauthState",
-  "security/publicReads",
-  "security/recoveryCodes",
-  "security/safeFetch",
-  "security/safePath",
-  "security/safeUrl",
-  "security/scimTenantTokens",
-  "security/securityEvents",
-  "security/stripeWebhook",
-  "security/webhookSignature",
-  "security/timingSafeCompare",
-  "security/tokenExpiry",
-  "security/totp",
-  "storage/storage",
-  "tenant/tenancyConfig",
-  "tenant/scopedDatabasePolicy",
-  "tenant/publicTenantHost",
-  "tenant/resolveTenant",
-  "tenant/tenantContext",
-  "tenant/tenantDatabaseScope",
-  "tenant/databaseTenantContext",
-  "tenant/tenantMiddleware",
-  "tenant/enableTenantRls",
-  "terminal/runShell",
-  "tracing/traceContext",
-  "tracing/tracingMiddleware",
-  "validation/rules",
-  "view",
-  "view/tokens",
+	'testing',
+	'auth/accountState',
+	'auth/accountStateMigration',
+	'auth/accessControl',
+	'auth/abilityChecker',
+	'auth/authContext',
+	'auth/authReader',
+	'auth/authOutcome',
+	'auth/abilityCatalog',
+	'auth/emailVerification',
+	'auth/guard',
+	'auth/jwt',
+	'auth/jwtGuard',
+	'auth/basicAuthGuard',
+	'auth/tokenAbilityChecker',
+	'auth/membershipContext',
+	'auth/membershipMiddleware',
+	'auth/membershipScope',
+	'auth/membershipService',
+	'auth/oauth/oidcProvider',
+	'auth/oauth/providers',
+	'auth/oauth/samlProvider',
+	'auth/oauth/types',
+	'auth/saml/samlServiceProvider',
+	'auth/password',
+	'auth/passwordLogin',
+	'auth/pendingMfaCookie',
+	'auth/oneTimeToken',
+	'auth/intendedUrlCookie',
+	'auth/passwordConfirmCookie',
+	'auth/policy',
+	'auth/scimAuthMiddleware',
+	'auth/sessionCookie',
+	'auth/sessionGuard',
+	'auth/tokenHash',
+	'audit/exportAuditLogs',
+	'audit/siemFormatter',
+	'admin/formatValue',
+	'admin/registry',
+	'admin/types',
+	'cache/tags',
+	'cache/tokens',
+	'cache/createCacheStore',
+	'cache/repository',
+	'cache/simpleCache',
+	'cache/simpleCacheStore',
+	'config/envSchema',
+	'config/applicationConfig',
+	'contracts/token',
+	'contracts/application',
+	'contracts/services',
+	'contracts/executionContext',
+	'contracts/executionOperations',
+	'contracts/executionOwnership',
+	'contracts/serviceTokens',
+	'contracts/authUserDirectory',
+	'contracts/container',
+	'contracts/di',
+	'contracts/persistence',
+	'contracts/membership',
+	'crypto/fieldEncryption',
+	'crypto/fieldEncryptionRotation',
+	'crypto/mfaSecret',
+	'database',
+	'database/acquisitionMetrics',
+	'database/baseRepository',
+	'database/bindings',
+	'database/definitions',
+	'database/ownedReadOnlyObservation',
+	'database/session',
+	'database/tokens',
+	'database/bunSql',
+	'database/connection',
+	'database/connectionContext',
+	'database/dialect',
+	'database/mysqlConnection',
+	'database/errors',
+	'database/factory',
+	'database/migrations',
+	'database/migrations/types',
+	'database/model',
+	'database/query',
+	'database/relationships',
+	'database/repositoryQuery',
+	'database/seeders',
+	'database/seeders/types',
+	'database/schema',
+	'database/sqliteConnection',
+	'database/table',
+	'database/types',
+	'database/whereBuilder',
+	'errors/http',
+	'events',
+	'events/outbox',
+	'http',
+	'http/authMiddleware',
+	'http/authorizeMiddleware',
+	'http/bodySizeLimitMiddleware',
+	'http/clientIp',
+	'http/cookies',
+	'http/contentNegotiation',
+	'http/contentSecurityPolicy',
+	'http/conditionalResponse',
+	'http/corsMiddleware',
+	'http/csrfMiddleware',
+	'http/csrfProtection',
+	'http/csrfToken',
+	'http/etag',
+	'http/flashSession',
+	'http/flashMiddleware',
+	'http/formRequest',
+	'http/middleware',
+	'http/metricsMiddleware',
+	'http/loginThrottleMiddleware',
+	'http/memoryThrottleMiddleware',
+	'http/pagination',
+	'http/parseFormBody',
+	'http/parseMultipartUpload',
+	'http/requireAbilityMiddleware',
+	'http/requireAuthMiddleware',
+	'http/requireGlobalAdminMiddleware',
+	'http/requireWebAuthMiddleware',
+	'http/requireVerifiedMiddleware',
+	'http/requirePasswordConfirmMiddleware',
+	'http/resources',
+	'http/response',
+	'http/route',
+	'http/routeMiddleware',
+	'http/routeModelBinding',
+	'http/safeInternalPath',
+	'http/signedUrl',
+	'http/statelessAuth',
+	'http/scimThrottleMiddleware',
+	'http/securityHeadersMiddleware',
+	'http/securedRouteModelBinding',
+	'http/requestMetaContext',
+	'http/webErrorResponse',
+	'http/webFormRequest',
+	'http/throttleMiddleware',
+	'http/uploads',
+	'http/validation',
+	'jobs/exportAuditLogsJob',
+	'jobs/invalidateCacheTagsJob',
+	'lifecycle/gracefulShutdown',
+	'logging/logger',
+	'logging/requestLoggingMiddleware',
+	'mail/mailer',
+	'mail/markdownMail',
+	'mail/markdownMailable',
+	'mail/sanitizeMailHtml',
+	'media/imageTransform',
+	'metrics/prometheus',
+	'notifications',
+	'openapi/generator',
+	'openapi/registeredRoute',
+	'openapi/validate',
+	'pagination',
+	'queue',
+	'queue/createAppQueue',
+	'queue/failedJobRepository',
+	'queue/failedJobService',
+	'queue/jobRegistry',
+	'queue/jobRunner',
+	'queue/queueConfig',
+	'queue/queueHandoff',
+	'queue/queueMetrics',
+	'queue/queueServices',
+	'queue/queueWorkerTransport',
+	'queue/publicQueue',
+	'queue/redisQueue',
+	'queue/types',
+	'runtime/appEnv',
+	'runtime/appKeyPrefix',
+	'runtime/application',
+	'runtime/frontendMode',
+	'runtime/asyncContextStore',
+	'scheduler/schedule',
+	'scheduler/osCron',
+	'security/oauthState',
+	'security/publicReads',
+	'security/recoveryCodes',
+	'security/safeFetch',
+	'security/safePath',
+	'security/safeUrl',
+	'security/scimTenantTokens',
+	'security/securityEvents',
+	'security/stripeWebhook',
+	'security/webhookSignature',
+	'security/timingSafeCompare',
+	'security/tokenExpiry',
+	'security/totp',
+	'storage/storage',
+	'tenant/tenancyConfig',
+	'tenant/scopedDatabasePolicy',
+	'tenant/publicTenantHost',
+	'tenant/resolveTenant',
+	'tenant/tenantContext',
+	'tenant/tenantDatabaseScope',
+	'tenant/databaseTenantContext',
+	'tenant/tenantMiddleware',
+	'tenant/enableTenantRls',
+	'terminal/runShell',
+	'tracing/traceContext',
+	'tracing/tracingMiddleware',
+	'validation/rules',
+	'view',
+	'view/tokens',
 ] as const;
 
 const BOOTSTRAP_SUBPATHS = [
-  "application",
-  "auth/accountWorkflows",
-  "auth/runtimeConfig",
-  "databaseCommands",
-  "testing",
-  "buildModuleRoutes",
-  "buildWebModuleRoutes",
-  "cache/modelCacheTags",
-  "cachedJson",
-  "config",
-  "context",
-  "contracts",
-  "createWebRoutes",
-  // createRoutes is in-repo fixture HTTP (imports the repo-root index.html); never publish it.
-  "createSpaRoutes",
-  "dependencies",
-  "discoverModules",
-  "discoverListeners",
-  "discoverModels",
-  "discoverJobs",
-  "health",
-  "http/securedRouteModelBinding",
-  "httpKernel",
-  "persistenceContracts",
-  "persistenceInvocation",
-  "databaseReadiness",
-  "listeners/invalidateCacheOnModelWrite",
-  "membershipService",
-  "metricsRoutes",
-  "queue/defaultJobs",
-  "providers",
-  "providers/view",
-  "providers/cache",
-  "providers/events",
-  "providers/auth",
-  "routePlan",
-  "schedule",
-  "secretsGuard",
-  "web/forms",
-  "web/routing",
-  "web/server",
-  "web/session",
-  "web/slug",
+	'application',
+	'auth/accountWorkflows',
+	'auth/runtimeConfig',
+	'databaseCommands',
+	'testing',
+	'buildModuleRoutes',
+	'buildWebModuleRoutes',
+	'cache/modelCacheTags',
+	'cachedJson',
+	'config',
+	'context',
+	'contracts',
+	'createWebRoutes',
+	// createRoutes is in-repo fixture HTTP (imports the repo-root index.html); never publish it.
+	'createSpaRoutes',
+	'dependencies',
+	'discoverModules',
+	'discoverListeners',
+	'discoverModels',
+	'discoverJobs',
+	'health',
+	'http/securedRouteModelBinding',
+	'httpKernel',
+	'persistenceContracts',
+	'persistenceInvocation',
+	'databaseReadiness',
+	'listeners/invalidateCacheOnModelWrite',
+	'membershipService',
+	'metricsRoutes',
+	'queue/defaultJobs',
+	'providers',
+	'providers/view',
+	'providers/cache',
+	'providers/events',
+	'providers/auth',
+	'routePlan',
+	'schedule',
+	'secretsGuard',
+	'web/forms',
+	'web/routing',
+	'web/server',
+	'web/session',
+	'web/slug',
 ] as const;
 
 function resolveCoreTypesPath(subpath: string): string {
-  if (["database/baseRepository", "database/model", "database/repositoryQuery"].includes(subpath))
-    return `./dist/entries/${subpath}.d.ts`;
-  const indexModules = new Set([
-    "database",
-    "database/schema",
-    "events",
-    "events/outbox",
-    "http",
-    "notifications",
-    "queue",
-    "view",
-    "pagination",
-  ]);
+	if (['database/baseRepository', 'database/model', 'database/repositoryQuery'].includes(subpath)) {
+		return `./dist/entries/${subpath}.d.ts`;
+	}
 
-  if (indexModules.has(subpath)) {
-    return `./dist/core/${subpath}/index.d.ts`;
-  }
+	const indexModules = new Set([
+		'database',
+		'database/schema',
+		'events',
+		'events/outbox',
+		'http',
+		'notifications',
+		'queue',
+		'view',
+		'pagination',
+	]);
 
-  if (subpath === "database/seeders") {
-    return "./dist/core/database/seeders/runner.d.ts";
-  }
+	if (indexModules.has(subpath)) {
+		return `./dist/core/${subpath}/index.d.ts`;
+	}
 
-  if (subpath === "database/migrations") {
-    return "./dist/core/database/migrations/runner.d.ts";
-  }
+	if (subpath === 'database/seeders') {
+		return './dist/core/database/seeders/runner.d.ts';
+	}
 
-  if (subpath === "database/migrations/types") {
-    return "./dist/core/database/migrations/types.d.ts";
-  }
+	if (subpath === 'database/migrations') {
+		return './dist/core/database/migrations/runner.d.ts';
+	}
 
-  if (subpath === "database/seeders/types") {
-    return "./dist/core/database/seeders/types.d.ts";
-  }
+	if (subpath === 'database/migrations/types') {
+		return './dist/core/database/migrations/types.d.ts';
+	}
 
-  return `./dist/core/${subpath}.d.ts`;
+	if (subpath === 'database/seeders/types') {
+		return './dist/core/database/seeders/types.d.ts';
+	}
+
+	return `./dist/core/${subpath}.d.ts`;
 }
 
 function resolveBootstrapTypesPath(subpath: string): string {
-  if (subpath === "providers") {
-    return "./dist/bootstrap/providers/index.d.ts";
-  }
+	if (subpath === 'providers') {
+		return './dist/bootstrap/providers/index.d.ts';
+	}
 
-  return `./dist/bootstrap/${subpath}.d.ts`;
+	return `./dist/bootstrap/${subpath}.d.ts`;
 }
 
 function buildExports(
-  packageName: "core" | "bootstrap",
-  subpaths: readonly string[],
+	packageName: 'core' | 'bootstrap',
+	subpaths: readonly string[],
 ): Record<string, { types: string; import: string; default: string }> {
-  const srcPrefix = packageName === "core" ? "core" : "bootstrap";
-  const exports: Record<string, { types: string; import: string; default: string }> = {
-    ".": {
-      types: `./dist/${srcPrefix === "core" ? "framework/public-api" : "bootstrap/public-api"}.d.ts`,
-      import: "./dist/index.js",
-      default: "./dist/index.js",
-    },
-  };
+	const srcPrefix = packageName === 'core' ? 'core' : 'bootstrap';
 
-  for (const subpath of subpaths) {
-    exports[`./${subpath}`] = {
-      types:
-        packageName === "core" ? resolveCoreTypesPath(subpath) : resolveBootstrapTypesPath(subpath),
-      import: `./dist/entries/${subpath}.js`,
-      default: `./dist/entries/${subpath}.js`,
-    };
-  }
+	const exports: Record<string, { types: string; import: string; default: string }> = {
+		'.': {
+			types: `./dist/${srcPrefix === 'core' ? 'framework/public-api' : 'bootstrap/public-api'}.d.ts`,
+			import: './dist/index.js',
+			default: './dist/index.js',
+		},
+	};
 
-  return exports;
+	for (const subpath of subpaths) {
+		exports[`./${subpath}`] = {
+			types:
+				packageName === 'core' ? resolveCoreTypesPath(subpath) : resolveBootstrapTypesPath(subpath),
+			import: `./dist/entries/${subpath}.js`,
+			default: `./dist/entries/${subpath}.js`,
+		};
+	}
+
+	return exports;
 }
 
 async function writeEntryFiles(
-  packageDir: string,
-  srcLayer: "core" | "bootstrap",
-  subpaths: readonly string[],
+	packageDir: string,
+	srcLayer: 'core' | 'bootstrap',
+	subpaths: readonly string[],
 ): Promise<string[]> {
-  const entriesDir = join(packageDir, "entries");
-  await mkdir(entriesDir, { recursive: true });
-  const entryFiles: string[] = [];
+	const entriesDir = join(packageDir, 'entries');
 
-  for (const subpath of subpaths) {
-    if (srcLayer === "core" && CORE_SHARED_SUBPATH_SET.has(subpath)) {
-      if (
-        ["database/baseRepository", "database/model", "database/repositoryQuery"].includes(subpath)
-      )
-        await rm(join(entriesDir, `${subpath}.ts`), { force: true });
-      continue;
-    }
+	await mkdir(entriesDir, { recursive: true });
+	const entryFiles: string[] = [];
 
-    if (srcLayer === "bootstrap" && subpath === "application") {
-      await rm(join(entriesDir, "application.ts"), { force: true });
-      continue;
-    }
-    const entryPath = join(entriesDir, `${subpath}.ts`);
-    await mkdir(dirname(entryPath), { recursive: true });
+	for (const subpath of subpaths) {
+		if (srcLayer === 'core' && CORE_SHARED_SUBPATH_SET.has(subpath)) {
+			if (
+				['database/baseRepository', 'database/model', 'database/repositoryQuery'].includes(subpath)
+			) {
+				await rm(join(entriesDir, `${subpath}.ts`), { force: true });
+			}
 
-    const indexModules = new Set([
-      "database",
-      "database/schema",
-      "events",
-      "events/outbox",
-      "http",
-      "notifications",
-      "queue",
-      "view",
-      "providers",
-      "pagination",
-    ]);
+			continue;
+		}
 
-    const sourcePath = indexModules.has(subpath)
-      ? `${subpath}/index`
-      : subpath === "database/seeders"
-        ? "database/seeders/runner"
-        : subpath === "database/migrations"
-          ? "database/migrations/runner"
-          : subpath;
+		if (srcLayer === 'bootstrap' && subpath === 'application') {
+			await rm(join(entriesDir, 'application.ts'), { force: true });
+			continue;
+		}
 
-    const srcPrefix = srcLayer === "core" ? "core" : "bootstrap";
-    const sourceFile = join(ROOT, "src", srcPrefix, `${sourcePath}.ts`);
-    let importPath = relative(dirname(entryPath), sourceFile).replace(/\\/g, "/");
+		const entryPath = join(entriesDir, `${subpath}.ts`);
 
-    if (!importPath.startsWith(".")) {
-      importPath = `./${importPath}`;
-    }
+		await mkdir(dirname(entryPath), { recursive: true });
 
-    await writeFile(
-      entryPath,
-      renderSubpathEntry(await readFile(sourceFile, "utf8"), importPath),
-      "utf8",
-    );
-    entryFiles.push(entryPath);
-  }
+		const indexModules = new Set([
+			'database',
+			'database/schema',
+			'events',
+			'events/outbox',
+			'http',
+			'notifications',
+			'queue',
+			'view',
+			'providers',
+			'pagination',
+		]);
 
-  return entryFiles;
+		const sourcePath = indexModules.has(subpath)
+			? `${subpath}/index`
+			: subpath === 'database/seeders'
+				? 'database/seeders/runner'
+				: subpath === 'database/migrations'
+					? 'database/migrations/runner'
+					: subpath;
+
+		const srcPrefix = srcLayer === 'core' ? 'core' : 'bootstrap';
+
+		const sourceFile = join(ROOT, 'src', srcPrefix, `${sourcePath}.ts`);
+
+		let importPath = relative(dirname(entryPath), sourceFile).replace(/\\/g, '/');
+
+		if (!importPath.startsWith('.')) {
+			importPath = `./${importPath}`;
+		}
+
+		await writeFile(
+			entryPath,
+			renderSubpathEntry(await readFile(sourceFile, 'utf8'), importPath),
+			'utf8',
+		);
+		entryFiles.push(entryPath);
+	}
+
+	return entryFiles;
 }
 
 async function updatePackageJson(
-  packageDir: string,
-  exports: Record<string, { types: string; import: string; default: string }>,
-  buildEntries: string[],
+	packageDir: string,
+	exports: Record<string, { types: string; import: string; default: string }>,
+	buildEntries: string[],
 ): Promise<void> {
-  const packageJsonPath = join(packageDir, "package.json");
-  const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as {
-    exports: Record<string, unknown>;
-    imports?: Record<string, unknown>;
-    scripts: Record<string, string>;
-  };
+	const packageJsonPath = join(packageDir, 'package.json');
 
-  packageJson.exports = exports;
+	const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8')) as {
+		exports: Record<string, unknown>;
+		imports?: Record<string, unknown>;
+		scripts: Record<string, string>;
+	};
 
-  const relativeEntries = buildEntries.map((entry) => relative(packageDir, entry)).join(" ");
-  const optionalPeerExternals = packageDir.includes("bootstrap")
-    ? " --external @getstrata/core"
-    : " --external @node-saml/node-saml";
-  const telemetryExternals = packageDir.includes("strata-core")
-    ? " --external '@opentelemetry/*'"
-    : "";
-  // Unlike subpath bundles, the core root must retain every legacy shared owner.
-  // Externalizing the package root also externalizes all subpaths in Bun.
-  const standaloneExternal = CORE_STANDALONE_SUBPATHS.map(
-    (subpath) => ` --external @getstrata/core/${subpath}`,
-  ).join("");
-  const privateExternal = packageDir.includes("strata-core")
-    ? " --external '#strata-orm-internal' --external '#strata-orm-runtime' --external '#strata-test-state' --external '#strata-mysql-native'"
-    : " --external '#strata-http-route' --external '#strata-job-discovery'";
-  packageJson.scripts["build:bundle"] =
-    `bun build index.ts --outdir dist --target bun --external bun${telemetryExternals} --external eta --external mysql2${optionalPeerExternals}${standaloneExternal}${privateExternal}`;
-  packageJson.scripts["build:shims"] = packageDir.includes("strata-core")
-    ? "bun ../../scripts/write-core-shared-shims.ts"
-    : "bun ../../scripts/write-bootstrap-shared-shims.ts";
-  const coreExternal = packageDir.includes("strata-core")
-    ? ` ${coreSubpathExternalFlags(CORE_SUBPATHS)}`
-    : "";
-  const bootstrapExternal = packageDir.includes("bootstrap")
-    ? ` ${bootstrapSubpathExternalFlags(BOOTSTRAP_SUBPATHS, CORE_SUBPATHS)}`
-    : "";
-  packageJson.scripts["build:subpaths"] = relativeEntries
-    ? `bun build ${relativeEntries} --outdir dist --root . --target bun --external bun${telemetryExternals} --external eta --external mysql2${packageDir.includes("strata-core") ? " --external @node-saml/node-saml" : ""}${coreExternal}${bootstrapExternal}${privateExternal}`
-    : "true";
-  packageJson.scripts["build:types"] = packageDir.includes("bootstrap")
-    ? "tsc -p tsconfig.types.json && bun ../../scripts/prune-bootstrap-dist-types.ts"
-    : "tsc -p tsconfig.types.json";
-  if (packageDir.includes("strata-core")) {
-    // Package-private identity shared by root and subpath bundles, never exported.
-    packageJson.imports = {
-      ...packageJson.imports,
-      "#strata-test-state": {
-        types: "./dist/core/testingState.d.ts",
-        default: "./dist/internal/testingState.js",
-      },
-      "#strata-mysql-native": {
-        types: "./dist/core/database/mysqlNative.d.ts",
-        default: "./dist/internal/mysqlNative.js",
-      },
-      "#strata-orm-internal": {
-        types: "./dist/core/database/ormInternal.d.ts",
-        default: "./dist/internal/ormInternal.js",
-      },
-      "#strata-orm-runtime": {
-        types: "./dist/core/database/ormRuntime.d.ts",
-        default: "./dist/internal/ormRuntime.js",
-      },
-    };
-    packageJson.scripts["build:internal"] =
-      `bun build internal/testingState.ts internal/mysqlNative.ts internal/ormInternal.ts internal/ormRuntime.ts --outdir dist/internal --target bun --external mysql2${coreExternal}${privateExternal}`;
-    packageJson.scripts["build:verify-standalone"] =
-      "bun ../../scripts/verify-core-standalone-subpaths.ts";
-  } else {
-    packageJson.imports = {
-      ...packageJson.imports,
-      "#strata-job-discovery": {
-        types: "./dist/bootstrap/jobDiscoveryState.d.ts",
-        default: "./dist/internal/jobDiscoveryState.js",
-      },
-      "#strata-http-route": {
-        types: "./dist/bootstrap/ownedHttpRoute.d.ts",
-        default: "./dist/internal/ownedHttpRoute.js",
-      },
-    };
-    packageJson.scripts["build:internal"] =
-      `bun build internal/ownedHttpRoute.ts internal/jobDiscoveryState.ts --outdir dist/internal --target bun${bootstrapExternal}${privateExternal}`;
-  }
-  // Clear dist so removed subpaths do not linger in the tarball.
-  packageJson.scripts["build"] =
-    "rm -rf dist && bun run build:internal && bun run build:bundle && bun run build:shims && bun run build:subpaths && bun run build:types";
+	packageJson.exports = exports;
 
-  await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
+	const relativeEntries = buildEntries.map((entry) => relative(packageDir, entry)).join(' ');
+
+	const optionalPeerExternals = packageDir.includes('bootstrap')
+		? ' --external @getstrata/core'
+		: ' --external @node-saml/node-saml';
+
+	const telemetryExternals = packageDir.includes('strata-core')
+		? " --external '@opentelemetry/*'"
+		: '';
+
+	// Unlike subpath bundles, the core root must retain every legacy shared owner.
+	// Externalizing the package root also externalizes all subpaths in Bun.
+	const standaloneExternal = CORE_STANDALONE_SUBPATHS.map(
+		(subpath) => ` --external @getstrata/core/${subpath}`,
+	).join('');
+
+	const privateExternal = packageDir.includes('strata-core')
+		? " --external '#strata-orm-internal' --external '#strata-orm-runtime' --external '#strata-test-state' --external '#strata-mysql-native'"
+		: " --external '#strata-http-route' --external '#strata-job-discovery'";
+
+	packageJson.scripts['build:bundle'] =
+		`bun build index.ts --outdir dist --target bun --external bun${telemetryExternals} --external eta --external mysql2${optionalPeerExternals}${standaloneExternal}${privateExternal}`;
+	packageJson.scripts['build:shims'] = packageDir.includes('strata-core')
+		? 'bun ../../scripts/write-core-shared-shims.ts'
+		: 'bun ../../scripts/write-bootstrap-shared-shims.ts';
+	const coreExternal = packageDir.includes('strata-core')
+		? ` ${coreSubpathExternalFlags(CORE_SUBPATHS)}`
+		: '';
+
+	const bootstrapExternal = packageDir.includes('bootstrap')
+		? ` ${bootstrapSubpathExternalFlags(BOOTSTRAP_SUBPATHS, CORE_SUBPATHS)}`
+		: '';
+
+	packageJson.scripts['build:subpaths'] = relativeEntries
+		? `bun build ${relativeEntries} --outdir dist --root . --target bun --external bun${telemetryExternals} --external eta --external mysql2${packageDir.includes('strata-core') ? ' --external @node-saml/node-saml' : ''}${coreExternal}${bootstrapExternal}${privateExternal}`
+		: 'true';
+	packageJson.scripts['build:types'] = packageDir.includes('bootstrap')
+		? 'tsc -p tsconfig.types.json && bun ../../scripts/prune-bootstrap-dist-types.ts'
+		: 'tsc -p tsconfig.types.json';
+
+	if (packageDir.includes('strata-core')) {
+		// Package-private identity shared by root and subpath bundles, never exported.
+		packageJson.imports = {
+			...packageJson.imports,
+			'#strata-test-state': {
+				types: './dist/core/testingState.d.ts',
+				default: './dist/internal/testingState.js',
+			},
+			'#strata-mysql-native': {
+				types: './dist/core/database/mysqlNative.d.ts',
+				default: './dist/internal/mysqlNative.js',
+			},
+			'#strata-orm-internal': {
+				types: './dist/core/database/ormInternal.d.ts',
+				default: './dist/internal/ormInternal.js',
+			},
+			'#strata-orm-runtime': {
+				types: './dist/core/database/ormRuntime.d.ts',
+				default: './dist/internal/ormRuntime.js',
+			},
+		};
+		packageJson.scripts['build:internal'] =
+			`bun build internal/testingState.ts internal/mysqlNative.ts internal/ormInternal.ts internal/ormRuntime.ts --outdir dist/internal --target bun --external mysql2${coreExternal}${privateExternal}`;
+		packageJson.scripts['build:verify-standalone'] =
+			'bun ../../scripts/verify-core-standalone-subpaths.ts';
+	} else {
+		packageJson.imports = {
+			...packageJson.imports,
+			'#strata-job-discovery': {
+				types: './dist/bootstrap/jobDiscoveryState.d.ts',
+				default: './dist/internal/jobDiscoveryState.js',
+			},
+			'#strata-http-route': {
+				types: './dist/bootstrap/ownedHttpRoute.d.ts',
+				default: './dist/internal/ownedHttpRoute.js',
+			},
+		};
+		packageJson.scripts['build:internal'] =
+			`bun build internal/ownedHttpRoute.ts internal/jobDiscoveryState.ts --outdir dist/internal --target bun${bootstrapExternal}${privateExternal}`;
+	}
+
+	// Clear dist so removed subpaths do not linger in the tarball.
+	packageJson.scripts['build'] =
+		'rm -rf dist && bun run build:internal && bun run build:bundle && bun run build:shims && bun run build:subpaths && bun run build:types';
+
+	await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
 }
 
 async function main(): Promise<void> {
-  const corePackageDir = join(ROOT, "packages/strata-core");
-  const bootstrapPackageDir = join(ROOT, "packages/strata-bootstrap");
+	const corePackageDir = join(ROOT, 'packages/strata-core');
 
-  const coreEntries = await writeEntryFiles(corePackageDir, "core", CORE_SUBPATHS);
-  const bootstrapEntries = await writeEntryFiles(
-    bootstrapPackageDir,
-    "bootstrap",
-    BOOTSTRAP_SUBPATHS,
-  );
+	const bootstrapPackageDir = join(ROOT, 'packages/strata-bootstrap');
 
-  await updatePackageJson(corePackageDir, buildExports("core", CORE_SUBPATHS), coreEntries);
-  await updatePackageJson(
-    bootstrapPackageDir,
-    buildExports("bootstrap", BOOTSTRAP_SUBPATHS),
-    bootstrapEntries,
-  );
+	const coreEntries = await writeEntryFiles(corePackageDir, 'core', CORE_SUBPATHS);
 
-  console.log(
-    `Synced ${CORE_SUBPATHS.length} @getstrata/core subpaths and ${BOOTSTRAP_SUBPATHS.length} bootstrap subpaths.`,
-  );
+	const bootstrapEntries = await writeEntryFiles(
+		bootstrapPackageDir,
+		'bootstrap',
+		BOOTSTRAP_SUBPATHS,
+	);
+
+	await updatePackageJson(corePackageDir, buildExports('core', CORE_SUBPATHS), coreEntries);
+	await updatePackageJson(
+		bootstrapPackageDir,
+		buildExports('bootstrap', BOOTSTRAP_SUBPATHS),
+		bootstrapEntries,
+	);
+
+	console.log(
+		`Synced ${CORE_SUBPATHS.length} @getstrata/core subpaths and ${BOOTSTRAP_SUBPATHS.length} bootstrap subpaths.`,
+	);
 }
 
 await main();

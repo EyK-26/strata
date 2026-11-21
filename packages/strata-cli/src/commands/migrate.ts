@@ -1,16 +1,18 @@
-import { pathToFileURL } from "node:url";
-import { isProductionEnv } from "@getstrata/core/runtime/appEnv";
-import type { StrataAppConfig } from "../types.ts";
+import { pathToFileURL } from 'node:url';
+
+import { isProductionEnv } from '@getstrata/core/runtime/appEnv';
+
+import type { StrataAppConfig } from '../types.ts';
 
 type MigrateModule = {
-  migrate?: (environment?: Readonly<Record<string, string | undefined>>) => Promise<void> | void;
-  seed?: (environment?: Readonly<Record<string, string | undefined>>) => Promise<void> | void;
-  fresh?: (environment?: Readonly<Record<string, string | undefined>>) => Promise<void> | void;
-  close?: () => Promise<void> | void;
+	migrate?: (environment?: Readonly<Record<string, string | undefined>>) => Promise<void> | void;
+	seed?: (environment?: Readonly<Record<string, string | undefined>>) => Promise<void> | void;
+	fresh?: (environment?: Readonly<Record<string, string | undefined>>) => Promise<void> | void;
+	close?: () => Promise<void> | void;
 };
 
 async function importEntry(path: string): Promise<MigrateModule> {
-  return (await import(pathToFileURL(path).href)) as MigrateModule;
+	return (await import(pathToFileURL(path).href)) as MigrateModule;
 }
 
 /**
@@ -18,75 +20,93 @@ async function importEntry(path: string): Promise<MigrateModule> {
  * finished its work would otherwise hang until the process is killed.
  */
 async function closeEntry(entry: MigrateModule): Promise<void> {
-  if (typeof entry.close === "function") {
-    await entry.close();
-  }
+	if (typeof entry.close === 'function') {
+		await entry.close();
+	}
 }
 
 async function migrateCommand(app: StrataAppConfig, args: string[]): Promise<void> {
-  const environment = Object.freeze({ ...process.env });
-  if (!app.migrate) {
-    throw new Error(
-      "No migrate entry found. Add src/db/migrate.ts or set migrate in strata.config.ts.",
-    );
-  }
+	const environment = Object.freeze({ ...process.env });
 
-  const entry = await importEntry(app.migrate);
-  if (typeof entry.migrate !== "function") {
-    throw new Error(`${app.migrate} must export a migrate() function.`);
-  }
-  if (args.includes("--seed") && typeof entry.seed !== "function") {
-    throw new Error("--seed requires a seed() export on the migration entry.");
-  }
+	if (!app.migrate) {
+		throw new Error(
+			'No migrate entry found. Add src/db/migrate.ts or set migrate in strata.config.ts.',
+		);
+	}
 
-  try {
-    await entry.migrate(environment);
+	const entry = await importEntry(app.migrate);
 
-    if (args.includes("--seed") && typeof entry.seed === "function") {
-      await entry.seed(environment);
-    }
-  } finally {
-    await closeEntry(entry);
-  }
-  console.log("Migrations applied.");
+	if (typeof entry.migrate !== 'function') {
+		throw new Error(`${app.migrate} must export a migrate() function.`);
+	}
+
+	if (args.includes('--seed') && typeof entry.seed !== 'function') {
+		throw new Error('--seed requires a seed() export on the migration entry.');
+	}
+
+	try {
+		await entry.migrate(environment);
+
+		if (args.includes('--seed') && typeof entry.seed === 'function') {
+			await entry.seed(environment);
+		}
+	} finally {
+		await closeEntry(entry);
+	}
+	console.log('Migrations applied.');
 }
 
 async function migrateFreshCommand(app: StrataAppConfig, args: string[]): Promise<void> {
-  const environment = Object.freeze({ ...process.env });
-  if (args.some((arg) => arg !== "--seed")) throw new Error("migrate:fresh supports only --seed.");
-  if (isProductionEnv(environment))
-    throw new Error("migrate:fresh is only available in development/test environments.");
-  if (app.fresh) {
-    const entry = await importEntry(app.fresh);
-    if (typeof entry.fresh !== "function") {
-      throw new Error(`${app.fresh} must export a fresh() function.`);
-    }
-    const seedEntry = args.includes("--seed")
-      ? typeof entry.seed === "function"
-        ? entry
-        : app.migrate
-          ? await importEntry(app.migrate)
-          : undefined
-      : undefined;
-    if (args.includes("--seed") && typeof seedEntry?.seed !== "function") {
-      throw new Error("--seed requires a seed() export on the migration or fresh entry.");
-    }
-    try {
-      await entry.fresh(environment);
-      if (seedEntry?.seed) {
-        await seedEntry.seed(environment);
-      }
-    } finally {
-      await closeEntry(entry);
-      if (seedEntry && seedEntry !== entry) await closeEntry(seedEntry);
-    }
-    console.log("Database reset and migrated.");
-    return;
-  }
+	const environment = Object.freeze({ ...process.env });
 
-  throw new Error(
-    "No migrate:fresh entry found. Add src/db/fresh.ts or register a migrate:fresh command.",
-  );
+	if (args.some((arg) => arg !== '--seed')) {
+		throw new Error('migrate:fresh supports only --seed.');
+	}
+
+	if (isProductionEnv(environment)) {
+		throw new Error('migrate:fresh is only available in development/test environments.');
+	}
+
+	if (app.fresh) {
+		const entry = await importEntry(app.fresh);
+
+		if (typeof entry.fresh !== 'function') {
+			throw new Error(`${app.fresh} must export a fresh() function.`);
+		}
+
+		const seedEntry = args.includes('--seed')
+			? typeof entry.seed === 'function'
+				? entry
+				: app.migrate
+					? await importEntry(app.migrate)
+					: undefined
+			: undefined;
+
+		if (args.includes('--seed') && typeof seedEntry?.seed !== 'function') {
+			throw new Error('--seed requires a seed() export on the migration or fresh entry.');
+		}
+
+		try {
+			await entry.fresh(environment);
+
+			if (seedEntry?.seed) {
+				await seedEntry.seed(environment);
+			}
+		} finally {
+			await closeEntry(entry);
+
+			if (seedEntry && seedEntry !== entry) {
+				await closeEntry(seedEntry);
+			}
+		}
+		console.log('Database reset and migrated.');
+
+		return;
+	}
+
+	throw new Error(
+		'No migrate:fresh entry found. Add src/db/fresh.ts or register a migrate:fresh command.',
+	);
 }
 
 export { migrateCommand, migrateFreshCommand };

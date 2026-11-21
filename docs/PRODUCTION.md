@@ -42,19 +42,19 @@ APP_ENV=production bunx strata secrets:check
 
 The checks reject generated `change-me` placeholders, development header authentication, published test tokens, and unsafe enabled-feature settings. They are configuration checks, not a substitute for testing the deployed service.
 
-| Configuration | Required use |
-| --- | --- |
-| `DATABASE_URL` | Runtime database; `APP_DATABASE_URL`, when set, overrides it for application execution. |
-| `SESSION_SECRET` | Cookie authentication; use at least 32 characters. HTML modes enforce that minimum at production startup. |
-| `SIGNED_URL_SECRET` | Dedicated signing secret for generated account flows without cookie authentication. Follow the selected app's `.env.example`. |
-| `TOKEN_HASH_PEPPER`, `API_TOKEN_DEFAULT_EXPIRY_DAYS` | Opaque API token authentication; choose and enforce a positive expiry. |
-| `JWT_SECRET` | JWT authentication; configure a private signing secret for the selected auth stack. |
-| `OAUTH_STATE_SECRET` | OAuth, OIDC, or SAML; configure provider credentials and callback URLs too. |
-| `KMS_ENCRYPTION_KEY` or `KMS_ENCRYPTION_KEYRING` | MFA or field encryption; preserve keys needed to read existing data. |
-| `SCIM_BEARER_TOKEN` | SCIM; configure per-tenant mappings with `SCIM_TENANT_TOKENS` when needed. |
-| `STRIPE_WEBHOOK_SECRET` | Enabled billing webhooks. |
-| `METRICS_TOKEN` | Production access to `/metrics`. |
-| `REDIS_URL` | Selected Redis cache, queue, or shared throttles. |
+| Configuration                                        | Required use                                                                                                                  |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                       | Runtime database; `APP_DATABASE_URL`, when set, overrides it for application execution.                                       |
+| `SESSION_SECRET`                                     | Cookie authentication; use at least 32 characters. HTML modes enforce that minimum at production startup.                     |
+| `SIGNED_URL_SECRET`                                  | Dedicated signing secret for generated account flows without cookie authentication. Follow the selected app's `.env.example`. |
+| `TOKEN_HASH_PEPPER`, `API_TOKEN_DEFAULT_EXPIRY_DAYS` | Opaque API token authentication; choose and enforce a positive expiry.                                                        |
+| `JWT_SECRET`                                         | JWT authentication; configure a private signing secret for the selected auth stack.                                           |
+| `OAUTH_STATE_SECRET`                                 | OAuth, OIDC, or SAML; configure provider credentials and callback URLs too.                                                   |
+| `KMS_ENCRYPTION_KEY` or `KMS_ENCRYPTION_KEYRING`     | MFA or field encryption; preserve keys needed to read existing data.                                                          |
+| `SCIM_BEARER_TOKEN`                                  | SCIM; configure per-tenant mappings with `SCIM_TENANT_TOKENS` when needed.                                                    |
+| `STRIPE_WEBHOOK_SECRET`                              | Enabled billing webhooks.                                                                                                     |
+| `METRICS_TOKEN`                                      | Production access to `/metrics`.                                                                                              |
+| `REDIS_URL`                                          | Selected Redis cache, queue, or shared throttles.                                                                             |
 
 Explicit encryption keyrings are validated even when encryption features are disabled. Plan reader compatibility before rotating keys, retain required old keys, and test restoration with the retained key material. SAML production responses must be signed. Unknown upload MIME types are rejected in production; retain the allowlist and inspect accepted content as needed. See [authentication](AUTH.md) and [integrations](INTEGRATIONS.md) for feature-specific configuration.
 

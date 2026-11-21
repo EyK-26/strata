@@ -1,1 +1,1 @@
-export * from "../../../../src/core/auth/pendingMfaCookie.ts";
+export * from '../../../../src/core/auth/pendingMfaCookie.ts';

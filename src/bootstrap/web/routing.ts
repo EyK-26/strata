@@ -1,25 +1,30 @@
-import { requestPrefersJson } from "@getstrata/core/http/contentNegotiation";
-import type { RouteHandler } from "@getstrata/core/http/middleware";
-import type { RouteRequest } from "@getstrata/core/http/route";
-import type { ComposedRouteHandler } from "#strata-http-route";
-import { identityModes, scimMiddleware } from "#strata-http-route";
-import type { AppDependencies } from "../contracts.ts";
+import { requestPrefersJson } from '@getstrata/core/http/contentNegotiation';
+import type { RouteHandler } from '@getstrata/core/http/middleware';
+import type { RouteRequest } from '@getstrata/core/http/route';
+
+import type { ComposedRouteHandler } from '#strata-http-route';
+import { identityModes, scimMiddleware } from '#strata-http-route';
+
+import type { AppDependencies } from '../contracts.ts';
 import {
-  type RouteModelBindingPorts,
-  securedBindRouteModelByKey,
-} from "../http/securedRouteModelBinding.ts";
-import type { HttpKernel } from "../httpKernel.ts";
-import { createHttpKernel } from "../httpKernel.ts";
-import type { BusinessRequestPorts, BusinessRouteHandler } from "../persistenceContracts";
+	type RouteModelBindingPorts,
+	securedBindRouteModelByKey,
+} from '../http/securedRouteModelBinding.ts';
+import type { HttpKernel } from '../httpKernel.ts';
+import { createHttpKernel } from '../httpKernel.ts';
+import type { BusinessRequestPorts, BusinessRouteHandler } from '../persistenceContracts';
 
 /** Read Bun native `:param` values from a route handler request. */
 export function routeParams(request: Request): Record<string, string> {
-  const raw = (request as Request & { params?: Record<string, string> }).params;
-  if (!raw || typeof raw !== "object") return {};
+	const raw = (request as Request & { params?: Record<string, string> }).params;
 
-  // Bun owns decoding. Create own data properties so names such as __proto__
-  // cannot invoke Object.prototype setters or disappear from the copied map.
-  return Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, String(value)]));
+	if (!raw || typeof raw !== 'object') {
+		return {};
+	}
+
+	// Bun owns decoding. Create own data properties so names such as __proto__
+	// cannot invoke Object.prototype setters or disappear from the copied map.
+	return Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, String(value)]));
 }
 
 /**
@@ -27,16 +32,18 @@ export function routeParams(request: Request): Record<string, string> {
  * Mutates the request in place so instanceof Request and Bun internals stay valid.
  */
 export function toRouteRequest<TParams extends Record<string, string>>(
-  request: Request,
+	request: Request,
 ): RouteRequest<TParams> {
-  const params = routeParams(request) as TParams;
-  Object.defineProperty(request, "params", {
-    value: params,
-    enumerable: true,
-    configurable: true,
-    writable: true,
-  });
-  return request as RouteRequest<TParams>;
+	const params = routeParams(request) as TParams;
+
+	Object.defineProperty(request, 'params', {
+		value: params,
+		enumerable: true,
+		configurable: true,
+		writable: true,
+	});
+
+	return request as RouteRequest<TParams>;
 }
 
 /**
@@ -46,66 +53,68 @@ export function toRouteRequest<TParams extends Record<string, string>>(
  * and GET ETags are skipped for HTML / composite objects unless `etag: true`.
  */
 export function wrapSecuredRouteModelByKey<
-  TParams extends Record<string, string>,
-  TModel,
-  TParam extends keyof TParams & string,
+	TParams extends Record<string, string>,
+	TModel,
+	TParam extends keyof TParams & string,
 >(
-  param: TParam,
-  resolver: (key: string, request: RouteRequest<TParams>) => Promise<TModel>,
-  authorization: {
-    resource: string;
-    action: "view" | "create" | "update" | "delete";
-    etag?: boolean;
-  },
-  handler: (request: RouteRequest<TParams>, model: TModel) => Response | Promise<Response>,
-  ports: RouteModelBindingPorts,
+	param: TParam,
+	resolver: (key: string, request: RouteRequest<TParams>) => Promise<TModel>,
+	authorization: {
+		resource: string;
+		action: 'view' | 'create' | 'update' | 'delete';
+		etag?: boolean;
+	},
+	handler: (request: RouteRequest<TParams>, model: TModel) => Response | Promise<Response>,
+	ports: RouteModelBindingPorts,
 ): RouteHandler {
-  const bound = securedBindRouteModelByKey(param, resolver, authorization, handler, ports);
+	const bound = securedBindRouteModelByKey(param, resolver, authorization, handler, ports);
 
-  return async (request) => bound(toRouteRequest<TParams>(request));
+	return async (request) => bound(toRouteRequest<TParams>(request));
 }
 
 /** Web group (CSRF + flash + HTML errors) plus login throttle. Do not wrap with wrapWeb again. */
 export function wrapWebLogin<TRequest extends Request = Request>(
-  kernel: HttpKernel,
-  handler: BusinessRouteHandler<TRequest>,
-  onThrottled: (request: TRequest, ports: BusinessRequestPorts) => Response | Promise<Response>,
+	kernel: HttpKernel,
+	handler: BusinessRouteHandler<TRequest>,
+	onThrottled: (request: TRequest, ports: BusinessRequestPorts) => Response | Promise<Response>,
 ): ComposedRouteHandler<TRequest> {
-  return kernel.wrapWeb(wrapWebThrottle(kernel, "login", handler, onThrottled));
+	return kernel.wrapWeb(wrapWebThrottle(kernel, 'login', handler, onThrottled));
 }
 
 /** Web group (CSRF + flash + HTML errors) plus register throttle. Do not wrap with wrapWeb again. */
 export function wrapWebRegister<TRequest extends Request = Request>(
-  kernel: HttpKernel,
-  handler: BusinessRouteHandler<TRequest>,
-  onThrottled: (request: TRequest, ports: BusinessRequestPorts) => Response | Promise<Response>,
+	kernel: HttpKernel,
+	handler: BusinessRouteHandler<TRequest>,
+	onThrottled: (request: TRequest, ports: BusinessRequestPorts) => Response | Promise<Response>,
 ): ComposedRouteHandler<TRequest> {
-  return kernel.wrapWeb(wrapWebThrottle(kernel, "register", handler, onThrottled));
+	return kernel.wrapWeb(wrapWebThrottle(kernel, 'register', handler, onThrottled));
 }
 
 function wrapWebThrottle<TRequest extends Request = Request>(
-  kernel: HttpKernel,
-  scope: "login" | "register",
-  handler: BusinessRouteHandler<TRequest>,
-  onThrottled: (request: TRequest, ports: BusinessRequestPorts) => Response | Promise<Response>,
+	kernel: HttpKernel,
+	scope: 'login' | 'register',
+	handler: BusinessRouteHandler<TRequest>,
+	onThrottled: (request: TRequest, ports: BusinessRequestPorts) => Response | Promise<Response>,
 ): BusinessRouteHandler<TRequest> {
-  const throttled = scope === "login" ? kernel.wrapLogin(handler) : kernel.wrapRegister(handler);
+	const throttled = scope === 'login' ? kernel.wrapLogin(handler) : kernel.wrapRegister(handler);
 
-  return kernel.composed(
-    async (request, ports) => {
-      const response = await throttled(request, ports);
-      if (response.status === 429 && !requestPrefersJson(request)) {
-        return onThrottled(request, ports);
-      }
-      return response;
-    },
-    "web",
-    identityModes(handler),
-    scimMiddleware(handler),
-  );
+	return kernel.composed(
+		async (request, ports) => {
+			const response = await throttled(request, ports);
+
+			if (response.status === 429 && !requestPrefersJson(request)) {
+				return onThrottled(request, ports);
+			}
+
+			return response;
+		},
+		'web',
+		identityModes(handler),
+		scimMiddleware(handler),
+	);
 }
 
 /** Convenience alias for `createHttpKernel`. */
 export function createRouteKernel(dependencies: AppDependencies): HttpKernel {
-  return createHttpKernel(dependencies);
+	return createHttpKernel(dependencies);
 }

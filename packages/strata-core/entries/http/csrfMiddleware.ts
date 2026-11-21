@@ -1,1 +1,1 @@
-export * from "../../../../src/core/http/csrfMiddleware.ts";
+export * from '../../../../src/core/http/csrfMiddleware.ts';

@@ -1,168 +1,188 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import {
-  CORE_AUTH_TOKEN,
-  CORE_POLICY_GATE_TOKEN,
-  CORE_QUEUE_TOKEN,
-} from "@getstrata/bootstrap/config";
-import type { AppDependencies, AppRouteMap } from "@getstrata/bootstrap/contracts";
-import { ServiceContainer } from "@getstrata/bootstrap/contracts";
-import { createWebRoutes, mergeWebRoutes } from "@getstrata/bootstrap/createWebRoutes";
-import { getRouteInventory } from "@getstrata/bootstrap/routePlan";
-import { AuthManager, GuestGuard } from "@getstrata/core/auth/guard";
-import { PolicyGate } from "@getstrata/core/auth/policy";
-import { CacheRepository } from "@getstrata/core/cache/repository";
-import { SimpleCache } from "@getstrata/core/cache/simpleCache";
-import { SimpleCacheStore } from "@getstrata/core/cache/simpleCacheStore";
-import { CORE_ABILITY_CHECKER_TOKEN } from "@getstrata/core/contracts/serviceTokens";
-import { SyncQueue } from "@getstrata/core/queue";
-import { createRoutes } from "../../src/bootstrap/createRoutes";
-import { guestGuardOptions } from "../helpers/devAuthHeaders";
-import { restoreEnvVar } from "../helpers/restoreEnv";
-import { createMockDependencies } from "./testHelpers";
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
-const PUBLIC_ASSETS_DIR = join(process.cwd(), "public/assets");
+import {
+	CORE_AUTH_TOKEN,
+	CORE_POLICY_GATE_TOKEN,
+	CORE_QUEUE_TOKEN,
+} from '@getstrata/bootstrap/config';
+import type { AppDependencies, AppRouteMap } from '@getstrata/bootstrap/contracts';
+import { ServiceContainer } from '@getstrata/bootstrap/contracts';
+import { createWebRoutes, mergeWebRoutes } from '@getstrata/bootstrap/createWebRoutes';
+import { getRouteInventory } from '@getstrata/bootstrap/routePlan';
+import { AuthManager, GuestGuard } from '@getstrata/core/auth/guard';
+import { PolicyGate } from '@getstrata/core/auth/policy';
+import { CacheRepository } from '@getstrata/core/cache/repository';
+import { SimpleCache } from '@getstrata/core/cache/simpleCache';
+import { SimpleCacheStore } from '@getstrata/core/cache/simpleCacheStore';
+import { CORE_ABILITY_CHECKER_TOKEN } from '@getstrata/core/contracts/serviceTokens';
+import { SyncQueue } from '@getstrata/core/queue';
+
+import { createRoutes } from '../../src/bootstrap/createRoutes';
+import { guestGuardOptions } from '../helpers/devAuthHeaders';
+import { restoreEnvVar } from '../helpers/restoreEnv';
+
+import { createMockDependencies } from './testHelpers';
+
+const PUBLIC_ASSETS_DIR = join(process.cwd(), 'public/assets');
 
 function createTestDependencies(): AppDependencies {
-  const container = new ServiceContainer();
-  const dependencies = createMockDependencies(
-    container,
-    new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
-  );
+	const container = new ServiceContainer();
 
-  dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard(guestGuardOptions())));
-  dependencies.container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
-  dependencies.container.set(CORE_QUEUE_TOKEN, new SyncQueue());
-  dependencies.container.set(CORE_ABILITY_CHECKER_TOKEN, {
-    requireAbility: () => undefined,
-    tokenCan: () => true,
-  });
+	const dependencies = createMockDependencies(
+		container,
+		new CacheRepository(new SimpleCacheStore(new SimpleCache(60_000, 20))),
+	);
 
-  return dependencies;
+	dependencies.container.set(CORE_AUTH_TOKEN, new AuthManager(new GuestGuard(guestGuardOptions())));
+	dependencies.container.set(CORE_POLICY_GATE_TOKEN, new PolicyGate());
+	dependencies.container.set(CORE_QUEUE_TOKEN, new SyncQueue());
+	dependencies.container.set(CORE_ABILITY_CHECKER_TOKEN, {
+		requireAbility: () => undefined,
+		tokenCan: () => true,
+	});
+
+	return dependencies;
 }
 
-describe("createWebRoutes", () => {
-  const previousFrontendMode = process.env.FRONTEND_MODE;
+describe('createWebRoutes', () => {
+	const previousFrontendMode = process.env.FRONTEND_MODE;
 
-  beforeEach(async () => {
-    process.env.FRONTEND_MODE = "server-htmx";
-    await mkdir(PUBLIC_ASSETS_DIR, { recursive: true });
-  });
+	beforeEach(async () => {
+		process.env.FRONTEND_MODE = 'server-htmx';
+		await mkdir(PUBLIC_ASSETS_DIR, { recursive: true });
+	});
 
-  afterEach(async () => {
-    if (previousFrontendMode === undefined) {
-      delete process.env.FRONTEND_MODE;
-    } else {
-      restoreEnvVar("FRONTEND_MODE", previousFrontendMode);
-    }
+	afterEach(async () => {
+		if (previousFrontendMode === undefined) {
+			delete process.env.FRONTEND_MODE;
+		} else {
+			restoreEnvVar('FRONTEND_MODE', previousFrontendMode);
+		}
 
-    await rm(join(PUBLIC_ASSETS_DIR, "coverage-test.css"), { force: true });
-  });
+		await rm(join(PUBLIC_ASSETS_DIR, 'coverage-test.css'), { force: true });
+	});
 
-  test("serves static assets from public/", async () => {
-    await writeFile(join(PUBLIC_ASSETS_DIR, "coverage-test.css"), "body { color: black; }");
+	test('serves static assets from public/', async () => {
+		await writeFile(join(PUBLIC_ASSETS_DIR, 'coverage-test.css'), 'body { color: black; }');
 
-    const routes = createWebRoutes(createTestDependencies(), { modules: [] });
-    const handler = routes["/assets/*"];
-    expect(handler).toBeDefined();
-    if (!handler) {
-      throw new Error("Expected /assets/* route handler");
-    }
+		const routes = createWebRoutes(createTestDependencies(), { modules: [] });
 
-    const before = getRouteInventory(routes);
-    const response = await handler(new Request("http://localhost/assets/coverage-test.css"));
-    expect(getRouteInventory(routes)).toEqual(before);
-    expect(before).toEqual([{ method: "*", path: "/assets/*", middleware: [] }]);
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe("body { color: black; }");
-  });
+		const handler = routes['/assets/*'];
 
-  test("returns 404 HTML for missing assets", async () => {
-    const routes = createWebRoutes(createTestDependencies(), { modules: [] });
-    const handler = routes["/assets/*"];
-    expect(handler).toBeDefined();
-    if (!handler) {
-      throw new Error("Expected /assets/* route handler");
-    }
+		expect(handler).toBeDefined();
 
-    const response = await handler(new Request("http://localhost/assets/missing.css"));
-    expect(response.status).toBe(404);
-    const html = await response.text();
-    expect(html).toContain("<!doctype html>");
-    expect(html).toContain('href="/assets/app.css"');
-    expect(html).toContain("Not Found");
-  });
+		if (!handler) {
+			throw new Error('Expected /assets/* route handler');
+		}
+
+		const before = getRouteInventory(routes);
+
+		const response = await handler(new Request('http://localhost/assets/coverage-test.css'));
+
+		expect(getRouteInventory(routes)).toEqual(before);
+		expect(before).toEqual([{ method: '*', path: '/assets/*', middleware: [] }]);
+		expect(response.status).toBe(200);
+		expect(await response.text()).toBe('body { color: black; }');
+	});
+
+	test('returns 404 HTML for missing assets', async () => {
+		const routes = createWebRoutes(createTestDependencies(), { modules: [] });
+
+		const handler = routes['/assets/*'];
+
+		expect(handler).toBeDefined();
+
+		if (!handler) {
+			throw new Error('Expected /assets/* route handler');
+		}
+
+		const response = await handler(new Request('http://localhost/assets/missing.css'));
+
+		expect(response.status).toBe(404);
+		const html = await response.text();
+
+		expect(html).toContain('<!doctype html>');
+		expect(html).toContain('href="/assets/app.css"');
+		expect(html).toContain('Not Found');
+	});
 });
 
-describe("mergeWebRoutes", () => {
-  const previousFrontendMode = process.env.FRONTEND_MODE;
+describe('mergeWebRoutes', () => {
+	const previousFrontendMode = process.env.FRONTEND_MODE;
 
-  afterEach(() => {
-    if (previousFrontendMode === undefined) {
-      delete process.env.FRONTEND_MODE;
-    } else {
-      restoreEnvVar("FRONTEND_MODE", previousFrontendMode);
-    }
-  });
+	afterEach(() => {
+		if (previousFrontendMode === undefined) {
+			delete process.env.FRONTEND_MODE;
+		} else {
+			restoreEnvVar('FRONTEND_MODE', previousFrontendMode);
+		}
+	});
 
-  test("returns api routes unchanged when views are disabled", () => {
-    process.env.FRONTEND_MODE = "api";
-    const apiRoutes: AppRouteMap = {
-      "/health": {
-        GET: async () => Response.json({ ok: true }),
-      },
-    };
+	test('returns api routes unchanged when views are disabled', () => {
+		process.env.FRONTEND_MODE = 'api';
+		const apiRoutes: AppRouteMap = {
+			'/health': {
+				GET: async () => Response.json({ ok: true }),
+			},
+		};
 
-    expect(mergeWebRoutes(createTestDependencies(), apiRoutes, { modules: [] })).toBe(apiRoutes);
-  });
+		expect(mergeWebRoutes(createTestDependencies(), apiRoutes, { modules: [] })).toBe(apiRoutes);
+	});
 
-  test("merges web asset routes ahead of api routes when views are enabled", () => {
-    process.env.FRONTEND_MODE = "server-htmx";
-    const apiRoutes: AppRouteMap = {
-      "/health": {
-        GET: async () => Response.json({ ok: true }),
-      },
-    };
+	test('merges web asset routes ahead of api routes when views are enabled', () => {
+		process.env.FRONTEND_MODE = 'server-htmx';
+		const apiRoutes: AppRouteMap = {
+			'/health': {
+				GET: async () => Response.json({ ok: true }),
+			},
+		};
 
-    const merged = mergeWebRoutes(createTestDependencies(), apiRoutes, { modules: [] });
+		const merged = mergeWebRoutes(createTestDependencies(), apiRoutes, { modules: [] });
 
-    expect(merged["/assets/*"]).toBeDefined();
-    expect(merged["/health"]).toBeDefined();
-  });
-  test("API and module web methods compose without losing operations", () => {
-    process.env.FRONTEND_MODE = "server-htmx";
-    const apiRoute = { GET: () => new Response("api") };
-    const merged = mergeWebRoutes(
-      createTestDependencies(),
-      { "/shared": apiRoute },
-      {
-        modules: [
-          { name: "web", webRoutes: () => ({ "/shared": { POST: () => new Response("web") } }) },
-        ],
-      },
-    );
-    expect(Object.keys(merged["/shared"])).toEqual(["POST", "GET"]);
-    expect(merged["/shared"].GET).toBe(apiRoute.GET);
-  });
+		expect(merged['/assets/*']).toBeDefined();
+		expect(merged['/health']).toBeDefined();
+	});
+	test('API and module web methods compose without losing operations', () => {
+		process.env.FRONTEND_MODE = 'server-htmx';
+		const apiRoute = { GET: () => new Response('api') };
+
+		const merged = mergeWebRoutes(
+			createTestDependencies(),
+			{ '/shared': apiRoute },
+			{
+				modules: [
+					{ name: 'web', webRoutes: () => ({ '/shared': { POST: () => new Response('web') } }) },
+				],
+			},
+		);
+
+		expect(Object.keys(merged['/shared'])).toEqual(['POST', 'GET']);
+		expect(merged['/shared'].GET).toBe(apiRoute.GET);
+	});
 });
 
-test("fallback handlers never mutate their construction-time route inventory", async () => {
-  const previous = process.env.FRONTEND_MODE;
-  process.env.FRONTEND_MODE = "api";
-  try {
-    const routes = createRoutes(createTestDependencies());
-    const before = getRouteInventory(routes);
-    for (const path of ["/api/*", "/*"]) {
-      expect((await routes[path](new Request("http://localhost/missing"))).status).toBe(404);
-      expect((await routes[path](new Request("http://localhost/missing"))).status).toBe(404);
-    }
-    expect(getRouteInventory(routes)).toEqual(before);
-    expect(before.filter((route) => route.path === "/").map((route) => route.method)).toEqual([
-      "GET",
-      "HEAD",
-    ]);
-  } finally {
-    restoreEnvVar("FRONTEND_MODE", previous);
-  }
+test('fallback handlers never mutate their construction-time route inventory', async () => {
+	const previous = process.env.FRONTEND_MODE;
+
+	process.env.FRONTEND_MODE = 'api';
+	try {
+		const routes = createRoutes(createTestDependencies());
+
+		const before = getRouteInventory(routes);
+
+		for (const path of ['/api/*', '/*']) {
+			expect((await routes[path](new Request('http://localhost/missing'))).status).toBe(404);
+			expect((await routes[path](new Request('http://localhost/missing'))).status).toBe(404);
+		}
+
+		expect(getRouteInventory(routes)).toEqual(before);
+		expect(before.filter((route) => route.path === '/').map((route) => route.method)).toEqual([
+			'GET',
+			'HEAD',
+		]);
+	} finally {
+		restoreEnvVar('FRONTEND_MODE', previous);
+	}
 });

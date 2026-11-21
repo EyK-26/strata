@@ -1,1 +1,1 @@
-export { makeModuleCommand } from "@getstrata/cli/scaffold";
+export { makeModuleCommand } from '@getstrata/cli/scaffold';

@@ -1,55 +1,58 @@
 #!/usr/bin/env bun
 /** Verify published package versions match the release matrix. */
 
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { checkPackagePeerCompatibility, type PackageVersion } from "./release-readiness";
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
-const ROOT = join(import.meta.dir, "..");
+import { checkPackagePeerCompatibility, type PackageVersion } from './release-readiness';
+
+const ROOT = join(import.meta.dir, '..');
 
 const EXPECTED: Record<string, string> = {
-  "@getstrata/core": "3.1.9",
-  "@getstrata/bootstrap": "3.1.9",
-  "@getstrata/cli": "3.1.9",
-  "@getstrata/starter": "3.1.9",
-  "create-strata": "3.1.9",
+	'@getstrata/core': '3.2.0',
+	'@getstrata/bootstrap': '3.2.0',
+	'@getstrata/cli': '3.2.0',
+	'@getstrata/starter': '3.2.0',
+	'create-strata': '3.2.0',
 };
 
 const PACKAGE_DIRS: Record<string, string> = {
-  "@getstrata/core": "packages/strata-core/package.json",
-  "@getstrata/bootstrap": "packages/strata-bootstrap/package.json",
-  "@getstrata/cli": "packages/strata-cli/package.json",
-  "@getstrata/starter": "packages/strata-starter/package.json",
-  "create-strata": "packages/create-strata/package.json",
+	'@getstrata/core': 'packages/strata-core/package.json',
+	'@getstrata/bootstrap': 'packages/strata-bootstrap/package.json',
+	'@getstrata/cli': 'packages/strata-cli/package.json',
+	'@getstrata/starter': 'packages/strata-starter/package.json',
+	'create-strata': 'packages/create-strata/package.json',
 };
 
 const mismatches: string[] = [];
+
 const packages: PackageVersion[] = [];
 
 for (const [name, relativePath] of Object.entries(PACKAGE_DIRS)) {
-  const packageJson = JSON.parse(await readFile(join(ROOT, relativePath), "utf8")) as {
-    name: string;
-    version: string;
-    peerDependencies?: Record<string, string>;
-  };
-  packages.push(packageJson);
-  const expected = EXPECTED[name];
+	const packageJson = JSON.parse(await readFile(join(ROOT, relativePath), 'utf8')) as {
+		name: string;
+		version: string;
+		peerDependencies?: Record<string, string>;
+	};
 
-  if (packageJson.version !== expected) {
-    mismatches.push(`${name}: expected ${expected}, got ${packageJson.version}`);
-  }
+	packages.push(packageJson);
+	const expected = EXPECTED[name];
+
+	if (packageJson.version !== expected) {
+		mismatches.push(`${name}: expected ${expected}, got ${packageJson.version}`);
+	}
 }
 
 mismatches.push(...checkPackagePeerCompatibility(packages));
 
 if (mismatches.length > 0) {
-  console.error(`Package version mismatch:\n${mismatches.join("\n")}`);
-  process.exit(1);
+	console.error(`Package version mismatch:\n${mismatches.join('\n')}`);
+	process.exit(1);
 }
 
 console.log(
-  "Package versions OK:",
-  Object.entries(EXPECTED)
-    .map(([k, v]) => `${k}@${v}`)
-    .join(", "),
+	'Package versions OK:',
+	Object.entries(EXPECTED)
+		.map(([k, v]) => `${k}@${v}`)
+		.join(', '),
 );

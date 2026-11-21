@@ -1,17 +1,19 @@
-import { registerOpenApiRoutes } from "./registerOpenApiRoutes";
+import { registerOpenApiRoutes } from './registerOpenApiRoutes';
 
 async function routeListCommand(): Promise<void> {
-  const routes = await registerOpenApiRoutes();
+	const routes = await registerOpenApiRoutes();
 
-  if (routes.length === 0) {
-    console.log("No routes registered.");
-    return;
-  }
+	if (routes.length === 0) {
+		console.log('No routes registered.');
 
-  for (const route of routes) {
-    const middleware = route.middleware.length > 0 ? ` [${route.middleware.join(", ")}]` : "";
-    console.log(`${route.method.padEnd(7)} ${route.path}${middleware}`);
-  }
+		return;
+	}
+
+	for (const route of routes) {
+		const middleware = route.middleware.length > 0 ? ` [${route.middleware.join(', ')}]` : '';
+
+		console.log(`${route.method.padEnd(7)} ${route.path}${middleware}`);
+	}
 }
 
 export { routeListCommand };

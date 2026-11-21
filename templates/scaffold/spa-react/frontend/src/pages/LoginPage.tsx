@@ -3,24 +3,41 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { AUTH_CONFIG } from "../auth/config";
+
 export default function LoginPage() {
   const { login, user, chooseIdentity } = useAuth();
+
   const navigate = useNavigate();
+
   const [email, setEmail] = useState("");
+
   const [password, setPassword] = useState("");
+
   const [mfaCode, setMfaCode] = useState("");
+
   const [id, setId] = useState("");
+
   const [role, setRole] = useState("member");
+
   const [error, setError] = useState<string | null>(null);
+
   const [submitting, setSubmitting] = useState(false);
-  if (user) return <Navigate to="/" replace />;
+
+  if (user) {
+    return <Navigate to="/" replace />;
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
     try {
-      if (AUTH_CONFIG.transport === "headers") chooseIdentity(id, role);
-      else await login(email, password, mfaCode);
+      if (AUTH_CONFIG.transport === "headers") {
+        chooseIdentity(id, role);
+      } else {
+        await login(email, password, mfaCode);
+      }
+
       navigate("/");
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : "Sign-in failed");
@@ -28,7 +45,9 @@ export default function LoginPage() {
       setSubmitting(false);
     }
   }
+
   const development = AUTH_CONFIG.transport === "headers";
+
   return (
     <section className="card">
       <h1>{development ? "Development identity" : "Sign in"}</h1>

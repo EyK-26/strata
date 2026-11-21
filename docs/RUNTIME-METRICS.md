@@ -12,14 +12,14 @@ The metrics extra now generates a typed `BootstrapOptions.runtimeMetrics` option
 
 ```ts
 const redisUrl = process.env.REDIS_URL;
-if (!redisUrl) throw new Error("REDIS_URL is required");
+if (!redisUrl) throw new Error('REDIS_URL is required');
 const { routes, config, context } = await bootstrapApp({
-  runtimeMetrics: {
-    queue: { redisUrl, transport: "streams", timeoutMs: 1000 },
-    // Postgres, file-backed SQLite or the URL-backed MySQL adapter, after explicitly deploying these schemas:
-    // outbox: { sampleLimit: 500, timeoutMs: 1000 },
-    // failedJobs: { sampleLimit: 500, timeoutMs: 1000 },
-  },
+	runtimeMetrics: {
+		queue: { redisUrl, transport: 'streams', timeoutMs: 1000 },
+		// Postgres, file-backed SQLite or the URL-backed MySQL adapter, after explicitly deploying these schemas:
+		// outbox: { sampleLimit: 500, timeoutMs: 1000 },
+		// failedJobs: { sampleLimit: 500, timeoutMs: 1000 },
+	},
 });
 ```
 
@@ -30,12 +30,12 @@ Tracing and acquisition observers are borrowed: pass an already-owned tracing ru
 ## Opt-in shared Redis queue observations
 
 ```ts
-import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
+import { createMetricsRoutes } from '@getstrata/bootstrap/metricsRoutes';
 
 const redisUrl = process.env.REDIS_URL;
-if (!redisUrl) throw new Error("REDIS_URL is required");
+if (!redisUrl) throw new Error('REDIS_URL is required');
 const metrics = createMetricsRoutes({
-  queue: { redisUrl, transport: "streams", timeoutMs: 1000 },
+	queue: { redisUrl, transport: 'streams', timeoutMs: 1000 },
 });
 // Merge metrics into the existing server routes as usual.
 ```
@@ -69,8 +69,8 @@ scrape/load costs and exercise worker recovery before promotion.
 ## Opt-in SQL outbox observations
 
 ```ts
-import { createOutboxMetricsCollector } from "@getstrata/core/events/outbox";
-import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
+import { createMetricsRoutes } from '@getstrata/bootstrap/metricsRoutes';
+import { createOutboxMetricsCollector } from '@getstrata/core/events/outbox';
 
 const outboxMetrics = createOutboxMetricsCollector({ timeoutMs: 1000, sampleLimit: 500 });
 const metrics = createMetricsRoutes({ outbox: outboxMetrics });
@@ -93,12 +93,11 @@ A 1–5,000ms deadline (default 1,000ms) bounds the scrape result. Collection us
 
 Three independent restricted-role processes, SQL table-lock, saturated-pool, cancellation/rollback, scope restoration, read-only source state, recovery, unsupported-dialect and authenticated failure regressions accompany the collector. The remaining #139 items include additional SQL dialects and deployment qualification. This addition does not close #139 or address encryption-key rotation (#140).
 
-
 ## Opt-in tracing health
 
 ```ts
-import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
-import { CORE_TRACING_RUNTIME_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import { createMetricsRoutes } from '@getstrata/bootstrap/metricsRoutes';
+import { CORE_TRACING_RUNTIME_TOKEN } from '@getstrata/core/contracts/serviceTokens';
 
 // After tracing initialization, use the existing provider-owned runtime.
 const tracing = appContext.container.resolve(CORE_TRACING_RUNTIME_TOKEN);
@@ -120,18 +119,20 @@ The adapter uses the pinned OpenTelemetry **2.12.0 public experimental** `BatchS
 
 Tests exercise real Bun HTTP collector outage and callback deadlines, 10,000 overflow observations, draining, late/duplicate callbacks, synchronous failures, no-op meter isolation, custom error-name collisions, disabled/unconfigured states, authenticated no-flush scraping and lifecycle rejection. Sustained memory/CPU/load qualification and operational thresholds remain #139 promotion work, along with additional outbox dialects. Encryption-key rotation (#140) remains separate.
 
-
 ## Opt-in transaction acquisition observations
 
 ```ts
-import { createTransactionAcquisitionMetrics } from "@getstrata/core/database/acquisitionMetrics";
-import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
+import { createMetricsRoutes } from '@getstrata/bootstrap/metricsRoutes';
+import { createTransactionAcquisitionMetrics } from '@getstrata/core/database/acquisitionMetrics';
 
 const acquisitionMetrics = createTransactionAcquisitionMetrics();
 const routes = createMetricsRoutes({ transactionAcquisition: acquisitionMetrics });
-await database.transaction(async tx => {
-  await tx.execute({ text: "SELECT 1", params: [] });
-}, { acquisitionMetrics, acquisitionSignal: AbortSignal.timeout(1000) });
+await database.transaction(
+	async (tx) => {
+		await tx.execute({ text: 'SELECT 1', params: [] });
+	},
+	{ acquisitionMetrics, acquisitionSignal: AbortSignal.timeout(1000) },
+);
 ```
 
 Use one factory-created collector for the selected transaction boundaries in a process. Native `reserve()` is required when opting in; adapters without it fail admission explicitly. Existing unobserved transactions retain the direct `begin()` path. The collector adds no cancellation or deadline; use `acquisitionSignal` and native connection timeouts separately. All reservation release, deferred-event, rollback, savepoint and tenant-scope behavior stays framework-owned.
@@ -148,12 +149,11 @@ These are process-local observations of **selected session transaction outer che
 
 Tests cover saturated restricted-role Postgres waits, native cancellation without late admission, unchanged tenant scopes/savepoints, error identity, release and business failure boundaries, simultaneous waits, immutable snapshots, 10,000 observations with constant histogram/scrape cardinality, authenticated no-SQL scraping and invalid observation rejection. The API/type fixtures compile against source and packed root/subpath exports. Operational alert thresholds and sustained multi-process load/recovery qualification remain #139 work, rather than additional SQL dialect implementation. #140 remains separate.
 
-
 ## Opt-in SQL failed-job observations
 
 ```ts
-import { createFailedJobMetricsCollector } from "@getstrata/core/queue/queueMetrics";
-import { createMetricsRoutes } from "@getstrata/bootstrap/metricsRoutes";
+import { createMetricsRoutes } from '@getstrata/bootstrap/metricsRoutes';
+import { createFailedJobMetricsCollector } from '@getstrata/core/queue/queueMetrics';
 
 const failedJobs = createFailedJobMetricsCollector({ sampleLimit: 500, timeoutMs: 1000 });
 const metrics = createMetricsRoutes({ failedJobs });

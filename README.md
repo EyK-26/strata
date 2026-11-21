@@ -48,14 +48,14 @@ optional directories need not exist in a new app. Domain modules are available
 when a larger application benefits from grouping a feature together.
 
 ```ts
-import { defineModel, field } from "@getstrata/core/database/model";
+import { defineModel, field } from '@getstrata/core/database/model';
 
 export class Note extends defineModel({
-  table: "notes",
-  fields: { id: field.number(), body: field.string() },
+	table: 'notes',
+	fields: { id: field.number(), body: field.string() },
 }) {
-  static $fillable = ["body"] as const;
-  static $timestamps = false;
+	static $fillable = ['body'] as const;
+	static $timestamps = false;
 }
 ```
 
@@ -70,26 +70,26 @@ imports such as `@getstrata/core/database/model` over the root barrel.
 
 ## Guides
 
-| Task | Guide |
-| --- | --- |
-| Generate an app or feature | [Starter](docs/STARTER.md), [application workflow](docs/BUILDING-APPS.md) |
-| Models, relationships and migrations | [Database](docs/DATABASE.md) |
-| Authentication and access control | [Auth](docs/AUTH.md), [tenancy](docs/TENANCY.md), [initial admin](docs/INITIAL-ADMIN.md) |
-| Uploads, images and storage | [Media](docs/MEDIA.md), [storage](docs/STORAGE.md) |
-| Background work | [Queues](docs/QUEUES.md), [scheduler](docs/SCHEDULER.md) |
-| External services and deployment | [Integrations](docs/INTEGRATIONS.md), [production](docs/PRODUCTION.md) |
+| Task                                 | Guide                                                                                    |
+| ------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Generate an app or feature           | [Starter](docs/STARTER.md), [application workflow](docs/BUILDING-APPS.md)                |
+| Models, relationships and migrations | [Database](docs/DATABASE.md)                                                             |
+| Authentication and access control    | [Auth](docs/AUTH.md), [tenancy](docs/TENANCY.md), [initial admin](docs/INITIAL-ADMIN.md) |
+| Uploads, images and storage          | [Media](docs/MEDIA.md), [storage](docs/STORAGE.md)                                       |
+| Background work                      | [Queues](docs/QUEUES.md), [scheduler](docs/SCHEDULER.md)                                 |
+| External services and deployment     | [Integrations](docs/INTEGRATIONS.md), [production](docs/PRODUCTION.md)                   |
 
 ## Packages
 
-Package version: **3.1.9** (this checkout; publication is tracked on npm).
+Package version: **3.2.0** (this checkout; publication is tracked on npm).
 
-| Package | Purpose |
-| --- | --- |
-| `@getstrata/core` | Runtime, HTTP, authentication, database, jobs, storage and media |
-| `@getstrata/bootstrap` | Application composition, providers and HTTP startup |
-| `@getstrata/cli` | Application lifecycle, migrations, workers and scaffolding |
-| `@getstrata/starter` | Configurable application generator |
-| `create-strata` | Convenient generator entrypoint for `bunx` |
+| Package                | Purpose                                                          |
+| ---------------------- | ---------------------------------------------------------------- |
+| `@getstrata/core`      | Runtime, HTTP, authentication, database, jobs, storage and media |
+| `@getstrata/bootstrap` | Application composition, providers and HTTP startup              |
+| `@getstrata/cli`       | Application lifecycle, migrations, workers and scaffolding       |
+| `@getstrata/starter`   | Configurable application generator                               |
+| `create-strata`        | Convenient generator entrypoint for `bunx`                       |
 
 The five packages use one coordinated version. See their changelogs for the next
 release and [npm](https://www.npmjs.com/package/@getstrata/core) for published versions.

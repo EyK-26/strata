@@ -1,1 +1,1 @@
-export * from "../../../../src/core/crypto/mfaSecret.ts";
+export * from '../../../../src/core/crypto/mfaSecret.ts';

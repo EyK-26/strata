@@ -1,1 +1,1 @@
-export * from "../../../src/core/database/ormRuntime";
+export * from '../../../src/core/database/ormRuntime';

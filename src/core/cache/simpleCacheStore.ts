@@ -1,55 +1,57 @@
-import type SimpleCache from "./simpleCache";
-import type { CacheStore } from "./store";
+import type SimpleCache from './simpleCache';
+import type { CacheStore } from './store';
 
 class SimpleCacheStore implements CacheStore {
-  constructor(private readonly cache: SimpleCache) {}
+	constructor(private readonly cache: SimpleCache) {}
 
-  get<T>(key: string): Promise<T | undefined> {
-    return Promise.resolve(this.cache.get<T>(key));
-  }
+	get<T>(key: string): Promise<T | undefined> {
+		return Promise.resolve(this.cache.get<T>(key));
+	}
 
-  async set<T>(key: string, value: T, ttlMs?: number | null, tags: string[] = []): Promise<void> {
-    this.cache.set(key, value, ttlMs, tags);
-  }
+	async set<T>(key: string, value: T, ttlMs?: number | null, tags: string[] = []): Promise<void> {
+		this.cache.set(key, value, ttlMs, tags);
+	}
 
-  getOrSet<T>(key: string, loader: () => Promise<T>, ttlMs?: number | null): Promise<T> {
-    return this.cache.getOrSet(key, loader, ttlMs);
-  }
+	getOrSet<T>(key: string, loader: () => Promise<T>, ttlMs?: number | null): Promise<T> {
+		return this.cache.getOrSet(key, loader, ttlMs);
+	}
 
-  getOrSetTagged<T>(
-    key: string,
-    loader: () => Promise<T>,
-    tags: string[],
-    ttlMs?: number | null,
-  ): Promise<T> {
-    return this.cache.getOrSetTagged(key, loader, tags, ttlMs);
-  }
+	getOrSetTagged<T>(
+		key: string,
+		loader: () => Promise<T>,
+		tags: string[],
+		ttlMs?: number | null,
+	): Promise<T> {
+		return this.cache.getOrSetTagged(key, loader, tags, ttlMs);
+	}
 
-  attachTags(key: string, tags: string[]): Promise<void> {
-    this.cache.attachTags(key, tags);
-    return Promise.resolve();
-  }
+	attachTags(key: string, tags: string[]): Promise<void> {
+		this.cache.attachTags(key, tags);
 
-  flushTags(tags: string[]): Promise<number> {
-    return Promise.resolve(this.cache.flushTags(tags));
-  }
+		return Promise.resolve();
+	}
 
-  invalidate(key: string): Promise<boolean> {
-    return Promise.resolve(this.cache.invalidate(key));
-  }
+	flushTags(tags: string[]): Promise<number> {
+		return Promise.resolve(this.cache.flushTags(tags));
+	}
 
-  invalidateByPrefix(prefix: string): Promise<number> {
-    return Promise.resolve(this.cache.invalidateByPrefix(prefix));
-  }
+	invalidate(key: string): Promise<boolean> {
+		return Promise.resolve(this.cache.invalidate(key));
+	}
 
-  clear(): Promise<void> {
-    this.cache.clear();
-    return Promise.resolve();
-  }
+	invalidateByPrefix(prefix: string): Promise<number> {
+		return Promise.resolve(this.cache.invalidateByPrefix(prefix));
+	}
 
-  size(): Promise<number> {
-    return Promise.resolve(this.cache.size());
-  }
+	clear(): Promise<void> {
+		this.cache.clear();
+
+		return Promise.resolve();
+	}
+
+	size(): Promise<number> {
+		return Promise.resolve(this.cache.size());
+	}
 }
 
 export { SimpleCacheStore };

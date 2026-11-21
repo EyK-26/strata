@@ -1,1 +1,1 @@
-export * from "../../../../src/core/runtime/appKeyPrefix.ts";
+export * from '../../../../src/core/runtime/appKeyPrefix.ts';

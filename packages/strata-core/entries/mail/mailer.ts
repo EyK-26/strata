@@ -1,1 +1,1 @@
-export * from "../../../../src/core/mail/mailer.ts";
+export * from '../../../../src/core/mail/mailer.ts';

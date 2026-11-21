@@ -1,97 +1,100 @@
-import type { CacheLike } from "../../types/services";
-import type { Storage } from "../storage/storage";
+import type { CacheLike } from '../../types/services';
+import type { Storage } from '../storage/storage';
+
 import type {
-  ConfigStore,
-  ConfigStoreLike,
-  ServiceContainer,
-  ServiceFactory,
-  ServiceToken,
-} from "./container";
-import type { PersistenceInvocation } from "./persistence";
+	ConfigStore,
+	ConfigStoreLike,
+	ServiceContainer,
+	ServiceFactory,
+	ServiceToken,
+} from './container';
+import type { PersistenceInvocation } from './persistence';
 
 // biome-ignore lint/suspicious/noExplicitAny: matches Bun's Routes map expectations
 type AppRouteMap = Record<string, any>;
 
 type CachedJson = <T>(
-  cacheKey: string,
-  loader: () => Promise<T>,
-  tags?: string[],
-  request?: Request,
+	cacheKey: string,
+	loader: () => Promise<T>,
+	tags?: string[],
+	request?: Request,
 ) => Promise<Response>;
 
 interface AppDependencies {
-  readonly invoke: PersistenceInvocation;
-  container: ServiceContainer;
-  cache: CacheLike;
-  storage: Storage;
+	readonly invoke: PersistenceInvocation;
+	container: ServiceContainer;
+	cache: CacheLike;
+	storage: Storage;
 }
 
-type MutableAppDependencies = Partial<Omit<AppDependencies, "container">> &
-  Pick<AppDependencies, "container">;
+type MutableAppDependencies = Partial<Omit<AppDependencies, 'container'>> &
+	Pick<AppDependencies, 'container'>;
 
 interface ProviderContext {
-  readonly invoke: PersistenceInvocation;
-  container: ServiceContainer;
-  config: ConfigStore;
-  dependencies: MutableAppDependencies;
-  /** Register owned resources immediately; flush precedes close, each in reverse order. */
-  onCleanup(handler: () => void | Promise<void>, phase?: "drain" | "flush" | "close"): void;
+	readonly invoke: PersistenceInvocation;
+	container: ServiceContainer;
+	config: ConfigStore;
+	dependencies: MutableAppDependencies;
+	/** Register owned resources immediately; flush precedes close, each in reverse order. */
+	onCleanup(handler: () => void | Promise<void>, phase?: 'drain' | 'flush' | 'close'): void;
 }
 
 interface ServiceProvider {
-  name: string;
-  register?(context: ProviderContext): void | Promise<void>;
-  boot?(context: ProviderContext): void | Promise<void>;
+	name: string;
+	register?(context: ProviderContext): void | Promise<void>;
+	boot?(context: ProviderContext): void | Promise<void>;
 }
 
 interface AppContext {
-  container: ServiceContainer;
-  config: ConfigStoreLike;
-  dependencies: AppDependencies;
+	container: ServiceContainer;
+	config: ConfigStoreLike;
+	dependencies: AppDependencies;
 }
 
 const requiredDependencyKeys = [
-  "container",
-  "invoke",
-  "cache",
-  "storage",
+	'container',
+	'invoke',
+	'cache',
+	'storage',
 ] as const satisfies readonly (keyof AppDependencies)[];
 
 function getRequiredDependency<K extends keyof AppDependencies>(
-  dependencies: Partial<AppDependencies>,
-  key: K,
+	dependencies: Partial<AppDependencies>,
+	key: K,
 ): AppDependencies[K] {
-  const dependency = dependencies[key];
+	const dependency = dependencies[key];
 
-  if (dependency === undefined) {
-    throw new Error(`Required dependency "${key}" is not registered.`);
-  }
+	if (dependency === undefined) {
+		throw new Error(`Required dependency "${key}" is not registered.`);
+	}
 
-  return dependency;
+	return dependency;
 }
 
 function assertAppDependenciesComplete(
-  dependencies: MutableAppDependencies,
+	dependencies: MutableAppDependencies,
 ): asserts dependencies is AppDependencies {
-  if (dependencies.invoke !== undefined && typeof dependencies.invoke !== "function")
-    throw new TypeError("Application persistence invocation must be a function.");
-  for (const key of requiredDependencyKeys) {
-    getRequiredDependency(dependencies, key);
-  }
+	if (dependencies.invoke !== undefined && typeof dependencies.invoke !== 'function') {
+		throw new TypeError('Application persistence invocation must be a function.');
+	}
+
+	for (const key of requiredDependencyKeys) {
+		getRequiredDependency(dependencies, key);
+	}
 }
 
 function resolveService<T>(dependencies: AppDependencies, token: ServiceToken<T>): T {
-  return dependencies.container.resolve(token);
+	return dependencies.container.resolve(token);
 }
 
 export type {
-  AppContext,
-  AppDependencies,
-  AppRouteMap,
-  CachedJson,
-  MutableAppDependencies,
-  ProviderContext,
-  ServiceFactory,
-  ServiceProvider,
+	AppContext,
+	AppDependencies,
+	AppRouteMap,
+	CachedJson,
+	MutableAppDependencies,
+	ProviderContext,
+	ServiceFactory,
+	ServiceProvider,
 };
 export { assertAppDependenciesComplete, getRequiredDependency, resolveService };

@@ -1,1 +1,1 @@
-export * from "../../../../src/core/http/validation.ts";
+export * from '../../../../src/core/http/validation.ts';

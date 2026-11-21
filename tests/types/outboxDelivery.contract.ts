@@ -1,19 +1,22 @@
-import type { DatabaseSession } from "@getstrata/core/database/session";
-import type { OutboxDeliverySnapshot, SqlOutbox } from "@getstrata/core/events/outbox";
+import type { DatabaseSession } from '@getstrata/core/database/session';
+import type { OutboxDeliverySnapshot, SqlOutbox } from '@getstrata/core/events/outbox';
+
 export async function inspectDeliveryContract(outbox: SqlOutbox, selected: DatabaseSession) {
-  const delivery: OutboxDeliverySnapshot | null = await outbox.getDelivery(
-    selected,
-    "event",
-    "listener",
-  );
-  if (delivery) {
-    const attempts: number = delivery.attempts;
-    // @ts-expect-error Inspection does not expose private payloads.
-    delivery.payload;
-    // @ts-expect-error Inspection does not expose renewable lease tokens.
-    delivery.leaseToken;
-    // @ts-expect-error Snapshot fields are readonly.
-    delivery.status = "pending";
-    void attempts;
-  }
+	const delivery: OutboxDeliverySnapshot | null = await outbox.getDelivery(
+		selected,
+		'event',
+		'listener',
+	);
+
+	if (delivery) {
+		const attempts: number = delivery.attempts;
+
+		// @ts-expect-error Inspection does not expose private payloads.
+		delivery.payload;
+		// @ts-expect-error Inspection does not expose renewable lease tokens.
+		delivery.leaseToken;
+		// @ts-expect-error Snapshot fields are readonly.
+		delivery.status = 'pending';
+		void attempts;
+	}
 }

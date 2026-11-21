@@ -1,327 +1,363 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from 'bun:test';
+
 import {
-  BadRequestError,
-  ForbiddenError,
-  HttpError,
-  UnauthorizedError,
-  ValidationError,
-} from "@getstrata/core/errors/http";
+	BadRequestError,
+	ForbiddenError,
+	HttpError,
+	UnauthorizedError,
+	ValidationError,
+} from '@getstrata/core/errors/http';
 import {
-  normalizeFieldErrors,
-  webErrorResponse as renderWebErrorResponse,
-} from "@getstrata/core/http/webErrorResponse";
+	normalizeFieldErrors,
+	webErrorResponse as renderWebErrorResponse,
+} from '@getstrata/core/http/webErrorResponse';
 
 let viewsEnabled = false;
+
 function webErrorResponse(error: unknown, request?: Request) {
-  return renderWebErrorResponse(error, request, { enabled: viewsEnabled, production: false });
+	return renderWebErrorResponse(error, request, { enabled: viewsEnabled, production: false });
 }
 
-describe("normalizeFieldErrors", () => {
-  test("returns an empty object for invalid details", () => {
-    expect(normalizeFieldErrors(null)).toEqual({});
-    expect(normalizeFieldErrors(undefined)).toEqual({});
-    expect(normalizeFieldErrors("invalid")).toEqual({});
-    expect(normalizeFieldErrors([])).toEqual({});
-  });
+describe('normalizeFieldErrors', () => {
+	test('returns an empty object for invalid details', () => {
+		expect(normalizeFieldErrors(null)).toEqual({});
+		expect(normalizeFieldErrors(undefined)).toEqual({});
+		expect(normalizeFieldErrors('invalid')).toEqual({});
+		expect(normalizeFieldErrors([])).toEqual({});
+	});
 
-  test("normalizes array and string messages", () => {
-    expect(
-      normalizeFieldErrors({
-        name: ["is required", 42],
-        slug: "already taken",
-        ignored: 123,
-      }),
-    ).toEqual({
-      name: ["is required", "42"],
-      slug: ["already taken"],
-    });
-  });
+	test('normalizes array and string messages', () => {
+		expect(
+			normalizeFieldErrors({
+				name: ['is required', 42],
+				slug: 'already taken',
+				ignored: 123,
+			}),
+		).toEqual({
+			name: ['is required', '42'],
+			slug: ['already taken'],
+		});
+	});
 });
 
-describe("webErrorResponse", () => {
-  afterEach(() => {
-    viewsEnabled = false;
-  });
+describe('webErrorResponse', () => {
+	afterEach(() => {
+		viewsEnabled = false;
+	});
 
-  test("returns null when request is missing", async () => {
-    expect(await webErrorResponse(new BadRequestError("Bad Request"))).toBeNull();
-  });
+	test('returns null when request is missing', async () => {
+		expect(await webErrorResponse(new BadRequestError('Bad Request'))).toBeNull();
+	});
 
-  test("returns null when views are disabled", async () => {
-    viewsEnabled = false;
+	test('returns null when views are disabled', async () => {
+		viewsEnabled = false;
 
-    const request = new Request("http://example.test/widgets", {
-      headers: { accept: "text/html" },
-    });
+		const request = new Request('http://example.test/widgets', {
+			headers: { accept: 'text/html' },
+		});
 
-    expect(await webErrorResponse(new BadRequestError("Bad Request"), request)).toBeNull();
-  });
+		expect(await webErrorResponse(new BadRequestError('Bad Request'), request)).toBeNull();
+	});
 
-  test("returns null when the client prefers JSON", async () => {
-    viewsEnabled = true;
+	test('returns null when the client prefers JSON', async () => {
+		viewsEnabled = true;
 
-    const request = new Request("http://example.test/api/v1/widgets", {
-      headers: { accept: "application/json" },
-    });
+		const request = new Request('http://example.test/api/v1/widgets', {
+			headers: { accept: 'application/json' },
+		});
 
-    expect(await webErrorResponse(new BadRequestError("Bad Request"), request)).toBeNull();
-  });
+		expect(await webErrorResponse(new BadRequestError('Bad Request'), request)).toBeNull();
+	});
 
-  test("returns null for /api/ even when Accept is HTML", async () => {
-    viewsEnabled = true;
+	test('returns null for /api/ even when Accept is HTML', async () => {
+		viewsEnabled = true;
 
-    const request = new Request("http://example.test/api/apply/me", {
-      headers: { accept: "text/html" },
-    });
+		const request = new Request('http://example.test/api/apply/me', {
+			headers: { accept: 'text/html' },
+		});
 
-    expect(await webErrorResponse(new ForbiddenError("staff cookie"), request)).toBeNull();
-  });
+		expect(await webErrorResponse(new ForbiddenError('staff cookie'), request)).toBeNull();
+	});
 
-  test("redirects unauthorized errors to login", async () => {
-    viewsEnabled = true;
+	test('redirects unauthorized errors to login', async () => {
+		viewsEnabled = true;
 
-    const request = new Request("http://example.test/widgets/new?tab=info", {
-      headers: { accept: "text/html" },
-    });
+		const request = new Request('http://example.test/widgets/new?tab=info', {
+			headers: { accept: 'text/html' },
+		});
 
-    const response = await webErrorResponse(new UnauthorizedError(), request);
+		const response = await webErrorResponse(new UnauthorizedError(), request);
 
-    expect(response?.status).toBe(302);
-    expect(response?.headers.get("location")).toBe("/login?redirect=%2Fwidgets%2Fnew%3Ftab%3Dinfo");
-  });
+		expect(response?.status).toBe(302);
+		expect(response?.headers.get('location')).toBe('/login?redirect=%2Fwidgets%2Fnew%3Ftab%3Dinfo');
+	});
 
-  test("renders validation errors with field summaries", async () => {
-    viewsEnabled = true;
+	test('renders validation errors with field summaries', async () => {
+		viewsEnabled = true;
 
-    const request = new Request("http://example.test/widgets", {
-      method: "POST",
-      headers: { accept: "text/html" },
-    });
-    const error = new ValidationError("Validation failed", {
-      name: ["is required"],
-      slug: "already taken",
-    });
+		const request = new Request('http://example.test/widgets', {
+			method: 'POST',
+			headers: { accept: 'text/html' },
+		});
 
-    const response = await webErrorResponse(error, request);
-    const html = await response?.text();
+		const error = new ValidationError('Validation failed', {
+			name: ['is required'],
+			slug: 'already taken',
+		});
 
-    expect(response?.status).toBe(422);
-    expect(html).toContain("<!doctype html>");
-    expect(html).toContain('href="/assets/app.css"');
-    expect(html).toContain("Validation failed");
-    expect(html).toContain("name: is required");
-    expect(html).toContain("slug: already taken");
-    expect(html).toContain("Go back");
-  });
+		const response = await webErrorResponse(error, request);
 
-  test("falls back to the validation message when field details are empty", async () => {
-    viewsEnabled = true;
+		const html = await response?.text();
 
-    const request = new Request("http://example.test/widgets", {
-      headers: { accept: "text/html" },
-    });
-    const error = new ValidationError("Validation failed", null);
+		expect(response?.status).toBe(422);
+		expect(html).toContain('<!doctype html>');
+		expect(html).toContain('href="/assets/app.css"');
+		expect(html).toContain('Validation failed');
+		expect(html).toContain('name: is required');
+		expect(html).toContain('slug: already taken');
+		expect(html).toContain('Go back');
+	});
 
-    const response = await webErrorResponse(error, request);
-    const html = await response?.text();
+	test('falls back to the validation message when field details are empty', async () => {
+		viewsEnabled = true;
 
-    expect(html).toContain("Validation failed");
-  });
+		const request = new Request('http://example.test/widgets', {
+			headers: { accept: 'text/html' },
+		});
 
-  test("renders generic HTTP errors as HTML", async () => {
-    viewsEnabled = true;
+		const error = new ValidationError('Validation failed', null);
 
-    const request = new Request("http://example.test/widgets", {
-      headers: { accept: "text/html" },
-    });
+		const response = await webErrorResponse(error, request);
 
-    const response = await webErrorResponse(new BadRequestError("Invalid widget"), request);
-    const html = await response?.text();
+		const html = await response?.text();
 
-    expect(response?.status).toBe(400);
-    expect(html).toContain("<!doctype html>");
-    expect(html).toContain('href="/assets/app.css"');
-    expect(html).toContain("Invalid widget");
-  });
+		expect(html).toContain('Validation failed');
+	});
 
-  test("renders a foreign Forbidden-shaped error as HTTP 403", async () => {
-    viewsEnabled = true;
+	test('renders generic HTTP errors as HTML', async () => {
+		viewsEnabled = true;
 
-    class ForeignForbidden extends Error {
-      readonly status = 403;
+		const request = new Request('http://example.test/widgets', {
+			headers: { accept: 'text/html' },
+		});
 
-      constructor() {
-        super("Forbidden");
-        this.name = "ForbiddenError";
-      }
-    }
+		const response = await webErrorResponse(new BadRequestError('Invalid widget'), request);
 
-    const request = new Request("http://example.test/users", {
-      headers: { accept: "text/html" },
-    });
-    const foreign = new ForeignForbidden();
+		const html = await response?.text();
 
-    expect(foreign instanceof HttpError).toBe(false);
+		expect(response?.status).toBe(400);
+		expect(html).toContain('<!doctype html>');
+		expect(html).toContain('href="/assets/app.css"');
+		expect(html).toContain('Invalid widget');
+	});
 
-    const response = await webErrorResponse(foreign, request);
-    const html = await response?.text();
+	test('renders a foreign Forbidden-shaped error as HTTP 403', async () => {
+		viewsEnabled = true;
 
-    expect(response?.status).toBe(403);
-    expect(html).toContain("Forbidden");
-  });
+		class ForeignForbidden extends Error {
+			readonly status = 403;
 
-  test("renders ForbiddenError as HTTP 403", async () => {
-    viewsEnabled = true;
+			constructor() {
+				super('Forbidden');
+				this.name = 'ForbiddenError';
+			}
+		}
 
-    const request = new Request("http://example.test/users", {
-      headers: { accept: "text/html" },
-    });
+		const request = new Request('http://example.test/users', {
+			headers: { accept: 'text/html' },
+		});
 
-    const response = await webErrorResponse(new ForbiddenError(), request);
-    const html = await response?.text();
+		const foreign = new ForeignForbidden();
 
-    expect(response?.status).toBe(403);
-    expect(html).toContain("Forbidden");
-  });
+		expect(foreign instanceof HttpError).toBe(false);
 
-  test("maps non-http errors through mapDatabaseError", async () => {
-    viewsEnabled = true;
+		const response = await webErrorResponse(foreign, request);
 
-    const request = new Request("http://example.test/widgets", {
-      headers: { accept: "text/html" },
-    });
+		const html = await response?.text();
 
-    const response = await webErrorResponse(new Error("connection refused"), request);
-    const html = await response?.text();
+		expect(response?.status).toBe(403);
+		expect(html).toContain('Forbidden');
+	});
 
-    expect(response?.status).toBe(500);
-    expect(html).not.toContain("connection refused");
-    expect(html).toContain("Internal server error.");
-  });
+	test('renders ForbiddenError as HTTP 403', async () => {
+		viewsEnabled = true;
 
-  test("passes through existing HttpError instances", async () => {
-    viewsEnabled = true;
+		const request = new Request('http://example.test/users', {
+			headers: { accept: 'text/html' },
+		});
 
-    const request = new Request("http://example.test/widgets", {
-      headers: { accept: "text/html" },
-    });
-    const error = new HttpError(418, "I am a teapot");
+		const response = await webErrorResponse(new ForbiddenError(), request);
 
-    const response = await webErrorResponse(error, request);
-    const html = await response?.text();
+		const html = await response?.text();
 
-    expect(response?.status).toBe(418);
-    expect(html).toContain("I am a teapot");
-  });
+		expect(response?.status).toBe(403);
+		expect(html).toContain('Forbidden');
+	});
+
+	test('maps non-http errors through mapDatabaseError', async () => {
+		viewsEnabled = true;
+
+		const request = new Request('http://example.test/widgets', {
+			headers: { accept: 'text/html' },
+		});
+
+		const response = await webErrorResponse(new Error('connection refused'), request);
+
+		const html = await response?.text();
+
+		expect(response?.status).toBe(500);
+		expect(html).not.toContain('connection refused');
+		expect(html).toContain('Internal server error.');
+	});
+
+	test('passes through existing HttpError instances', async () => {
+		viewsEnabled = true;
+
+		const request = new Request('http://example.test/widgets', {
+			headers: { accept: 'text/html' },
+		});
+
+		const error = new HttpError(418, 'I am a teapot');
+
+		const response = await webErrorResponse(error, request);
+
+		const html = await response?.text();
+
+		expect(response?.status).toBe(418);
+		expect(html).toContain('I am a teapot');
+	});
 });
 
-describe("CSP-safe validation return links", () => {
-  test.each([
-    ["http://example.test/admin/products?token=private#fragment", "/admin/products"],
-    ["https://attacker.test/steal", "/"],
-    ["javascript:alert(1)", "/"],
-    ["http://example.test/widgets", "/"],
-    ["http://example.test/%2f%2fattacker.test", "/"],
-    ["invalid referrer", "/"],
-    ["", "/"],
-  ])("referrer %s produces safe native navigation", async (referer, expected) => {
-    const { renderKernelErrorChrome } = await import("@getstrata/core/view/webErrorView");
-    const html = renderKernelErrorChrome({
-      status: 422,
-      title: "Invalid operation",
-      message: "Cannot delete",
-      request: new Request("http://example.test/widgets", { headers: { referer } }),
-    });
-    expect(html).toContain(`href="${expected}">Go back`);
-    expect(html).not.toContain("javascript:");
-    expect(html).not.toContain("private");
-  });
+describe('CSP-safe validation return links', () => {
+	test.each([
+		['http://example.test/admin/products?token=private#fragment', '/admin/products'],
+		['https://attacker.test/steal', '/'],
+		['javascript:alert(1)', '/'],
+		['http://example.test/widgets', '/'],
+		['http://example.test/%2f%2fattacker.test', '/'],
+		['invalid referrer', '/'],
+		['', '/'],
+	])('referrer %s produces safe native navigation', async (referer, expected) => {
+		const { renderKernelErrorChrome } = await import('@getstrata/core/view/webErrorView');
+
+		const html = renderKernelErrorChrome({
+			status: 422,
+			title: 'Invalid operation',
+			message: 'Cannot delete',
+			request: new Request('http://example.test/widgets', { headers: { referer } }),
+		});
+
+		expect(html).toContain(`href="${expected}">Go back`);
+		expect(html).not.toContain('javascript:');
+		expect(html).not.toContain('private');
+	});
 });
 
-test("a failed POST may return to the same safe GET form/list path", async () => {
-  const { renderKernelErrorChrome } = await import("@getstrata/core/view/webErrorView");
-  const html = renderKernelErrorChrome({
-    status: 422,
-    title: "Invalid operation",
-    message: "Cannot delete",
-    request: new Request("http://example.test/widgets", {
-      method: "POST",
-      headers: { referer: "http://example.test/widgets" },
-    }),
-  });
-  expect(html).toContain('href="/widgets">Go back');
+test('a failed POST may return to the same safe GET form/list path', async () => {
+	const { renderKernelErrorChrome } = await import('@getstrata/core/view/webErrorView');
+
+	const html = renderKernelErrorChrome({
+		status: 422,
+		title: 'Invalid operation',
+		message: 'Cannot delete',
+		request: new Request('http://example.test/widgets', {
+			method: 'POST',
+			headers: { referer: 'http://example.test/widgets' },
+		}),
+	});
+
+	expect(html).toContain('href="/widgets">Go back');
 });
 
-test("supplied invalid credentials remain HTTP 401 while anonymous protected requests redirect", async () => {
-  viewsEnabled = true;
-  const { InvalidCredentialsError } = await import("@getstrata/core/errors/http");
-  const { withErrorHandling } = await import("@getstrata/core/http/response");
-  const server = Bun.serve({
-    port: 0,
-    hostname: "127.0.0.1",
-    fetch: withErrorHandling(
-      (request: Request) => {
-        if (request.headers.has("authorization")) throw new InvalidCredentialsError();
-        throw new UnauthorizedError();
-      },
-      { enabled: true, production: false },
-    ),
-  });
-  try {
-    const origin = `http://127.0.0.1:${server.port}`;
-    const invalid = await fetch(`${origin}/login`, {
-      headers: { accept: "text/html", authorization: "Bearer invalid" },
-      redirect: "manual",
-    });
-    expect(invalid.status).toBe(401);
-    expect(invalid.headers.get("location")).toBeNull();
-    const followed = await fetch(`${origin}/login`, {
-      headers: { accept: "text/html", authorization: "Bearer invalid" },
-    });
-    expect(followed.status).toBe(401);
-    const anonymous = await fetch(`${origin}/private`, {
-      headers: { accept: "text/html" },
-      redirect: "manual",
-    });
-    expect(anonymous.status).toBe(302);
-    expect(anonymous.headers.get("location")).toContain("/login?redirect=");
-  } finally {
-    await server.stop(true);
-    viewsEnabled = false;
-  }
+test('supplied invalid credentials remain HTTP 401 while anonymous protected requests redirect', async () => {
+	viewsEnabled = true;
+	const { InvalidCredentialsError } = await import('@getstrata/core/errors/http');
+
+	const { withErrorHandling } = await import('@getstrata/core/http/response');
+
+	const server = Bun.serve({
+		port: 0,
+		hostname: '127.0.0.1',
+		fetch: withErrorHandling(
+			(request: Request) => {
+				if (request.headers.has('authorization')) {
+					throw new InvalidCredentialsError();
+				}
+
+				throw new UnauthorizedError();
+			},
+			{ enabled: true, production: false },
+		),
+	});
+
+	try {
+		const origin = `http://127.0.0.1:${server.port}`;
+
+		const invalid = await fetch(`${origin}/login`, {
+			headers: { accept: 'text/html', authorization: 'Bearer invalid' },
+			redirect: 'manual',
+		});
+
+		expect(invalid.status).toBe(401);
+		expect(invalid.headers.get('location')).toBeNull();
+		const followed = await fetch(`${origin}/login`, {
+			headers: { accept: 'text/html', authorization: 'Bearer invalid' },
+		});
+
+		expect(followed.status).toBe(401);
+		const anonymous = await fetch(`${origin}/private`, {
+			headers: { accept: 'text/html' },
+			redirect: 'manual',
+		});
+
+		expect(anonymous.status).toBe(302);
+		expect(anonymous.headers.get('location')).toContain('/login?redirect=');
+	} finally {
+		await server.stop(true);
+		viewsEnabled = false;
+	}
 });
 
-test("captured error policies isolate production redaction and ignore later ambient mode", async () => {
-  const { withErrorHandling } = await import("@getstrata/core/http/response");
-  const { spyOn } = await import("bun:test");
-  const log = spyOn(console, "error").mockImplementation(() => undefined);
-  const production = { enabled: true, production: true };
-  const productionHandler = withErrorHandling((_request: Request) => {
-    throw new HttpError(500, "private diagnostics");
-  }, production);
-  const developmentHandler = withErrorHandling(
-    (_request: Request) => {
-      throw new HttpError(500, "development diagnostics");
-    },
-    { enabled: true, production: false },
-  );
-  const unownedHandler = withErrorHandling((_request: Request) => {
-    throw new BadRequestError("ownerless");
-  });
-  production.production = false;
-  production.enabled = false;
-  try {
-    const request = new Request("https://app.test/error", { headers: { accept: "text/html" } });
-    const [safe, debug, unowned] = await Promise.all([
-      productionHandler(request),
-      developmentHandler(request),
-      unownedHandler(request),
-    ]);
-    expect(await safe.text()).toContain("Something went wrong.");
-    expect(await debug.text()).toContain("development diagnostics");
-    expect(unowned.headers.get("content-type")).toContain("application/json");
-    expect(await unowned.json()).toEqual({ error: "ownerless" });
-  } finally {
-    log.mockRestore();
-  }
+test('captured error policies isolate production redaction and ignore later ambient mode', async () => {
+	const { withErrorHandling } = await import('@getstrata/core/http/response');
+
+	const { spyOn } = await import('bun:test');
+
+	const log = spyOn(console, 'error').mockImplementation(() => undefined);
+
+	const production = { enabled: true, production: true };
+
+	const productionHandler = withErrorHandling((_request: Request) => {
+		throw new HttpError(500, 'private diagnostics');
+	}, production);
+
+	const developmentHandler = withErrorHandling(
+		(_request: Request) => {
+			throw new HttpError(500, 'development diagnostics');
+		},
+		{ enabled: true, production: false },
+	);
+
+	const unownedHandler = withErrorHandling((_request: Request) => {
+		throw new BadRequestError('ownerless');
+	});
+
+	production.production = false;
+	production.enabled = false;
+	try {
+		const request = new Request('https://app.test/error', { headers: { accept: 'text/html' } });
+
+		const [safe, debug, unowned] = await Promise.all([
+			productionHandler(request),
+			developmentHandler(request),
+			unownedHandler(request),
+		]);
+
+		expect(await safe.text()).toContain('Something went wrong.');
+		expect(await debug.text()).toContain('development diagnostics');
+		expect(unowned.headers.get('content-type')).toContain('application/json');
+		expect(await unowned.json()).toEqual({ error: 'ownerless' });
+	} finally {
+		log.mockRestore();
+	}
 });

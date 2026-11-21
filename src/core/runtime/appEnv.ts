@@ -5,10 +5,10 @@ type EnvRecord = Record<string, string | undefined>;
  * Staging is not in this set: it is typically internet-exposed with
  * production-like data, so it must use real secrets.
  */
-const NON_PRODUCTION_APP_ENVS = new Set(["local", "development", "dev", "test", "testing", "ci"]);
+const NON_PRODUCTION_APP_ENVS = new Set(['local', 'development', 'dev', 'test', 'testing', 'ci']);
 
 function normalizeEnvValue(value: string | undefined): string {
-  return (value ?? "").trim().toLowerCase();
+	return (value ?? '').trim().toLowerCase();
 }
 
 /**
@@ -18,23 +18,24 @@ function normalizeEnvValue(value: string | undefined): string {
  * checks cannot be skipped by capitalization or a typo.
  */
 function isProductionEnv(env: EnvRecord = process.env): boolean {
-  const appEnv = normalizeEnvValue(env.APP_ENV);
-  const nodeEnv = normalizeEnvValue(env.NODE_ENV);
+	const appEnv = normalizeEnvValue(env.APP_ENV);
 
-  if (appEnv === "production" || nodeEnv === "production") {
-    return true;
-  }
+	const nodeEnv = normalizeEnvValue(env.NODE_ENV);
 
-  if (appEnv === "") {
-    return false;
-  }
+	if (appEnv === 'production' || nodeEnv === 'production') {
+		return true;
+	}
 
-  return !NON_PRODUCTION_APP_ENVS.has(appEnv);
+	if (appEnv === '') {
+		return false;
+	}
+
+	return !NON_PRODUCTION_APP_ENVS.has(appEnv);
 }
 
 /** True only for the exact string "true". Unset, "false", "0", "FALSE", and "off" are off. */
 function envFlagEnabled(value: string | undefined): boolean {
-  return value === "true";
+	return value === 'true';
 }
 
 export type { EnvRecord };

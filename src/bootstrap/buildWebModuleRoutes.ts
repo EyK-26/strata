@@ -1,47 +1,50 @@
-import { createApplicationCachedJson } from "./cachedJson";
-import type { AppDependencies, AppModule, AppRouteMap } from "./contracts";
-import { createHttpKernel } from "./httpKernel";
-import { enterModuleRoutes } from "./moduleRouteMiddleware";
-import type { BusinessRouteHandler } from "./persistenceContracts";
-import type { RouteSource } from "./routeCompiler";
-import { compileRoutePlan } from "./routeCompiler";
-import { publishRoutePlan } from "./routeMetadata";
+import { createApplicationCachedJson } from './cachedJson';
+import type { AppDependencies, AppModule, AppRouteMap } from './contracts';
+import { createHttpKernel } from './httpKernel';
+import { enterModuleRoutes } from './moduleRouteMiddleware';
+import type { BusinessRouteHandler } from './persistenceContracts';
+import type { RouteSource } from './routeCompiler';
+import { compileRoutePlan } from './routeCompiler';
+import { publishRoutePlan } from './routeMetadata';
 
 interface BuildWebModuleRoutesOptions {
-  modules: readonly AppModule[];
-  seedRoutes?: Record<string, unknown>;
+	modules: readonly AppModule[];
+	seedRoutes?: Record<string, unknown>;
 }
 
 function buildWebModuleRoutes(
-  dependencies: AppDependencies,
-  options: BuildWebModuleRoutesOptions,
+	dependencies: AppDependencies,
+	options: BuildWebModuleRoutesOptions,
 ): AppRouteMap {
-  const { modules, seedRoutes = {} } = options;
+	const { modules, seedRoutes = {} } = options;
 
-  const kernel = createHttpKernel(dependencies);
-  const cachedJson = createApplicationCachedJson(dependencies);
+	const kernel = createHttpKernel(dependencies);
 
-  const sources: RouteSource[] = [
-    { name: "seed routes", routes: seedRoutes, middleware: ["global", "web"] },
-  ];
+	const cachedJson = createApplicationCachedJson(dependencies);
 
-  for (const module of modules) {
-    if (!module.webRoutes) {
-      continue;
-    }
+	const sources: RouteSource[] = [
+		{ name: 'seed routes', routes: seedRoutes, middleware: ['global', 'web'] },
+	];
 
-    sources.push({
-      name: module.name,
-      routes: module.webRoutes({ dependencies, cachedJson, kernel }),
-      middleware: ["global", "web"],
-    });
-  }
+	for (const module of modules) {
+		if (!module.webRoutes) {
+			continue;
+		}
 
-  const plan = compileRoutePlan(sources);
-  const routes = enterModuleRoutes(plan.routes, (callback) =>
-    kernel.composed(callback as BusinessRouteHandler, "web"),
-  );
-  return publishRoutePlan(plan, routes) as AppRouteMap;
+		sources.push({
+			name: module.name,
+			routes: module.webRoutes({ dependencies, cachedJson, kernel }),
+			middleware: ['global', 'web'],
+		});
+	}
+
+	const plan = compileRoutePlan(sources);
+
+	const routes = enterModuleRoutes(plan.routes, (callback) =>
+		kernel.composed(callback as BusinessRouteHandler, 'web'),
+	);
+
+	return publishRoutePlan(plan, routes) as AppRouteMap;
 }
 
 export type { BuildWebModuleRoutesOptions };

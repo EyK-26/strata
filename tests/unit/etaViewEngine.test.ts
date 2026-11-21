@@ -1,62 +1,67 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
-import { assertEtaHtmlSource } from "@getstrata/core/view/assertEtaHtmlSource";
-import { createGeneratedSourceApps } from "../helpers/generatedSourceApps";
-import { restoreEnvVar } from "../helpers/restoreEnv";
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, relative } from 'node:path';
+
+import { assertEtaHtmlSource } from '@getstrata/core/view/assertEtaHtmlSource';
+
+import { createGeneratedSourceApps } from '../helpers/generatedSourceApps';
+import { restoreEnvVar } from '../helpers/restoreEnv';
 
 const generated = createGeneratedSourceApps();
+
 afterAll(generated.close);
 
 async function collectEtaFiles(root: string): Promise<string[]> {
-  const entries = await readdir(root, { withFileTypes: true });
-  const files: string[] = [];
+	const entries = await readdir(root, { withFileTypes: true });
 
-  for (const entry of entries) {
-    const path = join(root, entry.name);
+	const files: string[] = [];
 
-    if (entry.isDirectory()) {
-      files.push(...(await collectEtaFiles(path)));
-      continue;
-    }
+	for (const entry of entries) {
+		const path = join(root, entry.name);
 
-    if (entry.isFile() && entry.name.endsWith(".eta")) {
-      files.push(path);
-    }
-  }
+		if (entry.isDirectory()) {
+			files.push(...(await collectEtaFiles(path)));
+			continue;
+		}
 
-  return files;
+		if (entry.isFile() && entry.name.endsWith('.eta')) {
+			files.push(path);
+		}
+	}
+
+	return files;
 }
 
-describe("EtaViewEngine", () => {
-  let viewsDirectory = "";
-  const previousFrontendMode = process.env.FRONTEND_MODE;
+describe('EtaViewEngine', () => {
+	let viewsDirectory = '';
 
-  beforeAll(async () => {
-    viewsDirectory = await mkdtemp(join(tmpdir(), "strata-views-"));
-    await mkdir(join(viewsDirectory, "layouts"), { recursive: true });
-    await mkdir(join(viewsDirectory, "partials"), { recursive: true });
+	const previousFrontendMode = process.env.FRONTEND_MODE;
 
-    await writeFile(
-      join(viewsDirectory, "hello.eta"),
-      "<h1><%= it.title %></h1><p><%= it.message %></p>",
-    );
-    await writeFile(
-      join(viewsDirectory, "partials", "blurb.eta"),
-      '<p class="blurb"><%= it.message %></p>',
-    );
-    await writeFile(
-      join(viewsDirectory, "page.eta"),
-      `<section class="section">
+	beforeAll(async () => {
+		viewsDirectory = await mkdtemp(join(tmpdir(), 'strata-views-'));
+		await mkdir(join(viewsDirectory, 'layouts'), { recursive: true });
+		await mkdir(join(viewsDirectory, 'partials'), { recursive: true });
+
+		await writeFile(
+			join(viewsDirectory, 'hello.eta'),
+			'<h1><%= it.title %></h1><p><%= it.message %></p>',
+		);
+		await writeFile(
+			join(viewsDirectory, 'partials', 'blurb.eta'),
+			'<p class="blurb"><%= it.message %></p>',
+		);
+		await writeFile(
+			join(viewsDirectory, 'page.eta'),
+			`<section class="section">
   <h1><%= it.title %></h1>
   <%~ include("./partials/blurb", it) %>
 </section>
 `,
-    );
-    await writeFile(
-      join(viewsDirectory, "layouts", "app.eta"),
-      `<!doctype html>
+		);
+		await writeFile(
+			join(viewsDirectory, 'layouts', 'app.eta'),
+			`<!doctype html>
 <html>
   <body>
     <main>
@@ -65,18 +70,18 @@ describe("EtaViewEngine", () => {
   </body>
 </html>
 `,
-    );
-    await writeFile(
-      join(viewsDirectory, "forum.eta"),
-      `section.section
+		);
+		await writeFile(
+			join(viewsDirectory, 'forum.eta'),
+			`section.section
   h1 Forum
   a.card href="/learn/<%= it.slug %>"
     h3><%= it.title %>
 `,
-    );
-    await writeFile(
-      join(viewsDirectory, "with-script.eta"),
-      `<section class="section">
+		);
+		await writeFile(
+			join(viewsDirectory, 'with-script.eta'),
+			`<section class="section">
   <h1><%= it.title %></h1>
   <script>
     document.addEventListener("DOMContentLoaded", () => {
@@ -88,133 +93,144 @@ describe("EtaViewEngine", () => {
   </script>
 </section>
 `,
-    );
-  });
+		);
+	});
 
-  afterAll(async () => {
-    if (previousFrontendMode === undefined) {
-      delete process.env.FRONTEND_MODE;
-    } else {
-      restoreEnvVar("FRONTEND_MODE", previousFrontendMode);
-    }
+	afterAll(async () => {
+		if (previousFrontendMode === undefined) {
+			delete process.env.FRONTEND_MODE;
+		} else {
+			restoreEnvVar('FRONTEND_MODE', previousFrontendMode);
+		}
 
-    await rm(viewsDirectory, { recursive: true, force: true });
-  });
+		await rm(viewsDirectory, { recursive: true, force: true });
+	});
 
-  test("renders templates from the configured views directory", async () => {
-    const { EtaViewEngine } = await import("@getstrata/core/view/etaViewEngine");
-    const engine = new EtaViewEngine(viewsDirectory);
+	test('renders templates from the configured views directory', async () => {
+		const { EtaViewEngine } = await import('@getstrata/core/view/etaViewEngine');
 
-    const html = await engine.render(
-      "hello",
-      {
-        title: "Hello",
-        message: "World",
-      },
-      { layout: false },
-    );
+		const engine = new EtaViewEngine(viewsDirectory);
 
-    expect(html).toContain("<h1>Hello</h1>");
-    expect(html).toContain("<p>World</p>");
-  });
+		const html = await engine.render(
+			'hello',
+			{
+				title: 'Hello',
+				message: 'World',
+			},
+			{ layout: false },
+		);
 
-  test("renders layouts and include() as HTML", async () => {
-    const { EtaViewEngine } = await import("@getstrata/core/view/etaViewEngine");
-    const engine = new EtaViewEngine(viewsDirectory);
+		expect(html).toContain('<h1>Hello</h1>');
+		expect(html).toContain('<p>World</p>');
+	});
 
-    const html = await engine.render("page", {
-      title: "Forum",
-      message: "Welcome",
-    });
+	test('renders layouts and include() as HTML', async () => {
+		const { EtaViewEngine } = await import('@getstrata/core/view/etaViewEngine');
 
-    expect(html).toContain("<!doctype html>");
-    expect(html).toContain("<h1>Forum</h1>");
-    expect(html).toContain('<p class="blurb">Welcome</p>');
-    expect(html).not.toContain("section.section");
-  });
+		const engine = new EtaViewEngine(viewsDirectory);
 
-  test("throws when a template uses Pug-like shorthand", async () => {
-    const { EtaViewEngine } = await import("@getstrata/core/view/etaViewEngine");
-    const engine = new EtaViewEngine(viewsDirectory);
+		const html = await engine.render('page', {
+			title: 'Forum',
+			message: 'Welcome',
+		});
 
-    const renderPug = engine.render("forum", { slug: "intro", title: "Hello" }, { layout: false });
+		expect(html).toContain('<!doctype html>');
+		expect(html).toContain('<h1>Forum</h1>');
+		expect(html).toContain('<p class="blurb">Welcome</p>');
+		expect(html).not.toContain('section.section');
+	});
 
-    await expect(renderPug).rejects.toThrow(/forum\.eta/);
-    await expect(
-      engine.render("forum", { slug: "intro", title: "Hello" }, { layout: false }),
-    ).rejects.toThrow(/Pug/);
-    await expect(
-      engine.render("forum", { slug: "intro", title: "Hello" }, { layout: false }),
-    ).rejects.toThrow(/HTML/);
-  });
+	test('throws when a template uses Pug-like shorthand', async () => {
+		const { EtaViewEngine } = await import('@getstrata/core/view/etaViewEngine');
 
-  test("passes Request into resolveLayoutData", async () => {
-    const { EtaViewEngine } = await import("@getstrata/core/view/etaViewEngine");
-    const seen: Request[] = [];
-    const engine = new EtaViewEngine(viewsDirectory, async (request) => {
-      if (request) {
-        seen.push(request);
-      }
-      return { currentUser: { email: "member@example.test" } };
-    });
-    const request = new Request("http://example.test/learn");
+		const engine = new EtaViewEngine(viewsDirectory);
 
-    const html = await engine.render(
-      "hello",
-      { title: "Hi", message: "there" },
-      { layout: false, request },
-    );
+		const renderPug = engine.render('forum', { slug: 'intro', title: 'Hello' }, { layout: false });
 
-    expect(seen[0]).toBe(request);
-    expect(html).toContain("<h1>Hi</h1>");
-  });
+		await expect(renderPug).rejects.toThrow(/forum\.eta/);
+		await expect(
+			engine.render('forum', { slug: 'intro', title: 'Hello' }, { layout: false }),
+		).rejects.toThrow(/Pug/);
+		await expect(
+			engine.render('forum', { slug: 'intro', title: 'Hello' }, { layout: false }),
+		).rejects.toThrow(/HTML/);
+	});
 
-  test("does not treat JavaScript inside script blocks as Pug", async () => {
-    const { EtaViewEngine } = await import("@getstrata/core/view/etaViewEngine");
-    const engine = new EtaViewEngine(viewsDirectory);
+	test('passes Request into resolveLayoutData', async () => {
+		const { EtaViewEngine } = await import('@getstrata/core/view/etaViewEngine');
 
-    const html = await engine.render("with-script", { title: "Safe" }, { layout: false });
+		const seen: Request[] = [];
 
-    expect(html).toContain("<h1>Safe</h1>");
-    expect(html).toContain('link.href = "/ok"');
-  });
+		const engine = new EtaViewEngine(viewsDirectory, async (request) => {
+			if (request) {
+				seen.push(request);
+			}
+
+			return { currentUser: { email: 'member@example.test' } };
+		});
+
+		const request = new Request('http://example.test/learn');
+
+		const html = await engine.render(
+			'hello',
+			{ title: 'Hi', message: 'there' },
+			{ layout: false, request },
+		);
+
+		expect(seen[0]).toBe(request);
+		expect(html).toContain('<h1>Hi</h1>');
+	});
+
+	test('does not treat JavaScript inside script blocks as Pug', async () => {
+		const { EtaViewEngine } = await import('@getstrata/core/view/etaViewEngine');
+
+		const engine = new EtaViewEngine(viewsDirectory);
+
+		const html = await engine.render('with-script', { title: 'Safe' }, { layout: false });
+
+		expect(html).toContain('<h1>Safe</h1>');
+		expect(html).toContain('link.href = "/ok"');
+	});
 });
 
-describe("assertEtaHtmlSource", () => {
-  test("accepts generated RLS/team and scaffold HTML+Eta views", async () => {
-    const roots = [
-      join(generated.rls, "views"),
-      join(generated.team, "views"),
-      join(process.cwd(), "templates"),
-      join(process.cwd(), "packages/strata-starter/templates"),
-    ];
+describe('assertEtaHtmlSource', () => {
+	test('accepts generated RLS/team and scaffold HTML+Eta views', async () => {
+		const roots = [
+			join(generated.rls, 'views'),
+			join(generated.team, 'views'),
+			join(process.cwd(), 'templates'),
+			join(process.cwd(), 'packages/strata-starter/templates'),
+		];
 
-    for (const [root, minimum] of [
-      [join(generated.rls, "views"), 10],
-      [join(generated.team, "views"), 6],
-    ] as const) {
-      expect((await collectEtaFiles(root)).length, root).toBeGreaterThanOrEqual(minimum);
-    }
+		for (const [root, minimum] of [
+			[join(generated.rls, 'views'), 10],
+			[join(generated.team, 'views'), 6],
+		] as const) {
+			expect((await collectEtaFiles(root)).length, root).toBeGreaterThanOrEqual(minimum);
+		}
 
-    for (const root of roots) {
-      let files: string[] = [];
-      try {
-        files = await collectEtaFiles(root);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-          continue;
-        }
-        throw error;
-      }
-      for (const file of files) {
-        const source = await readFile(file, "utf8");
-        expect(() => assertEtaHtmlSource(relative(process.cwd(), file), source)).not.toThrow();
-      }
-    }
-  });
+		for (const root of roots) {
+			let files: string[] = [];
 
-  test("rejects piped Pug text", () => {
-    expect(() => assertEtaHtmlSource("notes.eta", "| leftover pug text")).toThrow(/notes\.eta/);
-    expect(() => assertEtaHtmlSource("notes.eta", "| leftover pug text")).toThrow(/Pug/);
-  });
+			try {
+				files = await collectEtaFiles(root);
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+					continue;
+				}
+
+				throw error;
+			}
+			for (const file of files) {
+				const source = await readFile(file, 'utf8');
+
+				expect(() => assertEtaHtmlSource(relative(process.cwd(), file), source)).not.toThrow();
+			}
+		}
+	});
+
+	test('rejects piped Pug text', () => {
+		expect(() => assertEtaHtmlSource('notes.eta', '| leftover pug text')).toThrow(/notes\.eta/);
+		expect(() => assertEtaHtmlSource('notes.eta', '| leftover pug text')).toThrow(/Pug/);
+	});
 });

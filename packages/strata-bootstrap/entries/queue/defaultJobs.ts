@@ -1,1 +1,1 @@
-export * from "../../../../src/bootstrap/queue/defaultJobs.ts";
+export * from '../../../../src/bootstrap/queue/defaultJobs.ts';

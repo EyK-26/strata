@@ -1,1 +1,1 @@
-export * from "../../../../src/core/config/envSchema.ts";
+export * from '../../../../src/core/config/envSchema.ts';

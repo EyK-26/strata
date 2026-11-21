@@ -1,1 +1,1 @@
-export type { ServiceContainerLike } from "./container.ts";
+export type { ServiceContainerLike } from './container.ts';

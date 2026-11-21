@@ -23,14 +23,17 @@ The factory captures environment configuration when the application declares its
 For an explicit runtime, pass it to the middleware and register its ownership yourself:
 
 ```ts
-import { createTracingMiddleware, createTracingRuntime } from "@getstrata/core/tracing/tracingMiddleware";
-import { LifecycleCoordinator } from "@getstrata/core/lifecycle/gracefulShutdown";
+import { LifecycleCoordinator } from '@getstrata/core/lifecycle/gracefulShutdown';
+import {
+	createTracingMiddleware,
+	createTracingRuntime,
+} from '@getstrata/core/tracing/tracingMiddleware';
 const lifecycle = new LifecycleCoordinator();
 const runtime = createTracingRuntime({ sampleRatio: 0.1, maxQueueSize: 1024 });
 const middleware = createTracingMiddleware(runtime);
 // Register after stopping/draining admitted work:
-lifecycle.register("traces", () => runtime.forceFlush(), "flush");
-lifecycle.register("traces-close", () => runtime.shutdown(), "close");
+lifecycle.register('traces', () => runtime.forceFlush(), 'flush');
+lifecycle.register('traces-close', () => runtime.shutdown(), 'close');
 ```
 
 The runtime installs a shared asynchronous API context manager only if the application has not installed one. It does not register or replace the global tracer provider or propagator. `trace.getSpan(context.active())` exposes the active server span to existing instrumentation. Use your owned `runtime.tracer` for manually instrumented child spans exported with this provider, ending each span in `finally`. When using the provider, resolve its runtime through `container.resolve(CORE_TRACING_RUNTIME_TOKEN)`; import the token from `@getstrata/core/contracts/serviceTokens`. An application with its own global SDK retains ownership of that SDK's exports and shutdown. No automatic SQL, queue, scheduler or outbound-fetch spans are claimed by this integration. The compatibility `runWithTraceContext` helper still supplies framework log correlation; it does not create OpenTelemetry spans.

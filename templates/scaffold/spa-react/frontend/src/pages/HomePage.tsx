@@ -1,7 +1,9 @@
 import { useAuth } from "../auth/AuthContext";
 import { AUTH_CONFIG } from "../auth/config";
+
 export default function HomePage() {
   const { user } = useAuth();
+
   return (
     <section>
       <h1>{AUTH_CONFIG.transport === "headers" ? "Development identity selected" : "Signed in"}</h1>

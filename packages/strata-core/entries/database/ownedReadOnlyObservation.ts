@@ -1,1 +1,1 @@
-export * from "../../../../src/core/database/ownedReadOnlyObservation.ts";
+export * from '../../../../src/core/database/ownedReadOnlyObservation.ts';

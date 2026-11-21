@@ -1,1 +1,1 @@
-export * from "../../../src/bootstrap/discoverModules.ts";
+export * from '../../../src/bootstrap/discoverModules.ts';

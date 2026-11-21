@@ -1,1 +1,1 @@
-export * from "../../../src/bootstrap/schedule.ts";
+export * from '../../../src/bootstrap/schedule.ts';

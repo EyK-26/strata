@@ -2,11 +2,11 @@
 
 `TENANCY_DRIVER` chooses how tenant context is stored:
 
-| Driver | Database | What it does |
-|--------|----------|--------------|
-| `none` | any | No `tenant` table. Middleware still sets an async-local default tenant (`id` 1). It does not query `tenant` or run `SET LOCAL`. |
-| `column` | any | Creates a `tenant` table and `users.tenant_id`. Requests resolve the tenant in application code (ALS). No Postgres `SET LOCAL` / `set_config`. Use this on SQLite and MySQL, or on Postgres when you do not want RLS. |
-| `rls` | Postgres | Same tenant table plus `SET LOCAL` / `set_config('app.tenant_id')` on the connection that runs queries. SQLite and MySQL cannot do this. The feature compiler rejects RLS on those engines before generation. |
+| Driver   | Database | What it does                                                                                                                                                                                                          |
+| -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `none`   | any      | No `tenant` table. Middleware still sets an async-local default tenant (`id` 1). It does not query `tenant` or run `SET LOCAL`.                                                                                       |
+| `column` | any      | Creates a `tenant` table and `users.tenant_id`. Requests resolve the tenant in application code (ALS). No Postgres `SET LOCAL` / `set_config`. Use this on SQLite and MySQL, or on Postgres when you do not want RLS. |
+| `rls`    | Postgres | Same tenant table plus `SET LOCAL` / `set_config('app.tenant_id')` on the connection that runs queries. SQLite and MySQL cannot do this. The feature compiler rejects RLS on those engines before generation.         |
 
 The default in core (unset env) is `rls`. Generated apps write the driver you picked into `.env.example`. Hobby SQLite defaults to `none`.
 
@@ -28,13 +28,13 @@ The retained example layer presets `hiroapp-hobby` and `hiroapp-team` set `TENAN
 
 Auth middleware runs before tenant middleware. Lookups that must succeed before `app.tenant_id` is set either bypass RLS or stay off RLS.
 
-| Table | Why |
-|-------|-----|
-| Generated `users` | `ENABLE` + `FORCE ROW LEVEL SECURITY` on `--tenancy=rls`. Auth directory `findById` / `findByEmail` select identifier-limited scoped policy with that id or email. Token lookup selects `api_tokens` by `token_hash`, then `users` by `user_id`. Password reset, email verify, MFA enroll, and recovery-hash updates also wrap that identifier-scoped GUC so guest requests (tenant `1`) can update a user in another tenant. After tenant GUC is set, ordinary user queries (including SCIM) are tenant-scoped. |
-| Generated `api_tokens` (fixture name `api_token`) | `ENABLE` + `FORCE ROW LEVEL SECURITY` with a join to `users.tenant_id`, plus identifier match on `token_hash` or `user_id::text`. Bearer lookup runs in auth middleware **before** tenant middleware, so it selects identifier-limited policy for `token_hash`, then a second scope for `user_id`. Token mint wraps the user id so a guest request (tenant `1`) can insert a row for a user in another tenant. |
-| Generated `sessions` | Same join policy as `api_tokens`, plus identifier match on `id` or `user_id::text`. Cookie session load selects the session by id, then the user by `user_id`. Session create/destroy select identifier-limited scoped policy with the session id or user id. Identifier policy for a user id may see that user's sessions and tokens. That is the session-create pin, not a one-row-only policy. |
-| Generated `auth_one_time_tokens` | Same join policy, plus identifier match on `token_hash` or `user_id::text`. Insert wraps the user id. Consume wraps `hashOneTimeToken(token)` so guest password-reset and verify links work for users outside tenant `1`. |
-| Optional membership joins | If your app uses membership middleware, it also runs **before** tenant middleware so roles exist for the rest of the request. Generated applications do not use org membership. It stores `users.tenant_id`. |
+| Table                                             | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Generated `users`                                 | `ENABLE` + `FORCE ROW LEVEL SECURITY` on `--tenancy=rls`. Auth directory `findById` / `findByEmail` select identifier-limited scoped policy with that id or email. Token lookup selects `api_tokens` by `token_hash`, then `users` by `user_id`. Password reset, email verify, MFA enroll, and recovery-hash updates also wrap that identifier-scoped GUC so guest requests (tenant `1`) can update a user in another tenant. After tenant GUC is set, ordinary user queries (including SCIM) are tenant-scoped. |
+| Generated `api_tokens` (fixture name `api_token`) | `ENABLE` + `FORCE ROW LEVEL SECURITY` with a join to `users.tenant_id`, plus identifier match on `token_hash` or `user_id::text`. Bearer lookup runs in auth middleware **before** tenant middleware, so it selects identifier-limited policy for `token_hash`, then a second scope for `user_id`. Token mint wraps the user id so a guest request (tenant `1`) can insert a row for a user in another tenant.                                                                                                   |
+| Generated `sessions`                              | Same join policy as `api_tokens`, plus identifier match on `id` or `user_id::text`. Cookie session load selects the session by id, then the user by `user_id`. Session create/destroy select identifier-limited scoped policy with the session id or user id. Identifier policy for a user id may see that user's sessions and tokens. That is the session-create pin, not a one-row-only policy.                                                                                                                |
+| Generated `auth_one_time_tokens`                  | Same join policy, plus identifier match on `token_hash` or `user_id::text`. Insert wraps the user id. Consume wraps `hashOneTimeToken(token)` so guest password-reset and verify links work for users outside tenant `1`.                                                                                                                                                                                                                                                                                        |
+| Optional membership joins                         | If your app uses membership middleware, it also runs **before** tenant middleware so roles exist for the rest of the request. Generated applications do not use org membership. It stores `users.tenant_id`.                                                                                                                                                                                                                                                                                                     |
 
 Global middleware order: auth, then membership, then tenant. Do not reverse that order.
 
@@ -63,10 +63,10 @@ With tenancy enabled, bind `CORE_TENANT_RESOLVER_TOKEN` from `@getstrata/core/co
 Bind `CORE_THROTTLE_QUOTA_POLICY_TOKEN` to a synchronous `ThrottleQuotaPolicy` for the kernel's API group, or pass `quotaPolicy` directly to `createThrottleMiddleware` / `createMemoryThrottleMiddleware`:
 
 ```ts
-import { CORE_THROTTLE_QUOTA_POLICY_TOKEN } from "@getstrata/core/contracts/serviceTokens";
+import { CORE_THROTTLE_QUOTA_POLICY_TOKEN } from '@getstrata/core/contracts/serviceTokens';
 
 container.set(CORE_THROTTLE_QUOTA_POLICY_TOKEN, ({ tenant, maxAttempts }) => {
-  return tenant?.metadata?.entitlement === "education" ? 240 : maxAttempts;
+	return tenant?.metadata?.entitlement === 'education' ? 240 : maxAttempts;
 });
 ```
 
@@ -90,7 +90,6 @@ Reproduce the controlled local cardinality probe with `bun scripts/probe-memory-
 
 These identity and ownership changes are public behavior changes. Existing distributed throttles do not fall back to memory on a Redis outage. The legacy SCIM Redis gap was recorded in [framework issue #109](https://github.com/EyK-26/strata/issues/109); the distributed consumer correction below supersedes that implementation.
 
-
 ### Distributed throttle ownership and SCIM migration
 
 API, login and SCIM Redis throttles now reuse the same atomic increment/expiry script and deadline-bounded consumer. SCIM uses its hashed credential plus the same application namespace, trusted token tenant, HTTP method and registered route identity; the canonical token-to-tenant lookup binds valid credentials even when throttling runs before SCIM authentication enters its RLS scope. Unrecognized credentials retain the surrounding/anonymous scope for pre-auth admission; it keeps its own fixed quota and JSON 429 contract. Malformed counters, unavailable Redis and command deadlines return the framework's secret-safe 503 with Retry-After, never a memory fallback. Handler errors remain business errors. SCIM accepts `commandTimeoutMs`, `redisClient` and `keyPrefix`, matching the shared consumer's injection and namespace contracts.
@@ -98,7 +97,6 @@ API, login and SCIM Redis throttles now reuse the same atomic increment/expiry s
 The consumer and distributed middleware expose idempotent `dispose()`. Disposal closes only an owned Redis connection, cancels pending admission immediately, and permanently prevents reconnects. Injected clients stay owned by the caller. Cancellation removes deadline timers and abort listeners; it cannot undo a command already received by Redis, so an uncertain attempt may still be counted, but never reaches the handler after disposal. A command failure resets an owned connection so a later request can retry with a fresh connection; it cannot revive a disposed consumer. The kernel now owns distributed API, registration and login throttles as well as local ones; generated SCIM routes already join this ownership boundary. Application close still follows HTTP drain, so handlers already admitted can finish before resources close.
 
 **SCIM rolling deployment:** the default bucket namespace is now `scim-throttle:v2`. Old identity-only counters are not imported into tenant/method/route buckets, and limits are now per registered route and method rather than one credential-wide counter. This is a documented behavior change: mixed old/new replicas cannot enforce one shared SCIM window. Use a maintenance rollout or coordinated cutover with a consistent configuration across replicas. After retiring all old replicas, operators can remove the retired `APP_KEY_PREFIX:scim-throttle:*` keys using bounded SCAN/UNLINK maintenance, explicitly excluding `APP_KEY_PREFIX:scim-throttle:v2:*` (or the configured new prefix). Old immortal counters may otherwise remain; no application request scans Redis or silently deletes live quota state. No automatic migration resets current counters. Direct middleware/consumer users dispose their resources; injected Redis clients must be closed by their original owner.
-
 
 ## Trusted public tenancy and public-read admission
 
@@ -108,8 +106,8 @@ When tenancy is enabled, bind `CORE_PUBLIC_TENANCY_TOKEN` before constructing th
 
 ```typescript
 container.set(CORE_PUBLIC_TENANCY_TOKEN, {
-  resolveTenantId: async (hostname) => approvedDomainLookup(hostname),
-  trustedProxyAddresses: ["10.0.0.10"],
+	resolveTenantId: async (hostname) => approvedDomainLookup(hostname),
+	trustedProxyAddresses: ['10.0.0.10'],
 });
 ```
 
@@ -127,7 +125,6 @@ In production/staging, generated apps bind their configured `APP_URL` hostname t
 
 Core tenant resolution and authenticated user-to-tenant lookup use typed repositories with bound identifiers. They support generated SQLite column-tenancy apps after SCIM releases a temporary bound connection, as well as Postgres/MySQL; they do not depend on a callable tagged-SQL pool. The disabled-tenancy synthetic context, missing-tenant result, identified-user RLS bypass and request scope policies are unchanged. A native generated SQLite HTTP regression repeatedly alternates two SCIM tokens, cross-tenant reads/writes, an unknown tenant token and ordinary Basic-authenticated requests. This does not change arbitrary raw tagged-SQL support in application adapters or add database-enforced isolation to SQLite.
 
-
 ### Development identities without account tables
 
 `GuestGuard` marks an enabled local header identity with the trusted `guest` credential source. Tenant middleware applies the same approved-host/development-tenant-header policy used for an account-free principal; it does not query `users` for that identity. `TENANT_DEV_HEADERS=true` is still required for local anonymous/development `x-tenant-id` selection. Otherwise local requests use the default tenant or an approved host. In production/staging, missing or unknown host mappings fail closed; a development identity's role does not grant a tenant-header override. The ordinary `GuestGuard` production refusal remains in effect.
@@ -137,6 +134,5 @@ Session, bearer, Basic and legacy persisted identities still resolve membership 
 Column tenancy supplies application context rather than database-enforced isolation. Application resource queries must constrain their tenant column through the ORM, for example `Note.query().where({ tenant_id: currentTenantId() }).get()`. Postgres RLS also enforces the selected scope on its transaction connection. Choosing a column predicate and authorization policy for a business resource remains part of that resource's implementation.
 
 The generated header-tenancy acceptance creates two actual tenants through the published repository/model APIs on SQLite, MySQL and Postgres column mode plus restricted-role Postgres RLS. It proves account tables are absent, default/header selection follows the explicit dev flag, scoped ORM responses isolate the two datasets, and disabling header auth refuses the request. Policy regressions also retain production/staging host refusal and persisted membership lookup failures.
-
 
 The complete auth manager must preserve that `guest` source even when `GuestGuard` is registered under a named/default guard. Treating it as a session would incorrectly restore the persisted-account lookup. Account-free generated apps also exercise real protected writes through the published `requireUser` contract; the explicit local non-cookie proof follows the development-only CSRF policy in [AUTH.md](AUTH.md), without weakening production, anonymous or cookie checks.

@@ -26,16 +26,16 @@ an appropriate real authentication mode for applications with user accounts.
 
 ## Layers
 
-| Flag | Values |
-| --- | --- |
-| `--frontend` | `api`, `server-htmx`, `spa-react`, `hybrid` |
-| `--database` | `sqlite`, `postgres`, `mysql`; one primary database |
-| `--auth` | `headers`, `cookie`, `token`, `jwt`, `cookie-token`, `cookie-token-jwt` |
-| `--tenancy` | `none`, `column`, `rls`; RLS requires PostgreSQL, other engines use column mode |
-| `--cache` | `array`, `redis` |
-| `--queue` | `sync`, `redis` |
-| `--mail` | `log`, `smtp` |
-| `--spa-prefix` | SPA mount path, default `/app` |
+| Flag           | Values                                                                          |
+| -------------- | ------------------------------------------------------------------------------- |
+| `--frontend`   | `api`, `server-htmx`, `spa-react`, `hybrid`                                     |
+| `--database`   | `sqlite`, `postgres`, `mysql`; one primary database                             |
+| `--auth`       | `headers`, `cookie`, `token`, `jwt`, `cookie-token`, `cookie-token-jwt`         |
+| `--tenancy`    | `none`, `column`, `rls`; RLS requires PostgreSQL, other engines use column mode |
+| `--cache`      | `array`, `redis`                                                                |
+| `--queue`      | `sync`, `redis`                                                                 |
+| `--mail`       | `log`, `smtp`                                                                   |
+| `--spa-prefix` | SPA mount path, default `/app`                                                  |
 
 Extras: `--mfa`, `--email-verification`, `--scim`, `--metrics`, `--oauth-github`,
 `--oidc`, `--billing`, `--webhooks`; use the corresponding `--no-*` flag to disable
@@ -50,11 +50,11 @@ changes. Installing newer framework packages does not regenerate app-owned files
 
 ## Docker or local services
 
-| Flag | Behavior |
-| --- | --- |
-| `--docker` | Generate Compose for required services |
-| `--no-docker` | Use locally available services; no Compose file |
-| `--docker-services=postgres,redis` | Generate only the selected compatible services |
+| Flag                               | Behavior                                        |
+| ---------------------------------- | ----------------------------------------------- |
+| `--docker`                         | Generate Compose for required services          |
+| `--no-docker`                      | Use locally available services; no Compose file |
+| `--docker-services=postgres,redis` | Generate only the selected compatible services  |
 
 `--yes` does not imply Docker. Add `adminer` explicitly to `--docker-services` for
 a PostgreSQL/MySQL UI; the interactive wizard also offers it. Start the debug

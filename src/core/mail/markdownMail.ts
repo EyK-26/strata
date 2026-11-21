@@ -1,47 +1,49 @@
-import { sanitizeMailHtml } from "./sanitizeMailHtml.ts";
+import { sanitizeMailHtml } from './sanitizeMailHtml.ts';
 
 interface MarkdownMailLayoutOptions {
-  title?: string;
-  preview?: string;
-  footer?: string;
+	title?: string;
+	preview?: string;
+	footer?: string;
 }
 
 interface RenderedMarkdownMail {
-  html: string;
-  text: string;
+	html: string;
+	text: string;
 }
 
 function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+	return value
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;');
 }
 
 function stripMarkdown(markdown: string): string {
-  return markdown
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/\*([^*]+)\*/g, "$1")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
-    .replace(/^[-*]\s+/gm, "• ")
-    .replace(/```[\s\S]*?```/g, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+	return markdown
+		.replace(/^#{1,6}\s+/gm, '')
+		.replace(/\*\*([^*]+)\*\*/g, '$1')
+		.replace(/\*([^*]+)\*/g, '$1')
+		.replace(/`([^`]+)`/g, '$1')
+		.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)')
+		.replace(/^[-*]\s+/gm, '• ')
+		.replace(/```[\s\S]*?```/g, '')
+		.replace(/\n{3,}/g, '\n\n')
+		.trim();
 }
 
 function markdownToHtml(markdown: string): string {
-  return sanitizeMailHtml(Bun.markdown.html(markdown));
+	return sanitizeMailHtml(Bun.markdown.html(markdown));
 }
 
 function wrapMarkdownMailLayout(bodyHtml: string, options: MarkdownMailLayoutOptions = {}): string {
-  const title = escapeHtml(options.title ?? "GetStrata");
-  const preview = escapeHtml(options.preview ?? "");
-  const footer = escapeHtml(options.footer ?? "Sent by GetStrata");
+	const title = escapeHtml(options.title ?? 'GetStrata');
 
-  return `<!DOCTYPE html>
+	const preview = escapeHtml(options.preview ?? '');
+
+	const footer = escapeHtml(options.footer ?? 'Sent by GetStrata');
+
+	return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -59,7 +61,7 @@ function wrapMarkdownMailLayout(bodyHtml: string, options: MarkdownMailLayoutOpt
   </style>
 </head>
 <body>
-  ${preview ? `<span style="display:none;max-height:0;overflow:hidden;">${preview}</span>` : ""}
+  ${preview ? `<span style="display:none;max-height:0;overflow:hidden;">${preview}</span>` : ''}
   <div class="container">
     <div class="header">${title}</div>
     <div class="content">${bodyHtml}</div>
@@ -70,14 +72,16 @@ function wrapMarkdownMailLayout(bodyHtml: string, options: MarkdownMailLayoutOpt
 }
 
 function renderMarkdownMail(
-  markdown: string,
-  options: MarkdownMailLayoutOptions = {},
+	markdown: string,
+	options: MarkdownMailLayoutOptions = {},
 ): RenderedMarkdownMail {
-  const bodyHtml = markdownToHtml(markdown.trim());
-  const html = wrapMarkdownMailLayout(bodyHtml, options);
-  const text = stripMarkdown(markdown);
+	const bodyHtml = markdownToHtml(markdown.trim());
 
-  return { html, text };
+	const html = wrapMarkdownMailLayout(bodyHtml, options);
+
+	const text = stripMarkdown(markdown);
+
+	return { html, text };
 }
 
 export type { MarkdownMailLayoutOptions, RenderedMarkdownMail };

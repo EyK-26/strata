@@ -1,250 +1,283 @@
-const FRONTENDS = ["api", "server-htmx", "spa-react", "hybrid"] as const;
-const DATABASES = ["sqlite", "postgres", "mysql"] as const;
+const FRONTENDS = ['api', 'server-htmx', 'spa-react', 'hybrid'] as const;
+
+const DATABASES = ['sqlite', 'postgres', 'mysql'] as const;
+
 const AUTH_STACKS = [
-  "headers",
-  "cookie",
-  "token",
-  "jwt",
-  "cookie-token",
-  "cookie-token-jwt",
+	'headers',
+	'cookie',
+	'token',
+	'jwt',
+	'cookie-token',
+	'cookie-token-jwt',
 ] as const;
-const TENANCY_DRIVERS = ["none", "column", "rls"] as const;
-const CACHE_DRIVERS = ["array", "redis"] as const;
-const QUEUE_DRIVERS = ["sync", "redis"] as const;
-const MAIL_DRIVERS = ["log", "smtp"] as const;
-const DOCKER_SERVICE_NAMES = ["postgres", "mysql", "redis", "mailpit", "adminer"] as const;
-const EXAMPLE_APP_IDS = ["hiroapp-hobby", "hiroapp-team", "hiroapp"] as const;
+
+const TENANCY_DRIVERS = ['none', 'column', 'rls'] as const;
+
+const CACHE_DRIVERS = ['array', 'redis'] as const;
+
+const QUEUE_DRIVERS = ['sync', 'redis'] as const;
+
+const MAIL_DRIVERS = ['log', 'smtp'] as const;
+
+const DOCKER_SERVICE_NAMES = ['postgres', 'mysql', 'redis', 'mailpit', 'adminer'] as const;
+
+const EXAMPLE_APP_IDS = ['hiroapp-hobby', 'hiroapp-team', 'hiroapp'] as const;
 
 type FrontendMode = (typeof FRONTENDS)[number];
+
 type DatabaseLayer = (typeof DATABASES)[number];
+
 type AuthStack = (typeof AUTH_STACKS)[number];
+
 type TenancyLayer = (typeof TENANCY_DRIVERS)[number];
+
 type CacheLayer = (typeof CACHE_DRIVERS)[number];
+
 type QueueLayer = (typeof QUEUE_DRIVERS)[number];
+
 type MailLayer = (typeof MAIL_DRIVERS)[number];
+
 type DockerServiceName = (typeof DOCKER_SERVICE_NAMES)[number];
+
 type ExampleAppId = (typeof EXAMPLE_APP_IDS)[number];
 
 const DOCKER_SERVICE_LABELS: Record<DockerServiceName, string> = {
-  postgres: "Postgres",
-  mysql: "MySQL",
-  redis: "Redis",
-  mailpit: "SMTP (Mailpit)",
-  adminer: "Adminer (database UI)",
+	postgres: 'Postgres',
+	mysql: 'MySQL',
+	redis: 'Redis',
+	mailpit: 'SMTP (Mailpit)',
+	adminer: 'Adminer (database UI)',
 };
 
 interface CorporateExtras {
-  mfa: boolean;
-  emailVerification: boolean;
-  scim: boolean;
-  metrics: boolean;
-  oauthGithub: boolean;
-  oidc: boolean;
-  billing: boolean;
-  webhooks: boolean;
+	mfa: boolean;
+	emailVerification: boolean;
+	scim: boolean;
+	metrics: boolean;
+	oauthGithub: boolean;
+	oidc: boolean;
+	billing: boolean;
+	webhooks: boolean;
 }
 
 interface DockerLayer {
-  enabled: boolean;
-  services: Record<DockerServiceName, boolean>;
+	enabled: boolean;
+	services: Record<DockerServiceName, boolean>;
 }
 
 interface DockerNeedles {
-  database: DatabaseLayer;
-  cache: CacheLayer;
-  queue: QueueLayer;
-  mail: MailLayer;
+	database: DatabaseLayer;
+	cache: CacheLayer;
+	queue: QueueLayer;
+	mail: MailLayer;
 }
 
 interface StarterLayers {
-  frontend: FrontendMode;
-  database: DatabaseLayer;
-  auth: AuthStack;
-  tenancy: TenancyLayer;
-  cache: CacheLayer;
-  queue: QueueLayer;
-  mail: MailLayer;
-  spaPrefix: string;
-  extras: CorporateExtras;
-  docker: DockerLayer;
+	frontend: FrontendMode;
+	database: DatabaseLayer;
+	auth: AuthStack;
+	tenancy: TenancyLayer;
+	cache: CacheLayer;
+	queue: QueueLayer;
+	mail: MailLayer;
+	spaPrefix: string;
+	extras: CorporateExtras;
+	docker: DockerLayer;
 }
 
 interface GenerateOptions {
-  projectName: string;
-  targetDir: string;
-  layers: StarterLayers;
-  templateRoot: string;
-  overlayRoot: string;
-  force?: boolean;
-  /** Optional reference commercial domain, shared by browser and API examples. */
-  reference?: "work-tracker";
-  workspaceDependencies?: boolean;
-  /** Compatibility README label for generated example profiles; not a repository path. */
-  inRepoExample?: boolean;
-  /** Compatibility README label for an internal acceptance fixture. Product scaffolds stay unset. */
-  dogfood?: boolean;
+	projectName: string;
+	targetDir: string;
+	layers: StarterLayers;
+	templateRoot: string;
+	overlayRoot: string;
+	force?: boolean;
+	/** Optional reference commercial domain, shared by browser and API examples. */
+	reference?: 'work-tracker';
+	workspaceDependencies?: boolean;
+	/** Compatibility README label for generated example profiles; not a repository path. */
+	inRepoExample?: boolean;
+	/** Compatibility README label for an internal acceptance fixture. Product scaffolds stay unset. */
+	dogfood?: boolean;
 }
 
 function authUsesCookie(auth: AuthStack): boolean {
-  return auth === "cookie" || auth.startsWith("cookie-");
+	return auth === 'cookie' || auth.startsWith('cookie-');
 }
 
 function authUsesToken(auth: AuthStack): boolean {
-  return auth === "token" || auth.includes("token");
+	return auth === 'token' || auth.includes('token');
 }
 
 function authUsesJwt(auth: AuthStack): boolean {
-  return auth === "jwt" || auth.endsWith("jwt");
+	return auth === 'jwt' || auth.endsWith('jwt');
 }
 
 function authNeedsUsers(auth: AuthStack): boolean {
-  return auth !== "headers";
+	return auth !== 'headers';
 }
 
 function usesTenantTable(tenancy: TenancyLayer): boolean {
-  return tenancy === "rls" || tenancy === "column";
+	return tenancy === 'rls' || tenancy === 'column';
 }
 
 function htmlAuthKit(auth: AuthStack): boolean {
-  return authUsesCookie(auth);
+	return authUsesCookie(auth);
 }
 
 /** Frontends that ship a `frontend/` package the app must build before SPA_PREFIX serves. */
 function needsFrontendBuild(frontend: FrontendMode): boolean {
-  return frontend === "spa-react" || frontend === "hybrid";
+	return frontend === 'spa-react' || frontend === 'hybrid';
 }
 
 function extraApplies(extra: keyof CorporateExtras, auth: AuthStack): boolean {
-  if (extra === "metrics" || extra === "billing" || extra === "webhooks") {
-    return true;
-  }
-  if (extra === "mfa" || extra === "oauthGithub" || extra === "oidc") {
-    return htmlAuthKit(auth);
-  }
-  return authNeedsUsers(auth);
+	if (extra === 'metrics' || extra === 'billing' || extra === 'webhooks') {
+		return true;
+	}
+
+	if (extra === 'mfa' || extra === 'oauthGithub' || extra === 'oidc') {
+		return htmlAuthKit(auth);
+	}
+
+	return authNeedsUsers(auth);
 }
 
-function needsRedis(layers: Pick<StarterLayers, "cache" | "queue">): boolean {
-  return layers.cache === "redis" || layers.queue === "redis";
+function needsRedis(layers: Pick<StarterLayers, 'cache' | 'queue'>): boolean {
+	return layers.cache === 'redis' || layers.queue === 'redis';
 }
 
 function emptyDockerServices(): Record<DockerServiceName, boolean> {
-  return { postgres: false, mysql: false, redis: false, mailpit: false, adminer: false };
+	return { postgres: false, mysql: false, redis: false, mailpit: false, adminer: false };
 }
 
-function dockerDatabaseService(database: DatabaseLayer): "postgres" | "mysql" | null {
-  if (database === "postgres" || database === "mysql") {
-    return database;
-  }
-  return null;
+function dockerDatabaseService(database: DatabaseLayer): 'postgres' | 'mysql' | null {
+	if (database === 'postgres' || database === 'mysql') {
+		return database;
+	}
+
+	return null;
 }
 
 function enableDockerServices(
-  names: readonly DockerServiceName[],
+	names: readonly DockerServiceName[],
 ): Record<DockerServiceName, boolean> {
-  const services = emptyDockerServices();
-  for (const name of names) {
-    services[name] = true;
-  }
-  return services;
+	const services = emptyDockerServices();
+
+	for (const name of names) {
+		services[name] = true;
+	}
+
+	return services;
 }
 
 function neededDockerServices(layers: DockerNeedles): DockerServiceName[] {
-  const needed: DockerServiceName[] = [];
-  if (layers.database === "postgres") {
-    needed.push("postgres");
-  }
-  if (layers.database === "mysql") {
-    needed.push("mysql");
-  }
-  if (needsRedis(layers)) {
-    needed.push("redis");
-  }
-  if (layers.mail === "smtp") {
-    needed.push("mailpit");
-  }
-  return needed;
+	const needed: DockerServiceName[] = [];
+
+	if (layers.database === 'postgres') {
+		needed.push('postgres');
+	}
+
+	if (layers.database === 'mysql') {
+		needed.push('mysql');
+	}
+
+	if (needsRedis(layers)) {
+		needed.push('redis');
+	}
+
+	if (layers.mail === 'smtp') {
+		needed.push('mailpit');
+	}
+
+	return needed;
 }
 
 function selectedDockerServices(layers: StarterLayers): DockerServiceName[] {
-  if (!layers.docker.enabled) {
-    return [];
-  }
-  const selected = neededDockerServices(layers).filter((name) => layers.docker.services[name]);
-  const databaseService = dockerDatabaseService(layers.database);
-  if (databaseService && selected.includes(databaseService) && layers.docker.services.adminer) {
-    selected.push("adminer");
-  }
-  return selected;
+	if (!layers.docker.enabled) {
+		return [];
+	}
+
+	const selected = neededDockerServices(layers).filter((name) => layers.docker.services[name]);
+
+	const databaseService = dockerDatabaseService(layers.database);
+
+	if (databaseService && selected.includes(databaseService) && layers.docker.services.adminer) {
+		selected.push('adminer');
+	}
+
+	return selected;
 }
 
 /** Selected debug tooling must be started explicitly by generated instructions. */
 function dockerComposeUpCommand(layers: StarterLayers): string {
-  return selectedDockerServices(layers).includes("adminer")
-    ? "docker compose --profile debug up -d --wait --wait-timeout 180"
-    : "docker compose up -d --wait --wait-timeout 180";
+	return selectedDockerServices(layers).includes('adminer')
+		? 'docker compose --profile debug up -d --wait --wait-timeout 180'
+		: 'docker compose up -d --wait --wait-timeout 180';
 }
 
 function reconcileDocker(layers: StarterLayers): StarterLayers {
-  const selected = selectedDockerServices(layers);
-  return {
-    ...layers,
-    docker: {
-      enabled: selected.length > 0,
-      services: enableDockerServices(selected),
-    },
-  };
+	const selected = selectedDockerServices(layers);
+
+	return {
+		...layers,
+		docker: {
+			enabled: selected.length > 0,
+			services: enableDockerServices(selected),
+		},
+	};
 }
 
 function dockerLayerForNeeded(layers: DockerNeedles, enabled: boolean): DockerLayer {
-  const needed = neededDockerServices(layers);
-  if (!enabled || needed.length === 0) {
-    return { enabled: false, services: emptyDockerServices() };
-  }
-  return { enabled: true, services: enableDockerServices(needed) };
+	const needed = neededDockerServices(layers);
+
+	if (!enabled || needed.length === 0) {
+		return { enabled: false, services: emptyDockerServices() };
+	}
+
+	return { enabled: true, services: enableDockerServices(needed) };
 }
 
 export type {
-  AuthStack,
-  CacheLayer,
-  CorporateExtras,
-  DatabaseLayer,
-  DockerLayer,
-  DockerServiceName,
-  ExampleAppId,
-  FrontendMode,
-  GenerateOptions,
-  MailLayer,
-  QueueLayer,
-  StarterLayers,
-  TenancyLayer,
+	AuthStack,
+	CacheLayer,
+	CorporateExtras,
+	DatabaseLayer,
+	DockerLayer,
+	DockerServiceName,
+	ExampleAppId,
+	FrontendMode,
+	GenerateOptions,
+	MailLayer,
+	QueueLayer,
+	StarterLayers,
+	TenancyLayer,
 };
 export {
-  AUTH_STACKS,
-  authNeedsUsers,
-  authUsesCookie,
-  authUsesJwt,
-  authUsesToken,
-  CACHE_DRIVERS,
-  DATABASES,
-  DOCKER_SERVICE_LABELS,
-  DOCKER_SERVICE_NAMES,
-  dockerComposeUpCommand,
-  dockerDatabaseService,
-  dockerLayerForNeeded,
-  EXAMPLE_APP_IDS,
-  emptyDockerServices,
-  enableDockerServices,
-  extraApplies,
-  FRONTENDS,
-  htmlAuthKit,
-  MAIL_DRIVERS,
-  neededDockerServices,
-  needsFrontendBuild,
-  needsRedis,
-  QUEUE_DRIVERS,
-  reconcileDocker,
-  selectedDockerServices,
-  TENANCY_DRIVERS,
-  usesTenantTable,
+	AUTH_STACKS,
+	authNeedsUsers,
+	authUsesCookie,
+	authUsesJwt,
+	authUsesToken,
+	CACHE_DRIVERS,
+	DATABASES,
+	DOCKER_SERVICE_LABELS,
+	DOCKER_SERVICE_NAMES,
+	dockerComposeUpCommand,
+	dockerDatabaseService,
+	dockerLayerForNeeded,
+	EXAMPLE_APP_IDS,
+	emptyDockerServices,
+	enableDockerServices,
+	extraApplies,
+	FRONTENDS,
+	htmlAuthKit,
+	MAIL_DRIVERS,
+	neededDockerServices,
+	needsFrontendBuild,
+	needsRedis,
+	QUEUE_DRIVERS,
+	reconcileDocker,
+	selectedDockerServices,
+	TENANCY_DRIVERS,
+	usesTenantTable,
 };

@@ -1,1 +1,1 @@
-export * from "../../../../src/core/security/recoveryCodes.ts";
+export * from '../../../../src/core/security/recoveryCodes.ts';

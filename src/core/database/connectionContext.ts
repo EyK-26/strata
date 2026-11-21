@@ -1,26 +1,26 @@
-import { createAsyncContextStore } from "../runtime/asyncContextStore";
+import { createAsyncContextStore } from '../runtime/asyncContextStore';
 
 type ActiveDatabaseHandle = {
-  unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
+	unsafe<T>(query: string, params?: readonly unknown[]): Promise<T[]>;
 };
 
 const activeConnection = createAsyncContextStore<ActiveDatabaseHandle>(
-  "@getstrata/databaseConnectionContext",
+	'@getstrata/databaseConnectionContext',
 );
 
 function runWithDatabaseConnection<T>(
-  connection: ActiveDatabaseHandle,
-  callback: () => T | Promise<T>,
+	connection: ActiveDatabaseHandle,
+	callback: () => T | Promise<T>,
 ): T | Promise<T> {
-  return activeConnection.run(connection, callback);
+	return activeConnection.run(connection, callback);
 }
 
 function getActiveDatabaseConnection<T extends ActiveDatabaseHandle>(fallback: T): T {
-  return (activeConnection.getStore() as T | undefined) ?? fallback;
+	return (activeConnection.getStore() as T | undefined) ?? fallback;
 }
 
 function hasActiveDatabaseConnection(): boolean {
-  return activeConnection.getStore() !== undefined;
+	return activeConnection.getStore() !== undefined;
 }
 
 export type { ActiveDatabaseHandle };

@@ -1,12 +1,12 @@
-import { ControllerActions, type RenderedHttpFeature, renderAction } from "./controllerActions.ts";
-import type { StarterFeaturePlan } from "./featurePlan.ts";
+import { ControllerActions, renderAction, type RenderedHttpFeature } from './controllerActions.ts';
+import type { StarterFeaturePlan } from './featurePlan.ts';
 
 function renderScimParts(plan: StarterFeaturePlan, actions?: ControllerActions) {
-  if (!plan.decisions.scim) {
-    return null;
-  }
+	if (!plan.decisions.scim) {
+		return null;
+	}
 
-  const support = `import { randomBytes } from "node:crypto";
+	const support = `import { randomBytes } from "node:crypto";
 import type { HttpKernel } from "@getstrata/bootstrap/httpKernel";
 import type { AppModule } from "@getstrata/bootstrap/contracts";
 import { routeParams } from "@getstrata/bootstrap/web/routing";
@@ -20,16 +20,22 @@ import { User } from "../../models/User.ts";
 import { STARTER_AUTH_SERVICES, type StarterAuthServices } from "../../bootstrap/auth.ts";
 
 const USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
+
 const LIST_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:ListResponse";
+
 const ERROR_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:Error";
+
 const PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
+
 const CONFIG_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig";
 
 function tenantId(ports:BusinessRequestPorts): number {
   const tenant = ports.established.tenant;
+
   if (!tenant) {
     throw new Error("SCIM requires a tenant context.");
   }
+
   return tenant.id;
 }
 
@@ -40,6 +46,7 @@ function readScimUserId(request: Request): number | Response {
     if (error instanceof BadRequestError) {
       return scimError("Invalid id.", 400);
     }
+
     throw error;
   }
 }
@@ -57,7 +64,9 @@ function scimError(detail: string, status: number): Response {
 
 function toScimUser(user: { get(key: "id" | "name" | "email" | "is_active"): unknown }) {
   const email = String(user.get("email") ?? "");
+
   const name = String(user.get("name") ?? "");
+
   return {
     schemas: [USER_SCHEMA],
     id: String(user.get("id")),
@@ -71,32 +80,43 @@ function toScimUser(user: { get(key: "id" | "name" | "email" | "is_active"): unk
 
 function readUserName(body: Record<string, unknown>): string {
   const emails = body.emails;
+
   if (Array.isArray(emails) && emails[0] && typeof emails[0] === "object") {
     const value = (emails[0] as { value?: unknown }).value;
+
     if (typeof value === "string" && value.trim()) {
       return value.trim().toLowerCase();
     }
   }
+
   return typeof body.userName === "string" ? body.userName.trim().toLowerCase() : "";
 }
 
 function readName(body: Record<string, unknown>, fallback: string): string {
   const name = body.name;
+
   if (name && typeof name === "object") {
     const formatted = (name as { formatted?: unknown; givenName?: unknown; familyName?: unknown }).formatted;
+
     if (typeof formatted === "string" && formatted.trim()) {
       return formatted.trim();
     }
+
     const given = (name as { givenName?: unknown }).givenName;
+
     const family = (name as { familyName?: unknown }).familyName;
+
     const combined = [given, family].filter((part) => typeof part === "string").join(" ").trim();
+
     if (combined) {
       return combined;
     }
   }
+
   if (typeof body.displayName === "string" && body.displayName.trim()) {
     return body.displayName.trim();
   }
+
   return fallback;
 }
 
@@ -109,43 +129,59 @@ function validateScimProfile(body: Record<string, unknown>, strict = false): Res
   if ("active" in body && typeof body.active !== "boolean") {
     return scimError("active must be a boolean.", 400);
   }
+
   const fields = ["userName", "emails", "name", "displayName", "active"];
+
   if (strict && Object.keys(body).some((key) => !fields.includes(key))) {
     return scimError("Unsupported profile attribute.", 400);
   }
-  if (strict && !fields.some((key) => key in body)) return scimError("A profile value is required.", 400);
+
+  if (strict && !fields.some((key) => key in body)) {
+    return scimError("A profile value is required.", 400);
+  }
+
   for (const key of ["userName", "displayName"]) {
     const value = body[key];
+
     if (key in body && (typeof value !== "string" || !value.trim())) {
       return scimError("Profile strings must be non-empty.", 400);
     }
   }
+
   if ("emails" in body) {
     if (!Array.isArray(body.emails) || body.emails.length !== 1) {
       return scimError("Exactly one email value is supported.", 400);
     }
+
     const email = body.emails[0];
+
     if (!isScimObject(email) || typeof email.value !== "string" || !email.value.trim()) {
       return scimError("An email value is required.", 400);
     }
+
     if (Object.keys(email).some((key) => !["value", "primary"].includes(key)) || ("primary" in email && email.primary !== true)) {
       return scimError("Only one primary email value is supported.", 400);
     }
   }
+
   if ("name" in body) {
     if (!isScimObject(body.name) || Object.keys(body.name).some((key) => !["formatted", "givenName", "familyName"].includes(key))) {
       return scimError("Unsupported name value.", 400);
     }
+
     if (!Object.values(body.name).some((value) => typeof value === "string" && value.trim()) || Object.values(body.name).some((value) => typeof value !== "string")) {
       return scimError("Name values must be strings with a non-empty name.", 400);
     }
   }
+
   return null;
 }
 
 async function applyAccountUpdate(ports:BusinessRequestPorts, user: User, name: string, email: string, active?: boolean) {
   const wasActive = user.get("is_active") === true || user.get("is_active") === 1;
+
   await user.update({ name, email, ...(active === undefined ? {} : { is_active: active }) });
+
   // The caller owns the transaction and row lock. Both transition directions fence
   // old proofs; repeated identical state is idempotent and does not advance the epoch.
   if (active !== undefined && active !== wasActive) {
@@ -156,14 +192,16 @@ async function applyAccountUpdate(ports:BusinessRequestPorts, user: User, name: 
 async function readScimBody(request: Request): Promise<Record<string, unknown> | Response> {
   try {
     const body: unknown = await request.json();
+
     return isScimObject(body) ? body : scimError("An object body is required.", 400);
   } catch {
     return scimError("Invalid JSON body.", 400);
   }
 }
 
-${actions ? "export " : ""}function wrapScim(kernel: HttpKernel, services:StarterAuthServices, handler: BusinessRouteHandler) {
+${actions ? 'export ' : ''}function wrapScim(kernel: HttpKernel, services:StarterAuthServices, handler: BusinessRouteHandler) {
   const enabled = services.config.scimEnabled;
+
   const throttle = kernel.ownThrottle(createScimThrottleMiddleware({
     redisUrl: services.config.redisUrl,
     namespace: services.config.throttleNamespace,
@@ -172,8 +210,12 @@ ${actions ? "export " : ""}function wrapScim(kernel: HttpKernel, services:Starte
     maxAttempts: 120,
     decaySeconds: 60,
   }));
+
   return kernel.wrapScim(async (request, ports) => {
-    if (!enabled) return scimError("SCIM is off.", 404);
+    if (!enabled) {
+      return scimError("SCIM is off.", 404);
+    }
+
     return ["POST", "PUT", "PATCH", "DELETE"].includes(request.method)
       ? ports.database.transaction(database => handler(request, {...ports,database}))
       : handler(request, ports);
@@ -181,25 +223,29 @@ ${actions ? "export " : ""}function wrapScim(kernel: HttpKernel, services:Starte
 }
 
 `;
-  const routes = `${
-    actions
-      ? `export function scimApiRoutes(context: ModuleRouteContext): AppRouteMap {
+
+	const routes = `${
+		actions
+			? `export function scimApiRoutes(context: ModuleRouteContext): AppRouteMap {
     const { kernel, dependencies } = context;
+
     const controller = new ScimController();`
-      : `const scimModule: AppModule = {
+			: `const scimModule: AppModule = {
   name: "scim",
   order: 8,
   routes({ kernel, dependencies }) {`
-  }
+	}
+
     const services = dependencies.container.resolve(STARTER_AUTH_SERVICES);
+
     return {
       "/scim/v2/ServiceProviderConfig": {
         GET: kernel.wrap(
           "api",
           wrapScim(kernel, services, ${renderAction(
-            actions,
-            "configuration",
-            `async () =>
+						actions,
+						'configuration',
+						`async () =>
             scimJson({
               schemas: [CONFIG_SCHEMA],
               patch: { supported: true },
@@ -218,7 +264,7 @@ ${actions ? "export " : ""}function wrapScim(kernel: HttpKernel, services:Starte
                 },
               ],
             })`,
-          )},
+					)},
           ),
         ),
       },
@@ -226,19 +272,28 @@ ${actions ? "export " : ""}function wrapScim(kernel: HttpKernel, services:Starte
         GET: kernel.wrap(
           "api",
           wrapScim(kernel, services, ${renderAction(
-            actions,
-            "index",
-            `async (request, ports) => {
+						actions,
+						'index',
+						`async (request, ports) => {
             const url = new URL(request.url);
+
             const filter = url.searchParams.get("filter") ?? "";
+
             const match = /userName\\s+eq\\s+"([^"]+)"/i.exec(filter);
+
             const startIndex = Math.max(1, Number.parseInt(url.searchParams.get("startIndex") ?? "1", 10) || 1);
+
             const count = Math.min(200, Math.max(1, Number.parseInt(url.searchParams.get("count") ?? "200", 10) || 200));
+
             if (match?.[1]) {
               const email = match[1].trim().toLowerCase();
+
               const user = await ports.database.model(User).where({ email, tenant_id: tenantId(ports) }).first();
+
               const users = user ? [user] : [];
+
               const slice = users.slice(startIndex - 1, startIndex - 1 + count);
+
               return scimJson({
                 schemas: [LIST_SCHEMA],
                 totalResults: users.length,
@@ -247,8 +302,11 @@ ${actions ? "export " : ""}function wrapScim(kernel: HttpKernel, services:Starte
                 Resources: slice.map(toScimUser),
               });
             }
+
             const totalResults = await ports.database.model(User).where({ tenant_id: tenantId(ports) }).count();
+
             const page = await ports.database.model(User).where({ tenant_id: tenantId(ports) }).offset(startIndex - 1).limit(count).get();
+
             return scimJson({
               schemas: [LIST_SCHEMA],
               totalResults,
@@ -257,120 +315,176 @@ ${actions ? "export " : ""}function wrapScim(kernel: HttpKernel, services:Starte
               Resources: page.map(toScimUser),
             });
           }`,
-          )}),
+					)}),
         ),
         POST: kernel.wrap(
           "api",
           wrapScim(kernel, services, ${renderAction(
-            actions,
-            "store",
-            `async (request, ports) => {
+						actions,
+						'store',
+						`async (request, ports) => {
             const body = await readScimBody(request);
-            if (body instanceof Response) return body;
+
+            if (body instanceof Response) {
+              return body;
+            }
+
             const invalid = validateScimProfile(body);
-            if (invalid) return invalid;
+
+            if (invalid) {
+              return invalid;
+            }
+
             const email = readUserName(body);
+
             const name = readName(body, email.split("@")[0] ?? "User");
+
             if (!email) {
               return scimError("userName is required.", 400);
             }
+
             const existing = await ports.database.model(User).where({ email, tenant_id: tenantId(ports) }).first();
+
             if (existing) {
               return scimError("User already exists.", 409);
             }
+
             const hashed = await hashPassword(randomBytes(18).toString("hex"));
+
             const created = await ports.database.model(User).create({ name, email, password: hashed, is_admin: false, is_active: body.active !== false, tenant_id: tenantId(ports) });
+
             if (!created) {
               return scimError("Could not create user.", 500);
             }
+
             return scimJson(toScimUser(created), 201);
           }`,
-          )}),
+					)}),
         ),
       },
       "/scim/v2/Users/:id": {
         GET: kernel.wrap(
           "api",
           wrapScim(kernel, services, ${renderAction(
-            actions,
-            "show",
-            `async (request, ports) => {
+						actions,
+						'show',
+						`async (request, ports) => {
             const id = readScimUserId(request);
+
             if (id instanceof Response) {
               return id;
             }
+
             const user = await ports.database.model(User).where({ id, tenant_id: tenantId(ports) }).first();
+
             if (!user) {
               return scimError("User not found.", 404);
             }
+
             return scimJson(toScimUser(user));
           }`,
-          )}),
+					)}),
         ),
         PUT: kernel.wrap(
           "api",
           wrapScim(kernel, services, ${renderAction(
-            actions,
-            "update",
-            `async (request, ports) => {
+						actions,
+						'update',
+						`async (request, ports) => {
             const id = readScimUserId(request);
+
             if (id instanceof Response) {
               return id;
             }
+
             const body = await readScimBody(request);
-            if (body instanceof Response) return body;
+
+            if (body instanceof Response) {
+              return body;
+            }
+
             const invalid = validateScimProfile(body);
-            if (invalid) return invalid;
+
+            if (invalid) {
+              return invalid;
+            }
+
             const email = readUserName(body);
+
             const name = readName(body, email);
+
             if (!email || !name) {
               return scimError("userName and name are required.", 400);
             }
-            const user = await ports.database.model(User).where({ id, tenant_id: tenantId(ports) })${plan.decisions.rowLocks ? ".lockForUpdate()" : ""}.first();
+
+            const user = await ports.database.model(User).where({ id, tenant_id: tenantId(ports) })${plan.decisions.rowLocks ? '.lockForUpdate()' : ''}.first();
+
             if (!user) {
               return scimError("User not found.", 404);
             }
+
             await applyAccountUpdate(ports, user, name, email, typeof body.active === "boolean" ? body.active : undefined);
+
             return scimJson(toScimUser(user));
           }`,
-          )}),
+					)}),
         ),
         PATCH: kernel.wrap(
           "api",
           wrapScim(kernel, services, ${renderAction(
-            actions,
-            "patch",
-            `async (request, ports) => {
+						actions,
+						'patch',
+						`async (request, ports) => {
             const id = readScimUserId(request);
+
             if (id instanceof Response) {
               return id;
             }
-            const user = await ports.database.model(User).where({ id, tenant_id: tenantId(ports) })${plan.decisions.rowLocks ? ".lockForUpdate()" : ""}.first();
+
+            const user = await ports.database.model(User).where({ id, tenant_id: tenantId(ports) })${plan.decisions.rowLocks ? '.lockForUpdate()' : ''}.first();
+
             if (!user) {
               return scimError("User not found.", 404);
             }
+
             const body = await readScimBody(request);
-            if (body instanceof Response) return body;
+
+            if (body instanceof Response) {
+              return body;
+            }
+
             if (!Array.isArray(body.schemas) || !body.schemas.includes(PATCH_SCHEMA)) {
               return scimError("Unsupported patch schema.", 400);
             }
+
             if (!Array.isArray(body.Operations) || body.Operations.length === 0) {
               return scimError("A non-empty Operations array is required.", 400);
             }
+
             let active: boolean | undefined;
+
             let name = String(user.get("name") ?? "");
+
             let email = String(user.get("email") ?? "");
+
             for (const operation of body.Operations) {
               if (!isScimObject(operation) || typeof operation.op !== "string" || !["replace", "add"].includes(operation.op.toLowerCase())) {
                 return scimError("Only add and replace profile operations are supported.", 400);
               }
+
               if (operation.path !== undefined && typeof operation.path !== "string") {
                 return scimError("Invalid patch path.", 400);
               }
+
               const path = typeof operation.path === "string" ? operation.path.toLowerCase() : "";
+
               let value: Record<string, unknown>;
+
               if (!path) {
-                if (!isScimObject(operation.value)) return scimError("A profile object is required.", 400);
+                if (!isScimObject(operation.value)) {
+                  return scimError("A profile object is required.", 400);
+                }
+
                 value = operation.value;
               } else if (path === "username") {
                 value = { userName: operation.value };
@@ -387,63 +501,84 @@ ${actions ? "export " : ""}function wrapScim(kernel: HttpKernel, services:Starte
               } else {
                 return scimError("Unsupported patch path.", 400);
               }
+
               const invalid = validateScimProfile(value, true);
-              if (invalid) return invalid;
+
+              if (invalid) {
+                return invalid;
+              }
+
               email = readUserName(value) || email;
               name = readName(value, name);
-              if (typeof value.active === "boolean") active = value.active;
+
+              if (typeof value.active === "boolean") {
+                active = value.active;
+              }
             }
+
             await applyAccountUpdate(ports, user, name, email, active);
+
             return scimJson(toScimUser(user));
           }`,
-          )}),
+					)}),
         ),
         DELETE: kernel.wrap(
           "api",
           wrapScim(kernel, services, ${renderAction(
-            actions,
-            "destroy",
-            `async (request, ports) => {
+						actions,
+						'destroy',
+						`async (request, ports) => {
             const id = readScimUserId(request);
+
             if (id instanceof Response) {
               return id;
             }
-            const user = await ports.database.model(User).where({ id, tenant_id: tenantId(ports) })${plan.decisions.rowLocks ? ".lockForUpdate()" : ""}.first();
+
+            const user = await ports.database.model(User).where({ id, tenant_id: tenantId(ports) })${plan.decisions.rowLocks ? '.lockForUpdate()' : ''}.first();
+
             if (user) {
               await user.delete();
             }
+
             return new Response(null, { status: 204 });
           }`,
-          )}),
+					)}),
         ),
       },
     };
-  }${actions ? "" : ",\n};\n\nexport default scimModule;"}
+  }${actions ? '' : ',\n};\n\nexport default scimModule;'}
 `;
-  return { support, routes };
+
+	return { support, routes };
 }
 
 function renderScimModule(plan: StarterFeaturePlan): string | null {
-  const parts = renderScimParts(plan);
-  return parts ? parts.support + parts.routes : null;
+	const parts = renderScimParts(plan);
+
+	return parts ? parts.support + parts.routes : null;
 }
 
 export function renderScimHttp(plan: StarterFeaturePlan): RenderedHttpFeature | null {
-  const actions = new ControllerActions("ScimController");
-  const parts = renderScimParts(plan, actions);
-  if (!parts) return null;
-  return {
-    files: {
-      "http/controllers/ScimController.ts":
-        parts.support
-          .replace('import type { AppModule } from "@getstrata/bootstrap/contracts";\n', "")
-          .replace(
-            "import { STARTER_AUTH_SERVICES, type StarterAuthServices }",
-            "import type { StarterAuthServices }",
-          ) + actions.render(),
-    },
-    api: { name: "scimApiRoutes", source: parts.routes },
-  };
+	const actions = new ControllerActions('ScimController');
+
+	const parts = renderScimParts(plan, actions);
+
+	if (!parts) {
+		return null;
+	}
+
+	return {
+		files: {
+			'http/controllers/ScimController.ts':
+				parts.support
+					.replace('import type { AppModule } from "@getstrata/bootstrap/contracts";\n', '')
+					.replace(
+						'import { STARTER_AUTH_SERVICES, type StarterAuthServices }',
+						'import type { StarterAuthServices }',
+					) + actions.render(),
+		},
+		api: { name: 'scimApiRoutes', source: parts.routes },
+	};
 }
 
 export { renderScimModule };

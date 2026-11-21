@@ -1,1 +1,1 @@
-export { makePolicyCommand } from "@getstrata/cli/scaffold";
+export { makePolicyCommand } from '@getstrata/cli/scaffold';

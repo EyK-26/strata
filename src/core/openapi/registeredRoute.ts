@@ -1,62 +1,64 @@
 /** JSON Schema keywords remain extensible; metadata cannot contain executable values. */
 type OpenApiJson =
-  | null
-  | boolean
-  | number
-  | string
-  | OpenApiJson[]
-  | { [key: string]: OpenApiJson | undefined };
+	null | boolean | number | string | OpenApiJson[] | { [key: string]: OpenApiJson | undefined };
+
 type OpenApiSchema = boolean | { [keyword: string]: OpenApiJson | undefined };
+
 interface OpenApiParameter {
-  name: string;
-  in: "header" | "query" | "path" | "cookie";
-  required?: boolean;
-  description?: string;
-  schema: OpenApiSchema;
+	name: string;
+	in: 'header' | 'query' | 'path' | 'cookie';
+	required?: boolean;
+	description?: string;
+	schema: OpenApiSchema;
 }
+
 interface OpenApiMediaType {
-  schema?: OpenApiSchema;
-  example?: OpenApiJson;
+	schema?: OpenApiSchema;
+	example?: OpenApiJson;
 }
+
 interface OpenApiResponse {
-  description: string;
-  content?: Record<string, OpenApiMediaType>;
+	description: string;
+	content?: Record<string, OpenApiMediaType>;
 }
+
 interface OpenApiOperation {
-  summary?: string;
-  description?: string;
-  operationId?: string;
-  tags?: string[];
-  deprecated?: boolean;
-  parameters?: OpenApiParameter[];
-  requestBody?: {
-    required?: boolean;
-    description?: string;
-    content: Record<string, OpenApiMediaType>;
-  };
-  responses?: Record<string, OpenApiResponse>;
-  security?: Array<Record<string, string[]>>;
+	summary?: string;
+	description?: string;
+	operationId?: string;
+	tags?: string[];
+	deprecated?: boolean;
+	parameters?: OpenApiParameter[];
+	requestBody?: {
+		required?: boolean;
+		description?: string;
+		content: Record<string, OpenApiMediaType>;
+	};
+	responses?: Record<string, OpenApiResponse>;
+	security?: Array<Record<string, string[]>>;
 }
+
 type OpenApiRouteMap = Record<
-  string,
-  Partial<
-    Record<"GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS", OpenApiOperation>
-  >
+	string,
+	Partial<
+		Record<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS', OpenApiOperation>
+	>
 >;
+
 interface RegisteredRoute {
-  readonly method: string;
-  readonly path: string;
-  readonly middleware: readonly string[];
-  readonly openApi?: Readonly<OpenApiOperation>;
+	readonly method: string;
+	readonly path: string;
+	readonly middleware: readonly string[];
+	readonly openApi?: Readonly<OpenApiOperation>;
 }
 
 export type {
-  OpenApiJson,
-  OpenApiMediaType,
-  OpenApiOperation,
-  OpenApiParameter,
-  OpenApiResponse,
-  OpenApiRouteMap,
-  OpenApiSchema,
-  RegisteredRoute,
+	OpenApiJson,
+	OpenApiMediaType,
+	OpenApiOperation,
+	OpenApiParameter,
+	OpenApiResponse,
+	OpenApiRouteMap,
+	OpenApiSchema,
+	RegisteredRoute,
 };

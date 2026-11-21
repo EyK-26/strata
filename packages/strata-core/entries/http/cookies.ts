@@ -1,1 +1,1 @@
-export * from "../../../../src/core/http/cookies.ts";
+export * from '../../../../src/core/http/cookies.ts';

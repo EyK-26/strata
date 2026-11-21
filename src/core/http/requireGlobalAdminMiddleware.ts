@@ -1,26 +1,27 @@
-import { isGlobalAdmin } from "@getstrata/core/auth/accessControl";
-import { currentAuthUser } from "@getstrata/core/auth/authContext";
-import { ForbiddenError } from "@getstrata/core/errors/http";
-import { errorResponse } from "@getstrata/core/http/response";
-import { logSecurityEvent } from "@getstrata/core/security/securityEvents";
-import type { Middleware } from "./middleware";
+import { isGlobalAdmin } from '@getstrata/core/auth/accessControl';
+import { currentAuthUser } from '@getstrata/core/auth/authContext';
+import { ForbiddenError } from '@getstrata/core/errors/http';
+import { errorResponse } from '@getstrata/core/http/response';
+import { logSecurityEvent } from '@getstrata/core/security/securityEvents';
+
+import type { Middleware } from './middleware';
 
 function createRequireGlobalAdminMiddleware(): Middleware {
-  return async (_request: Request, next: () => Promise<Response>) => {
-    const user = currentAuthUser();
+	return async (_request: Request, next: () => Promise<Response>) => {
+		const user = currentAuthUser();
 
-    if (!isGlobalAdmin(user)) {
-      logSecurityEvent("privilege_escalation_blocked", {
-        required_role: "platform_admin",
-        path: new URL(_request.url).pathname,
-      });
-      const error = new ForbiddenError("Platform admin access required.");
+		if (!isGlobalAdmin(user)) {
+			logSecurityEvent('privilege_escalation_blocked', {
+				required_role: 'platform_admin',
+				path: new URL(_request.url).pathname,
+			});
+			const error = new ForbiddenError('Platform admin access required.');
 
-      return errorResponse(error);
-    }
+			return errorResponse(error);
+		}
 
-    return await next();
-  };
+		return await next();
+	};
 }
 
 export { createRequireGlobalAdminMiddleware };

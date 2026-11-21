@@ -17,11 +17,11 @@ Run multiple schedulers against the same Redis coordination store and namespace.
 ## Handler contract and replay
 
 ```ts
-schedule.command("* * * * *", "inventory-scan", async (context) => {
-  // Stable opaque ID: namespace + task name + scheduled minute.
-  const key = context.occurrenceId;
-  await context.assertOwnership();
-  await applicationScan({ idempotencyKey: key, signal: context.signal });
+schedule.command('* * * * *', 'inventory-scan', async (context) => {
+	// Stable opaque ID: namespace + task name + scheduled minute.
+	const key = context.occurrenceId;
+	await context.assertOwnership();
+	await applicationScan({ idempotencyKey: key, signal: context.signal });
 });
 ```
 

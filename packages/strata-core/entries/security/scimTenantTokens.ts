@@ -1,1 +1,1 @@
-export * from "../../../../src/core/security/scimTenantTokens.ts";
+export * from '../../../../src/core/security/scimTenantTokens.ts';

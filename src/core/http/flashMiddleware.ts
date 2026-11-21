@@ -1,22 +1,23 @@
-import { pullFlash, withFlashClear } from "./flashSession";
-import type { Middleware } from "./middleware";
-import { currentRequestMeta, runWithRequestMeta } from "./requestMetaContext";
+import { pullFlash, withFlashClear } from './flashSession';
+import type { Middleware } from './middleware';
+import { currentRequestMeta, runWithRequestMeta } from './requestMetaContext';
 
-function createFlashMiddleware(options: import("./flashSession").FlashSessionOptions): Middleware {
-  return async (request: Request, next: () => Promise<Response>) => {
-    const flash = pullFlash(request, options);
-    const meta = currentRequestMeta();
+function createFlashMiddleware(options: import('./flashSession').FlashSessionOptions): Middleware {
+	return async (request: Request, next: () => Promise<Response>) => {
+		const flash = pullFlash(request, options);
 
-    return await runWithRequestMeta({ ...meta, request, flash }, async () => {
-      const response = await next();
+		const meta = currentRequestMeta();
 
-      if (flash) {
-        return withFlashClear(response, options);
-      }
+		return await runWithRequestMeta({ ...meta, request, flash }, async () => {
+			const response = await next();
 
-      return response;
-    });
-  };
+			if (flash) {
+				return withFlashClear(response, options);
+			}
+
+			return response;
+		});
+	};
 }
 
 export { createFlashMiddleware };

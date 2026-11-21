@@ -1,1009 +1,1009 @@
 [
-  {
-    "name": "api-headers-bare",
-    "args": ["--frontend=api", "--auth=headers", "--database=sqlite", "--tenancy=none"],
-    "hashes": {
-      "module": null,
-      "directory": null,
-      "provider": "8f76926fc6e288b6783475f7f1a5ad51c40ea2fd03f62e52b39e820e25cba6b2",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "api-headers-all",
-    "args": [
-      "--frontend=api",
-      "--auth=headers",
-      "--database=sqlite",
-      "--tenancy=none",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": null,
-      "directory": null,
-      "provider": "8f76926fc6e288b6783475f7f1a5ad51c40ea2fd03f62e52b39e820e25cba6b2",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "api-cookie-bare",
-    "args": ["--frontend=api", "--auth=cookie", "--database=sqlite", "--tenancy=none"],
-    "hashes": {
-      "module": "3e48febd7a4fbfb6679c27d204bbea84917989c5faeae892c26ed20f3a2672a3",
-      "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "e130a3d2d3ad6c0ccaacd850678d08564364658c5c5360e15872a2374da6fc38",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "api-cookie-all",
-    "args": [
-      "--frontend=api",
-      "--auth=cookie",
-      "--database=sqlite",
-      "--tenancy=none",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "9a55dd4a9f3fecae795187ef915f4166e477066ac9c42af34d37b867bc623833",
-      "directory": "fbe64793ec790a71472cefc24567916a25968274c2b15e43592b3d90476a700d",
-      "provider": "ab68112a04ffe674dfc950fc51062949bfff2485bbb80f8c59feca20cf70ddd6",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "api-cookie-mfa",
-    "args": ["--frontend=api", "--auth=cookie", "--database=sqlite", "--tenancy=none", "--mfa"],
-    "hashes": {
-      "module": "2e30f04375f7b68ac929abce0eeda4a955c22dbe470946932bcc9a40b37f4b91",
-      "directory": "fbe64793ec790a71472cefc24567916a25968274c2b15e43592b3d90476a700d",
-      "provider": "ab68112a04ffe674dfc950fc51062949bfff2485bbb80f8c59feca20cf70ddd6",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "api-cookie-verification",
-    "args": [
-      "--frontend=api",
-      "--auth=cookie",
-      "--database=sqlite",
-      "--tenancy=none",
-      "--email-verification"
-    ],
-    "hashes": {
-      "module": "42d45ba5d225ef55f2252858ed13a0262f3aab37bd63be271a1760f7b51e23be",
-      "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "e130a3d2d3ad6c0ccaacd850678d08564364658c5c5360e15872a2374da6fc38",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "api-cookie-github",
-    "args": [
-      "--frontend=api",
-      "--auth=cookie",
-      "--database=sqlite",
-      "--tenancy=none",
-      "--oauth-github"
-    ],
-    "hashes": {
-      "module": "16981adbee394229e0c89d1e928900e129f9f0e9bb7d5bfe55838e49b302ea09",
-      "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "e130a3d2d3ad6c0ccaacd850678d08564364658c5c5360e15872a2374da6fc38",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "api-cookie-oidc",
-    "args": ["--frontend=api", "--auth=cookie", "--database=sqlite", "--tenancy=none", "--oidc"],
-    "hashes": {
-      "module": "7e17953f4b88493898beae128863c817cc372739b2f17a89fffe004b688841ab",
-      "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "e130a3d2d3ad6c0ccaacd850678d08564364658c5c5360e15872a2374da6fc38",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "api-token-bare",
-    "args": ["--frontend=api", "--auth=token", "--database=sqlite", "--tenancy=none"],
-    "hashes": {
-      "module": "908a82637a00bda1daaef05812a4f77bb60572f82ffccfd4c250575083ffdb79",
-      "directory": "43058e802646f15bf768c70b6601b14a02728e816f0a1d2179a9d6b1451ed264",
-      "provider": "76dc9eb09f38646612ea5e04f28086f7d92bc36812b3c99f5d855b865018e64c",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "api-token-all",
-    "args": [
-      "--frontend=api",
-      "--auth=token",
-      "--database=sqlite",
-      "--tenancy=none",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "43d9f90ea10cad59705b67f079a9361abe16b5e1fbeb742ddd8a4e11f1b9ec95",
-      "directory": "43058e802646f15bf768c70b6601b14a02728e816f0a1d2179a9d6b1451ed264",
-      "provider": "76dc9eb09f38646612ea5e04f28086f7d92bc36812b3c99f5d855b865018e64c",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "api-jwt-bare",
-    "args": ["--frontend=api", "--auth=jwt", "--database=sqlite", "--tenancy=none"],
-    "hashes": {
-      "module": "9a1213471845fad4be7c1e9c26a3e83ac18d2d4b9a913cfd4980632e3ad5a69e",
-      "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "be9f9dc341fcea71e8d7f296ef811bb4e9bfe30061f41f4bb13d7a38de99330c",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "api-jwt-all",
-    "args": [
-      "--frontend=api",
-      "--auth=jwt",
-      "--database=sqlite",
-      "--tenancy=none",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "414319805fe4a82ed2899a63c06c761c54e1f1f20fa29a03510430bf47b580d9",
-      "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "be9f9dc341fcea71e8d7f296ef811bb4e9bfe30061f41f4bb13d7a38de99330c",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "api-cookie-token-bare",
-    "args": ["--frontend=api", "--auth=cookie-token", "--database=sqlite", "--tenancy=none"],
-    "hashes": {
-      "module": "25a1473f77080ca05ab114d1dbe55e2ee5fe984e9ddfbe6fdfc060cf408f36a4",
-      "directory": "43058e802646f15bf768c70b6601b14a02728e816f0a1d2179a9d6b1451ed264",
-      "provider": "da304b14ff55c7e19a9584724d2d7f972a687d9519f057613744148a0ef8a192",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "api-cookie-token-all",
-    "args": [
-      "--frontend=api",
-      "--auth=cookie-token",
-      "--database=sqlite",
-      "--tenancy=none",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "58819fe97901143d663322fbbeff4e7e838936883e1dd38ebdb3b9fe03fedc9e",
-      "directory": "f1ef9be5d6e93d404a013b6c8c84a32d7736807d453fa0f5107505a27e61285b",
-      "provider": "6a1074bae97a371d7ea79303f9ea14f7364b683a267f035c260408bbd764cc5b",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "api-cookie-token-jwt-bare",
-    "args": ["--frontend=api", "--auth=cookie-token-jwt", "--database=sqlite", "--tenancy=none"],
-    "hashes": {
-      "module": "45084ce5c7e80a2ddeda37cf5feca5d482c61ead6446901ade5a77fc6a560042",
-      "directory": "43058e802646f15bf768c70b6601b14a02728e816f0a1d2179a9d6b1451ed264",
-      "provider": "ae850f7b77cce863941539d0c2f3a52168ca34918e18e82b2b9c6118e0323a96",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "api-cookie-token-jwt-all",
-    "args": [
-      "--frontend=api",
-      "--auth=cookie-token-jwt",
-      "--database=sqlite",
-      "--tenancy=none",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "df88338ad6f2728363d68eda6f0a42025d773f7f8d38f8013ccd24ce7ffabfae",
-      "directory": "f1ef9be5d6e93d404a013b6c8c84a32d7736807d453fa0f5107505a27e61285b",
-      "provider": "42f1afa99e8e2b80449aef2e470a8296c6dad7d978ce26b0d97c4c32950372ab",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "server-htmx-headers-bare",
-    "args": ["--frontend=server-htmx", "--auth=headers", "--database=mysql", "--tenancy=column"],
-    "hashes": {
-      "module": null,
-      "directory": null,
-      "provider": "9a16497a8893ca975772628d3bd6e4515e4bafdcba268b43195cf16c43d37a86",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "server-htmx-headers-all",
-    "args": [
-      "--frontend=server-htmx",
-      "--auth=headers",
-      "--database=mysql",
-      "--tenancy=column",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": null,
-      "directory": null,
-      "provider": "9a16497a8893ca975772628d3bd6e4515e4bafdcba268b43195cf16c43d37a86",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "server-htmx-cookie-bare",
-    "args": ["--frontend=server-htmx", "--auth=cookie", "--database=mysql", "--tenancy=column"],
-    "hashes": {
-      "module": "84f6499d2b11163e87d1c79d393f42d6d22f8373ec670462246b2b7d48784a8a",
-      "directory": "da45c1790826de5cb7e202c8308afe6086d9be75ba723a8bbf0d6521aec6cf44",
-      "provider": "1a1317f6b189e406f918cdd21f255644a993ae68b77ecd2496d8f780d5e18642",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "server-htmx-cookie-all",
-    "args": [
-      "--frontend=server-htmx",
-      "--auth=cookie",
-      "--database=mysql",
-      "--tenancy=column",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "f43f6513ad3dcc7c6b45d0e446194fe0d7f72f5fd06ffda354fbfdc988cbce2a",
-      "directory": "e53386022a0c9957e9071eac6d73b62467f20483f4c5fe9519ad561e267ddebf",
-      "provider": "ddfaa7840f5de66d6663d2af86d0756414a99dcc313220a1cda3a4a55e1f4226",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "server-htmx-cookie-mfa",
-    "args": [
-      "--frontend=server-htmx",
-      "--auth=cookie",
-      "--database=mysql",
-      "--tenancy=column",
-      "--mfa"
-    ],
-    "hashes": {
-      "module": "1c97c8f33d0340b6d49c1392d99efffd883d695b9f6c7736b758bb1e7b646567",
-      "directory": "e53386022a0c9957e9071eac6d73b62467f20483f4c5fe9519ad561e267ddebf",
-      "provider": "ddfaa7840f5de66d6663d2af86d0756414a99dcc313220a1cda3a4a55e1f4226",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "server-htmx-cookie-verification",
-    "args": [
-      "--frontend=server-htmx",
-      "--auth=cookie",
-      "--database=mysql",
-      "--tenancy=column",
-      "--email-verification"
-    ],
-    "hashes": {
-      "module": "c30a72aba8850185c88f030a7dc8fd0f2747f62f072b7b57f2faf6f191319726",
-      "directory": "da45c1790826de5cb7e202c8308afe6086d9be75ba723a8bbf0d6521aec6cf44",
-      "provider": "1a1317f6b189e406f918cdd21f255644a993ae68b77ecd2496d8f780d5e18642",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "server-htmx-cookie-github",
-    "args": [
-      "--frontend=server-htmx",
-      "--auth=cookie",
-      "--database=mysql",
-      "--tenancy=column",
-      "--oauth-github"
-    ],
-    "hashes": {
-      "module": "503670c5cbe6d5ac5614ecdd0bb5e01352d9d86b79b2b4537e8fe1fd13f6bc26",
-      "directory": "da45c1790826de5cb7e202c8308afe6086d9be75ba723a8bbf0d6521aec6cf44",
-      "provider": "1a1317f6b189e406f918cdd21f255644a993ae68b77ecd2496d8f780d5e18642",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "server-htmx-cookie-oidc",
-    "args": [
-      "--frontend=server-htmx",
-      "--auth=cookie",
-      "--database=mysql",
-      "--tenancy=column",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "4b2f360ec572f84f8f77675d6297e4c96eaf06bc4ef97aa6b71fd51fad891067",
-      "directory": "da45c1790826de5cb7e202c8308afe6086d9be75ba723a8bbf0d6521aec6cf44",
-      "provider": "1a1317f6b189e406f918cdd21f255644a993ae68b77ecd2496d8f780d5e18642",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "server-htmx-token-bare",
-    "args": ["--frontend=server-htmx", "--auth=token", "--database=mysql", "--tenancy=column"],
-    "hashes": {
-      "module": "84e16a683e0a326bc92820cca8a3d92d5b03818fa742b7f51e21aee61a5c2c59",
-      "directory": "584821ba04efd48bff2d2389c6b9129d4e18d3b6bda23ce70276c224d09fcd29",
-      "provider": "bff3817a31925e942ebd0967f0636dfc70a5364a858c4cdeee4c969ab4d8604d",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "server-htmx-token-all",
-    "args": [
-      "--frontend=server-htmx",
-      "--auth=token",
-      "--database=mysql",
-      "--tenancy=column",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "3fcde2e16e070b3fee1256115bd11762818c079d6cecd4d42d3942e5644ff27a",
-      "directory": "584821ba04efd48bff2d2389c6b9129d4e18d3b6bda23ce70276c224d09fcd29",
-      "provider": "bff3817a31925e942ebd0967f0636dfc70a5364a858c4cdeee4c969ab4d8604d",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "server-htmx-jwt-bare",
-    "args": ["--frontend=server-htmx", "--auth=jwt", "--database=mysql", "--tenancy=column"],
-    "hashes": {
-      "module": "e6edc0afccf437b0d62bcf699dce2f221396cf0f181696abbe18f108a8c18e33",
-      "directory": "da45c1790826de5cb7e202c8308afe6086d9be75ba723a8bbf0d6521aec6cf44",
-      "provider": "ef0fe56b57ff6de6839b85c64485d4feb137a0227ee6bf8bf0f2060b742b3346",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "server-htmx-jwt-all",
-    "args": [
-      "--frontend=server-htmx",
-      "--auth=jwt",
-      "--database=mysql",
-      "--tenancy=column",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "a21a3bc5c79082adfd2a94dd6348fcc330bc58c2a14836ba51264419b1e02655",
-      "directory": "da45c1790826de5cb7e202c8308afe6086d9be75ba723a8bbf0d6521aec6cf44",
-      "provider": "ef0fe56b57ff6de6839b85c64485d4feb137a0227ee6bf8bf0f2060b742b3346",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "server-htmx-cookie-token-bare",
-    "args": [
-      "--frontend=server-htmx",
-      "--auth=cookie-token",
-      "--database=mysql",
-      "--tenancy=column"
-    ],
-    "hashes": {
-      "module": "a90a515e655d7608ec353b0b4acf79535f255082e637da172d780ac23e798faf",
-      "directory": "584821ba04efd48bff2d2389c6b9129d4e18d3b6bda23ce70276c224d09fcd29",
-      "provider": "b2813f80100b9d6172f29b46f0918a8663e813a791135d14055ee9561ae50609",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "server-htmx-cookie-token-all",
-    "args": [
-      "--frontend=server-htmx",
-      "--auth=cookie-token",
-      "--database=mysql",
-      "--tenancy=column",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "281a6697293467219ad2bd0bb5f3eee4faab355b3bd46d7d2965183dd89a4020",
-      "directory": "066dc2d6eba5dbd762310f764ddbafc61d45298828ad8073c832f0e21b1dace3",
-      "provider": "f7544dbd702656f1fc3aa821ca95d509d37e1524a9f748f04dc05a65dd9e4123",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "server-htmx-cookie-token-jwt-bare",
-    "args": [
-      "--frontend=server-htmx",
-      "--auth=cookie-token-jwt",
-      "--database=mysql",
-      "--tenancy=column"
-    ],
-    "hashes": {
-      "module": "c2bd4acd527292661030b4f7f6a378620d95c215d5ca099cadad1cf4c60a3401",
-      "directory": "584821ba04efd48bff2d2389c6b9129d4e18d3b6bda23ce70276c224d09fcd29",
-      "provider": "8012d905c03f1c602b694326dcabb1658b687f59ae287504a2c714eecc04079f",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "server-htmx-cookie-token-jwt-all",
-    "args": [
-      "--frontend=server-htmx",
-      "--auth=cookie-token-jwt",
-      "--database=mysql",
-      "--tenancy=column",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "75edc02bfcf6e8bae05d437764257532a43447de2f9b8e6a64ed5d6876c0bdce",
-      "directory": "066dc2d6eba5dbd762310f764ddbafc61d45298828ad8073c832f0e21b1dace3",
-      "provider": "e371381ad2715deaed2af06144b5e929f43bbad30272eb745e674f3405918547",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "spa-react-headers-bare",
-    "args": ["--frontend=spa-react", "--auth=headers", "--database=postgres", "--tenancy=rls"],
-    "hashes": {
-      "module": null,
-      "directory": null,
-      "provider": "9a16497a8893ca975772628d3bd6e4515e4bafdcba268b43195cf16c43d37a86",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "spa-react-headers-all",
-    "args": [
-      "--frontend=spa-react",
-      "--auth=headers",
-      "--database=postgres",
-      "--tenancy=rls",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": null,
-      "directory": null,
-      "provider": "9a16497a8893ca975772628d3bd6e4515e4bafdcba268b43195cf16c43d37a86",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "spa-react-cookie-bare",
-    "args": ["--frontend=spa-react", "--auth=cookie", "--database=postgres", "--tenancy=rls"],
-    "hashes": {
-      "module": "f28827d5eacfbd4c5259767b436c2a76853aec02badc88207f4918886fe85788",
-      "directory": "eb6a486be8bf70f59a3b94a764c3a73f783a95242a42ebd6ff1f25621665a2f0",
-      "provider": "6f5a1457ffe3cc0b2289eacecc1337733aa03167c26c09e5ae6d77bdc36545cf",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "spa-react-cookie-all",
-    "args": [
-      "--frontend=spa-react",
-      "--auth=cookie",
-      "--database=postgres",
-      "--tenancy=rls",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "d6377f0aa17216f2871ae54fa85a1a1d14d0f0bec4be59c92ab00a72b7a82163",
-      "directory": "290833485da4fed9515a60704c38007a19a22d4e563450de55fd54a890e6c07c",
-      "provider": "d754cefca6fe856eb38567d103eee7487518f425f65732d5fb88a5268668c436",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "spa-react-cookie-mfa",
-    "args": [
-      "--frontend=spa-react",
-      "--auth=cookie",
-      "--database=postgres",
-      "--tenancy=rls",
-      "--mfa"
-    ],
-    "hashes": {
-      "module": "8a274b3a83c58055d4991c5c46a6368a0deb1b3b3a28fdfb79b13ac30dcd62b3",
-      "directory": "290833485da4fed9515a60704c38007a19a22d4e563450de55fd54a890e6c07c",
-      "provider": "d754cefca6fe856eb38567d103eee7487518f425f65732d5fb88a5268668c436",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "spa-react-cookie-verification",
-    "args": [
-      "--frontend=spa-react",
-      "--auth=cookie",
-      "--database=postgres",
-      "--tenancy=rls",
-      "--email-verification"
-    ],
-    "hashes": {
-      "module": "596b585dcb44049e63735350432f1de2c7e5de2f7e05624b1c4d8c711bd4ead1",
-      "directory": "eb6a486be8bf70f59a3b94a764c3a73f783a95242a42ebd6ff1f25621665a2f0",
-      "provider": "6f5a1457ffe3cc0b2289eacecc1337733aa03167c26c09e5ae6d77bdc36545cf",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "spa-react-cookie-github",
-    "args": [
-      "--frontend=spa-react",
-      "--auth=cookie",
-      "--database=postgres",
-      "--tenancy=rls",
-      "--oauth-github"
-    ],
-    "hashes": {
-      "module": "7217f6cf2c3f78783d522f64d4b9d9eb47ca3961f637ec28ebaa896d03d55bf4",
-      "directory": "eb6a486be8bf70f59a3b94a764c3a73f783a95242a42ebd6ff1f25621665a2f0",
-      "provider": "6f5a1457ffe3cc0b2289eacecc1337733aa03167c26c09e5ae6d77bdc36545cf",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "spa-react-cookie-oidc",
-    "args": [
-      "--frontend=spa-react",
-      "--auth=cookie",
-      "--database=postgres",
-      "--tenancy=rls",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "686e8032e35d9f6eea30dd63adf090e77438098e3a2a267c3d6b6bb43225cd36",
-      "directory": "eb6a486be8bf70f59a3b94a764c3a73f783a95242a42ebd6ff1f25621665a2f0",
-      "provider": "6f5a1457ffe3cc0b2289eacecc1337733aa03167c26c09e5ae6d77bdc36545cf",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "spa-react-token-bare",
-    "args": ["--frontend=spa-react", "--auth=token", "--database=postgres", "--tenancy=rls"],
-    "hashes": {
-      "module": "84e16a683e0a326bc92820cca8a3d92d5b03818fa742b7f51e21aee61a5c2c59",
-      "directory": "1b4ad088f80b12da2e2ef5b6f892ad93b204375f4f03c67f445a142e02380c55",
-      "provider": "bff3817a31925e942ebd0967f0636dfc70a5364a858c4cdeee4c969ab4d8604d",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "spa-react-token-all",
-    "args": [
-      "--frontend=spa-react",
-      "--auth=token",
-      "--database=postgres",
-      "--tenancy=rls",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "3fcde2e16e070b3fee1256115bd11762818c079d6cecd4d42d3942e5644ff27a",
-      "directory": "1b4ad088f80b12da2e2ef5b6f892ad93b204375f4f03c67f445a142e02380c55",
-      "provider": "bff3817a31925e942ebd0967f0636dfc70a5364a858c4cdeee4c969ab4d8604d",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "spa-react-jwt-bare",
-    "args": ["--frontend=spa-react", "--auth=jwt", "--database=postgres", "--tenancy=rls"],
-    "hashes": {
-      "module": "e6edc0afccf437b0d62bcf699dce2f221396cf0f181696abbe18f108a8c18e33",
-      "directory": "eb6a486be8bf70f59a3b94a764c3a73f783a95242a42ebd6ff1f25621665a2f0",
-      "provider": "ef0fe56b57ff6de6839b85c64485d4feb137a0227ee6bf8bf0f2060b742b3346",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "spa-react-jwt-all",
-    "args": [
-      "--frontend=spa-react",
-      "--auth=jwt",
-      "--database=postgres",
-      "--tenancy=rls",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "a21a3bc5c79082adfd2a94dd6348fcc330bc58c2a14836ba51264419b1e02655",
-      "directory": "eb6a486be8bf70f59a3b94a764c3a73f783a95242a42ebd6ff1f25621665a2f0",
-      "provider": "ef0fe56b57ff6de6839b85c64485d4feb137a0227ee6bf8bf0f2060b742b3346",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "spa-react-cookie-token-bare",
-    "args": ["--frontend=spa-react", "--auth=cookie-token", "--database=postgres", "--tenancy=rls"],
-    "hashes": {
-      "module": "174592281dd5dedea10a75c5e0da52a1bc5f22494c4ff1a0a70add19200c29b6",
-      "directory": "1b4ad088f80b12da2e2ef5b6f892ad93b204375f4f03c67f445a142e02380c55",
-      "provider": "7c593ba88a8ff96727545415db802cdd1e12a134c02d6f394803f61a5e17cd43",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "spa-react-cookie-token-all",
-    "args": [
-      "--frontend=spa-react",
-      "--auth=cookie-token",
-      "--database=postgres",
-      "--tenancy=rls",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "b15ff6b9970c1b1281e7a4567f19178e566a2860a65ebca1b824513a82997540",
-      "directory": "ed41507921f413b06897aff15dbe08e389cc8c71efde8ded53df921bce41948c",
-      "provider": "43dc11424da101b35cc2292ef0e8a9d16e364b53ec6f66ed2f3db03289806b90",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "spa-react-cookie-token-jwt-bare",
-    "args": [
-      "--frontend=spa-react",
-      "--auth=cookie-token-jwt",
-      "--database=postgres",
-      "--tenancy=rls"
-    ],
-    "hashes": {
-      "module": "84c0364c4743c76ef4eae67bb34b0a0ca9adddd05f8de988f2af6a078e1a9e9f",
-      "directory": "1b4ad088f80b12da2e2ef5b6f892ad93b204375f4f03c67f445a142e02380c55",
-      "provider": "2e2cd7142c66b10adbbcd4c96a70c35d6a84e9af101defc2238b39e0137b7f8a",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "spa-react-cookie-token-jwt-all",
-    "args": [
-      "--frontend=spa-react",
-      "--auth=cookie-token-jwt",
-      "--database=postgres",
-      "--tenancy=rls",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "8d635de1a9a168e7304c8d677e06e8087d5bf32c5ba8e7fa2fd82173d8cedec1",
-      "directory": "ed41507921f413b06897aff15dbe08e389cc8c71efde8ded53df921bce41948c",
-      "provider": "c31f4d2097cf3fe603f97eb158fc69e521dc8045ea03c472093b2fa59dc92b33",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "hybrid-headers-bare",
-    "args": ["--frontend=hybrid", "--auth=headers", "--database=sqlite", "--tenancy=none"],
-    "hashes": {
-      "module": null,
-      "directory": null,
-      "provider": "8f76926fc6e288b6783475f7f1a5ad51c40ea2fd03f62e52b39e820e25cba6b2",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "hybrid-headers-all",
-    "args": [
-      "--frontend=hybrid",
-      "--auth=headers",
-      "--database=sqlite",
-      "--tenancy=none",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": null,
-      "directory": null,
-      "provider": "8f76926fc6e288b6783475f7f1a5ad51c40ea2fd03f62e52b39e820e25cba6b2",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "hybrid-cookie-bare",
-    "args": ["--frontend=hybrid", "--auth=cookie", "--database=sqlite", "--tenancy=none"],
-    "hashes": {
-      "module": "3e48febd7a4fbfb6679c27d204bbea84917989c5faeae892c26ed20f3a2672a3",
-      "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "e130a3d2d3ad6c0ccaacd850678d08564364658c5c5360e15872a2374da6fc38",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "hybrid-cookie-all",
-    "args": [
-      "--frontend=hybrid",
-      "--auth=cookie",
-      "--database=sqlite",
-      "--tenancy=none",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "5191756546df1bb9acec8dd44ce22e45857c0ede0c330d9b6b815c3ffa061c5d",
-      "directory": "fbe64793ec790a71472cefc24567916a25968274c2b15e43592b3d90476a700d",
-      "provider": "ab68112a04ffe674dfc950fc51062949bfff2485bbb80f8c59feca20cf70ddd6",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "hybrid-cookie-mfa",
-    "args": ["--frontend=hybrid", "--auth=cookie", "--database=sqlite", "--tenancy=none", "--mfa"],
-    "hashes": {
-      "module": "777bfade21a4db1cc623fb24eb008d8219dd2ee79b83cc1d1510df805b4a640a",
-      "directory": "fbe64793ec790a71472cefc24567916a25968274c2b15e43592b3d90476a700d",
-      "provider": "ab68112a04ffe674dfc950fc51062949bfff2485bbb80f8c59feca20cf70ddd6",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "hybrid-cookie-verification",
-    "args": [
-      "--frontend=hybrid",
-      "--auth=cookie",
-      "--database=sqlite",
-      "--tenancy=none",
-      "--email-verification"
-    ],
-    "hashes": {
-      "module": "42d45ba5d225ef55f2252858ed13a0262f3aab37bd63be271a1760f7b51e23be",
-      "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "e130a3d2d3ad6c0ccaacd850678d08564364658c5c5360e15872a2374da6fc38",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "hybrid-cookie-github",
-    "args": [
-      "--frontend=hybrid",
-      "--auth=cookie",
-      "--database=sqlite",
-      "--tenancy=none",
-      "--oauth-github"
-    ],
-    "hashes": {
-      "module": "16981adbee394229e0c89d1e928900e129f9f0e9bb7d5bfe55838e49b302ea09",
-      "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "e130a3d2d3ad6c0ccaacd850678d08564364658c5c5360e15872a2374da6fc38",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "hybrid-cookie-oidc",
-    "args": ["--frontend=hybrid", "--auth=cookie", "--database=sqlite", "--tenancy=none", "--oidc"],
-    "hashes": {
-      "module": "7e17953f4b88493898beae128863c817cc372739b2f17a89fffe004b688841ab",
-      "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "e130a3d2d3ad6c0ccaacd850678d08564364658c5c5360e15872a2374da6fc38",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "hybrid-token-bare",
-    "args": ["--frontend=hybrid", "--auth=token", "--database=sqlite", "--tenancy=none"],
-    "hashes": {
-      "module": "908a82637a00bda1daaef05812a4f77bb60572f82ffccfd4c250575083ffdb79",
-      "directory": "43058e802646f15bf768c70b6601b14a02728e816f0a1d2179a9d6b1451ed264",
-      "provider": "76dc9eb09f38646612ea5e04f28086f7d92bc36812b3c99f5d855b865018e64c",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "hybrid-token-all",
-    "args": [
-      "--frontend=hybrid",
-      "--auth=token",
-      "--database=sqlite",
-      "--tenancy=none",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "43d9f90ea10cad59705b67f079a9361abe16b5e1fbeb742ddd8a4e11f1b9ec95",
-      "directory": "43058e802646f15bf768c70b6601b14a02728e816f0a1d2179a9d6b1451ed264",
-      "provider": "76dc9eb09f38646612ea5e04f28086f7d92bc36812b3c99f5d855b865018e64c",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "hybrid-jwt-bare",
-    "args": ["--frontend=hybrid", "--auth=jwt", "--database=sqlite", "--tenancy=none"],
-    "hashes": {
-      "module": "9a1213471845fad4be7c1e9c26a3e83ac18d2d4b9a913cfd4980632e3ad5a69e",
-      "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "be9f9dc341fcea71e8d7f296ef811bb4e9bfe30061f41f4bb13d7a38de99330c",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "hybrid-jwt-all",
-    "args": [
-      "--frontend=hybrid",
-      "--auth=jwt",
-      "--database=sqlite",
-      "--tenancy=none",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "414319805fe4a82ed2899a63c06c761c54e1f1f20fa29a03510430bf47b580d9",
-      "directory": "f0a01f13ee5e61cfb419dde1ceeb0f4511890cb3dd6592b3edca935e5e4510c8",
-      "provider": "be9f9dc341fcea71e8d7f296ef811bb4e9bfe30061f41f4bb13d7a38de99330c",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "hybrid-cookie-token-bare",
-    "args": ["--frontend=hybrid", "--auth=cookie-token", "--database=sqlite", "--tenancy=none"],
-    "hashes": {
-      "module": "25a1473f77080ca05ab114d1dbe55e2ee5fe984e9ddfbe6fdfc060cf408f36a4",
-      "directory": "43058e802646f15bf768c70b6601b14a02728e816f0a1d2179a9d6b1451ed264",
-      "provider": "da304b14ff55c7e19a9584724d2d7f972a687d9519f057613744148a0ef8a192",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "hybrid-cookie-token-all",
-    "args": [
-      "--frontend=hybrid",
-      "--auth=cookie-token",
-      "--database=sqlite",
-      "--tenancy=none",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "0e29303990ffd123da248c48fba84ac0a16581d21bc1df32a6a380800ccb9185",
-      "directory": "f1ef9be5d6e93d404a013b6c8c84a32d7736807d453fa0f5107505a27e61285b",
-      "provider": "6a1074bae97a371d7ea79303f9ea14f7364b683a267f035c260408bbd764cc5b",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "hybrid-cookie-token-jwt-bare",
-    "args": ["--frontend=hybrid", "--auth=cookie-token-jwt", "--database=sqlite", "--tenancy=none"],
-    "hashes": {
-      "module": "45084ce5c7e80a2ddeda37cf5feca5d482c61ead6446901ade5a77fc6a560042",
-      "directory": "43058e802646f15bf768c70b6601b14a02728e816f0a1d2179a9d6b1451ed264",
-      "provider": "ae850f7b77cce863941539d0c2f3a52168ca34918e18e82b2b9c6118e0323a96",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  },
-  {
-    "name": "hybrid-cookie-token-jwt-all",
-    "args": [
-      "--frontend=hybrid",
-      "--auth=cookie-token-jwt",
-      "--database=sqlite",
-      "--tenancy=none",
-      "--mfa",
-      "--email-verification",
-      "--oauth-github",
-      "--oidc"
-    ],
-    "hashes": {
-      "module": "732d374149c2669c7024a009471b6f32b56373b0573138da9d7d960417f5e031",
-      "directory": "f1ef9be5d6e93d404a013b6c8c84a32d7736807d453fa0f5107505a27e61285b",
-      "provider": "42f1afa99e8e2b80449aef2e470a8296c6dad7d978ce26b0d97c4c32950372ab",
-      "pendingMfa": "28a57dcd89b63494d8294f1725b3d89d1ac9c0ef4432f71f472b46eb9623c332",
-      "site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
-    }
-  }
+	{
+		"name": "api-headers-bare",
+		"args": ["--frontend=api", "--auth=headers", "--database=sqlite", "--tenancy=none"],
+		"hashes": {
+			"module": null,
+			"directory": null,
+			"provider": "81d264e6b23b89d231eddcc49787472acfb54f2cccf4737775d3ca5fc9022eb6",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "api-headers-all",
+		"args": [
+			"--frontend=api",
+			"--auth=headers",
+			"--database=sqlite",
+			"--tenancy=none",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": null,
+			"directory": null,
+			"provider": "81d264e6b23b89d231eddcc49787472acfb54f2cccf4737775d3ca5fc9022eb6",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "api-cookie-bare",
+		"args": ["--frontend=api", "--auth=cookie", "--database=sqlite", "--tenancy=none"],
+		"hashes": {
+			"module": "4fbc3ff9b92431407156e75a5f725e6f72daf33497b7c5e46898bcc8359d0200",
+			"directory": "a3f136a2fed6f38fedffa3d1e6681936a5407819b88cbabdd138a61cc1d40fef",
+			"provider": "34b1126eefb97330e25787532186cb5e30ab4af0ffbab73edf0a8134ceb4737e",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "api-cookie-all",
+		"args": [
+			"--frontend=api",
+			"--auth=cookie",
+			"--database=sqlite",
+			"--tenancy=none",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "c561a177990745235f33fcf0bc9744d6804f2dd41c46f82c45daefccd89ce7e4",
+			"directory": "b457cd1f04077270ac368906f2eff41d3cd97958f6b9954230e631373464da91",
+			"provider": "b77a2368e8950f3c55064682baeb4bc74cbd6607e8ed56442aa5720d8b813ce8",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "api-cookie-mfa",
+		"args": ["--frontend=api", "--auth=cookie", "--database=sqlite", "--tenancy=none", "--mfa"],
+		"hashes": {
+			"module": "7f0b5c3556cb5c96ae90d21525cafce0cc218421c4f7cb618f44f41e31f9ce00",
+			"directory": "b457cd1f04077270ac368906f2eff41d3cd97958f6b9954230e631373464da91",
+			"provider": "b77a2368e8950f3c55064682baeb4bc74cbd6607e8ed56442aa5720d8b813ce8",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "api-cookie-verification",
+		"args": [
+			"--frontend=api",
+			"--auth=cookie",
+			"--database=sqlite",
+			"--tenancy=none",
+			"--email-verification"
+		],
+		"hashes": {
+			"module": "f1a3b7f16acdde6f929624878e1e6ff60ecd5189104da0d737b75d6901128834",
+			"directory": "a3f136a2fed6f38fedffa3d1e6681936a5407819b88cbabdd138a61cc1d40fef",
+			"provider": "34b1126eefb97330e25787532186cb5e30ab4af0ffbab73edf0a8134ceb4737e",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "api-cookie-github",
+		"args": [
+			"--frontend=api",
+			"--auth=cookie",
+			"--database=sqlite",
+			"--tenancy=none",
+			"--oauth-github"
+		],
+		"hashes": {
+			"module": "b387f0d0190c0072a04691d7f52b3fe0e01c7916cb00b5fa579906365c0af66d",
+			"directory": "a3f136a2fed6f38fedffa3d1e6681936a5407819b88cbabdd138a61cc1d40fef",
+			"provider": "34b1126eefb97330e25787532186cb5e30ab4af0ffbab73edf0a8134ceb4737e",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "api-cookie-oidc",
+		"args": ["--frontend=api", "--auth=cookie", "--database=sqlite", "--tenancy=none", "--oidc"],
+		"hashes": {
+			"module": "e6c259b736105a9a1a55230bb0554bd26aa6c1fc4948c08bc2d21c808497217a",
+			"directory": "a3f136a2fed6f38fedffa3d1e6681936a5407819b88cbabdd138a61cc1d40fef",
+			"provider": "34b1126eefb97330e25787532186cb5e30ab4af0ffbab73edf0a8134ceb4737e",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "api-token-bare",
+		"args": ["--frontend=api", "--auth=token", "--database=sqlite", "--tenancy=none"],
+		"hashes": {
+			"module": "1e3dfddb205a2c935d9c6aeb657cbf8be675d62ea62cf14eb4491b8df65e6d06",
+			"directory": "0c4580983f490d06f61088e453679f12ad7de1a3977b093263dd43a94c156ba3",
+			"provider": "4f5f0b3e82b315f5b7290624e0235ad4fd3bf4db3223ab5856d1b820b18c60f6",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "api-token-all",
+		"args": [
+			"--frontend=api",
+			"--auth=token",
+			"--database=sqlite",
+			"--tenancy=none",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "399f3f839f1591386b113bf888c0b74c731b9fa7b8ce5009d82c5b9f9df260b6",
+			"directory": "0c4580983f490d06f61088e453679f12ad7de1a3977b093263dd43a94c156ba3",
+			"provider": "4f5f0b3e82b315f5b7290624e0235ad4fd3bf4db3223ab5856d1b820b18c60f6",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "api-jwt-bare",
+		"args": ["--frontend=api", "--auth=jwt", "--database=sqlite", "--tenancy=none"],
+		"hashes": {
+			"module": "5bfcbecd51a904d58939ccf1a30574ca97e625e5e4145c0378785045df88d34d",
+			"directory": "a3f136a2fed6f38fedffa3d1e6681936a5407819b88cbabdd138a61cc1d40fef",
+			"provider": "05fad4b946d52e86dffd464b9186ac251efad906d412b0b139a6dbb1dabdb557",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "api-jwt-all",
+		"args": [
+			"--frontend=api",
+			"--auth=jwt",
+			"--database=sqlite",
+			"--tenancy=none",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "84eadea1e24317b70cd64c7a49c9c019c79f841f78311a4fd917e412fada5c86",
+			"directory": "a3f136a2fed6f38fedffa3d1e6681936a5407819b88cbabdd138a61cc1d40fef",
+			"provider": "05fad4b946d52e86dffd464b9186ac251efad906d412b0b139a6dbb1dabdb557",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "api-cookie-token-bare",
+		"args": ["--frontend=api", "--auth=cookie-token", "--database=sqlite", "--tenancy=none"],
+		"hashes": {
+			"module": "7f7f8a8162af6ecb9d2aaa47c988f68b976ce3bbd1cd2f142a12c53e1f0e0637",
+			"directory": "0c4580983f490d06f61088e453679f12ad7de1a3977b093263dd43a94c156ba3",
+			"provider": "2c36ffc51fbb1f39ac045a80568eb25c17933ee7d8cee742362fdaa902d18bbe",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "api-cookie-token-all",
+		"args": [
+			"--frontend=api",
+			"--auth=cookie-token",
+			"--database=sqlite",
+			"--tenancy=none",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "c1b08411bbe19a35ebf49026e2aec445d9633f88bc0b92792084cee820f64900",
+			"directory": "6fa9138924f003bcbe200d274d299ae5f9b6bfb0404371cd30bd73cc6135dcaa",
+			"provider": "53b8a9b9412491fd04d1eb30d987dd6a1abd0e2175b5704ccd34556c6c6852b3",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "api-cookie-token-jwt-bare",
+		"args": ["--frontend=api", "--auth=cookie-token-jwt", "--database=sqlite", "--tenancy=none"],
+		"hashes": {
+			"module": "3106f78c61348db2c2700d3cff8d2225741e2787e47016314afec32779fd85f7",
+			"directory": "0c4580983f490d06f61088e453679f12ad7de1a3977b093263dd43a94c156ba3",
+			"provider": "f93625fbae7c1ad449f98dd6f7b3fdffe5b32a7a92f2657cef5b660c62dd8428",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "api-cookie-token-jwt-all",
+		"args": [
+			"--frontend=api",
+			"--auth=cookie-token-jwt",
+			"--database=sqlite",
+			"--tenancy=none",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "6f37cbb8b1cb65eee8561436326f0d8c524c4dd11e3b09ff204e6454515cc447",
+			"directory": "6fa9138924f003bcbe200d274d299ae5f9b6bfb0404371cd30bd73cc6135dcaa",
+			"provider": "e9b0661f525a50eadbceb9af62f9da435ffae209aabfcc8648a96a02fd67a091",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "server-htmx-headers-bare",
+		"args": ["--frontend=server-htmx", "--auth=headers", "--database=mysql", "--tenancy=column"],
+		"hashes": {
+			"module": null,
+			"directory": null,
+			"provider": "e3fea64207291a9f4fedd8ed458670c292aa38b9af329a1d9918902cba765067",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "server-htmx-headers-all",
+		"args": [
+			"--frontend=server-htmx",
+			"--auth=headers",
+			"--database=mysql",
+			"--tenancy=column",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": null,
+			"directory": null,
+			"provider": "e3fea64207291a9f4fedd8ed458670c292aa38b9af329a1d9918902cba765067",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "server-htmx-cookie-bare",
+		"args": ["--frontend=server-htmx", "--auth=cookie", "--database=mysql", "--tenancy=column"],
+		"hashes": {
+			"module": "b5d63403908aa47318d0c54aab765e6f0d29e6d36084e97af6267a19fc417c4e",
+			"directory": "550e01e17b6e8cde7b0aaa1a4e1d181950a902f5a13e69c0131da772d4aff1f0",
+			"provider": "337af11c00535cc26326d685628752c394bef3ecb949069c3eb38b32ff001287",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "server-htmx-cookie-all",
+		"args": [
+			"--frontend=server-htmx",
+			"--auth=cookie",
+			"--database=mysql",
+			"--tenancy=column",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "cd87f07f5c56d73f837f5dbd49184f963c81d7fd85f607f0673b018edea71125",
+			"directory": "7d897e7f1b6b447835ef102f6f4bab57b0eba3b787a48487967772cff454ca64",
+			"provider": "796cb654b6f6ba57067f32cff082b9004d90f5994eb3a94a4714a2141c93f3c7",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "server-htmx-cookie-mfa",
+		"args": [
+			"--frontend=server-htmx",
+			"--auth=cookie",
+			"--database=mysql",
+			"--tenancy=column",
+			"--mfa"
+		],
+		"hashes": {
+			"module": "87697c2e4f9ee7dc72df34bf691f71a3873075088b6f84013d14440b41931880",
+			"directory": "7d897e7f1b6b447835ef102f6f4bab57b0eba3b787a48487967772cff454ca64",
+			"provider": "796cb654b6f6ba57067f32cff082b9004d90f5994eb3a94a4714a2141c93f3c7",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "server-htmx-cookie-verification",
+		"args": [
+			"--frontend=server-htmx",
+			"--auth=cookie",
+			"--database=mysql",
+			"--tenancy=column",
+			"--email-verification"
+		],
+		"hashes": {
+			"module": "317249743cf59b99b4f2c6f2165ed240b58359c126882d37a83aa1004af4ec84",
+			"directory": "550e01e17b6e8cde7b0aaa1a4e1d181950a902f5a13e69c0131da772d4aff1f0",
+			"provider": "337af11c00535cc26326d685628752c394bef3ecb949069c3eb38b32ff001287",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "server-htmx-cookie-github",
+		"args": [
+			"--frontend=server-htmx",
+			"--auth=cookie",
+			"--database=mysql",
+			"--tenancy=column",
+			"--oauth-github"
+		],
+		"hashes": {
+			"module": "459b212f794ebf18b5889a10a8817f54771e87c5ef8dc96a12a82f7c0d9ec990",
+			"directory": "550e01e17b6e8cde7b0aaa1a4e1d181950a902f5a13e69c0131da772d4aff1f0",
+			"provider": "337af11c00535cc26326d685628752c394bef3ecb949069c3eb38b32ff001287",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "server-htmx-cookie-oidc",
+		"args": [
+			"--frontend=server-htmx",
+			"--auth=cookie",
+			"--database=mysql",
+			"--tenancy=column",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "d08877ddd5cecd62b35760dcaec2cb1c31f2229df0cf239bb7f6ca877c6b2cd0",
+			"directory": "550e01e17b6e8cde7b0aaa1a4e1d181950a902f5a13e69c0131da772d4aff1f0",
+			"provider": "337af11c00535cc26326d685628752c394bef3ecb949069c3eb38b32ff001287",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "server-htmx-token-bare",
+		"args": ["--frontend=server-htmx", "--auth=token", "--database=mysql", "--tenancy=column"],
+		"hashes": {
+			"module": "5ccf5021889e9c9941b9e26c539220d1e43a44621fdefbe6b4278b88b67a9baf",
+			"directory": "5fb2de9c2b137f215085ec252e7850cf51b1193e54bed06bf6a52625e84af0e1",
+			"provider": "1380fad1b15523b89149f4c34b9dcc3fe107297c10a2d7bbf86cb1029849ec29",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "server-htmx-token-all",
+		"args": [
+			"--frontend=server-htmx",
+			"--auth=token",
+			"--database=mysql",
+			"--tenancy=column",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "6640f695e61301c396b0fa23a8c77e8215036d5204c71ee591f768b47bff59e3",
+			"directory": "5fb2de9c2b137f215085ec252e7850cf51b1193e54bed06bf6a52625e84af0e1",
+			"provider": "1380fad1b15523b89149f4c34b9dcc3fe107297c10a2d7bbf86cb1029849ec29",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "server-htmx-jwt-bare",
+		"args": ["--frontend=server-htmx", "--auth=jwt", "--database=mysql", "--tenancy=column"],
+		"hashes": {
+			"module": "a74a2ce9284b630bb8159cc015b7aa56881bb8df735c3d741fdcce0be0313635",
+			"directory": "550e01e17b6e8cde7b0aaa1a4e1d181950a902f5a13e69c0131da772d4aff1f0",
+			"provider": "f81d5efa8c3987244a878b2389fe2ccc75f1bab615a3f36ea342a012933e6c3a",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "server-htmx-jwt-all",
+		"args": [
+			"--frontend=server-htmx",
+			"--auth=jwt",
+			"--database=mysql",
+			"--tenancy=column",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "bf601ed65d44eddd054ddd3892faf9db9784b57ee99883d32c3440090b74dc3e",
+			"directory": "550e01e17b6e8cde7b0aaa1a4e1d181950a902f5a13e69c0131da772d4aff1f0",
+			"provider": "f81d5efa8c3987244a878b2389fe2ccc75f1bab615a3f36ea342a012933e6c3a",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "server-htmx-cookie-token-bare",
+		"args": [
+			"--frontend=server-htmx",
+			"--auth=cookie-token",
+			"--database=mysql",
+			"--tenancy=column"
+		],
+		"hashes": {
+			"module": "05e3271918f258485ac626175868d7f5ddfd8b425988dc646d14aa9ad5e437bb",
+			"directory": "5fb2de9c2b137f215085ec252e7850cf51b1193e54bed06bf6a52625e84af0e1",
+			"provider": "c5ad038651f32786c71ca28036c5b21dc6a46263bbc12423456b4a3c31ce31c3",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "server-htmx-cookie-token-all",
+		"args": [
+			"--frontend=server-htmx",
+			"--auth=cookie-token",
+			"--database=mysql",
+			"--tenancy=column",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "7f835a918c47728cc033580fc3a26c8d5502d0158f44ca5010f0f41ad178da11",
+			"directory": "ee5f344ffaab86a490c8e947543d49d13c1eaaa35daffb5e526cc8e70f6e0fbb",
+			"provider": "9ce3fcbecb9cb58b35192290e815c290330bc6d33ae5fea7d72841b6223fd7ce",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "server-htmx-cookie-token-jwt-bare",
+		"args": [
+			"--frontend=server-htmx",
+			"--auth=cookie-token-jwt",
+			"--database=mysql",
+			"--tenancy=column"
+		],
+		"hashes": {
+			"module": "7cfb16d85f112d575921a33aa7516bdc99317cf4a6ba12de594ed93ea0c6b93d",
+			"directory": "5fb2de9c2b137f215085ec252e7850cf51b1193e54bed06bf6a52625e84af0e1",
+			"provider": "0e8023d7bc184e147c0156c46595f6601ee13eb0c91f3b5209bb403bcf8f05b2",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "server-htmx-cookie-token-jwt-all",
+		"args": [
+			"--frontend=server-htmx",
+			"--auth=cookie-token-jwt",
+			"--database=mysql",
+			"--tenancy=column",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "d7852a7c598f6b341fc0c290d078659f3c50bd45ca8f5683d5aa3f8384251e06",
+			"directory": "ee5f344ffaab86a490c8e947543d49d13c1eaaa35daffb5e526cc8e70f6e0fbb",
+			"provider": "43be060cd65e3e3a46bdb757dd0a9c6fcd1346d26559a3af1305334fbc4234d0",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "spa-react-headers-bare",
+		"args": ["--frontend=spa-react", "--auth=headers", "--database=postgres", "--tenancy=rls"],
+		"hashes": {
+			"module": null,
+			"directory": null,
+			"provider": "e3fea64207291a9f4fedd8ed458670c292aa38b9af329a1d9918902cba765067",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "spa-react-headers-all",
+		"args": [
+			"--frontend=spa-react",
+			"--auth=headers",
+			"--database=postgres",
+			"--tenancy=rls",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": null,
+			"directory": null,
+			"provider": "e3fea64207291a9f4fedd8ed458670c292aa38b9af329a1d9918902cba765067",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "spa-react-cookie-bare",
+		"args": ["--frontend=spa-react", "--auth=cookie", "--database=postgres", "--tenancy=rls"],
+		"hashes": {
+			"module": "152a90e3dfa2104e09ce2b32d4cd1eaef5857314e335bad5fb78776bc91813c0",
+			"directory": "ed8e1c990c2b79bc08e7a8dcf622b0bfe8359758ad8c6e6d790cb042f7831ee8",
+			"provider": "06622c805c0d8e2d24e357fb4d855496aaf91f1b9205e6ad613bbe26e35586f3",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "spa-react-cookie-all",
+		"args": [
+			"--frontend=spa-react",
+			"--auth=cookie",
+			"--database=postgres",
+			"--tenancy=rls",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "73313d1b64846b3844c672a87d3f0cef584d63e8d334716c280204f627ee350e",
+			"directory": "2a51d23bab5b450dfc60fd7edfbbd65e996c278329dc27d6afd30ce04cb054f2",
+			"provider": "dce720b20aa5a474a304e4d87c9be49a63ac5ceda1e58948467a8e7a1bc3f457",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "spa-react-cookie-mfa",
+		"args": [
+			"--frontend=spa-react",
+			"--auth=cookie",
+			"--database=postgres",
+			"--tenancy=rls",
+			"--mfa"
+		],
+		"hashes": {
+			"module": "29c63f45eaf1305184ac6b49753452152481e60e10eecdd3cdb87a0f5a0c5194",
+			"directory": "2a51d23bab5b450dfc60fd7edfbbd65e996c278329dc27d6afd30ce04cb054f2",
+			"provider": "dce720b20aa5a474a304e4d87c9be49a63ac5ceda1e58948467a8e7a1bc3f457",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "spa-react-cookie-verification",
+		"args": [
+			"--frontend=spa-react",
+			"--auth=cookie",
+			"--database=postgres",
+			"--tenancy=rls",
+			"--email-verification"
+		],
+		"hashes": {
+			"module": "138d453030f2e325b0bfd6040bcdf6707d556f3614edd1a9c87b52fb61468867",
+			"directory": "ed8e1c990c2b79bc08e7a8dcf622b0bfe8359758ad8c6e6d790cb042f7831ee8",
+			"provider": "06622c805c0d8e2d24e357fb4d855496aaf91f1b9205e6ad613bbe26e35586f3",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "spa-react-cookie-github",
+		"args": [
+			"--frontend=spa-react",
+			"--auth=cookie",
+			"--database=postgres",
+			"--tenancy=rls",
+			"--oauth-github"
+		],
+		"hashes": {
+			"module": "99ee91e648155e01ccffa5815587106a8c90be2794beeed0c5cb0c2e9793bafe",
+			"directory": "ed8e1c990c2b79bc08e7a8dcf622b0bfe8359758ad8c6e6d790cb042f7831ee8",
+			"provider": "06622c805c0d8e2d24e357fb4d855496aaf91f1b9205e6ad613bbe26e35586f3",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "spa-react-cookie-oidc",
+		"args": [
+			"--frontend=spa-react",
+			"--auth=cookie",
+			"--database=postgres",
+			"--tenancy=rls",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "1a12a18befded9e1e0e6ff7f5bfb732f4aec07e8715b1d06541b6cb0de022620",
+			"directory": "ed8e1c990c2b79bc08e7a8dcf622b0bfe8359758ad8c6e6d790cb042f7831ee8",
+			"provider": "06622c805c0d8e2d24e357fb4d855496aaf91f1b9205e6ad613bbe26e35586f3",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "spa-react-token-bare",
+		"args": ["--frontend=spa-react", "--auth=token", "--database=postgres", "--tenancy=rls"],
+		"hashes": {
+			"module": "5ccf5021889e9c9941b9e26c539220d1e43a44621fdefbe6b4278b88b67a9baf",
+			"directory": "6db400909c6325fc7b1e7b8576d92b94ea1e6e0fb4bb1d65ab089e013ddb437e",
+			"provider": "1380fad1b15523b89149f4c34b9dcc3fe107297c10a2d7bbf86cb1029849ec29",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "spa-react-token-all",
+		"args": [
+			"--frontend=spa-react",
+			"--auth=token",
+			"--database=postgres",
+			"--tenancy=rls",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "6640f695e61301c396b0fa23a8c77e8215036d5204c71ee591f768b47bff59e3",
+			"directory": "6db400909c6325fc7b1e7b8576d92b94ea1e6e0fb4bb1d65ab089e013ddb437e",
+			"provider": "1380fad1b15523b89149f4c34b9dcc3fe107297c10a2d7bbf86cb1029849ec29",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "spa-react-jwt-bare",
+		"args": ["--frontend=spa-react", "--auth=jwt", "--database=postgres", "--tenancy=rls"],
+		"hashes": {
+			"module": "a74a2ce9284b630bb8159cc015b7aa56881bb8df735c3d741fdcce0be0313635",
+			"directory": "ed8e1c990c2b79bc08e7a8dcf622b0bfe8359758ad8c6e6d790cb042f7831ee8",
+			"provider": "f81d5efa8c3987244a878b2389fe2ccc75f1bab615a3f36ea342a012933e6c3a",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "spa-react-jwt-all",
+		"args": [
+			"--frontend=spa-react",
+			"--auth=jwt",
+			"--database=postgres",
+			"--tenancy=rls",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "bf601ed65d44eddd054ddd3892faf9db9784b57ee99883d32c3440090b74dc3e",
+			"directory": "ed8e1c990c2b79bc08e7a8dcf622b0bfe8359758ad8c6e6d790cb042f7831ee8",
+			"provider": "f81d5efa8c3987244a878b2389fe2ccc75f1bab615a3f36ea342a012933e6c3a",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "spa-react-cookie-token-bare",
+		"args": ["--frontend=spa-react", "--auth=cookie-token", "--database=postgres", "--tenancy=rls"],
+		"hashes": {
+			"module": "1bb5302074b364fbff94f5b9c34576d7d14ba75a01a67062f9e41ed97de73ab7",
+			"directory": "6db400909c6325fc7b1e7b8576d92b94ea1e6e0fb4bb1d65ab089e013ddb437e",
+			"provider": "a101fff3c773d5ea83703b4283abc00bca360f4eff40431e20094b4fb8a759a0",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "spa-react-cookie-token-all",
+		"args": [
+			"--frontend=spa-react",
+			"--auth=cookie-token",
+			"--database=postgres",
+			"--tenancy=rls",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "c5b85b83f8173c11ce7f4501d7468381d70096d3db566b52f000473ed0d1585e",
+			"directory": "f24902136ead981505a8ae40cb1df6b4a9757098280febf98d367fe723e58996",
+			"provider": "60307014263e923cecf4195dc508eefb42aaf6373c8f3454f0354d0d9d504253",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "spa-react-cookie-token-jwt-bare",
+		"args": [
+			"--frontend=spa-react",
+			"--auth=cookie-token-jwt",
+			"--database=postgres",
+			"--tenancy=rls"
+		],
+		"hashes": {
+			"module": "35d59e9cf6da202a28c4f717903c266f39135a9b7e316b5a2e5aafe4d0cdc1fa",
+			"directory": "6db400909c6325fc7b1e7b8576d92b94ea1e6e0fb4bb1d65ab089e013ddb437e",
+			"provider": "1f07a23f9ac5e64dba67f702fdc0a17980b60c9479059f72407d6b15c374ea57",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "spa-react-cookie-token-jwt-all",
+		"args": [
+			"--frontend=spa-react",
+			"--auth=cookie-token-jwt",
+			"--database=postgres",
+			"--tenancy=rls",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "940bd561787f8859838cce88700d23442c39fc6e1d750a9c16e022fc7cfbc376",
+			"directory": "f24902136ead981505a8ae40cb1df6b4a9757098280febf98d367fe723e58996",
+			"provider": "7ecb2d1dc1b6e5badbc9e45a59ed6e465334ddcd0e97b6182e4bdb0eb74e0a65",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "hybrid-headers-bare",
+		"args": ["--frontend=hybrid", "--auth=headers", "--database=sqlite", "--tenancy=none"],
+		"hashes": {
+			"module": null,
+			"directory": null,
+			"provider": "81d264e6b23b89d231eddcc49787472acfb54f2cccf4737775d3ca5fc9022eb6",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "hybrid-headers-all",
+		"args": [
+			"--frontend=hybrid",
+			"--auth=headers",
+			"--database=sqlite",
+			"--tenancy=none",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": null,
+			"directory": null,
+			"provider": "81d264e6b23b89d231eddcc49787472acfb54f2cccf4737775d3ca5fc9022eb6",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "hybrid-cookie-bare",
+		"args": ["--frontend=hybrid", "--auth=cookie", "--database=sqlite", "--tenancy=none"],
+		"hashes": {
+			"module": "4fbc3ff9b92431407156e75a5f725e6f72daf33497b7c5e46898bcc8359d0200",
+			"directory": "a3f136a2fed6f38fedffa3d1e6681936a5407819b88cbabdd138a61cc1d40fef",
+			"provider": "34b1126eefb97330e25787532186cb5e30ab4af0ffbab73edf0a8134ceb4737e",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "hybrid-cookie-all",
+		"args": [
+			"--frontend=hybrid",
+			"--auth=cookie",
+			"--database=sqlite",
+			"--tenancy=none",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "d25a1cb4e95cf11650e7321c6cf0719008a18290a4802943500297b0b3107278",
+			"directory": "b457cd1f04077270ac368906f2eff41d3cd97958f6b9954230e631373464da91",
+			"provider": "b77a2368e8950f3c55064682baeb4bc74cbd6607e8ed56442aa5720d8b813ce8",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "hybrid-cookie-mfa",
+		"args": ["--frontend=hybrid", "--auth=cookie", "--database=sqlite", "--tenancy=none", "--mfa"],
+		"hashes": {
+			"module": "d77948d2abbe1aaf8c36c768b24593d5abb7ecabeab802eabce77e7a2d5b1e06",
+			"directory": "b457cd1f04077270ac368906f2eff41d3cd97958f6b9954230e631373464da91",
+			"provider": "b77a2368e8950f3c55064682baeb4bc74cbd6607e8ed56442aa5720d8b813ce8",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "hybrid-cookie-verification",
+		"args": [
+			"--frontend=hybrid",
+			"--auth=cookie",
+			"--database=sqlite",
+			"--tenancy=none",
+			"--email-verification"
+		],
+		"hashes": {
+			"module": "f1a3b7f16acdde6f929624878e1e6ff60ecd5189104da0d737b75d6901128834",
+			"directory": "a3f136a2fed6f38fedffa3d1e6681936a5407819b88cbabdd138a61cc1d40fef",
+			"provider": "34b1126eefb97330e25787532186cb5e30ab4af0ffbab73edf0a8134ceb4737e",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "hybrid-cookie-github",
+		"args": [
+			"--frontend=hybrid",
+			"--auth=cookie",
+			"--database=sqlite",
+			"--tenancy=none",
+			"--oauth-github"
+		],
+		"hashes": {
+			"module": "b387f0d0190c0072a04691d7f52b3fe0e01c7916cb00b5fa579906365c0af66d",
+			"directory": "a3f136a2fed6f38fedffa3d1e6681936a5407819b88cbabdd138a61cc1d40fef",
+			"provider": "34b1126eefb97330e25787532186cb5e30ab4af0ffbab73edf0a8134ceb4737e",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "hybrid-cookie-oidc",
+		"args": ["--frontend=hybrid", "--auth=cookie", "--database=sqlite", "--tenancy=none", "--oidc"],
+		"hashes": {
+			"module": "e6c259b736105a9a1a55230bb0554bd26aa6c1fc4948c08bc2d21c808497217a",
+			"directory": "a3f136a2fed6f38fedffa3d1e6681936a5407819b88cbabdd138a61cc1d40fef",
+			"provider": "34b1126eefb97330e25787532186cb5e30ab4af0ffbab73edf0a8134ceb4737e",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "hybrid-token-bare",
+		"args": ["--frontend=hybrid", "--auth=token", "--database=sqlite", "--tenancy=none"],
+		"hashes": {
+			"module": "1e3dfddb205a2c935d9c6aeb657cbf8be675d62ea62cf14eb4491b8df65e6d06",
+			"directory": "0c4580983f490d06f61088e453679f12ad7de1a3977b093263dd43a94c156ba3",
+			"provider": "4f5f0b3e82b315f5b7290624e0235ad4fd3bf4db3223ab5856d1b820b18c60f6",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "hybrid-token-all",
+		"args": [
+			"--frontend=hybrid",
+			"--auth=token",
+			"--database=sqlite",
+			"--tenancy=none",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "399f3f839f1591386b113bf888c0b74c731b9fa7b8ce5009d82c5b9f9df260b6",
+			"directory": "0c4580983f490d06f61088e453679f12ad7de1a3977b093263dd43a94c156ba3",
+			"provider": "4f5f0b3e82b315f5b7290624e0235ad4fd3bf4db3223ab5856d1b820b18c60f6",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "hybrid-jwt-bare",
+		"args": ["--frontend=hybrid", "--auth=jwt", "--database=sqlite", "--tenancy=none"],
+		"hashes": {
+			"module": "5bfcbecd51a904d58939ccf1a30574ca97e625e5e4145c0378785045df88d34d",
+			"directory": "a3f136a2fed6f38fedffa3d1e6681936a5407819b88cbabdd138a61cc1d40fef",
+			"provider": "05fad4b946d52e86dffd464b9186ac251efad906d412b0b139a6dbb1dabdb557",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "hybrid-jwt-all",
+		"args": [
+			"--frontend=hybrid",
+			"--auth=jwt",
+			"--database=sqlite",
+			"--tenancy=none",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "84eadea1e24317b70cd64c7a49c9c019c79f841f78311a4fd917e412fada5c86",
+			"directory": "a3f136a2fed6f38fedffa3d1e6681936a5407819b88cbabdd138a61cc1d40fef",
+			"provider": "05fad4b946d52e86dffd464b9186ac251efad906d412b0b139a6dbb1dabdb557",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "hybrid-cookie-token-bare",
+		"args": ["--frontend=hybrid", "--auth=cookie-token", "--database=sqlite", "--tenancy=none"],
+		"hashes": {
+			"module": "7f7f8a8162af6ecb9d2aaa47c988f68b976ce3bbd1cd2f142a12c53e1f0e0637",
+			"directory": "0c4580983f490d06f61088e453679f12ad7de1a3977b093263dd43a94c156ba3",
+			"provider": "2c36ffc51fbb1f39ac045a80568eb25c17933ee7d8cee742362fdaa902d18bbe",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "hybrid-cookie-token-all",
+		"args": [
+			"--frontend=hybrid",
+			"--auth=cookie-token",
+			"--database=sqlite",
+			"--tenancy=none",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "df08beac91449dd31e8fcf183255d1cb2ba52f0486e087e5b866b39e836cce3b",
+			"directory": "6fa9138924f003bcbe200d274d299ae5f9b6bfb0404371cd30bd73cc6135dcaa",
+			"provider": "53b8a9b9412491fd04d1eb30d987dd6a1abd0e2175b5704ccd34556c6c6852b3",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "hybrid-cookie-token-jwt-bare",
+		"args": ["--frontend=hybrid", "--auth=cookie-token-jwt", "--database=sqlite", "--tenancy=none"],
+		"hashes": {
+			"module": "3106f78c61348db2c2700d3cff8d2225741e2787e47016314afec32779fd85f7",
+			"directory": "0c4580983f490d06f61088e453679f12ad7de1a3977b093263dd43a94c156ba3",
+			"provider": "f93625fbae7c1ad449f98dd6f7b3fdffe5b32a7a92f2657cef5b660c62dd8428",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	},
+	{
+		"name": "hybrid-cookie-token-jwt-all",
+		"args": [
+			"--frontend=hybrid",
+			"--auth=cookie-token-jwt",
+			"--database=sqlite",
+			"--tenancy=none",
+			"--mfa",
+			"--email-verification",
+			"--oauth-github",
+			"--oidc"
+		],
+		"hashes": {
+			"module": "b6365d03f813746f3fbc06c2a26769d90a9eca2beeed8e984dac2854ed3a9b77",
+			"directory": "6fa9138924f003bcbe200d274d299ae5f9b6bfb0404371cd30bd73cc6135dcaa",
+			"provider": "e9b0661f525a50eadbceb9af62f9da435ffae209aabfcc8648a96a02fd67a091",
+			"pendingMfa": "46d8f1de18ac531247cad4ee1c657ac952bafefcb3739375eedcdc41db217f89",
+			"site": "c8f152ca5d3f3af4b60b6c7497ee09f51e2703d5f1351b7a9dab30c2edeb8ec1"
+		}
+	}
 ]

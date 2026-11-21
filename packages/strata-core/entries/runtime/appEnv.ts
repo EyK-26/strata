@@ -1,1 +1,1 @@
-export * from "../../../../src/core/runtime/appEnv.ts";
+export * from '../../../../src/core/runtime/appEnv.ts';

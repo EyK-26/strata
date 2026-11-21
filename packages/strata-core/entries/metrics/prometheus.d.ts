@@ -1,1 +1,1 @@
-export * from "../../../../src/core/metrics/prometheus.ts";
+export * from '../../../../src/core/metrics/prometheus.ts';

@@ -1,1 +1,1 @@
-export * from "../../../../src/core/openapi/generator.ts";
+export * from '../../../../src/core/openapi/generator.ts';

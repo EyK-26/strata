@@ -1,5 +1,5 @@
-import { createGrammar } from "./createGrammar.ts";
+import { createGrammar } from './createGrammar.ts';
 
-const MySqlGrammar = createGrammar("mysql");
+const MySqlGrammar = createGrammar('mysql');
 
 export { MySqlGrammar };

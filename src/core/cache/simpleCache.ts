@@ -1,258 +1,278 @@
-import { resolveCacheTtl } from "./expiration";
+import { resolveCacheTtl } from './expiration';
 
 type CacheEntry<T> = {
-  value: T;
-  expiresAt: number;
-  lastAccessedAt: number;
+	value: T;
+	expiresAt: number;
+	lastAccessedAt: number;
 };
 
 function validateSimpleCacheOptions(ttlMs: number | null, maxEntries: number): void {
-  resolveCacheTtl(ttlMs, ttlMs);
-  if (!Number.isInteger(maxEntries) || maxEntries < 1) {
-    throw new RangeError("maxEntries must be a positive integer.");
-  }
+	resolveCacheTtl(ttlMs, ttlMs);
+
+	if (!Number.isInteger(maxEntries) || maxEntries < 1) {
+		throw new RangeError('maxEntries must be a positive integer.');
+	}
 }
 
 class SimpleCache {
-  private readonly cache = new Map<string, CacheEntry<unknown>>();
-  private readonly inflight = new Map<string, Promise<unknown>>();
-  private readonly tagIndex = new Map<string, Set<string>>();
-  private readonly keyTags = new Map<string, Set<string>>();
+	private readonly cache = new Map<string, CacheEntry<unknown>>();
+	private readonly inflight = new Map<string, Promise<unknown>>();
+	private readonly tagIndex = new Map<string, Set<string>>();
+	private readonly keyTags = new Map<string, Set<string>>();
 
-  constructor(
-    private readonly ttlMs: number | null = 3_600_000,
-    private readonly maxEntries: number = 100,
-  ) {
-    validateSimpleCacheOptions(ttlMs, maxEntries);
-  }
+	constructor(
+		private readonly ttlMs: number | null = 3_600_000,
+		private readonly maxEntries: number = 100,
+	) {
+		validateSimpleCacheOptions(ttlMs, maxEntries);
+	}
 
-  get<T>(key: string): T | undefined {
-    return this.getFreshEntry<T>(key)?.value;
-  }
+	get<T>(key: string): T | undefined {
+		return this.getFreshEntry<T>(key)?.value;
+	}
 
-  set<T>(key: string, value: T, ttlMs?: number | null, tags: string[] = []): void {
-    const now = Date.now();
-    const resolvedTtlMs = resolveCacheTtl(ttlMs, this.ttlMs);
-    if (resolvedTtlMs !== null && resolvedTtlMs <= 0) {
-      this.invalidate(key);
-      return;
-    }
+	set<T>(key: string, value: T, ttlMs?: number | null, tags: string[] = []): void {
+		const now = Date.now();
 
-    // A later explicit write owns the key; an older loader may only return to its caller.
-    this.inflight.delete(key);
+		const resolvedTtlMs = resolveCacheTtl(ttlMs, this.ttlMs);
 
-    this.cache.set(key, {
-      value,
-      expiresAt: resolvedTtlMs === null ? Infinity : now + resolvedTtlMs,
-      lastAccessedAt: now,
-    });
+		if (resolvedTtlMs !== null && resolvedTtlMs <= 0) {
+			this.invalidate(key);
 
-    this.attachTags(key, tags);
-    this.evictOverflow();
-  }
+			return;
+		}
 
-  async getOrSet<T>(key: string, loader: () => Promise<T>, ttlMs?: number | null): Promise<T> {
-    return this.getOrSetTagged(key, loader, [], ttlMs);
-  }
+		// A later explicit write owns the key; an older loader may only return to its caller.
+		this.inflight.delete(key);
 
-  async getOrSetTagged<T>(
-    key: string,
-    loader: () => Promise<T>,
-    tags: string[],
-    ttlMs?: number | null,
-  ): Promise<T> {
-    resolveCacheTtl(ttlMs, this.ttlMs);
-    this.pruneExpired();
+		this.cache.set(key, {
+			value,
+			expiresAt: resolvedTtlMs === null ? Infinity : now + resolvedTtlMs,
+			lastAccessedAt: now,
+		});
 
-    const cachedEntry = this.getFreshEntry<T>(key);
-    if (cachedEntry) {
-      this.attachTags(key, tags);
-      return cachedEntry.value;
-    }
+		this.attachTags(key, tags);
+		this.evictOverflow();
+	}
 
-    const inflightRequest = this.inflight.get(key) as Promise<T> | undefined;
-    if (inflightRequest) {
-      this.attachTags(key, tags);
-      return inflightRequest;
-    }
+	async getOrSet<T>(key: string, loader: () => Promise<T>, ttlMs?: number | null): Promise<T> {
+		return this.getOrSetTagged(key, loader, [], ttlMs);
+	}
 
-    const pendingRequest = Promise.resolve()
-      .then(loader)
-      .then((value) => {
-        if (this.inflight.get(key) === pendingRequest) this.set(key, value, ttlMs);
-        return value;
-      })
-      .finally(() => {
-        if (this.inflight.get(key) === pendingRequest) {
-          this.inflight.delete(key);
-          if (!this.cache.has(key)) this.detachKeyFromTags(key);
-        }
-      });
+	async getOrSetTagged<T>(
+		key: string,
+		loader: () => Promise<T>,
+		tags: string[],
+		ttlMs?: number | null,
+	): Promise<T> {
+		resolveCacheTtl(ttlMs, this.ttlMs);
+		this.pruneExpired();
 
-    this.inflight.set(key, pendingRequest);
-    this.attachTags(key, tags);
-    return pendingRequest;
-  }
+		const cachedEntry = this.getFreshEntry<T>(key);
 
-  attachTags(key: string, tags: string[]): void {
-    if (tags.length === 0) {
-      return;
-    }
+		if (cachedEntry) {
+			this.attachTags(key, tags);
 
-    let tagsForKey = this.keyTags.get(key);
+			return cachedEntry.value;
+		}
 
-    if (!tagsForKey) {
-      tagsForKey = new Set();
-      this.keyTags.set(key, tagsForKey);
-    }
+		const inflightRequest = this.inflight.get(key) as Promise<T> | undefined;
 
-    for (const tag of tags) {
-      tagsForKey.add(tag);
+		if (inflightRequest) {
+			this.attachTags(key, tags);
 
-      let keysForTag = this.tagIndex.get(tag);
+			return inflightRequest;
+		}
 
-      if (!keysForTag) {
-        keysForTag = new Set();
-        this.tagIndex.set(tag, keysForTag);
-      }
+		const pendingRequest = Promise.resolve()
+			.then(loader)
+			.then((value) => {
+				if (this.inflight.get(key) === pendingRequest) {
+					this.set(key, value, ttlMs);
+				}
 
-      keysForTag.add(key);
-    }
-  }
+				return value;
+			})
+			.finally(() => {
+				if (this.inflight.get(key) === pendingRequest) {
+					this.inflight.delete(key);
 
-  flushTags(tags: string[]): number {
-    const keysToRemove = new Set<string>();
+					if (!this.cache.has(key)) {
+						this.detachKeyFromTags(key);
+					}
+				}
+			});
 
-    for (const tag of tags) {
-      const keys = this.tagIndex.get(tag);
+		this.inflight.set(key, pendingRequest);
+		this.attachTags(key, tags);
 
-      if (!keys) {
-        continue;
-      }
+		return pendingRequest;
+	}
 
-      for (const key of keys) {
-        keysToRemove.add(key);
-      }
-    }
+	attachTags(key: string, tags: string[]): void {
+		if (tags.length === 0) {
+			return;
+		}
 
-    let removed = 0;
+		let tagsForKey = this.keyTags.get(key);
 
-    for (const key of keysToRemove) {
-      if (this.invalidate(key)) {
-        removed += 1;
-      }
-    }
+		if (!tagsForKey) {
+			tagsForKey = new Set();
+			this.keyTags.set(key, tagsForKey);
+		}
 
-    for (const tag of tags) {
-      this.tagIndex.delete(tag);
-    }
+		for (const tag of tags) {
+			tagsForKey.add(tag);
 
-    return removed;
-  }
+			let keysForTag = this.tagIndex.get(tag);
 
-  invalidate(key: string): boolean {
-    const removed = this.cache.delete(key);
-    this.inflight.delete(key);
-    this.detachKeyFromTags(key);
+			if (!keysForTag) {
+				keysForTag = new Set();
+				this.tagIndex.set(tag, keysForTag);
+			}
 
-    return removed;
-  }
+			keysForTag.add(key);
+		}
+	}
 
-  invalidateByPrefix(prefix: string): number {
-    let removed = 0;
+	flushTags(tags: string[]): number {
+		const keysToRemove = new Set<string>();
 
-    for (const key of new Set([...this.cache.keys(), ...this.inflight.keys()])) {
-      if (key === prefix || key.startsWith(`${prefix}?`)) {
-        if (this.invalidate(key)) {
-          removed += 1;
-        }
-      }
-    }
+		for (const tag of tags) {
+			const keys = this.tagIndex.get(tag);
 
-    return removed;
-  }
+			if (!keys) {
+				continue;
+			}
 
-  clear(): void {
-    this.cache.clear();
-    this.inflight.clear();
-    this.tagIndex.clear();
-    this.keyTags.clear();
-  }
+			for (const key of keys) {
+				keysToRemove.add(key);
+			}
+		}
 
-  size(): number {
-    this.pruneExpired();
-    return this.cache.size;
-  }
+		let removed = 0;
 
-  private detachKeyFromTags(key: string): void {
-    const tags = this.keyTags.get(key);
+		for (const key of keysToRemove) {
+			if (this.invalidate(key)) {
+				removed += 1;
+			}
+		}
 
-    if (!tags) {
-      return;
-    }
+		for (const tag of tags) {
+			this.tagIndex.delete(tag);
+		}
 
-    for (const tag of tags) {
-      const keys = this.tagIndex.get(tag);
+		return removed;
+	}
 
-      if (!keys) {
-        continue;
-      }
+	invalidate(key: string): boolean {
+		const removed = this.cache.delete(key);
 
-      keys.delete(key);
+		this.inflight.delete(key);
+		this.detachKeyFromTags(key);
 
-      if (keys.size === 0) {
-        this.tagIndex.delete(tag);
-      }
-    }
+		return removed;
+	}
 
-    this.keyTags.delete(key);
-  }
+	invalidateByPrefix(prefix: string): number {
+		let removed = 0;
 
-  private getFreshEntry<T>(key: string): CacheEntry<T> | undefined {
-    const entry = this.cache.get(key) as CacheEntry<T> | undefined;
+		for (const key of new Set([...this.cache.keys(), ...this.inflight.keys()])) {
+			if (key === prefix || key.startsWith(`${prefix}?`)) {
+				if (this.invalidate(key)) {
+					removed += 1;
+				}
+			}
+		}
 
-    if (!entry) {
-      return undefined;
-    }
+		return removed;
+	}
 
-    if (entry.expiresAt <= Date.now()) {
-      this.invalidate(key);
-      return undefined;
-    }
+	clear(): void {
+		this.cache.clear();
+		this.inflight.clear();
+		this.tagIndex.clear();
+		this.keyTags.clear();
+	}
 
-    entry.lastAccessedAt = Date.now();
-    return entry;
-  }
+	size(): number {
+		this.pruneExpired();
 
-  private pruneExpired(): void {
-    const now = Date.now();
+		return this.cache.size;
+	}
 
-    for (const [key, entry] of this.cache.entries()) {
-      if (entry.expiresAt <= now) {
-        this.invalidate(key);
-      }
-    }
-  }
+	private detachKeyFromTags(key: string): void {
+		const tags = this.keyTags.get(key);
 
-  private evictOverflow(): void {
-    while (this.cache.size > this.maxEntries) {
-      let oldestKey: string | undefined;
-      let oldestAccessTime = Number.POSITIVE_INFINITY;
+		if (!tags) {
+			return;
+		}
 
-      for (const [key, entry] of this.cache.entries()) {
-        if (entry.lastAccessedAt < oldestAccessTime) {
-          oldestAccessTime = entry.lastAccessedAt;
-          oldestKey = key;
-        }
-      }
+		for (const tag of tags) {
+			const keys = this.tagIndex.get(tag);
 
-      if (oldestKey === undefined) {
-        return;
-      }
+			if (!keys) {
+				continue;
+			}
 
-      this.invalidate(oldestKey);
-    }
-  }
+			keys.delete(key);
+
+			if (keys.size === 0) {
+				this.tagIndex.delete(tag);
+			}
+		}
+
+		this.keyTags.delete(key);
+	}
+
+	private getFreshEntry<T>(key: string): CacheEntry<T> | undefined {
+		const entry = this.cache.get(key) as CacheEntry<T> | undefined;
+
+		if (!entry) {
+			return undefined;
+		}
+
+		if (entry.expiresAt <= Date.now()) {
+			this.invalidate(key);
+
+			return undefined;
+		}
+
+		entry.lastAccessedAt = Date.now();
+
+		return entry;
+	}
+
+	private pruneExpired(): void {
+		const now = Date.now();
+
+		for (const [key, entry] of this.cache.entries()) {
+			if (entry.expiresAt <= now) {
+				this.invalidate(key);
+			}
+		}
+	}
+
+	private evictOverflow(): void {
+		while (this.cache.size > this.maxEntries) {
+			let oldestKey: string | undefined;
+
+			let oldestAccessTime = Number.POSITIVE_INFINITY;
+
+			for (const [key, entry] of this.cache.entries()) {
+				if (entry.lastAccessedAt < oldestAccessTime) {
+					oldestAccessTime = entry.lastAccessedAt;
+					oldestKey = key;
+				}
+			}
+
+			if (oldestKey === undefined) {
+				return;
+			}
+
+			this.invalidate(oldestKey);
+		}
+	}
 }
 
 export { SimpleCache, validateSimpleCacheOptions };

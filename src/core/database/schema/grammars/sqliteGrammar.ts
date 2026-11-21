@@ -1,5 +1,5 @@
-import { createGrammar } from "./createGrammar.ts";
+import { createGrammar } from './createGrammar.ts';
 
-const SqliteGrammar = createGrammar("sqlite");
+const SqliteGrammar = createGrammar('sqlite');
 
 export { SqliteGrammar };

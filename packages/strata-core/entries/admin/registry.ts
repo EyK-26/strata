@@ -1,1 +1,1 @@
-export * from "../../../../src/core/admin/registry.ts";
+export * from '../../../../src/core/admin/registry.ts';

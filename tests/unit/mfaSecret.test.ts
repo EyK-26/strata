@@ -1,109 +1,119 @@
-import { afterAll, afterEach, describe, expect, mock, test } from "bun:test";
-import { createMfaSecretCodec } from "@getstrata/core/crypto/mfaSecret";
-import { restoreEnvVar } from "../helpers/restoreEnv";
+import { afterAll, afterEach, describe, expect, mock, test } from 'bun:test';
+
+import { createMfaSecretCodec } from '@getstrata/core/crypto/mfaSecret';
+
+import { restoreEnvVar } from '../helpers/restoreEnv';
 
 const previousEncryptionKey = process.env.KMS_ENCRYPTION_KEY;
+
 const previousFeatureFlag = process.env.FEATURE_FIELD_ENCRYPTION;
 
 afterEach(() => {
-  if (previousEncryptionKey === undefined) {
-    delete process.env.KMS_ENCRYPTION_KEY;
-  } else {
-    restoreEnvVar("KMS_ENCRYPTION_KEY", previousEncryptionKey);
-  }
+	if (previousEncryptionKey === undefined) {
+		delete process.env.KMS_ENCRYPTION_KEY;
+	} else {
+		restoreEnvVar('KMS_ENCRYPTION_KEY', previousEncryptionKey);
+	}
 
-  if (previousFeatureFlag === undefined) {
-    delete process.env.FEATURE_FIELD_ENCRYPTION;
-  } else {
-    restoreEnvVar("FEATURE_FIELD_ENCRYPTION", previousFeatureFlag);
-  }
+	if (previousFeatureFlag === undefined) {
+		delete process.env.FEATURE_FIELD_ENCRYPTION;
+	} else {
+		restoreEnvVar('FEATURE_FIELD_ENCRYPTION', previousFeatureFlag);
+	}
 });
 
 afterAll(() => {
-  mock.restore();
+	mock.restore();
 });
 
-describe("mfaSecret", () => {
-  test("refuses to store plaintext when the encryption key is missing", async () => {
-    delete process.env.KMS_ENCRYPTION_KEY;
-    delete process.env.FEATURE_FIELD_ENCRYPTION;
+describe('mfaSecret', () => {
+	test('refuses to store plaintext when the encryption key is missing', async () => {
+		delete process.env.KMS_ENCRYPTION_KEY;
+		delete process.env.FEATURE_FIELD_ENCRYPTION;
 
-    const { protectMfaSecret, revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
+		const { protectMfaSecret, revealMfaSecret } = await import('@getstrata/core/crypto/mfaSecret');
 
-    expect(() => protectMfaSecret("JBSWY3DPEHPK3PXP", createMfaSecretCodec(process.env))).toThrow(
-      "KMS_ENCRYPTION_KEY",
-    );
-    expect(revealMfaSecret("JBSWY3DPEHPK3PXP", createMfaSecretCodec(process.env))).toBe(
-      "JBSWY3DPEHPK3PXP",
-    );
-    expect(revealMfaSecret(null, createMfaSecretCodec(process.env))).toBeNull();
-    expect(revealMfaSecret(undefined, createMfaSecretCodec(process.env))).toBeNull();
-  });
+		expect(() => protectMfaSecret('JBSWY3DPEHPK3PXP', createMfaSecretCodec(process.env))).toThrow(
+			'KMS_ENCRYPTION_KEY',
+		);
+		expect(revealMfaSecret('JBSWY3DPEHPK3PXP', createMfaSecretCodec(process.env))).toBe(
+			'JBSWY3DPEHPK3PXP',
+		);
+		expect(revealMfaSecret(null, createMfaSecretCodec(process.env))).toBeNull();
+		expect(revealMfaSecret(undefined, createMfaSecretCodec(process.env))).toBeNull();
+	});
 
-  test("encrypts MFA secrets whenever a key is present", async () => {
-    process.env.KMS_ENCRYPTION_KEY = "c".repeat(64);
-    delete process.env.FEATURE_FIELD_ENCRYPTION;
+	test('encrypts MFA secrets whenever a key is present', async () => {
+		process.env.KMS_ENCRYPTION_KEY = 'c'.repeat(64);
+		delete process.env.FEATURE_FIELD_ENCRYPTION;
 
-    const { protectMfaSecret, revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
-    const protectedSecret = protectMfaSecret("JBSWY3DPEHPK3PXP", createMfaSecretCodec(process.env));
+		const { protectMfaSecret, revealMfaSecret } = await import('@getstrata/core/crypto/mfaSecret');
 
-    expect(protectedSecret.startsWith("enc:v1:")).toBe(true);
-    expect(revealMfaSecret(protectedSecret, createMfaSecretCodec(process.env))).toBe(
-      "JBSWY3DPEHPK3PXP",
-    );
-  });
+		const protectedSecret = protectMfaSecret('JBSWY3DPEHPK3PXP', createMfaSecretCodec(process.env));
 
-  test("returns stored plaintext when decrypt is not available", async () => {
-    process.env.FEATURE_FIELD_ENCRYPTION = "true";
-    delete process.env.KMS_ENCRYPTION_KEY;
+		expect(protectedSecret.startsWith('enc:v1:')).toBe(true);
+		expect(revealMfaSecret(protectedSecret, createMfaSecretCodec(process.env))).toBe(
+			'JBSWY3DPEHPK3PXP',
+		);
+	});
 
-    const { revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
+	test('returns stored plaintext when decrypt is not available', async () => {
+		process.env.FEATURE_FIELD_ENCRYPTION = 'true';
+		delete process.env.KMS_ENCRYPTION_KEY;
 
-    expect(revealMfaSecret("plain-secret", createMfaSecretCodec(process.env))).toBe("plain-secret");
-    expect(() => revealMfaSecret("enc:v1:ciphertext", createMfaSecretCodec(process.env))).toThrow(
-      "KMS_ENCRYPTION_KEY",
-    );
-  });
+		const { revealMfaSecret } = await import('@getstrata/core/crypto/mfaSecret');
 
-  test("decrypts MFA secrets even when FEATURE_FIELD_ENCRYPTION is false", async () => {
-    process.env.KMS_ENCRYPTION_KEY = "e".repeat(64);
-    process.env.FEATURE_FIELD_ENCRYPTION = "false";
+		expect(revealMfaSecret('plain-secret', createMfaSecretCodec(process.env))).toBe('plain-secret');
+		expect(() => revealMfaSecret('enc:v1:ciphertext', createMfaSecretCodec(process.env))).toThrow(
+			'KMS_ENCRYPTION_KEY',
+		);
+	});
 
-    const { protectMfaSecret, revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
-    const protectedSecret = protectMfaSecret("JBSWY3DPEHPK3PXP", createMfaSecretCodec(process.env));
-    expect(protectedSecret.startsWith("enc:v1:")).toBe(true);
-    expect(revealMfaSecret(protectedSecret, createMfaSecretCodec(process.env))).toBe(
-      "JBSWY3DPEHPK3PXP",
-    );
-  });
+	test('decrypts MFA secrets even when FEATURE_FIELD_ENCRYPTION is false', async () => {
+		process.env.KMS_ENCRYPTION_KEY = 'e'.repeat(64);
+		process.env.FEATURE_FIELD_ENCRYPTION = 'false';
 
-  test("refuses stored plaintext when an encryption key is set", async () => {
-    const previous = process.env.APP_ENV;
-    process.env.KMS_ENCRYPTION_KEY = "d".repeat(64);
-    process.env.FEATURE_FIELD_ENCRYPTION = "true";
-    process.env.APP_ENV = "local";
+		const { protectMfaSecret, revealMfaSecret } = await import('@getstrata/core/crypto/mfaSecret');
 
-    try {
-      const { revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
-      expect(() =>
-        revealMfaSecret("legacy-plain-secret", createMfaSecretCodec(process.env)),
-      ).toThrow("must be encrypted");
-    } finally {
-      restoreEnvVar("APP_ENV", previous);
-    }
-  });
+		const protectedSecret = protectMfaSecret('JBSWY3DPEHPK3PXP', createMfaSecretCodec(process.env));
 
-  test("rejects plaintext MFA secrets in production", async () => {
-    const previous = process.env.APP_ENV;
-    process.env.APP_ENV = "production";
-    process.env.KMS_ENCRYPTION_KEY = "d".repeat(64);
-    try {
-      const { revealMfaSecret } = await import("@getstrata/core/crypto/mfaSecret");
-      expect(() =>
-        revealMfaSecret("legacy-plain-secret", createMfaSecretCodec(process.env)),
-      ).toThrow("must be encrypted");
-    } finally {
-      restoreEnvVar("APP_ENV", previous);
-    }
-  });
+		expect(protectedSecret.startsWith('enc:v1:')).toBe(true);
+		expect(revealMfaSecret(protectedSecret, createMfaSecretCodec(process.env))).toBe(
+			'JBSWY3DPEHPK3PXP',
+		);
+	});
+
+	test('refuses stored plaintext when an encryption key is set', async () => {
+		const previous = process.env.APP_ENV;
+
+		process.env.KMS_ENCRYPTION_KEY = 'd'.repeat(64);
+		process.env.FEATURE_FIELD_ENCRYPTION = 'true';
+		process.env.APP_ENV = 'local';
+
+		try {
+			const { revealMfaSecret } = await import('@getstrata/core/crypto/mfaSecret');
+
+			expect(() =>
+				revealMfaSecret('legacy-plain-secret', createMfaSecretCodec(process.env)),
+			).toThrow('must be encrypted');
+		} finally {
+			restoreEnvVar('APP_ENV', previous);
+		}
+	});
+
+	test('rejects plaintext MFA secrets in production', async () => {
+		const previous = process.env.APP_ENV;
+
+		process.env.APP_ENV = 'production';
+		process.env.KMS_ENCRYPTION_KEY = 'd'.repeat(64);
+		try {
+			const { revealMfaSecret } = await import('@getstrata/core/crypto/mfaSecret');
+
+			expect(() =>
+				revealMfaSecret('legacy-plain-secret', createMfaSecretCodec(process.env)),
+			).toThrow('must be encrypted');
+		} finally {
+			restoreEnvVar('APP_ENV', previous);
+		}
+	});
 });

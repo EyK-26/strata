@@ -1,138 +1,157 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { resetDiscoverJobsForTests } from "@getstrata/bootstrap/testing";
-import { JobRegistry } from "@getstrata/core/queue/jobRegistry";
+import { afterEach, describe, expect, test } from 'bun:test';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { resetDiscoverJobsForTests } from '@getstrata/bootstrap/testing';
+import { JobRegistry } from '@getstrata/core/queue/jobRegistry';
 
 const jobRegistry = new JobRegistry();
 
-const repoRoot = join(import.meta.dir, "../..");
+const repoRoot = join(import.meta.dir, '../..');
+
 const tempDirectories: string[] = [];
 
 async function tempDir(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "strata-discover-jobs-"));
-  tempDirectories.push(directory);
-  return directory;
+	const directory = await mkdtemp(join(tmpdir(), 'strata-discover-jobs-'));
+
+	tempDirectories.push(directory);
+
+	return directory;
 }
 
 async function writeJob(directory: string, fileName: string, source: string): Promise<void> {
-  await writeFile(join(directory, fileName), source);
+	await writeFile(join(directory, fileName), source);
 }
 
-describe("discoverJobs", () => {
-  afterEach(async () => {
-    process.chdir(repoRoot);
-    resetDiscoverJobsForTests(jobRegistry);
-    while (tempDirectories.length > 0) {
-      const directory = tempDirectories.pop();
-      if (directory) {
-        await rm(directory, { recursive: true, force: true });
-      }
-    }
-  });
+describe('discoverJobs', () => {
+	afterEach(async () => {
+		process.chdir(repoRoot);
+		resetDiscoverJobsForTests(jobRegistry);
+		while (tempDirectories.length > 0) {
+			const directory = tempDirectories.pop();
 
-  test("returns no names when src/jobs is absent", async () => {
-    const { discoverJobs } = await import("../../src/bootstrap/discoverJobs");
-    resetDiscoverJobsForTests(jobRegistry);
+			if (directory) {
+				await rm(directory, { recursive: true, force: true });
+			}
+		}
+	});
 
-    expect(await discoverJobs(jobRegistry)).toEqual([]);
-  });
+	test('returns no names when src/jobs is absent', async () => {
+		const { discoverJobs } = await import('../../src/bootstrap/discoverJobs');
 
-  test("returns no names when cwd src/jobs exists but is empty", async () => {
-    const root = await tempDir();
-    await mkdir(join(root, "src", "jobs"), { recursive: true });
+		resetDiscoverJobsForTests(jobRegistry);
 
-    process.chdir(root);
-    const { discoverJobs } = await import("../../src/bootstrap/discoverJobs");
-    resetDiscoverJobsForTests(jobRegistry);
+		expect(await discoverJobs(jobRegistry)).toEqual([]);
+	});
 
-    expect(await discoverJobs(jobRegistry)).toEqual([]);
-  });
+	test('returns no names when cwd src/jobs exists but is empty', async () => {
+		const root = await tempDir();
 
-  test("registers jobs with static jobName from cwd", async () => {
-    const root = await tempDir();
-    const jobsDirectory = join(root, "src", "jobs");
-    await mkdir(jobsDirectory, { recursive: true });
-    await writeJob(
-      jobsDirectory,
-      "echoJob.ts",
-      `export default class EchoJob {
+		await mkdir(join(root, 'src', 'jobs'), { recursive: true });
+
+		process.chdir(root);
+		const { discoverJobs } = await import('../../src/bootstrap/discoverJobs');
+
+		resetDiscoverJobsForTests(jobRegistry);
+
+		expect(await discoverJobs(jobRegistry)).toEqual([]);
+	});
+
+	test('registers jobs with static jobName from cwd', async () => {
+		const root = await tempDir();
+
+		const jobsDirectory = join(root, 'src', 'jobs');
+
+		await mkdir(jobsDirectory, { recursive: true });
+		await writeJob(
+			jobsDirectory,
+			'echoJob.ts',
+			`export default class EchoJob {
   static jobName = "echo";
   async handle() {}
 }
 `,
-    );
+		);
 
-    process.chdir(root);
-    const { discoverJobs } = await import("../../src/bootstrap/discoverJobs");
-    resetDiscoverJobsForTests(jobRegistry);
+		process.chdir(root);
+		const { discoverJobs } = await import('../../src/bootstrap/discoverJobs');
 
-    expect(await discoverJobs(jobRegistry)).toEqual(["echo"]);
-    expect(jobRegistry.create("echo")?.constructor.name).toBe("EchoJob");
-  });
+		resetDiscoverJobsForTests(jobRegistry);
 
-  test("loads legacy CommonJS defaults and ignores explicitly excluded helper modules", async () => {
-    const root = await tempDir();
-    const jobsDirectory = join(root, "src", "jobs");
-    await mkdir(jobsDirectory, { recursive: true });
-    await writeJob(jobsDirectory, "helper.ts", "export default 1;");
-    await writeJob(
-      jobsDirectory,
-      "fromJs.js",
-      'module.exports = {default: class FromJs {static jobName="from-js"; async handle(){}}};',
-    );
-    process.chdir(root);
-    const { discoverJobs } = await import("../../src/bootstrap/discoverJobs");
-    expect(await discoverJobs(jobRegistry, { exclude: ["helper.ts"] })).toEqual(["from-js"]);
-    expect(jobRegistry.create("from-js")?.constructor.name).toBe("FromJs");
-  });
+		expect(await discoverJobs(jobRegistry)).toEqual(['echo']);
+		expect(jobRegistry.create('echo')?.constructor.name).toBe('EchoJob');
+	});
 
-  test("returns cached names until reset", async () => {
-    const root = await tempDir();
-    const jobsDirectory = join(root, "src", "jobs");
-    await mkdir(jobsDirectory, { recursive: true });
-    await writeJob(
-      jobsDirectory,
-      "echoJob.ts",
-      `export default class EchoJob {
+	test('loads legacy CommonJS defaults and ignores explicitly excluded helper modules', async () => {
+		const root = await tempDir();
+
+		const jobsDirectory = join(root, 'src', 'jobs');
+
+		await mkdir(jobsDirectory, { recursive: true });
+		await writeJob(jobsDirectory, 'helper.ts', 'export default 1;');
+		await writeJob(
+			jobsDirectory,
+			'fromJs.js',
+			'module.exports = {default: class FromJs {static jobName="from-js"; async handle(){}}};',
+		);
+		process.chdir(root);
+		const { discoverJobs } = await import('../../src/bootstrap/discoverJobs');
+
+		expect(await discoverJobs(jobRegistry, { exclude: ['helper.ts'] })).toEqual(['from-js']);
+		expect(jobRegistry.create('from-js')?.constructor.name).toBe('FromJs');
+	});
+
+	test('returns cached names until reset', async () => {
+		const root = await tempDir();
+
+		const jobsDirectory = join(root, 'src', 'jobs');
+
+		await mkdir(jobsDirectory, { recursive: true });
+		await writeJob(
+			jobsDirectory,
+			'echoJob.ts',
+			`export default class EchoJob {
   static jobName = "echo";
   async handle() {}
 }
 `,
-    );
+		);
 
-    process.chdir(root);
-    const { discoverJobs } = await import("../../src/bootstrap/discoverJobs");
-    resetDiscoverJobsForTests(jobRegistry);
+		process.chdir(root);
+		const { discoverJobs } = await import('../../src/bootstrap/discoverJobs');
 
-    expect(await discoverJobs(jobRegistry)).toEqual(["echo"]);
+		resetDiscoverJobsForTests(jobRegistry);
 
-    await writeJob(
-      jobsDirectory,
-      "laterJob.ts",
-      `export default class LaterJob {
+		expect(await discoverJobs(jobRegistry)).toEqual(['echo']);
+
+		await writeJob(
+			jobsDirectory,
+			'laterJob.ts',
+			`export default class LaterJob {
   static jobName = "later";
   async handle() {}
 }
 `,
-    );
+		);
 
-    expect(await discoverJobs(jobRegistry)).toEqual(["echo"]);
+		expect(await discoverJobs(jobRegistry)).toEqual(['echo']);
 
-    resetDiscoverJobsForTests(jobRegistry);
-    expect((await discoverJobs(jobRegistry)).toSorted()).toEqual(["echo", "later"]);
-  });
+		resetDiscoverJobsForTests(jobRegistry);
+		expect((await discoverJobs(jobRegistry)).toSorted()).toEqual(['echo', 'later']);
+	});
 
-  test("rethrows non-ENOENT errors when src/jobs is not a directory", async () => {
-    const root = await tempDir();
-    await mkdir(join(root, "src"), { recursive: true });
-    await writeFile(join(root, "src", "jobs"), "not a directory\n");
+	test('rethrows non-ENOENT errors when src/jobs is not a directory', async () => {
+		const root = await tempDir();
 
-    process.chdir(root);
-    const { discoverJobs } = await import("../../src/bootstrap/discoverJobs");
-    resetDiscoverJobsForTests(jobRegistry);
+		await mkdir(join(root, 'src'), { recursive: true });
+		await writeFile(join(root, 'src', 'jobs'), 'not a directory\n');
 
-    await expect(discoverJobs(jobRegistry)).rejects.toThrow();
-  });
+		process.chdir(root);
+		const { discoverJobs } = await import('../../src/bootstrap/discoverJobs');
+
+		resetDiscoverJobsForTests(jobRegistry);
+
+		await expect(discoverJobs(jobRegistry)).rejects.toThrow();
+	});
 });

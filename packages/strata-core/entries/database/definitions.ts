@@ -1,1 +1,1 @@
-export * from "../../../../src/core/database/definitions.ts";
+export * from '../../../../src/core/database/definitions.ts';

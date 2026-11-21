@@ -1,20 +1,20 @@
-import type { QueryOrder } from "./types.ts";
+import type { QueryOrder } from './types.ts';
 
 interface TableDefinition<
-  TEntity,
-  PrimaryKey extends keyof TEntity & string = keyof TEntity & string,
+	TEntity,
+	PrimaryKey extends keyof TEntity & string = keyof TEntity & string,
 > {
-  name: string;
-  primaryKey: PrimaryKey;
-  columns: readonly (keyof TEntity & string)[];
-  defaultOrderBy?: QueryOrder<TEntity> | QueryOrder<TEntity>[];
-  softDeletes?: boolean | { column?: keyof TEntity & string };
+	name: string;
+	primaryKey: PrimaryKey;
+	columns: readonly (keyof TEntity & string)[];
+	defaultOrderBy?: QueryOrder<TEntity> | QueryOrder<TEntity>[];
+	softDeletes?: boolean | { column?: keyof TEntity & string };
 }
 
 function defineTable<TEntity, PrimaryKey extends keyof TEntity & string = keyof TEntity & string>(
-  definition: TableDefinition<TEntity, PrimaryKey>,
+	definition: TableDefinition<TEntity, PrimaryKey>,
 ): TableDefinition<TEntity, PrimaryKey> {
-  return definition;
+	return definition;
 }
 
 export type { TableDefinition };

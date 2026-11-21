@@ -1,1 +1,1 @@
-export * from "../../../src/core/testing.ts";
+export * from '../../../src/core/testing.ts';

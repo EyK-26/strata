@@ -1,21 +1,24 @@
-import { assertFixtureSchema } from "../../bootstrap/schemaTarget.ts";
+import { assertFixtureSchema } from '../../bootstrap/schemaTarget.ts';
 
 async function migrateStatusCommand(): Promise<void> {
-  assertFixtureSchema();
-  const { getMigrationStatus } = await import("../../db/migrations/runner");
-  const statuses = await getMigrationStatus();
+	assertFixtureSchema();
+	const { getMigrationStatus } = await import('../../db/migrations/runner');
 
-  if (statuses.length === 0) {
-    console.log("No migration files found.");
-    return;
-  }
+	const statuses = await getMigrationStatus();
 
-  console.log("Migration status:");
+	if (statuses.length === 0) {
+		console.log('No migration files found.');
 
-  for (const { name, status, batch } of statuses) {
-    const batchLabel = batch === null ? "-" : String(batch);
-    console.log(`- [${status}] ${name} (batch: ${batchLabel})`);
-  }
+		return;
+	}
+
+	console.log('Migration status:');
+
+	for (const { name, status, batch } of statuses) {
+		const batchLabel = batch === null ? '-' : String(batch);
+
+		console.log(`- [${status}] ${name} (batch: ${batchLabel})`);
+	}
 }
 
 export { migrateStatusCommand };

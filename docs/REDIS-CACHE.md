@@ -7,20 +7,22 @@ The Redis driver coordinates cache fills and invalidation across application and
 Use `createCacheStore` and `CacheRepository`, including `cache.tags(...names).remember(key, loader)`. Tagged remember binds tags **before** loading. Calling `attachTags` after an untagged fill cannot retroactively protect that fill from an earlier tag invalidation. Use consistent tags for a logical key.
 
 ```ts
-import { createCacheStore } from "@getstrata/core/cache/createCacheStore";
-import { CacheRepository } from "@getstrata/core/cache/repository";
+import { createCacheStore } from '@getstrata/core/cache/createCacheStore';
+import { CacheRepository } from '@getstrata/core/cache/repository';
 
-const cache = new CacheRepository(createCacheStore({
-  driver: "redis",
-  redisUrl: process.env.REDIS_URL,
-  ttlMs: 60_000,
-  maxEntries: 1000,
-  redis: { fillTimeoutMs: 30_000, metadataTtlMs: 60_000 },
-}));
+const cache = new CacheRepository(
+	createCacheStore({
+		driver: 'redis',
+		redisUrl: process.env.REDIS_URL,
+		ttlMs: 60_000,
+		maxEntries: 1000,
+		redis: { fillTimeoutMs: 30_000, metadataTtlMs: 60_000 },
+	}),
+);
 
-await cache.tags("catalog").remember("catalog?category=12", async (signal) => {
-  // Redis loaders receive an AbortSignal. Pass it to cancellable operations.
-  return fetch(catalogUrl, { signal }).then(response => response.json());
+await cache.tags('catalog').remember('catalog?category=12', async (signal) => {
+	// Redis loaders receive an AbortSignal. Pass it to cancellable operations.
+	return fetch(catalogUrl, { signal }).then((response) => response.json());
 });
 ```
 
@@ -32,11 +34,11 @@ The repository and execution-scoped cache expose Laravel-style `put`, `forever`,
 `remember`, `forget`, `flush` and `tags`. Durations remain explicit milliseconds.
 
 ```ts
-await cache.put("stock:42", 12, 30_000);
-await cache.forever("settings:currency", "EUR");
-await cache.tags("catalog").put("product:42", product, 30_000);
-await cache.tags("settings").forever("settings:tax", taxSettings);
-await cache.put("stock:42", 0, 0); // forget the existing entry
+await cache.put('stock:42', 12, 30_000);
+await cache.forever('settings:currency', 'EUR');
+await cache.tags('catalog').put('product:42', product, 30_000);
+await cache.tags('settings').forever('settings:tax', taxSettings);
+await cache.put('stock:42', 0, 0); // forget the existing entry
 ```
 
 - A positive safe integer TTL expires after that many milliseconds.

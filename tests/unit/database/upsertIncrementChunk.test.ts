@@ -1,330 +1,340 @@
-import { describe, expect, test } from "bun:test";
-import { BaseRepository } from "@getstrata/core/database/baseRepository";
-import { defineRepository } from "@getstrata/core/database/definitions";
-import { currentSqlDialect, runWithSqlDialect } from "@getstrata/core/database/dialect";
+import { describe, expect, test } from 'bun:test';
+
+import { BaseRepository } from '@getstrata/core/database/baseRepository';
+import { defineRepository } from '@getstrata/core/database/definitions';
+import { currentSqlDialect, runWithSqlDialect } from '@getstrata/core/database/dialect';
 import {
-  buildIncrementQuery,
-  buildSelectQuery,
-  buildUpsertQuery,
-} from "@getstrata/core/database/query";
-import { defineTable } from "@getstrata/core/database/table";
-import type { DatabaseConnection } from "../../../src/core/database/connectionContracts";
-import { withRepositories } from "../../helpers/boundRepositoryHarness";
+	buildIncrementQuery,
+	buildSelectQuery,
+	buildUpsertQuery,
+} from '@getstrata/core/database/query';
+import { defineTable } from '@getstrata/core/database/table';
+
+import type { DatabaseConnection } from '../../../src/core/database/connectionContracts';
+import { withRepositories } from '../../helpers/boundRepositoryHarness';
 
 type Counter = {
-  id: number;
-  slug: string;
-  hits: number;
+	id: number;
+	slug: string;
+	hits: number;
 };
 
-const counterTable = defineTable<Counter, "id">({
-  name: "counters",
-  primaryKey: "id",
-  columns: ["id", "slug", "hits"],
+const counterTable = defineTable<Counter, 'id'>({
+	name: 'counters',
+	primaryKey: 'id',
+	columns: ['id', 'slug', 'hits'],
 });
 
 class FakeConnection implements DatabaseConnection {
-  readonly calls: Array<{ query: string; params: readonly unknown[] }> = [];
-  private readonly responses: unknown[][] = [];
+	readonly calls: Array<{ query: string; params: readonly unknown[] }> = [];
+	private readonly responses: unknown[][] = [];
 
-  queue(rows: unknown[]): void {
-    this.responses.push(rows);
-  }
+	queue(rows: unknown[]): void {
+		this.responses.push(rows);
+	}
 
-  async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
-    this.calls.push({ query, params: [...params] });
-    return (this.responses.shift() ?? []) as T[];
-  }
+	async unsafe<T>(query: string, params: readonly unknown[] = []): Promise<T[]> {
+		this.calls.push({ query, params: [...params] });
+
+		return (this.responses.shift() ?? []) as T[];
+	}
 }
 
-class CounterRepository extends BaseRepository<Counter, "id"> {}
+class CounterRepository extends BaseRepository<Counter, 'id'> {}
+
 const CounterRepositoryDefinition = defineRepository({
-  name: "CounterRepository",
-  table: counterTable,
-  dependencies: [],
-  create: (binding) => new CounterRepository(binding),
+	name: 'CounterRepository',
+	table: counterTable,
+	dependencies: [],
+	create: (binding) => new CounterRepository(binding),
 });
 
-describe("upsert", () => {
-  test("postgres and sqlite use ON CONFLICT DO UPDATE with excluded", () => {
-    for (const driver of ["pgsql", "sqlite"] as const) {
-      const { text } = runWithSqlDialect(driver, () =>
-        buildUpsertQuery(currentSqlDialect(), counterTable, { slug: "a", hits: 1 }, ["slug"]),
-      ) as unknown as { text: string };
+describe('upsert', () => {
+	test('postgres and sqlite use ON CONFLICT DO UPDATE with excluded', () => {
+		for (const driver of ['pgsql', 'sqlite'] as const) {
+			const { text } = runWithSqlDialect(driver, () =>
+				buildUpsertQuery(currentSqlDialect(), counterTable, { slug: 'a', hits: 1 }, ['slug']),
+			) as unknown as { text: string };
 
-      expect(text).toContain('ON CONFLICT ("slug") DO UPDATE SET');
-      expect(text).toContain('"hits" = excluded."hits"');
-    }
-  });
+			expect(text).toContain('ON CONFLICT ("slug") DO UPDATE SET');
+			expect(text).toContain('"hits" = excluded."hits"');
+		}
+	});
 
-  test("mysql uses ON DUPLICATE KEY UPDATE", () => {
-    const { text } = runWithSqlDialect("mysql", () =>
-      buildUpsertQuery(currentSqlDialect(), counterTable, { slug: "a", hits: 1 }, ["slug"]),
-    ) as unknown as { text: string };
+	test('mysql uses ON DUPLICATE KEY UPDATE', () => {
+		const { text } = runWithSqlDialect('mysql', () =>
+			buildUpsertQuery(currentSqlDialect(), counterTable, { slug: 'a', hits: 1 }, ['slug']),
+		) as unknown as { text: string };
 
-    expect(text).toContain("ON DUPLICATE KEY UPDATE");
-    expect(text).toContain("`hits` = VALUES(`hits`)");
-  });
+		expect(text).toContain('ON DUPLICATE KEY UPDATE');
+		expect(text).toContain('`hits` = VALUES(`hits`)');
+	});
 
-  test("an empty update list becomes DO NOTHING", () => {
-    const { text } = runWithSqlDialect("pgsql", () =>
-      buildUpsertQuery(currentSqlDialect(), counterTable, { slug: "a" }, ["slug"], []),
-    ) as unknown as { text: string };
+	test('an empty update list becomes DO NOTHING', () => {
+		const { text } = runWithSqlDialect('pgsql', () =>
+			buildUpsertQuery(currentSqlDialect(), counterTable, { slug: 'a' }, ['slug'], []),
+		) as unknown as { text: string };
 
-    expect(text).toContain("DO NOTHING");
-  });
+		expect(text).toContain('DO NOTHING');
+	});
 
-  test("sqlite also uses DO NOTHING for an empty update list", () => {
-    const { text } = runWithSqlDialect("sqlite", () =>
-      buildUpsertQuery(currentSqlDialect(), counterTable, { slug: "a" }, ["slug"], []),
-    ) as unknown as { text: string };
+	test('sqlite also uses DO NOTHING for an empty update list', () => {
+		const { text } = runWithSqlDialect('sqlite', () =>
+			buildUpsertQuery(currentSqlDialect(), counterTable, { slug: 'a' }, ['slug'], []),
+		) as unknown as { text: string };
 
-    expect(text).toContain('ON CONFLICT ("slug") DO NOTHING');
-  });
+		expect(text).toContain('ON CONFLICT ("slug") DO NOTHING');
+	});
 
-  test("mysql anchors its no-op update on a real conflict column", () => {
-    const { text } = runWithSqlDialect("mysql", () =>
-      buildUpsertQuery(currentSqlDialect(), counterTable, { slug: "a" }, ["slug"], []),
-    ) as unknown as { text: string };
+	test('mysql anchors its no-op update on a real conflict column', () => {
+		const { text } = runWithSqlDialect('mysql', () =>
+			buildUpsertQuery(currentSqlDialect(), counterTable, { slug: 'a' }, ['slug'], []),
+		) as unknown as { text: string };
 
-    expect(text).toContain("ON DUPLICATE KEY UPDATE `slug` = `slug`");
-    expect(text).not.toContain("`id`");
-  });
+		expect(text).toContain('ON DUPLICATE KEY UPDATE `slug` = `slug`');
+		expect(text).not.toContain('`id`');
+	});
 
-  test("conflict columns are excluded from the update set by default", () => {
-    const { text } = runWithSqlDialect("pgsql", () =>
-      buildUpsertQuery(currentSqlDialect(), counterTable, { slug: "a", hits: 1 }, ["slug"]),
-    ) as unknown as { text: string };
+	test('conflict columns are excluded from the update set by default', () => {
+		const { text } = runWithSqlDialect('pgsql', () =>
+			buildUpsertQuery(currentSqlDialect(), counterTable, { slug: 'a', hits: 1 }, ['slug']),
+		) as unknown as { text: string };
 
-    expect(text).not.toContain('"slug" = excluded."slug"');
-  });
+		expect(text).not.toContain('"slug" = excluded."slug"');
+	});
 
-  test("values are bound, never inlined", () => {
-    const { params } = runWithSqlDialect("pgsql", () =>
-      buildUpsertQuery(currentSqlDialect(), counterTable, { slug: "a", hits: 1 }, ["slug"]),
-    ) as unknown as { params: unknown[] };
+	test('values are bound, never inlined', () => {
+		const { params } = runWithSqlDialect('pgsql', () =>
+			buildUpsertQuery(currentSqlDialect(), counterTable, { slug: 'a', hits: 1 }, ['slug']),
+		) as unknown as { params: unknown[] };
 
-    expect(params).toEqual(["a", 1]);
-  });
+		expect(params).toEqual(['a', 1]);
+	});
 
-  test("no values or no conflict columns is an error", () => {
-    runWithSqlDialect("pgsql", () => {
-      expect(() => buildUpsertQuery(currentSqlDialect(), counterTable, {}, ["slug"])).toThrow(
-        /without any column/,
-      );
-      expect(() => buildUpsertQuery(currentSqlDialect(), counterTable, { slug: "a" }, [])).toThrow(
-        /without any conflict/,
-      );
-    });
-  });
+	test('no values or no conflict columns is an error', () => {
+		runWithSqlDialect('pgsql', () => {
+			expect(() => buildUpsertQuery(currentSqlDialect(), counterTable, {}, ['slug'])).toThrow(
+				/without any column/,
+			);
+			expect(() => buildUpsertQuery(currentSqlDialect(), counterTable, { slug: 'a' }, [])).toThrow(
+				/without any conflict/,
+			);
+		});
+	});
 
-  test("the repository returns null when a DO NOTHING upsert changes nothing", async () => {
-    const connection = new FakeConnection();
+	test('the repository returns null when a DO NOTHING upsert changes nothing', async () => {
+		const connection = new FakeConnection();
 
-    await withRepositories(
-      connection,
-      [CounterRepositoryDefinition] as const,
-      async ([repository]) => {
-        connection.queue([]);
+		await withRepositories(
+			connection,
+			[CounterRepositoryDefinition] as const,
+			async ([repository]) => {
+				connection.queue([]);
 
-        const result = await runWithSqlDialect("pgsql", async () =>
-          repository.upsert({ slug: "a" }, ["slug"], []),
-        );
+				const result = await runWithSqlDialect('pgsql', async () =>
+					repository.upsert({ slug: 'a' }, ['slug'], []),
+				);
 
-        expect(result).toBeNull();
-      },
-    );
-  });
+				expect(result).toBeNull();
+			},
+		);
+	});
 });
 
-describe("increment and decrement", () => {
-  test("increment emits a self-referential assignment", () => {
-    const { text, params } = runWithSqlDialect("pgsql", () =>
-      buildIncrementQuery(currentSqlDialect(), counterTable, 1, "hits", 5),
-    ) as unknown as { text: string; params: unknown[] };
+describe('increment and decrement', () => {
+	test('increment emits a self-referential assignment', () => {
+		const { text, params } = runWithSqlDialect('pgsql', () =>
+			buildIncrementQuery(currentSqlDialect(), counterTable, 1, 'hits', 5),
+		) as unknown as { text: string; params: unknown[] };
 
-    expect(text).toContain('"hits" = "hits" + $1');
-    expect(params).toEqual([5, 1]);
-  });
+		expect(text).toContain('"hits" = "hits" + $1');
+		expect(params).toEqual([5, 1]);
+	});
 
-  test("extra columns are set alongside the counter", () => {
-    const { text } = runWithSqlDialect("pgsql", () =>
-      buildIncrementQuery(currentSqlDialect(), counterTable, 1, "hits", 1, { slug: "b" } as never),
-    ) as unknown as { text: string };
+	test('extra columns are set alongside the counter', () => {
+		const { text } = runWithSqlDialect('pgsql', () =>
+			buildIncrementQuery(currentSqlDialect(), counterTable, 1, 'hits', 1, { slug: 'b' } as never),
+		) as unknown as { text: string };
 
-    expect(text).toContain('"slug" = $2');
-  });
+		expect(text).toContain('"slug" = $2');
+	});
 
-  test("decrement passes a negative amount", async () => {
-    const connection = new FakeConnection();
+	test('decrement passes a negative amount', async () => {
+		const connection = new FakeConnection();
 
-    await withRepositories(
-      connection,
-      [CounterRepositoryDefinition] as const,
-      async ([repository]) => {
-        connection.queue([{ id: 1, slug: "a", hits: 4 }]);
+		await withRepositories(
+			connection,
+			[CounterRepositoryDefinition] as const,
+			async ([repository]) => {
+				connection.queue([{ id: 1, slug: 'a', hits: 4 }]);
 
-        await runWithSqlDialect("pgsql", async () => repository.decrementById(1, "hits", 5));
+				await runWithSqlDialect('pgsql', async () => repository.decrementById(1, 'hits', 5));
 
-        expect(connection.calls[0]?.params).toEqual([-5, 1]);
-      },
-    );
-  });
+				expect(connection.calls[0]?.params).toEqual([-5, 1]);
+			},
+		);
+	});
 
-  test("an unknown column is rejected", () => {
-    runWithSqlDialect("pgsql", () => {
-      expect(() =>
-        buildIncrementQuery(currentSqlDialect(), counterTable, 1, "nope" as never, 1),
-      ).toThrow(/Unknown column/);
-    });
-  });
+	test('an unknown column is rejected', () => {
+		runWithSqlDialect('pgsql', () => {
+			expect(() =>
+				buildIncrementQuery(currentSqlDialect(), counterTable, 1, 'nope' as never, 1),
+			).toThrow(/Unknown column/);
+		});
+	});
 
-  test("a non-finite amount is rejected", () => {
-    runWithSqlDialect("pgsql", () => {
-      expect(() =>
-        buildIncrementQuery(currentSqlDialect(), counterTable, 1, "hits", Number.NaN),
-      ).toThrow(/finite/);
-      expect(() =>
-        buildIncrementQuery(currentSqlDialect(), counterTable, 1, "hits", Number.POSITIVE_INFINITY),
-      ).toThrow(/finite/);
-    });
-  });
+	test('a non-finite amount is rejected', () => {
+		runWithSqlDialect('pgsql', () => {
+			expect(() =>
+				buildIncrementQuery(currentSqlDialect(), counterTable, 1, 'hits', Number.NaN),
+			).toThrow(/finite/);
+			expect(() =>
+				buildIncrementQuery(currentSqlDialect(), counterTable, 1, 'hits', Number.POSITIVE_INFINITY),
+			).toThrow(/finite/);
+		});
+	});
 });
 
-describe("subquery counts", () => {
-  test("the subquery is aliased and its placeholders are renumbered before the where clause", () => {
-    const { text, params } = runWithSqlDialect("pgsql", () =>
-      buildSelectQuery(currentSqlDialect(), counterTable, {
-        select: [
-          { kind: "column", table: "counters", column: "id" },
-          {
-            kind: "subqueryCount",
-            sql: 'SELECT COUNT(*) FROM "hits" WHERE "hits"."cid" = "counters"."id" AND "hits"."ok" = $1',
-            params: [true],
-            as: "hits_count",
-          },
-        ],
-        where: { slug: "a" },
-      } as never),
-    ) as unknown as { text: string; params: unknown[] };
+describe('subquery counts', () => {
+	test('the subquery is aliased and its placeholders are renumbered before the where clause', () => {
+		const { text, params } = runWithSqlDialect('pgsql', () =>
+			buildSelectQuery(currentSqlDialect(), counterTable, {
+				select: [
+					{ kind: 'column', table: 'counters', column: 'id' },
+					{
+						kind: 'subqueryCount',
+						sql: 'SELECT COUNT(*) FROM "hits" WHERE "hits"."cid" = "counters"."id" AND "hits"."ok" = $1',
+						params: [true],
+						as: 'hits_count',
+					},
+				],
+				where: { slug: 'a' },
+			} as never),
+		) as unknown as { text: string; params: unknown[] };
 
-    expect(text).toContain('AS "hits_count"');
-    expect(text).toContain('"hits"."ok" = $1');
-    expect(text).toContain('"counters"."slug" = $2');
-    expect(params).toEqual([true, "a"]);
-  });
+		expect(text).toContain('AS "hits_count"');
+		expect(text).toContain('"hits"."ok" = $1');
+		expect(text).toContain('"counters"."slug" = $2');
+		expect(params).toEqual([true, 'a']);
+	});
 });
 
-describe("chunkById", () => {
-  test("walks keyset pages and stops when a page is short", async () => {
-    const connection = new FakeConnection();
+describe('chunkById', () => {
+	test('walks keyset pages and stops when a page is short', async () => {
+		const connection = new FakeConnection();
 
-    await withRepositories(
-      connection,
-      [CounterRepositoryDefinition] as const,
-      async ([repository]) => {
-        connection.queue([
-          { id: 1, slug: "a", hits: 0 },
-          { id: 2, slug: "b", hits: 0 },
-          { id: 3, slug: "c", hits: 0 },
-        ]);
-        connection.queue([{ id: 3, slug: "c", hits: 0 }]);
+		await withRepositories(
+			connection,
+			[CounterRepositoryDefinition] as const,
+			async ([repository]) => {
+				connection.queue([
+					{ id: 1, slug: 'a', hits: 0 },
+					{ id: 2, slug: 'b', hits: 0 },
+					{ id: 3, slug: 'c', hits: 0 },
+				]);
+				connection.queue([{ id: 3, slug: 'c', hits: 0 }]);
 
-        const seen: number[][] = [];
-        await runWithSqlDialect("pgsql", async () =>
-          repository.chunkById(2, async (rows) => {
-            seen.push(rows.map((row) => row.id));
-            return undefined;
-          }),
-        );
+				const seen: number[][] = [];
 
-        expect(seen).toEqual([[1, 2], [3]]);
-      },
-    );
-  });
+				await runWithSqlDialect('pgsql', async () =>
+					repository.chunkById(2, async (rows) => {
+						seen.push(rows.map((row) => row.id));
 
-  test("uses a keyset cursor rather than OFFSET", async () => {
-    const connection = new FakeConnection();
+						return undefined;
+					}),
+				);
 
-    await withRepositories(
-      connection,
-      [CounterRepositoryDefinition] as const,
-      async ([repository]) => {
-        connection.queue([
-          { id: 1, slug: "a", hits: 0 },
-          { id: 2, slug: "b", hits: 0 },
-          { id: 3, slug: "c", hits: 0 },
-        ]);
-        connection.queue([]);
+				expect(seen).toEqual([[1, 2], [3]]);
+			},
+		);
+	});
 
-        await runWithSqlDialect("pgsql", async () =>
-          repository.chunkById(2, async () => undefined),
-        );
+	test('uses a keyset cursor rather than OFFSET', async () => {
+		const connection = new FakeConnection();
 
-        expect(connection.calls[0]?.query).not.toContain("OFFSET");
-        expect(connection.calls[1]?.params).toContain(2);
-      },
-    );
-  });
+		await withRepositories(
+			connection,
+			[CounterRepositoryDefinition] as const,
+			async ([repository]) => {
+				connection.queue([
+					{ id: 1, slug: 'a', hits: 0 },
+					{ id: 2, slug: 'b', hits: 0 },
+					{ id: 3, slug: 'c', hits: 0 },
+				]);
+				connection.queue([]);
 
-  test("returning false stops the walk", async () => {
-    const connection = new FakeConnection();
+				await runWithSqlDialect('pgsql', async () =>
+					repository.chunkById(2, async () => undefined),
+				);
 
-    await withRepositories(
-      connection,
-      [CounterRepositoryDefinition] as const,
-      async ([repository]) => {
-        connection.queue([
-          { id: 1, slug: "a", hits: 0 },
-          { id: 2, slug: "b", hits: 0 },
-          { id: 3, slug: "c", hits: 0 },
-        ]);
+				expect(connection.calls[0]?.query).not.toContain('OFFSET');
+				expect(connection.calls[1]?.params).toContain(2);
+			},
+		);
+	});
 
-        let pages = 0;
-        await runWithSqlDialect("pgsql", async () =>
-          repository.chunkById(2, async () => {
-            pages += 1;
-            return false;
-          }),
-        );
+	test('returning false stops the walk', async () => {
+		const connection = new FakeConnection();
 
-        expect(pages).toBe(1);
-        expect(connection.calls).toHaveLength(1);
-      },
-    );
-  });
+		await withRepositories(
+			connection,
+			[CounterRepositoryDefinition] as const,
+			async ([repository]) => {
+				connection.queue([
+					{ id: 1, slug: 'a', hits: 0 },
+					{ id: 2, slug: 'b', hits: 0 },
+					{ id: 3, slug: 'c', hits: 0 },
+				]);
 
-  test("an empty table invokes the callback zero times", async () => {
-    const connection = new FakeConnection();
+				let pages = 0;
 
-    await withRepositories(
-      connection,
-      [CounterRepositoryDefinition] as const,
-      async ([repository]) => {
-        connection.queue([]);
+				await runWithSqlDialect('pgsql', async () =>
+					repository.chunkById(2, async () => {
+						pages += 1;
 
-        let pages = 0;
-        await runWithSqlDialect("pgsql", async () =>
-          repository.chunkById(2, async () => {
-            pages += 1;
-            return undefined;
-          }),
-        );
+						return false;
+					}),
+				);
 
-        expect(pages).toBe(0);
-      },
-    );
-  });
+				expect(pages).toBe(1);
+				expect(connection.calls).toHaveLength(1);
+			},
+		);
+	});
 
-  test("a non-positive chunk size is rejected", async () => {
-    await withRepositories(
-      new FakeConnection(),
-      [CounterRepositoryDefinition] as const,
-      async ([repository]) => {
-        await expect(repository.chunkById(0, async () => undefined)).rejects.toThrow(
-          /positive integer/,
-        );
-      },
-    );
-  });
+	test('an empty table invokes the callback zero times', async () => {
+		const connection = new FakeConnection();
+
+		await withRepositories(
+			connection,
+			[CounterRepositoryDefinition] as const,
+			async ([repository]) => {
+				connection.queue([]);
+
+				let pages = 0;
+
+				await runWithSqlDialect('pgsql', async () =>
+					repository.chunkById(2, async () => {
+						pages += 1;
+
+						return undefined;
+					}),
+				);
+
+				expect(pages).toBe(0);
+			},
+		);
+	});
+
+	test('a non-positive chunk size is rejected', async () => {
+		await withRepositories(
+			new FakeConnection(),
+			[CounterRepositoryDefinition] as const,
+			async ([repository]) => {
+				await expect(repository.chunkById(0, async () => undefined)).rejects.toThrow(
+					/positive integer/,
+				);
+			},
+		);
+	});
 });

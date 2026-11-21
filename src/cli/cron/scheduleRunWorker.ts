@@ -1,3 +1,3 @@
-import { scheduleRunCommand } from "../commands/scheduleRun.ts";
+import { scheduleRunCommand } from '../commands/scheduleRun.ts';
 
 await scheduleRunCommand();

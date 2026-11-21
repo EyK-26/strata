@@ -132,21 +132,20 @@ SAML bearer admission also binds the `Recipient` in a signature-verified `Subjec
 
 SAML response envelope admission independently requires a root `Response` in the SAML protocol namespace and `Destination` exactly equal to `SAML_ACS_URL`; DOCTYPE and malformed envelopes are refused. After node-saml verification the framework uses its returned XML with the declared maintained `@xmldom/xmldom` parser for this metadata check. The assertion's verified bearer Recipient remains independently required. This follows the [HTTP POST binding destination requirement](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf). Parser admission does not authenticate unsigned metadata or replace any library signature check.
 
-
 ## Application notification channels
 
 Import `NotificationChannel`, `NotificationChannels`, `Notification`, and `createNotificationDispatcher` from `@getstrata/core/notifications`. The dispatcher accepts an application-owned channel map as its third argument; the first two arguments retain the mail sender and optional database store convenience API. A handler implements `send(notifiable, notification): Promise<void>`. Custom notification subclasses return their channel names from `via()` and expose their own payload methods or fields; handlers can narrow the notification with `instanceof` to access those fields.
 
 ```ts
 const sms: NotificationChannel = {
-  async send(recipient, notification) {
-    if (!(notification instanceof OrderShippedNotification)) {
-      throw new TypeError("Expected an order shipment notification");
-    }
-    const number = recipient.routeNotificationFor("sms");
-    if (number === null) return;
-    await smsProvider.send(String(number), notification.text);
-  },
+	async send(recipient, notification) {
+		if (!(notification instanceof OrderShippedNotification)) {
+			throw new TypeError('Expected an order shipment notification');
+		}
+		const number = recipient.routeNotificationFor('sms');
+		if (number === null) return;
+		await smsProvider.send(String(number), notification.text);
+	},
 };
 const notifications = createNotificationDispatcher(mailSender, databaseStore, { sms });
 ```

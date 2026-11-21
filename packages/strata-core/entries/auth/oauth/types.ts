@@ -1,1 +1,1 @@
-export * from "../../../../../src/core/auth/oauth/types.ts";
+export * from '../../../../../src/core/auth/oauth/types.ts';

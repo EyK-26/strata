@@ -17,14 +17,14 @@ bun add @getstrata/core
 Use focused public subpaths. Ordinary models extend `defineModel`; fields supply both runtime metadata and inferred attribute types:
 
 ```typescript
-import { defineModel, field } from "@getstrata/core/database/model";
+import { defineModel, field } from '@getstrata/core/database/model';
 
 export class Note extends defineModel({
-  table: "notes",
-  fields: { id: field.number(), body: field.string() },
+	table: 'notes',
+	fields: { id: field.number(), body: field.string() },
 }) {
-  static $fillable = ["body"] as const;
-  static $timestamps = false;
+	static $fillable = ['body'] as const;
+	static $timestamps = false;
 }
 ```
 

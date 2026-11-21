@@ -1,66 +1,66 @@
 {
-  "name": "@getstrata/cli",
-  "version": "3.1.9",
-  "description": "Strata development tools: application servers, scaffolding, migrations, workers, and scheduling.",
-  "type": "module",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/EyK-26/strata.git",
-    "directory": "packages/strata-cli"
-  },
-  "bin": {
-    "strata": "./cli.ts"
-  },
-  "exports": {
-    ".": {
-      "import": "./src/index.ts",
-      "default": "./src/index.ts"
-    },
-    "./queueWorker": {
-      "import": "./src/queueWorker.ts",
-      "default": "./src/queueWorker.ts"
-    },
-    "./outboxWorker": {
-      "import": "./src/outboxWorker.ts",
-      "default": "./src/outboxWorker.ts"
-    },
-    "./queueFailed": {
-      "import": "./src/queueFailed.ts",
-      "default": "./src/queueFailed.ts"
-    },
-    "./scaffold": {
-      "import": "./src/scaffold/index.ts",
-      "default": "./src/scaffold/index.ts"
-    },
-    "./openapi": {
-      "import": "./src/openapi.ts",
-      "default": "./src/openapi.ts"
-    },
-    "./schedule": {
-      "import": "./src/schedule.ts",
-      "default": "./src/schedule.ts"
-    },
-    "./initialAdmin": {
-      "import": "./src/initialAdmin.ts",
-      "default": "./src/initialAdmin.ts"
-    }
-  },
-  "files": [
-    "cli.ts",
-    "src",
-    "README.md",
-    "CHANGELOG.md"
-  ],
-  "scripts": {},
-  "peerDependencies": {
-    "@getstrata/bootstrap": "^3.1.9",
-    "@getstrata/core": "^3.1.9"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "engines": {
-    "bun": ">=1.4.4"
-  }
+	"name": "@getstrata/cli",
+	"version": "3.2.0",
+	"description": "Strata development tools: application servers, scaffolding, migrations, workers, and scheduling.",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/EyK-26/strata.git",
+		"directory": "packages/strata-cli"
+	},
+	"bin": {
+		"strata": "./cli.ts"
+	},
+	"files": [
+		"cli.ts",
+		"src",
+		"README.md",
+		"CHANGELOG.md"
+	],
+	"type": "module",
+	"exports": {
+		".": {
+			"import": "./src/index.ts",
+			"default": "./src/index.ts"
+		},
+		"./queueWorker": {
+			"import": "./src/queueWorker.ts",
+			"default": "./src/queueWorker.ts"
+		},
+		"./outboxWorker": {
+			"import": "./src/outboxWorker.ts",
+			"default": "./src/outboxWorker.ts"
+		},
+		"./queueFailed": {
+			"import": "./src/queueFailed.ts",
+			"default": "./src/queueFailed.ts"
+		},
+		"./scaffold": {
+			"import": "./src/scaffold/index.ts",
+			"default": "./src/scaffold/index.ts"
+		},
+		"./openapi": {
+			"import": "./src/openapi.ts",
+			"default": "./src/openapi.ts"
+		},
+		"./schedule": {
+			"import": "./src/schedule.ts",
+			"default": "./src/schedule.ts"
+		},
+		"./initialAdmin": {
+			"import": "./src/initialAdmin.ts",
+			"default": "./src/initialAdmin.ts"
+		}
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {},
+	"peerDependencies": {
+		"@getstrata/bootstrap": "^3.2.0",
+		"@getstrata/core": "^3.2.0"
+	},
+	"engines": {
+		"bun": ">=1.4.4"
+	}
 }

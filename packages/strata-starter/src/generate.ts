@@ -1,133 +1,140 @@
 import {
-  copyFileSync,
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-} from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
-import { copyOverlayTree, copyTree, removeIfExists, writeText } from "./copy.ts";
-import { usesComposePostgres } from "./databaseDefaults.ts";
-import { compileStarterFeatures, type StarterFeaturePlan } from "./featurePlan.ts";
-import type { ParsedFlags } from "./parseArgs.ts";
-import { parseCreateStrataArgs, usage } from "./parseArgs.ts";
-import { resolveStarterPlan } from "./prompt.ts";
-import { renderAgentInstructions } from "./renderAgentInstructions.ts";
+	copyFileSync,
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+} from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
+
+import { copyOverlayTree, copyTree, removeIfExists, writeText } from './copy.ts';
+import { usesComposePostgres } from './databaseDefaults.ts';
+import { compileStarterFeatures, type StarterFeaturePlan } from './featurePlan.ts';
+import type { ParsedFlags } from './parseArgs.ts';
+import { parseCreateStrataArgs, usage } from './parseArgs.ts';
+import { resolveStarterPlan } from './prompt.ts';
+import { renderAgentInstructions } from './renderAgentInstructions.ts';
 import {
-  renderAuthDirectory,
-  renderAuthProvider,
-  renderConfirmPasswordView,
-  renderForgotPasswordView,
-  renderHomeView,
-  renderLayout,
-  renderLoginView,
-  renderMfaChallengeView,
-  renderMfaSetupView,
-  renderPendingMfaTs,
-  renderRegisterView,
-  renderResetPasswordView,
-  renderSiteCss,
-  renderVerifyEmailView,
-} from "./renderAuth.ts";
+	renderAuthDirectory,
+	renderAuthProvider,
+	renderConfirmPasswordView,
+	renderForgotPasswordView,
+	renderHomeView,
+	renderLayout,
+	renderLoginView,
+	renderMfaChallengeView,
+	renderMfaSetupView,
+	renderPendingMfaTs,
+	renderRegisterView,
+	renderResetPasswordView,
+	renderSiteCss,
+	renderVerifyEmailView,
+} from './renderAuth.ts';
 import {
-  renderConfigTs,
-  renderCreateAppTs,
-  renderOutboxRegistryTs,
-  renderScheduleTs,
-  renderServerTs,
-  renderStrataConfigTs,
-} from "./renderBootstrap.ts";
-import { renderCliRegisterTs } from "./renderCli.ts";
-import { renderDatabaseTs, renderEnsureDatabaseTs } from "./renderDatabase.ts";
-import { renderDockerCompose, renderDockerfile, renderDockerignore } from "./renderDocker.ts";
+	renderConfigTs,
+	renderCreateAppTs,
+	renderOutboxRegistryTs,
+	renderScheduleTs,
+	renderServerTs,
+	renderStrataConfigTs,
+} from './renderBootstrap.ts';
+import { renderCliRegisterTs } from './renderCli.ts';
+import { renderDatabaseTs, renderEnsureDatabaseTs } from './renderDatabase.ts';
+import { renderDockerCompose, renderDockerfile, renderDockerignore } from './renderDocker.ts';
 import {
-  renderApiDocs,
-  renderEnvExample,
-  renderGitignore,
-  renderLayersManifest,
-  renderPackageJson,
-  renderPostgresAppRoleInitSql,
-  renderReadme,
-} from "./renderEnv.ts";
-import { renderHttpFiles } from "./renderHttp.ts";
-import { renderInitialAdminCommand, renderInitialAdminMigration } from "./renderInitialAdmin.ts";
+	renderApiDocs,
+	renderEnvExample,
+	renderGitignore,
+	renderLayersManifest,
+	renderPackageJson,
+	renderPostgresAppRoleInitSql,
+	renderReadme,
+} from './renderEnv.ts';
+import { renderHttpFiles } from './renderHttp.ts';
+import { renderInitialAdminCommand, renderInitialAdminMigration } from './renderInitialAdmin.ts';
 import {
-  billingMigrationName,
-  renderApplyStripeWebhook,
-  renderBillingMigration,
-  renderDispatchOutboundWebhookJob,
-  renderDispatchWebhook,
-  renderWebhooksMigration,
-  webhookMigrationName,
-} from "./renderIntegrations.ts";
+	billingMigrationName,
+	renderApplyStripeWebhook,
+	renderBillingMigration,
+	renderDispatchOutboundWebhookJob,
+	renderDispatchWebhook,
+	renderWebhooksMigration,
+	webhookMigrationName,
+} from './renderIntegrations.ts';
 import {
-  renderAccountStateMigration,
-  renderFreshTs,
-  renderMigrateTs,
-  renderMigrationRuntimeTs,
-  renderOutboxMigration,
-  renderRollbackTs,
-  renderSeedTs,
-  renderStarterSchemaMigration,
-  renderStatusTs,
-} from "./renderMigrations.ts";
+	renderAccountStateMigration,
+	renderFreshTs,
+	renderMigrateTs,
+	renderMigrationRuntimeTs,
+	renderOutboxMigration,
+	renderRollbackTs,
+	renderSeedTs,
+	renderStarterSchemaMigration,
+	renderStatusTs,
+} from './renderMigrations.ts';
 import {
-  renderApiTokenModel,
-  renderAuthOneTimeTokenModel,
-  renderModelsRegister,
-  renderUserFactory,
-  renderUserModel,
-} from "./renderModels.ts";
+	renderApiTokenModel,
+	renderAuthOneTimeTokenModel,
+	renderModelsRegister,
+	renderUserFactory,
+	renderUserModel,
+} from './renderModels.ts';
 import {
-  renderWorkTrackerDomain,
-  renderWorkTrackerGuide,
-  renderWorkTrackerMigration,
-  renderWorkTrackerModels,
-} from "./renderWorkTracker.ts";
-import type { GenerateOptions } from "./types.ts";
+	renderWorkTrackerDomain,
+	renderWorkTrackerGuide,
+	renderWorkTrackerMigration,
+	renderWorkTrackerModels,
+} from './renderWorkTracker.ts';
+import type { GenerateOptions } from './types.ts';
 
 const PROJECT_NAME_PATTERN = /^[a-z0-9][a-z0-9-_]*$/i;
 
 function starterPackageRoot(): string {
-  return join(import.meta.dir, "..");
+	return join(import.meta.dir, '..');
 }
 
 function resolveTemplateRoot(root = starterPackageRoot()): string {
-  const fromDist = join(root, "templates");
-  if (existsSync(join(fromDist, "tsconfig.json"))) {
-    return fromDist;
-  }
-  const nested = join(root, "dist/templates");
-  if (existsSync(join(nested, "tsconfig.json"))) {
-    return nested;
-  }
-  return fromDist;
+	const fromDist = join(root, 'templates');
+
+	if (existsSync(join(fromDist, 'tsconfig.json'))) {
+		return fromDist;
+	}
+
+	const nested = join(root, 'dist/templates');
+
+	if (existsSync(join(nested, 'tsconfig.json'))) {
+		return nested;
+	}
+
+	return fromDist;
 }
 
 function resolveOverlayRoot(root = starterPackageRoot()): string {
-  const candidates = [
-    join(root, "templates/overlays"),
-    join(root, "dist/templates/overlays"),
-    join(root, "../../templates/scaffold"),
-  ];
-  for (const candidate of candidates) {
-    if (
-      existsSync(join(candidate, "server-htmx")) ||
-      existsSync(join(candidate, "spa-react")) ||
-      existsSync(join(candidate, "api"))
-    ) {
-      return candidate;
-    }
-  }
-  return candidates[0] ?? join(root, "templates/overlays");
+	const candidates = [
+		join(root, 'templates/overlays'),
+		join(root, 'dist/templates/overlays'),
+		join(root, '../../templates/scaffold'),
+	];
+
+	for (const candidate of candidates) {
+		if (
+			existsSync(join(candidate, 'server-htmx')) ||
+			existsSync(join(candidate, 'spa-react')) ||
+			existsSync(join(candidate, 'api'))
+		) {
+			return candidate;
+		}
+	}
+
+	return candidates[0] ?? join(root, 'templates/overlays');
 }
 
 function assertProjectName(projectName: string): void {
-  if (!PROJECT_NAME_PATTERN.test(projectName)) {
-    throw new Error("Project name must contain only letters, numbers, hyphens, and underscores.");
-  }
+	if (!PROJECT_NAME_PATTERN.test(projectName)) {
+		throw new Error('Project name must contain only letters, numbers, hyphens, and underscores.');
+	}
 }
 
 /**
@@ -135,398 +142,472 @@ function assertProjectName(projectName: string): void {
  * segment becomes the project name; the rest selects where to write.
  */
 function resolveProjectTarget(
-  rawTarget: string,
-  cwd: string,
+	rawTarget: string,
+	cwd: string,
 ): { projectName: string; targetDir: string } {
-  const targetDir = resolve(cwd, rawTarget.trim());
-  const projectName = basename(targetDir);
-  assertProjectName(projectName);
-  return { projectName, targetDir };
+	const targetDir = resolve(cwd, rawTarget.trim());
+
+	const projectName = basename(targetDir);
+
+	assertProjectName(projectName);
+
+	return { projectName, targetDir };
 }
 
 function applyFrontendOverlays(
-  overlayRoot: string,
-  targetDir: string,
-  plan: StarterFeaturePlan,
+	overlayRoot: string,
+	targetDir: string,
+	plan: StarterFeaturePlan,
 ): void {
-  if (plan.decisions.frontendBuild) {
-    copyOverlayTree(join(overlayRoot, "spa-react"), targetDir);
-  }
+	if (plan.decisions.frontendBuild) {
+		copyOverlayTree(join(overlayRoot, 'spa-react'), targetDir);
+	}
 }
 
 function writeGeneratedFiles(options: GenerateOptions, plan: StarterFeaturePlan): void {
-  const { decisions } = plan;
-  const { targetDir, projectName } = options;
-  const { layers } = plan;
-  const src = join(targetDir, "src");
-  if (decisions.frontendBuild) {
-    const transport = decisions.browserTransport;
-    const mfa = decisions.pendingMfa;
-    writeText(
-      join(targetDir, "frontend/src/auth/config.ts"),
-      `export type AuthTransport = "cookie" | "token" | "jwt" | "headers";\nexport const AUTH_CONFIG: { transport: AuthTransport; mfa: boolean } = ${JSON.stringify({ transport, mfa })};\n`,
-    );
+	const { decisions } = plan;
 
-    writeText(
-      join(targetDir, "frontend/src/config.ts"),
-      `import { validateSpaPrefix } from "@getstrata/core/runtime/frontendMode";
+	const { targetDir, projectName } = options;
+
+	const { layers } = plan;
+
+	const src = join(targetDir, 'src');
+
+	if (decisions.frontendBuild) {
+		const transport = decisions.browserTransport;
+
+		const mfa = decisions.pendingMfa;
+
+		writeText(
+			join(targetDir, 'frontend/src/auth/config.ts'),
+			`export type AuthTransport = "cookie" | "token" | "jwt" | "headers";\n\nexport const AUTH_CONFIG: { transport: AuthTransport; mfa: boolean } = ${JSON.stringify({ transport, mfa })};\n`,
+		);
+
+		writeText(
+			join(targetDir, 'frontend/src/config.ts'),
+			`import { validateSpaPrefix } from "@getstrata/core/runtime/frontendMode";
 
 // Generated scripts supply only this public value before Bun starts.
 export const SPA_PREFIX = validateSpaPrefix(process.env.BUN_PUBLIC_SPA_PREFIX);
+
 export const TENANCY_ENABLED = ${decisions.tenantTable};
 `,
-    );
-    const manifestPath = join(targetDir, "frontend/package.json");
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
-      scripts: Record<string, string>;
-    };
-    // Bun's HTML/HMR bundler reads its scoped environment at process startup.
-    const publicEnv = `BUN_PUBLIC_SPA_PREFIX="\${SPA_PREFIX:-${layers.spaPrefix}}"`;
-    manifest.scripts.dev = `${publicEnv} bun --hot dev-server.ts`;
-    manifest.scripts.build = `${publicEnv} bun run build.ts`;
-    manifest.scripts.preview = `bun run build && ${publicEnv} bun dev-server.ts --preview`;
-    writeText(manifestPath, JSON.stringify(manifest, null, 2));
-  }
+		);
+		const manifestPath = join(targetDir, 'frontend/package.json');
 
-  writeText(join(targetDir, ".bun-version"), "1.4.4\n");
-  writeText(join(targetDir, "AGENTS.md"), renderAgentInstructions(projectName, plan));
-  writeText(join(targetDir, ".env.example"), renderEnvExample(projectName, plan));
-  writeText(join(targetDir, ".gitignore"), renderGitignore());
-  writeText(join(targetDir, "package.json"), renderPackageJson(projectName, { ...options, plan }));
-  writeText(
-    join(targetDir, "README.md"),
-    renderReadme(projectName, plan, {
-      inRepoExample: options.inRepoExample,
-      dogfood: options.dogfood,
-    }),
-  );
-  if (decisions.apiDocs) {
-    writeText(join(targetDir, "docs/API.md"), renderApiDocs(projectName, plan));
-  } else {
-    removeIfExists(join(targetDir, "docs/API.md"));
-  }
-  writeText(join(targetDir, "strata.layers.json"), renderLayersManifest(projectName, plan));
+		const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+			scripts: Record<string, string>;
+		};
 
-  writeText(join(targetDir, "Dockerfile"), renderDockerfile(plan));
-  writeText(join(targetDir, ".dockerignore"), renderDockerignore(plan));
+		// Bun's HTML/HMR bundler reads its scoped environment at process startup.
+		const publicEnv = `BUN_PUBLIC_SPA_PREFIX="\${SPA_PREFIX:-${layers.spaPrefix}}"`;
 
-  const compose = renderDockerCompose(projectName, plan);
-  if (compose) {
-    writeText(join(targetDir, "docker-compose.yml"), compose);
-  } else {
-    removeIfExists(join(targetDir, "docker-compose.yml"));
-  }
-  const postgresInit = renderPostgresAppRoleInitSql(projectName, plan);
-  if (postgresInit) {
-    writeText(join(targetDir, "db/ensure-postgres-app-role.sql"), postgresInit);
-    if (usesComposePostgres(plan)) {
-      writeText(join(targetDir, "docker/postgres-init/01-strata-app-role.sql"), postgresInit);
-    } else {
-      removeIfExists(join(targetDir, "docker/postgres-init"));
-    }
-  } else {
-    removeIfExists(join(targetDir, "db/ensure-postgres-app-role.sql"));
-    removeIfExists(join(targetDir, "docker/postgres-init"));
-  }
+		manifest.scripts.dev = `${publicEnv} bun --hot dev-server.ts`;
+		manifest.scripts.build = `${publicEnv} bun run build.ts`;
+		manifest.scripts.preview = `bun run build && ${publicEnv} bun dev-server.ts --preview`;
+		writeText(manifestPath, JSON.stringify(manifest, null, 2));
+	}
 
-  writeText(join(src, "config/app.ts"), renderConfigTs(plan, projectName));
-  writeText(join(src, "bootstrap/server.ts"), renderServerTs());
-  writeText(join(targetDir, "strata.config.ts"), renderStrataConfigTs());
-  writeText(join(src, "bootstrap/database.ts"), renderDatabaseTs(plan, projectName));
-  const ensureDatabase = renderEnsureDatabaseTs(plan, projectName);
-  if (ensureDatabase) {
-    writeText(join(src, "bootstrap/ensureDatabase.ts"), ensureDatabase);
-  } else {
-    removeIfExists(join(src, "bootstrap/ensureDatabase.ts"));
-  }
-  writeText(join(src, "bootstrap/createApp.ts"), renderCreateAppTs(plan));
-  writeText(join(src, "bootstrap/schedule.ts"), renderScheduleTs());
-  writeText(join(src, "cli/register.ts"), renderCliRegisterTs(plan));
-  const initialAdminCommand = renderInitialAdminCommand(plan);
-  const initialAdminMigration = renderInitialAdminMigration(plan);
-  if (initialAdminCommand && initialAdminMigration) {
-    writeText(join(src, "cli/initialAdmin.ts"), initialAdminCommand);
-    writeText(join(src, "db/migrations/0004_initial_admin_provisioning.ts"), initialAdminMigration);
-  } else {
-    removeIfExists(join(src, "cli/initialAdmin.ts"));
-    removeIfExists(join(src, "db/migrations/0004_initial_admin_provisioning.ts"));
-  }
-  writeText(join(src, "outbox/registry.ts"), renderOutboxRegistryTs(plan));
-  writeText(join(src, "bootstrap/auth.ts"), renderAuthProvider(plan));
-  if (decisions.users) {
-    writeText(join(src, "models/User.ts"), renderUserModel(plan));
-    writeText(join(src, "db/factories/UserFactory.ts"), renderUserFactory(plan));
-    writeText(join(src, "models/AuthOneTimeToken.ts"), renderAuthOneTimeTokenModel());
-  } else {
-    removeIfExists(join(src, "models/User.ts"));
-    removeIfExists(join(src, "db/factories/UserFactory.ts"));
-    removeIfExists(join(src, "models/AuthOneTimeToken.ts"));
-  }
-  if (decisions.token) {
-    writeText(join(src, "models/ApiToken.ts"), renderApiTokenModel());
-  } else {
-    removeIfExists(join(src, "models/ApiToken.ts"));
-  }
-  writeText(join(src, "models/register.ts"), renderModelsRegister(plan));
-  writeText(join(src, "db/migrate.ts"), renderMigrateTs(plan));
-  writeText(join(src, "db/migrationRuntime.ts"), renderMigrationRuntimeTs(plan));
-  writeText(join(src, "db/migrations/0001_starter_schema.ts"), renderStarterSchemaMigration(plan));
-  writeText(join(src, "db/migrations/0005_outbox.ts"), renderOutboxMigration(plan));
-  if (decisions.users) {
-    writeText(join(src, "db/migrations/0006_account_state.ts"), renderAccountStateMigration(plan));
-  } else {
-    removeIfExists(join(src, "db/migrations/0006_account_state.ts"));
-  }
-  removeIfExists(join(src, "db/migrations/0002_webhooks_schema.ts"));
-  removeIfExists(join(src, "db/migrations/0002_billing_schema.ts"));
-  removeIfExists(join(src, "db/migrations/0003_billing_schema.ts"));
-  const webhooksMigration = renderWebhooksMigration(plan);
-  const webhooksName = webhookMigrationName(plan);
-  if (webhooksMigration && webhooksName) {
-    writeText(join(src, `db/migrations/${webhooksName}.ts`), webhooksMigration);
-  }
-  const billingMigration = renderBillingMigration(plan);
-  const billingName = billingMigrationName(plan);
-  if (billingMigration && billingName) {
-    writeText(join(src, `db/migrations/${billingName}.ts`), billingMigration);
-  }
-  writeText(join(src, "db/fresh.ts"), renderFreshTs(plan));
-  writeText(join(src, "db/seed.ts"), renderSeedTs());
-  writeText(join(src, "db/status.ts"), renderStatusTs(plan));
-  writeText(join(src, "db/rollback.ts"), renderRollbackTs(plan));
-  for (const [path, source] of Object.entries(renderHttpFiles(plan))) {
-    writeText(join(src, path), source);
-  }
+	writeText(join(targetDir, '.bun-version'), '1.4.4\n');
+	writeText(join(targetDir, 'AGENTS.md'), renderAgentInstructions(projectName, plan));
+	writeText(join(targetDir, '.env.example'), renderEnvExample(projectName, plan));
+	writeText(join(targetDir, '.gitignore'), renderGitignore());
+	writeText(join(targetDir, 'package.json'), renderPackageJson(projectName, { ...options, plan }));
+	writeText(
+		join(targetDir, 'README.md'),
+		renderReadme(projectName, plan, {
+			inRepoExample: options.inRepoExample,
+			dogfood: options.dogfood,
+		}),
+	);
 
-  const directory = renderAuthDirectory(plan);
-  if (directory) {
-    writeText(join(src, "bootstrap/authDirectory.ts"), directory);
-  }
+	if (decisions.apiDocs) {
+		writeText(join(targetDir, 'docs/API.md'), renderApiDocs(projectName, plan));
+	} else {
+		removeIfExists(join(targetDir, 'docs/API.md'));
+	}
 
-  if (layers.extras.billing) {
-    writeText(join(src, "billing/applyStripeWebhook.ts"), renderApplyStripeWebhook());
-  } else {
-    removeIfExists(join(src, "billing/applyStripeWebhook.ts"));
-  }
+	writeText(join(targetDir, 'strata.layers.json'), renderLayersManifest(projectName, plan));
 
-  if (layers.extras.webhooks) {
-    writeText(
-      join(src, "jobs/dispatchOutboundWebhookJob.ts"),
-      renderDispatchOutboundWebhookJob(plan),
-    );
-    writeText(join(src, "webhooks/dispatchWebhook.ts"), renderDispatchWebhook());
-  } else {
-    removeIfExists(join(src, "jobs/dispatchOutboundWebhookJob.ts"));
-    removeIfExists(join(src, "webhooks/dispatchWebhook.ts"));
-  }
+	writeText(join(targetDir, 'Dockerfile'), renderDockerfile(plan));
+	writeText(join(targetDir, '.dockerignore'), renderDockerignore(plan));
 
-  if (decisions.pendingMfa) {
-    writeText(join(src, "bootstrap/pendingMfa.ts"), renderPendingMfaTs());
-  } else {
-    removeIfExists(join(src, "bootstrap/pendingMfa.ts"));
-  }
+	const compose = renderDockerCompose(projectName, plan);
 
-  if (decisions.serverViews || decisions.mfaViews) {
-    writeText(join(targetDir, "public/assets/site.css"), renderSiteCss());
-    // HTMX 2.0.4 from unpkg. See templates/public/assets/htmx.min.js.version.
-    const htmxSource = join(
-      options.templateRoot ?? starterPackageRoot(),
-      "public/assets/htmx.min.js",
-    );
-    const htmxFallback = join(starterPackageRoot(), "templates/public/assets/htmx.min.js");
-    const htmxPath = existsSync(htmxSource) ? htmxSource : htmxFallback;
-    if (existsSync(htmxPath)) {
-      mkdirSync(join(targetDir, "public/assets"), { recursive: true });
-      copyFileSync(htmxPath, join(targetDir, "public/assets/htmx.min.js"));
-      const versionSidecar = `${htmxPath}.version`;
-      if (existsSync(versionSidecar)) {
-        copyFileSync(versionSidecar, join(targetDir, "public/assets/htmx.min.js.version"));
-      }
-    }
-    if (decisions.serverViews)
-      writeText(join(targetDir, "views/home.eta"), renderHomeView(projectName, plan));
-    writeText(join(targetDir, "views/layouts/app.eta"), renderLayout(plan, projectName));
-  }
-  if (decisions.htmlAuth) {
-    writeText(join(targetDir, "views/auth/login.eta"), renderLoginView(plan));
-    writeText(join(targetDir, "views/auth/register.eta"), renderRegisterView());
-    writeText(join(targetDir, "views/auth/forgot-password.eta"), renderForgotPasswordView());
-    writeText(join(targetDir, "views/auth/reset-password.eta"), renderResetPasswordView());
-    if (layers.extras.emailVerification) {
-      writeText(join(targetDir, "views/auth/verify-email.eta"), renderVerifyEmailView());
-    }
-    if (layers.extras.mfa) {
-      writeText(join(targetDir, "views/auth/mfa-challenge.eta"), renderMfaChallengeView());
-      writeText(join(targetDir, "views/auth/mfa-setup.eta"), renderMfaSetupView());
-      writeText(join(targetDir, "views/auth/confirm-password.eta"), renderConfirmPasswordView());
-    }
-  }
+	if (compose) {
+		writeText(join(targetDir, 'docker-compose.yml'), compose);
+	} else {
+		removeIfExists(join(targetDir, 'docker-compose.yml'));
+	}
 
-  if (decisions.workTracker) {
-    writeText(join(targetDir, "docs/WORK_TRACKER.md"), renderWorkTrackerGuide());
-    const readmePath = join(targetDir, "README.md");
-    writeText(
-      readmePath,
-      readFileSync(readmePath, "utf8") +
-        "\n## Work tracker reference\n\nOpen `/work` after signing in to the server app. See [the reference workflow](docs/WORK_TRACKER.md) for roles, API actions and the durable worker.\n",
-    );
-    writeText(join(src, "domain/workTracker.ts"), renderWorkTrackerDomain());
-    writeText(join(src, "models/workTracker.ts"), renderWorkTrackerModels());
+	const postgresInit = renderPostgresAppRoleInitSql(projectName, plan);
 
-    writeText(join(src, "db/migrations/0007_work_tracker.ts"), renderWorkTrackerMigration(plan));
-  }
+	if (postgresInit) {
+		writeText(join(targetDir, 'db/ensure-postgres-app-role.sql'), postgresInit);
 
-  mkdirSync(join(targetDir, "storage"), { recursive: true });
-  writeText(join(targetDir, "storage/.gitkeep"), "");
+		if (usesComposePostgres(plan)) {
+			writeText(join(targetDir, 'docker/postgres-init/01-strata-app-role.sql'), postgresInit);
+		} else {
+			removeIfExists(join(targetDir, 'docker/postgres-init'));
+		}
+	} else {
+		removeIfExists(join(targetDir, 'db/ensure-postgres-app-role.sql'));
+		removeIfExists(join(targetDir, 'docker/postgres-init'));
+	}
+
+	writeText(join(src, 'config/app.ts'), renderConfigTs(plan, projectName));
+	writeText(join(src, 'bootstrap/server.ts'), renderServerTs());
+	writeText(join(targetDir, 'strata.config.ts'), renderStrataConfigTs());
+	writeText(join(src, 'bootstrap/database.ts'), renderDatabaseTs(plan, projectName));
+	const ensureDatabase = renderEnsureDatabaseTs(plan, projectName);
+
+	if (ensureDatabase) {
+		writeText(join(src, 'bootstrap/ensureDatabase.ts'), ensureDatabase);
+	} else {
+		removeIfExists(join(src, 'bootstrap/ensureDatabase.ts'));
+	}
+
+	writeText(join(src, 'bootstrap/createApp.ts'), renderCreateAppTs(plan));
+	writeText(join(src, 'bootstrap/schedule.ts'), renderScheduleTs());
+	writeText(join(src, 'cli/register.ts'), renderCliRegisterTs(plan));
+	const initialAdminCommand = renderInitialAdminCommand(plan);
+
+	const initialAdminMigration = renderInitialAdminMigration(plan);
+
+	if (initialAdminCommand && initialAdminMigration) {
+		writeText(join(src, 'cli/initialAdmin.ts'), initialAdminCommand);
+		writeText(join(src, 'db/migrations/0004_initial_admin_provisioning.ts'), initialAdminMigration);
+	} else {
+		removeIfExists(join(src, 'cli/initialAdmin.ts'));
+		removeIfExists(join(src, 'db/migrations/0004_initial_admin_provisioning.ts'));
+	}
+
+	writeText(join(src, 'outbox/registry.ts'), renderOutboxRegistryTs(plan));
+	writeText(join(src, 'bootstrap/auth.ts'), renderAuthProvider(plan));
+
+	if (decisions.users) {
+		writeText(join(src, 'models/User.ts'), renderUserModel(plan));
+		writeText(join(src, 'db/factories/UserFactory.ts'), renderUserFactory(plan));
+		writeText(join(src, 'models/AuthOneTimeToken.ts'), renderAuthOneTimeTokenModel());
+	} else {
+		removeIfExists(join(src, 'models/User.ts'));
+		removeIfExists(join(src, 'db/factories/UserFactory.ts'));
+		removeIfExists(join(src, 'models/AuthOneTimeToken.ts'));
+	}
+
+	if (decisions.token) {
+		writeText(join(src, 'models/ApiToken.ts'), renderApiTokenModel());
+	} else {
+		removeIfExists(join(src, 'models/ApiToken.ts'));
+	}
+
+	writeText(join(src, 'models/register.ts'), renderModelsRegister(plan));
+	writeText(join(src, 'db/migrate.ts'), renderMigrateTs(plan));
+	writeText(join(src, 'db/migrationRuntime.ts'), renderMigrationRuntimeTs(plan));
+	writeText(join(src, 'db/migrations/0001_starter_schema.ts'), renderStarterSchemaMigration(plan));
+	writeText(join(src, 'db/migrations/0005_outbox.ts'), renderOutboxMigration(plan));
+
+	if (decisions.users) {
+		writeText(join(src, 'db/migrations/0006_account_state.ts'), renderAccountStateMigration(plan));
+	} else {
+		removeIfExists(join(src, 'db/migrations/0006_account_state.ts'));
+	}
+
+	removeIfExists(join(src, 'db/migrations/0002_webhooks_schema.ts'));
+	removeIfExists(join(src, 'db/migrations/0002_billing_schema.ts'));
+	removeIfExists(join(src, 'db/migrations/0003_billing_schema.ts'));
+	const webhooksMigration = renderWebhooksMigration(plan);
+
+	const webhooksName = webhookMigrationName(plan);
+
+	if (webhooksMigration && webhooksName) {
+		writeText(join(src, `db/migrations/${webhooksName}.ts`), webhooksMigration);
+	}
+
+	const billingMigration = renderBillingMigration(plan);
+
+	const billingName = billingMigrationName(plan);
+
+	if (billingMigration && billingName) {
+		writeText(join(src, `db/migrations/${billingName}.ts`), billingMigration);
+	}
+
+	writeText(join(src, 'db/fresh.ts'), renderFreshTs(plan));
+	writeText(join(src, 'db/seed.ts'), renderSeedTs());
+	writeText(join(src, 'db/status.ts'), renderStatusTs(plan));
+	writeText(join(src, 'db/rollback.ts'), renderRollbackTs(plan));
+	for (const [path, source] of Object.entries(renderHttpFiles(plan))) {
+		writeText(join(src, path), source);
+	}
+
+	const directory = renderAuthDirectory(plan);
+
+	if (directory) {
+		writeText(join(src, 'bootstrap/authDirectory.ts'), directory);
+	}
+
+	if (layers.extras.billing) {
+		writeText(join(src, 'billing/applyStripeWebhook.ts'), renderApplyStripeWebhook());
+	} else {
+		removeIfExists(join(src, 'billing/applyStripeWebhook.ts'));
+	}
+
+	if (layers.extras.webhooks) {
+		writeText(
+			join(src, 'jobs/dispatchOutboundWebhookJob.ts'),
+			renderDispatchOutboundWebhookJob(plan),
+		);
+		writeText(join(src, 'webhooks/dispatchWebhook.ts'), renderDispatchWebhook());
+	} else {
+		removeIfExists(join(src, 'jobs/dispatchOutboundWebhookJob.ts'));
+		removeIfExists(join(src, 'webhooks/dispatchWebhook.ts'));
+	}
+
+	if (decisions.pendingMfa) {
+		writeText(join(src, 'bootstrap/pendingMfa.ts'), renderPendingMfaTs());
+	} else {
+		removeIfExists(join(src, 'bootstrap/pendingMfa.ts'));
+	}
+
+	if (decisions.serverViews || decisions.mfaViews) {
+		writeText(join(targetDir, 'public/assets/site.css'), renderSiteCss());
+		// HTMX 2.0.4 from unpkg. See templates/public/assets/htmx.min.js.version.
+		const htmxSource = join(
+			options.templateRoot ?? starterPackageRoot(),
+			'public/assets/htmx.min.js',
+		);
+
+		const htmxFallback = join(starterPackageRoot(), 'templates/public/assets/htmx.min.js');
+
+		const htmxPath = existsSync(htmxSource) ? htmxSource : htmxFallback;
+
+		if (existsSync(htmxPath)) {
+			mkdirSync(join(targetDir, 'public/assets'), { recursive: true });
+			copyFileSync(htmxPath, join(targetDir, 'public/assets/htmx.min.js'));
+			const versionSidecar = `${htmxPath}.version`;
+
+			if (existsSync(versionSidecar)) {
+				copyFileSync(versionSidecar, join(targetDir, 'public/assets/htmx.min.js.version'));
+			}
+		}
+
+		if (decisions.serverViews) {
+			writeText(join(targetDir, 'views/home.eta'), renderHomeView(projectName, plan));
+		}
+
+		writeText(join(targetDir, 'views/layouts/app.eta'), renderLayout(plan, projectName));
+	}
+
+	if (decisions.htmlAuth) {
+		writeText(join(targetDir, 'views/auth/login.eta'), renderLoginView(plan));
+		writeText(join(targetDir, 'views/auth/register.eta'), renderRegisterView());
+		writeText(join(targetDir, 'views/auth/forgot-password.eta'), renderForgotPasswordView());
+		writeText(join(targetDir, 'views/auth/reset-password.eta'), renderResetPasswordView());
+
+		if (layers.extras.emailVerification) {
+			writeText(join(targetDir, 'views/auth/verify-email.eta'), renderVerifyEmailView());
+		}
+
+		if (layers.extras.mfa) {
+			writeText(join(targetDir, 'views/auth/mfa-challenge.eta'), renderMfaChallengeView());
+			writeText(join(targetDir, 'views/auth/mfa-setup.eta'), renderMfaSetupView());
+			writeText(join(targetDir, 'views/auth/confirm-password.eta'), renderConfirmPasswordView());
+		}
+	}
+
+	if (decisions.workTracker) {
+		writeText(join(targetDir, 'docs/WORK_TRACKER.md'), renderWorkTrackerGuide());
+		const readmePath = join(targetDir, 'README.md');
+
+		writeText(
+			readmePath,
+			readFileSync(readmePath, 'utf8') +
+				'\n## Work tracker reference\n\nOpen `/work` after signing in to the server app. See [the reference workflow](docs/WORK_TRACKER.md) for roles, API actions and the durable worker.\n',
+		);
+		writeText(join(src, 'domain/workTracker.ts'), renderWorkTrackerDomain());
+		writeText(join(src, 'models/workTracker.ts'), renderWorkTrackerModels());
+
+		writeText(join(src, 'db/migrations/0007_work_tracker.ts'), renderWorkTrackerMigration(plan));
+	}
+
+	mkdirSync(join(targetDir, 'storage'), { recursive: true });
+	writeText(join(targetDir, 'storage/.gitkeep'), '');
 }
 
 function printNextSteps(
-  projectName: string,
-  plan: StarterFeaturePlan,
-  compose: boolean,
-  cdTarget = projectName,
+	projectName: string,
+	plan: StarterFeaturePlan,
+	compose: boolean,
+	cdTarget = projectName,
 ): void {
-  const layers = plan.layers;
-  const dockerOn = plan.services.docker;
-  const neededTools = plan.services.required;
-  const localOn = plan.services.local;
-  const dockerSummary =
-    dockerOn.length > 0 ? dockerOn.join("+") : neededTools.length === 0 ? "none" : "local";
-  console.log(`\nCreated Strata app in ${projectName}/\n`);
-  console.log(
-    `frontend=${layers.frontend}  db=${layers.database}  auth=${layers.auth}  docker=${dockerSummary}`,
-  );
-  console.log("\nNext steps:");
-  console.log(`  cd ${cdTarget}`);
-  console.log("  cp .env.example .env");
-  if (compose) {
-    console.log(`  ${plan.decisions.composeUpCommand}`);
-  }
-  if (dockerOn.includes("adminer")) {
-    console.log("  Adminer: http://localhost:8080");
-  }
-  if (localOn.length > 0) {
-    console.log(`  Point env at local ${localOn.join(", ")} (see README).`);
-  }
-  console.log("  bun install");
-  if (plan.decisions.frontendBuild) {
-    console.log("  bun run frontend:install");
-    console.log("  bun run frontend:build");
-  }
-  console.log("  bun run db:migrate");
-  console.log("  bun run dev\n");
-  console.log("The strata binary is local to the app, so use the bun run scripts above.");
-  console.log("Run it directly with bunx strata <command> from inside the app directory.\n");
+	const layers = plan.layers;
+
+	const dockerOn = plan.services.docker;
+
+	const neededTools = plan.services.required;
+
+	const localOn = plan.services.local;
+
+	const dockerSummary =
+		dockerOn.length > 0 ? dockerOn.join('+') : neededTools.length === 0 ? 'none' : 'local';
+
+	console.log(`\nCreated Strata app in ${projectName}/\n`);
+	console.log(
+		`frontend=${layers.frontend}  db=${layers.database}  auth=${layers.auth}  docker=${dockerSummary}`,
+	);
+	console.log('\nNext steps:');
+	console.log(`  cd ${cdTarget}`);
+	console.log('  cp .env.example .env');
+
+	if (compose) {
+		console.log(`  ${plan.decisions.composeUpCommand}`);
+	}
+
+	if (dockerOn.includes('adminer')) {
+		console.log('  Adminer: http://localhost:8080');
+	}
+
+	if (localOn.length > 0) {
+		console.log(`  Point env at local ${localOn.join(', ')} (see README).`);
+	}
+
+	console.log('  bun install');
+
+	if (plan.decisions.frontendBuild) {
+		console.log('  bun run frontend:install');
+		console.log('  bun run frontend:build');
+	}
+
+	console.log('  bun run db:migrate');
+	console.log('  bun run dev\n');
+	console.log('The strata binary is local to the app, so use the bun run scripts above.');
+	console.log('Run it directly with bunx strata <command> from inside the app directory.\n');
 }
 
 function generateProject(options: GenerateOptions): StarterFeaturePlan {
-  assertProjectName(options.projectName);
-  const plan = compileStarterFeatures(options.layers, options.reference);
-  mkdirSync(dirname(options.targetDir), { recursive: true });
-  // mkdir is the ownership boundary: it refuses files, directories and dangling symlinks.
-  // --force never authorizes deleting an existing application's data.
-  try {
-    mkdirSync(options.targetDir);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
-      throw new Error(
-        `Output path already exists: ${options.targetDir}. Choose a new path; --force does not overwrite existing projects.`,
-      );
-    }
-    throw error;
-  }
-  const owned = lstatSync(options.targetDir);
-  try {
-    copyTree(
-      options.templateRoot,
-      options.targetDir,
-      options.projectName,
-      new Set(["overlays", "public", "views"]),
-    );
-    applyFrontendOverlays(options.overlayRoot, options.targetDir, plan);
-    writeGeneratedFiles({ ...options, layers: plan.layers }, plan);
-    for (const artifact of plan.artifacts) {
-      if (!lstatSync(join(options.targetDir, artifact)).isFile()) {
-        throw new Error(`Feature plan artifact was not rendered: ${artifact}`);
-      }
-    }
-    const inventory = (directory: string, prefix = ""): string[] =>
-      readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-        const path = prefix ? `${prefix}/${entry.name}` : entry.name;
-        return entry.isDirectory() ? inventory(join(directory, entry.name), path) : [path];
-      });
-    writeText(
-      join(options.targetDir, ".strata/generator.json"),
-      JSON.stringify(
-        {
-          ...plan,
-          emittedArtifacts: [
-            ...new Set([...inventory(options.targetDir), ".strata/generator.json"]),
-          ].sort(),
-        },
-        null,
-        2,
-      ),
-    );
-  } catch (error) {
-    // Never remove a path replaced by another owner while rendering.
-    try {
-      const current = lstatSync(options.targetDir);
-      if (current.dev === owned.dev && current.ino === owned.ino) {
-        rmSync(options.targetDir, { recursive: true, force: true });
-      }
-    } catch (cleanupError) {
-      if ((cleanupError as NodeJS.ErrnoException).code !== "ENOENT") {
-        throw new AggregateError(
-          [error, cleanupError],
-          "Starter generation and owned-output cleanup failed.",
-        );
-      }
-    }
-    throw error;
-  }
-  return plan;
+	assertProjectName(options.projectName);
+	const plan = compileStarterFeatures(options.layers, options.reference);
+
+	mkdirSync(dirname(options.targetDir), { recursive: true });
+	// mkdir is the ownership boundary: it refuses files, directories and dangling symlinks.
+	// --force never authorizes deleting an existing application's data.
+	try {
+		mkdirSync(options.targetDir);
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+			throw new Error(
+				`Output path already exists: ${options.targetDir}. Choose a new path; --force does not overwrite existing projects.`,
+			);
+		}
+
+		throw error;
+	}
+	const owned = lstatSync(options.targetDir);
+
+	try {
+		copyTree(
+			options.templateRoot,
+			options.targetDir,
+			options.projectName,
+			new Set(['overlays', 'public', 'views']),
+		);
+		applyFrontendOverlays(options.overlayRoot, options.targetDir, plan);
+		writeGeneratedFiles({ ...options, layers: plan.layers }, plan);
+		for (const artifact of plan.artifacts) {
+			if (!lstatSync(join(options.targetDir, artifact)).isFile()) {
+				throw new Error(`Feature plan artifact was not rendered: ${artifact}`);
+			}
+		}
+
+		const inventory = (directory: string, prefix = ''): string[] =>
+			readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+				const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+
+				return entry.isDirectory() ? inventory(join(directory, entry.name), path) : [path];
+			});
+
+		writeText(
+			join(options.targetDir, '.strata/generator.json'),
+			JSON.stringify(
+				{
+					...plan,
+					emittedArtifacts: [
+						...new Set([...inventory(options.targetDir), '.strata/generator.json']),
+					].sort(),
+				},
+				null,
+				2,
+			),
+		);
+	} catch (error) {
+		// Never remove a path replaced by another owner while rendering.
+		try {
+			const current = lstatSync(options.targetDir);
+
+			if (current.dev === owned.dev && current.ino === owned.ino) {
+				rmSync(options.targetDir, { recursive: true, force: true });
+			}
+		} catch (cleanupError) {
+			if ((cleanupError as NodeJS.ErrnoException).code !== 'ENOENT') {
+				throw new AggregateError(
+					[error, cleanupError],
+					'Starter generation and owned-output cleanup failed.',
+				);
+			}
+		}
+		throw error;
+	}
+
+	return plan;
 }
 
 async function runCreateStrata(argv: string[], cwd = process.cwd()): Promise<number> {
-  let flags: ParsedFlags;
-  try {
-    flags = parseCreateStrataArgs(argv);
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : error);
-    return 1;
-  }
+	let flags: ParsedFlags;
 
-  if (flags.help) {
-    console.log(usage());
-    return 0;
-  }
+	try {
+		flags = parseCreateStrataArgs(argv);
+	} catch (error) {
+		console.error(error instanceof Error ? error.message : error);
 
-  try {
-    const plan = await resolveStarterPlan(flags);
-    const { projectName, targetDir } = resolveProjectTarget(plan.projectName, cwd);
-    const features = generateProject({
-      projectName,
-      targetDir,
-      layers: plan.layers,
-      templateRoot: resolveTemplateRoot(),
-      overlayRoot: resolveOverlayRoot(),
-      force: flags.force,
-    });
-    printNextSteps(projectName, features, features.services.docker.length > 0, plan.projectName);
-    return 0;
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : error);
-    return 1;
-  }
+		return 1;
+	}
+
+	if (flags.help) {
+		console.log(usage());
+
+		return 0;
+	}
+
+	try {
+		const plan = await resolveStarterPlan(flags);
+
+		const { projectName, targetDir } = resolveProjectTarget(plan.projectName, cwd);
+
+		const features = generateProject({
+			projectName,
+			targetDir,
+			layers: plan.layers,
+			templateRoot: resolveTemplateRoot(),
+			overlayRoot: resolveOverlayRoot(),
+			force: flags.force,
+		});
+
+		printNextSteps(projectName, features, features.services.docker.length > 0, plan.projectName);
+
+		return 0;
+	} catch (error) {
+		console.error(error instanceof Error ? error.message : error);
+
+		return 1;
+	}
 }
 
 export {
-  generateProject,
-  printNextSteps,
-  resolveOverlayRoot,
-  resolveProjectTarget,
-  resolveTemplateRoot,
-  runCreateStrata,
-  starterPackageRoot,
+	generateProject,
+	printNextSteps,
+	resolveOverlayRoot,
+	resolveProjectTarget,
+	resolveTemplateRoot,
+	runCreateStrata,
+	starterPackageRoot,
 };

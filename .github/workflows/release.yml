@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
   workflow_dispatch:
     inputs:
       tag:
@@ -119,12 +119,12 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version-file: ".bun-version"
+          bun-version-file: '.bun-version'
 
       - name: Set up Node.js for npm publish
         uses: actions/setup-node@v7
         with:
-          node-version: "24"
+          node-version: '24'
           package-manager-cache: false
 
       - name: Install npm CLI for trusted publishing
@@ -165,7 +165,7 @@ jobs:
           SKIP_FIXTURE_TEST_BOOTSTRAP: 1
           CACHE_DRIVER: array
           QUEUE_DRIVER: sync
-          FEATURE_SCIM: "true"
+          FEATURE_SCIM: 'true'
           SCIM_BEARER_TOKEN: strata-scim-test-token
           ADMIN_API_TOKEN: strata-admin-test-token
           MEMBER_API_TOKEN: strata-member-test-token

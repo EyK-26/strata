@@ -1,1 +1,1 @@
-export * from "../../../../../src/core/auth/saml/samlServiceProvider.ts";
+export * from '../../../../../src/core/auth/saml/samlServiceProvider.ts';

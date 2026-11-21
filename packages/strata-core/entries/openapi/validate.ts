@@ -1,1 +1,1 @@
-export * from "../../../../src/core/openapi/validate.ts";
+export * from '../../../../src/core/openapi/validate.ts';

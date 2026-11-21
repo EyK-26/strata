@@ -1,1 +1,1 @@
-export * from "../../../../src/bootstrap/auth/accountWorkflows.ts";
+export * from '../../../../src/bootstrap/auth/accountWorkflows.ts';

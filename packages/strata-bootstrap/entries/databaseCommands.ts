@@ -1,1 +1,1 @@
-export * from "../../../src/bootstrap/databaseCommands.ts";
+export * from '../../../src/bootstrap/databaseCommands.ts';

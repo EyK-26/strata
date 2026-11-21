@@ -1,1 +1,1 @@
-export * from "../../../../src/core/http/requireAbilityMiddleware.ts";
+export * from '../../../../src/core/http/requireAbilityMiddleware.ts';

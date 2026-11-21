@@ -1,1 +1,1 @@
-export * from "../../../../src/core/auth/scimAuthMiddleware.ts";
+export * from '../../../../src/core/auth/scimAuthMiddleware.ts';

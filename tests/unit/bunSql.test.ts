@@ -1,30 +1,31 @@
-import { describe, expect, test } from "bun:test";
-import { createBunSqlPool } from "@getstrata/core/database/bunSql";
+import { describe, expect, test } from 'bun:test';
 
-describe("explicit Bun SQL pool constructor", () => {
-  test("createBunSqlPool requires a url", () => {
-    expect(() => createBunSqlPool({ url: "" })).toThrow("DATABASE_URL is not configured");
-  });
+import { createBunSqlPool } from '@getstrata/core/database/bunSql';
 
-  test("createBunSqlPool returns a Bun SQL client", async () => {
-    const sql = createBunSqlPool({
-      url: "postgres://postgres:postgres@127.0.0.1:1/strata_pool_test",
-      max: 2,
-      idleTimeout: 5,
-      maxLifetime: 30,
-      connectionTimeout: 1,
-    });
+describe('explicit Bun SQL pool constructor', () => {
+	test('createBunSqlPool requires a url', () => {
+		expect(() => createBunSqlPool({ url: '' })).toThrow('DATABASE_URL is not configured');
+	});
 
-    expect(typeof sql.unsafe).toBe("function");
-    await sql.close();
-  });
+	test('createBunSqlPool returns a Bun SQL client', async () => {
+		const sql = createBunSqlPool({
+			url: 'postgres://postgres:postgres@127.0.0.1:1/strata_pool_test',
+			max: 2,
+			idleTimeout: 5,
+			maxLifetime: 30,
+			connectionTimeout: 1,
+		});
 
-  test("createBunSqlPool uses pool defaults when options are omitted", async () => {
-    const sql = createBunSqlPool({
-      url: "postgres://postgres:postgres@127.0.0.1:1/strata_pool_defaults",
-    });
+		expect(typeof sql.unsafe).toBe('function');
+		await sql.close();
+	});
 
-    expect(typeof sql.unsafe).toBe("function");
-    await sql.close();
-  });
+	test('createBunSqlPool uses pool defaults when options are omitted', async () => {
+		const sql = createBunSqlPool({
+			url: 'postgres://postgres:postgres@127.0.0.1:1/strata_pool_defaults',
+		});
+
+		expect(typeof sql.unsafe).toBe('function');
+		await sql.close();
+	});
 });
