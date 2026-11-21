@@ -1,6 +1,6 @@
 {
 	"name": "@getstrata/starter",
-	"version": "3.2.0",
+	"version": "3.3.0",
 	"description": "Interactive application generator for Strata, a Laravel-inspired Bun and TypeScript framework.",
 	"license": "MIT",
 	"repository": {

@@ -32,11 +32,16 @@ test('identity dispatch refuses to sign an unregistered job before calling the q
 
 	let dispatched = false;
 
-	const queue = createIdentityQueue({
-		async dispatch() {
-			dispatched = true;
+	const queue = createIdentityQueue(
+		{
+			async dispatch() {
+				dispatched = true;
+			},
 		},
-	}, new JobRegistry(), createQueueHandoff({ key, audience: 'app-a' }), identity);
+		new JobRegistry(),
+		createQueueHandoff({ key, audience: 'app-a' }),
+		identity,
+	);
 
 	await expect(queue.dispatch(new Unregistered(), {})).rejects.toThrow('Job is not registered');
 	expect(dispatched).toBe(false);
@@ -53,12 +58,14 @@ test('a registry without a job instance cannot record or retry a business failur
 			throw new Error('No job instance was admitted');
 		};
 
-		await expect(runQueueJob(
-			{ name: 'missing', payload: {}, jobId: 'missing-fixture' },
-			{ runAttempt: services.runAttempt, recordFailure: noBusinessFailure },
-			registry,
-			{ retryPolicy: policy, deferRetry: noBusinessFailure },
-		)).rejects.toThrow('Unknown job "missing".');
+		await expect(
+			runQueueJob(
+				{ name: 'missing', payload: {}, jobId: 'missing-fixture' },
+				{ runAttempt: services.runAttempt, recordFailure: noBusinessFailure },
+				registry,
+				{ retryPolicy: policy, deferRetry: noBusinessFailure },
+			),
+		).rejects.toThrow('Unknown job "missing".');
 	});
 });
 

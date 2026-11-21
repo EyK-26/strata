@@ -99,7 +99,9 @@ describe('RepositoryQuery', () => {
 			async ([squads, members]) => {
 				const query = squads.query({ id: 1 }).withHasMany('members', squadHasMembers, members);
 
-				await expect(query.delete()).rejects.toThrow('Conditional writes do not support eager loading.');
+				await expect(query.delete()).rejects.toThrow(
+					'Conditional writes do not support eager loading.',
+				);
 				expect(connection.calls).toEqual([]);
 			},
 		);

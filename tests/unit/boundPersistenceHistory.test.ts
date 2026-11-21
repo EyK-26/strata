@@ -325,29 +325,35 @@ test('an unknown savepoint defers its released descendant restores until confirm
 	const restored: string[] = [];
 
 	await f.app.start();
-	const outcome = f.app.run(async (scope) => {
-		await scope.resolve(DATABASE_SESSION_TOKEN).transaction(async (outer) => {
-			await assert.rejects(outer.transaction(async (middle) => {
-				await assert.rejects(middle.transaction(async (inner) => {
-					await inner.transaction((descendant) => {
-						const entity = descendant.model(note).newRecord({ title: 'released descendant' });
+	const outcome = f.app
+		.run(async (scope) => {
+			await scope.resolve(DATABASE_SESSION_TOKEN).transaction(async (outer) => {
+				await assert.rejects(
+					outer.transaction(async (middle) => {
+						await assert.rejects(
+							middle.transaction(async (inner) => {
+								await inner.transaction((descendant) => {
+									const entity = descendant.model(note).newRecord({ title: 'released descendant' });
 
-						getBindingPorts(getModelBinding(entity)).registerRestore(() => {
-							restored.push('descendant');
+									getBindingPorts(getModelBinding(entity)).registerRestore(() => {
+										restored.push('descendant');
 
-							return undefined;
-						});
-					});
-				}));
+										return undefined;
+									});
+								});
+							}),
+						);
+						assert.deepEqual(restored, []);
+					}),
+				);
 				assert.deepEqual(restored, []);
-			}));
-			assert.deepEqual(restored, []);
-			outer.requestRollback();
-		});
-	}).then(
-		() => ({ ok: true }),
-		(error: unknown) => ({ ok: false, error }),
-	);
+				outer.requestRollback();
+			});
+		})
+		.then(
+			() => ({ ok: true }),
+			(error: unknown) => ({ ok: false, error }),
+		);
 
 	try {
 		await bounded(f.ackEntered.promise);

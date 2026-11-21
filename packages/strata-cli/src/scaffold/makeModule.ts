@@ -3,23 +3,42 @@ import { join, relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { renderModuleScaffold } from './renderModule';
-import { scaffoldArguments, writeScaffoldFile } from './scaffoldFile';
+import { renderRlsModuleScaffold } from './renderRlsModule';
+import { scaffoldArguments, writeScaffoldFile, writeScaffoldFiles } from './scaffoldFile';
 import {
+	migrationDirectory,
 	moduleDirectory,
+	timestampForFilename,
 	toCamelCase,
 	toKebabCase,
 	toPascalCase,
 	webViewsDirectory,
 } from './utils';
 
+async function writeModuleFiles(directory: string, files: ReadonlyMap<string, string>) {
+	for (const [fileName, content] of files) {
+		await writeScaffoldFile(
+			relative(process.cwd(), join(directory, fileName)).split(sep),
+			content,
+			'Module file',
+		);
+	}
+}
+
 async function makeModuleCommand(...args: string[]): Promise<void> {
-	const parsed = scaffoldArguments('make:module', args, ['--with-web']);
+	const parsed = scaffoldArguments('make:module', args, ['--with-web', '--rls']);
 
 	if (!parsed) {
 		return;
 	}
 
 	const withWeb = args.includes('--with-web');
+
+	const withRls = args.includes('--rls');
+
+	if (withRls && withWeb) {
+		throw new Error('make:module --rls is API-only and cannot be combined with --with-web.');
+	}
 
 	const [name] = parsed;
 
@@ -40,22 +59,25 @@ async function makeModuleCommand(...args: string[]): Promise<void> {
 	// Inspect the generated app's inert choices without importing its bootstrap graph.
 	const choicesPath = join(process.cwd(), 'src', 'config', 'app.ts');
 
-	if (await Bun.file(choicesPath).exists()) {
-		const { default: choices } = (await import(pathToFileURL(choicesPath).href)) as {
-			default?: { views?: boolean; tenancy?: string };
-		};
+	const choices = (await Bun.file(choicesPath).exists())
+		? ((await import(pathToFileURL(choicesPath).href)).default as
+				{ views?: boolean; tenancy?: string } | undefined)
+		: undefined;
 
-		if (withWeb && choices?.views === false) {
-			throw new Error(
-				'make:module --with-web requires a configured server view renderer. This app disabled views; use make:module without --with-web or configure views first.',
-			);
-		}
+	if (withWeb && choices?.views === false) {
+		throw new Error(
+			'make:module --with-web requires a configured server view renderer. This app disabled views; use make:module without --with-web or configure views first.',
+		);
+	}
 
-		if (choices?.tenancy === 'column' || choices?.tenancy === 'rls') {
-			throw new Error(
-				`make:module CRUD does not implement ${choices.tenancy} tenancy. Use make:model, make:controller and make:request to implement trusted tenant scoping and schema explicitly.`,
-			);
-		}
+	if (withRls && choices?.tenancy !== 'rls') {
+		throw new Error('make:module --rls requires an app configured for PostgreSQL RLS.');
+	}
+
+	if (!withRls && (choices?.tenancy === 'column' || choices?.tenancy === 'rls')) {
+		throw new Error(
+			`make:module CRUD does not implement ${choices.tenancy} tenancy. Use make:model, make:controller and make:request to implement trusted tenant scoping and schema explicitly.`,
+		);
 	}
 
 	const directory = await moduleDirectory(moduleSlug);
@@ -73,20 +95,44 @@ async function makeModuleCommand(...args: string[]): Promise<void> {
 		}
 	}
 
-	const { files, webFiles, viewFiles, pluralSlug } = renderModuleScaffold({
+	const options = {
 		moduleSlug,
 		moduleName,
 		moduleIdentifier,
 		withWeb,
-	});
+	};
 
-	for (const [fileName, content] of files) {
-		await writeScaffoldFile(
-			relative(process.cwd(), join(directory, fileName)).split(sep),
-			content,
-			'Module file',
+	if (withRls) {
+		const migrationName = `${timestampForFilename()}_create_${moduleSlug.replaceAll('-', '_')}`;
+
+		const { files, migration } = renderRlsModuleScaffold(options, migrationName);
+
+		const migrationFile = join(migrationDirectory(), `${migrationName}.ts`);
+
+		await writeScaffoldFiles([
+			...Array.from(files, ([fileName, content]) => ({
+				segments: relative(process.cwd(), join(directory, fileName)).split(sep),
+				content,
+				label: 'Module file',
+			})),
+			{
+				segments: relative(process.cwd(), migrationFile).split(sep),
+				content: migration,
+				label: 'Migration',
+			},
+		]);
+		console.log(`Created RLS module scaffold in: ${directory}`);
+		console.log(`Created migration: ${migrationFile}`);
+		console.log(
+			'Review the migration, register the model, and configure abilities and the resource policy.',
 		);
+
+		return;
 	}
+
+	const { files, webFiles, viewFiles, pluralSlug } = renderModuleScaffold(options);
+
+	await writeModuleFiles(directory, files);
 
 	let createdViewsDirectory: string | undefined;
 
@@ -102,13 +148,7 @@ async function makeModuleCommand(...args: string[]): Promise<void> {
 			);
 		}
 
-		for (const [fileName, content] of webFiles) {
-			await writeScaffoldFile(
-				relative(process.cwd(), join(directory, fileName)).split(sep),
-				content,
-				'Module file',
-			);
-		}
+		await writeModuleFiles(directory, webFiles);
 	}
 
 	console.log(`Created module scaffold in: ${directory}`);

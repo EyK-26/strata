@@ -1,11 +1,12 @@
 import { expect, test } from 'bun:test';
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { ESLint } from 'eslint';
 
 import { scaffoldCommands } from '../../../packages/strata-cli/src/scaffold';
+import { makeModuleCommand } from '../../../packages/strata-cli/src/scaffold/makeModule';
 
 import { captureConsole } from './helpers';
 
@@ -54,6 +55,10 @@ test('CLI scaffolds follow the application spacing and brace rules', async () =>
 
 				await run(...args);
 			}
+
+			await mkdir('src/config', { recursive: true });
+			await writeFile('src/config/app.ts', 'export default { tenancy: "rls" };\n');
+			await makeModuleCommand('Ticket', '--rls');
 		} finally {
 			process.chdir(previousCwd);
 			output.restore();

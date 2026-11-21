@@ -1,8 +1,8 @@
-import { RedisClient } from 'bun';
 import { describe, expect, spyOn, test } from 'bun:test';
 
 import { Job } from '@getstrata/core/queue';
 import { JobRegistry } from '@getstrata/core/queue/jobRegistry';
+import { RedisClient } from 'bun';
 
 import {
 	ensureStreamGroup,

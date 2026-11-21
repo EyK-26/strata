@@ -66,6 +66,7 @@ import {
 	validateSpaPrefix,
 } from '@getstrata/core/runtime/frontendMode';
 import { resolveScimTenantFromToken } from '@getstrata/core/security/scimTenantTokens';
+import type { PublicTenancyOptions } from '@getstrata/core/tenant/publicTenantHost';
 import { resolveTenant } from '@getstrata/core/tenant/resolveTenant';
 import type { WebErrorView } from '@getstrata/core/view';
 import { CORE_WEB_ERROR_VIEW_TOKEN } from '@getstrata/core/view/tokens';
@@ -167,6 +168,7 @@ export interface AppDefinition<A extends ApplicationAuthServices> {
 		readonly token?: ServiceToken<Readonly<Pick<SqlOutbox, 'publish'>>>;
 	};
 	readonly tenancy: 'none' | 'column' | 'rls';
+	readonly publicTenancy?: PublicTenancyOptions;
 	readonly frontend: 'api' | 'spa-react' | 'server-htmx' | 'hybrid';
 	readonly views?: boolean;
 	readonly scim?: boolean;
@@ -180,10 +182,18 @@ export interface AppDefinition<A extends ApplicationAuthServices> {
 }
 
 export function defineApp<A extends ApplicationAuthServices>(input: AppDefinition<A>) {
+	const { publicTenancy } = input;
+
 	const definition = Object.freeze({
 		...input,
 		root: resolve(input.root),
 		auth: Object.freeze({ ...input.auth }),
+		publicTenancy: publicTenancy
+			? Object.freeze({
+					resolveTenantId: publicTenancy.resolveTenantId.bind(publicTenancy),
+					trustedProxyAddresses: Object.freeze([...(publicTenancy.trustedProxyAddresses ?? [])]),
+				})
+			: undefined,
 		models: Object.freeze([...input.models]),
 		repositories: Object.freeze([...(input.repositories ?? [])]),
 		outbox: Object.freeze({
@@ -483,14 +493,14 @@ export function defineApp<A extends ApplicationAuthServices>(input: AppDefinitio
 				allowTenantDevHeaders: !production && env.TENANT_DEV_HEADERS === 'true',
 				signatureSecret: auth.config.signatureSecret,
 				passwordConfirmation: auth.config.passwordConfirmation,
-				...(production
-					? {
-							publicTenancy: {
+				publicTenancy:
+					definition.publicTenancy ??
+					(production
+						? {
 								resolveTenantId: async (host: string) =>
 									host === new URL(config.appUrl).hostname ? 1 : null,
-							},
-						}
-					: {}),
+							}
+						: undefined),
 				scim: definition.scim
 					? createScimAuthenticator({
 							resolveToken: (token) => resolveScimTenantFromToken(token, env),

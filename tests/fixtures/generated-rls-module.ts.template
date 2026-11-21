@@ -1,0 +1,71 @@
+import assert from 'node:assert/strict';
+
+import { createAppServer } from './bootstrap/createApp.ts';
+
+const [phase, first, second, ungranted, blocked] = process.argv.slice(2);
+
+assert.ok(first && second && ungranted);
+
+const boot = await createAppServer({
+	migrate: false,
+	server: { port: 0, native: { hostname: '127.0.0.1' } },
+});
+
+try {
+	const server = boot.server;
+
+	assert.ok(server);
+
+	const origin = server.url;
+
+	async function call(token: string | undefined, status: number, method = 'GET', suffix = '', body?: object) {
+		const response = await fetch(new URL('/tickets' + suffix, origin), {
+			method,
+			headers: {
+				accept: 'application/json',
+				...(token ? { authorization: `Bearer ${token}` } : {}),
+				...(body ? { 'content-type': 'application/json' } : {}),
+			},
+			body: body ? JSON.stringify(body) : undefined,
+			signal: AbortSignal.timeout(5000),
+		});
+
+		const text = await response.text();
+
+		assert.equal(response.status, status, `${method} /tickets${suffix}: ${text}`);
+
+		return text ? JSON.parse(text) : null;
+	}
+
+	if (phase === 'default') {
+		assert.ok(blocked);
+		assert.equal((await call(first, 403)).error, 'Forbidden');
+		assert.equal((await call(first, 403, 'POST', '', { name: 'Denied by the generated policy' })).error, 'Forbidden');
+		assert.equal((await call(first, 403, 'GET', `/${blocked}`)).error, 'Forbidden');
+		assert.equal((await call(first, 403, 'PATCH', `/${blocked}`, { name: 'Denied' })).error, 'Forbidden');
+		assert.equal((await call(first, 403, 'DELETE', `/${blocked}`)).error, 'Forbidden');
+	} else {
+		await call(undefined, 401);
+		await call(ungranted, 403);
+		await call(ungranted, 403, 'POST', '', { name: 'Denied by the missing ability' });
+		const owned = await call(first, 201, 'POST', '', { name: 'First', tenant_id: 2 });
+
+		const other = await call(second, 201, 'POST', '', { name: 'Second', tenant_id: 1 });
+
+		assert.deepEqual((await call(first, 200)).data, [owned]);
+		assert.deepEqual((await call(second, 200)).data, [other]);
+		assert.deepEqual(await call(first, 200, 'GET', `/${owned.id}`), owned);
+		await call(second, 404, 'GET', `/${owned.id}`);
+		await call(second, 404, 'PATCH', `/${owned.id}`, { name: 'Cross-tenant update' });
+		await call(second, 404, 'DELETE', `/${owned.id}`);
+		assert.deepEqual(
+			await call(first, 200, 'PATCH', `/${owned.id}`, { name: 'Updated', tenant_id: 2 }),
+			{ id: owned.id, name: 'Updated' },
+		);
+		assert.deepEqual((await call(second, 200)).data, [other]);
+		await call(first, 204, 'DELETE', `/${owned.id}`);
+		assert.deepEqual((await call(first, 200)).data, []);
+	}
+} finally {
+	assert.equal((await boot.application.stop({ reason: 'RLS module acceptance complete' })).successful, true);
+}

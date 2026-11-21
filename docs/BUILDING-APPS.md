@@ -61,6 +61,24 @@ Generators never overwrite existing files or register routes/models automaticall
 They do not apply migrations. `make:module Task` is an optional grouped scaffold;
 use `--help` for each command's options.
 
+For a PostgreSQL RLS app, run `bunx strata make:module Task --rls` to generate
+an API module and a migration for a new `module_task` table. Review the migration,
+add the generated model to `src/models/register.ts`, and run your normal migration
+command. Use your migration credentials for schema changes and the restricted
+runtime role for HTTP. The migration creates the table and its RLS policy together
+and fails if the table already exists. An ordinary rollback refuses to drop the
+table while it contains data.
+
+The API starts with a deny-by-default resource policy. Define the app's policy
+and explicitly grant the `tasks:list`, `tasks:view`, `tasks:create`,
+`tasks:update` and `tasks:delete` abilities as appropriate. The policy's
+`view(user)` decision authorizes the entire tenant-scoped list, while
+`view(user, record)` governs the detail route. Add an explicit query constraint
+if your app needs per-user filtering within a tenant. The handlers use the
+request's tenant scope and set ownership on creation from that scope. The
+`--rls` option supports new API resources. Use individual generators for web
+views, column tenancy or existing schemas.
+
 Edit `src/models/Task.ts`:
 
 ```ts

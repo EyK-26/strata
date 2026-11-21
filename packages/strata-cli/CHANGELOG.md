@@ -1,5 +1,9 @@
 # @getstrata/cli changelog
 
+## 3.3.0
+
+Add `make:module --rls` to generate API routes, a model, validation, a deny-by-default policy and a reviewable migration for a new PostgreSQL tenant-owned table.
+
 ## 3.2.0
 
 Apply code and template styling and formatting

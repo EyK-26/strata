@@ -2165,12 +2165,18 @@ for (const stage of ['before checkout', 'after checkout'] as const) {
 					context,
 					operations,
 					ownership,
-					() => { throw new Error('Cancelled transaction must not attach a session'); },
+					() => {
+						throw new Error('Cancelled transaction must not attach a session');
+					},
 					() => scope.resolve(DATABASE_SESSION_TOKEN),
 					(pool) => ({ app: fixture.app, configuredPool: pool }),
 				);
 
-				const error = await rejected(runtime.run(fixture.pool, () => { bodies++; }));
+				const error = await rejected(
+					runtime.run(fixture.pool, () => {
+						bodies++;
+					}),
+				);
 
 				assert.ok(error instanceof PersistenceError);
 				assert.equal(error.code, 'DATABASE_TRANSACTION_FAILED');
