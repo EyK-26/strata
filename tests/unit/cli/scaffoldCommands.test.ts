@@ -160,6 +160,59 @@ export const repositoryDefinitions = [NoteRepository];
 		});
 	});
 
+	test('opt-in RLS mode writes a tenant-owned API module and a separate migration', async () => {
+		await withTempWorkspace(async (workspace) => {
+			const { makeModuleCommand } = await import('../../../src/cli/commands/makeModule');
+
+			await ensureDirectory(join(workspace, 'src/config'));
+			await writeFile(join(workspace, 'src/config/app.ts'), 'export default { tenancy: "rls" };');
+			await expect(makeModuleCommand('Ticket')).rejects.toThrow('does not implement rls tenancy');
+			await expect(makeModuleCommand('Ticket', '--rls', '--with-web')).rejects.toThrow('API-only');
+			await makeModuleCommand('Ticket', '--rls');
+			const module = join(workspace, 'src/modules/ticket');
+
+			expect(await Bun.file(join(module, 'models/Ticket.ts')).text()).toContain('tenant_id');
+			expect(await Bun.file(join(module, 'webRoutes.ts')).exists()).toBe(false);
+			const migrations = join(workspace, 'src/db/migrations');
+
+			const files = await Array.fromAsync(new Bun.Glob('*_create_ticket.ts').scan(migrations));
+
+			expect(files).toHaveLength(1);
+			expect(await Bun.file(join(migrations, files[0] ?? '')).text()).toContain('enableTenantRlsSql');
+		});
+	});
+
+	test('RLS mode requires an app configured for RLS before writing output', async () => {
+		await withTempWorkspace(async (workspace) => {
+			const { makeModuleCommand } = await import('../../../src/cli/commands/makeModule');
+
+			await expect(makeModuleCommand('Ticket', '--rls')).rejects.toThrow('PostgreSQL RLS');
+			await ensureDirectory(join(workspace, 'src/config'));
+			await writeFile(join(workspace, 'src/config/app.ts'), 'export default { tenancy: "column" };');
+			await expect(makeModuleCommand('Ticket', '--rls')).rejects.toThrow('PostgreSQL RLS');
+			expect(await Bun.file(join(workspace, 'src/modules/ticket/index.ts')).exists()).toBe(false);
+		});
+	});
+
+	test('RLS mode leaves a retryable workspace when the migration cannot be written', async () => {
+		await withTempWorkspace(async (workspace) => {
+			const { makeModuleCommand } = await import('../../../src/cli/commands/makeModule');
+
+			await ensureDirectory(join(workspace, 'src/config'));
+			await writeFile(join(workspace, 'src/config/app.ts'), 'export default { tenancy: "rls" };');
+			await ensureDirectory(join(workspace, 'src/db'));
+			const destination = join(workspace, 'src/db/migrations');
+
+			await writeFile(destination, 'existing file');
+			await expect(makeModuleCommand('Ticket', '--rls')).rejects.toThrow('not a directory');
+			expect(await Bun.file(destination).text()).toBe('existing file');
+			expect(await Bun.file(join(workspace, 'src/modules/ticket/index.ts')).exists()).toBe(false);
+			await rm(destination);
+			await makeModuleCommand('Ticket', '--rls');
+			expect(await Bun.file(join(workspace, 'src/modules/ticket/index.ts')).exists()).toBe(true);
+		});
+	});
+
 	test('rejects invalid module names', async () => {
 		const { makeModuleCommand } = await import('../../../src/cli/commands/makeModule');
 

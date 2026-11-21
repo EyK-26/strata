@@ -1,5 +1,5 @@
 import type { Stats } from 'node:fs';
-import { lstat, mkdir, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, rmdir, unlink, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 /** Validate before normalization so traversal and punctuation cannot become a different name. */
@@ -30,6 +30,7 @@ async function writeScaffoldFile(
 	segments: string[],
 	content: string,
 	label: string,
+	createdDirectories?: string[],
 ): Promise<string> {
 	const target = resolve(process.cwd(), ...segments);
 
@@ -53,7 +54,12 @@ async function writeScaffoldFile(
 				throw error;
 			}
 
-			await mkdir(directory, { recursive: true });
+			const created = await mkdir(directory, { recursive: true });
+
+			if (created === directory) {
+				createdDirectories?.push(directory);
+			}
+
 			entry = await lstat(directory);
 		}
 
@@ -81,7 +87,57 @@ async function writeScaffoldFile(
 	return path;
 }
 
-export { scaffoldNameParts, writeScaffoldFile };
+interface ScaffoldOutput {
+	segments: string[];
+	content: string;
+	label: string;
+}
+
+async function writeScaffoldFiles(outputs: readonly ScaffoldOutput[]): Promise<void> {
+	const files: string[] = [];
+
+	const directories: string[] = [];
+
+	try {
+		for (const { segments, content, label } of outputs) {
+			files.push(await writeScaffoldFile(segments, content, label, directories));
+		}
+	} catch (error) {
+		const cleanupErrors: unknown[] = [];
+
+		for (const file of files.reverse()) {
+			try {
+				await unlink(file);
+			} catch (failure) {
+				if ((failure as NodeJS.ErrnoException).code !== 'ENOENT') {
+					cleanupErrors.push(failure);
+				}
+			}
+		}
+
+		for (const directory of directories.reverse()) {
+			try {
+				await rmdir(directory);
+			} catch (failure) {
+				const code = (failure as NodeJS.ErrnoException).code;
+
+				if (code !== 'ENOENT' && code !== 'ENOTEMPTY') {
+					cleanupErrors.push(failure);
+				}
+			}
+		}
+
+		if (cleanupErrors.length > 0) {
+			throw new AggregateError([error, ...cleanupErrors], 'Unable to clean up partial scaffold output.', {
+				cause: error,
+			});
+		}
+
+		throw error;
+	}
+}
+
+export { scaffoldNameParts, writeScaffoldFile, writeScaffoldFiles };
 
 function scaffoldArguments(
 	command: string,
