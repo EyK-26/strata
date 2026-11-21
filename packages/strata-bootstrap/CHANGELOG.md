@@ -1,5 +1,9 @@
 # @getstrata/bootstrap changelog
 
+## 3.3.0
+
+Accept an application-owned `PublicTenancyOptions` resolver in `defineApp` for multi-domain tenancy. Apps that omit it retain the single-host `APP_URL` default.
+
 ## 3.2.0
 
 Apply code and template styling and formatting

@@ -1,6 +1,6 @@
 {
 	"name": "@getstrata/cli",
-	"version": "3.2.0",
+	"version": "3.3.0",
 	"description": "Strata development tools: application servers, scaffolding, migrations, workers, and scheduling.",
 	"license": "MIT",
 	"repository": {
@@ -57,8 +57,8 @@
 	},
 	"scripts": {},
 	"peerDependencies": {
-		"@getstrata/bootstrap": "^3.2.0",
-		"@getstrata/core": "^3.2.0"
+		"@getstrata/bootstrap": "^3.3.0",
+		"@getstrata/core": "^3.3.0"
 	},
 	"engines": {
 		"bun": ">=1.4.4"

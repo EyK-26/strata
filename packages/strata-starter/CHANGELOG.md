@@ -1,5 +1,9 @@
 # create-strata changelog
 
+## 3.3.0
+
+Generated apps install the 3.3.0 bootstrap and CLI, including the optional multi-domain resolver and API-only PostgreSQL RLS module scaffold.
+
 ## 3.2.0
 
 Apply code and template styling and formatting

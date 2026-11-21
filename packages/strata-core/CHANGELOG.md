@@ -1,5 +1,9 @@
 # @getstrata/core changelog
 
+## 3.3.0
+
+Align the core package version with the bootstrap and CLI tenancy additions.
+
 ## 3.2.0
 
 Apply code and template styling and formatting
