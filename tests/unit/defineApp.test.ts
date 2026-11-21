@@ -1,11 +1,14 @@
 import { afterEach, expect, spyOn, test } from 'bun:test';
+import { ok } from 'node:assert/strict';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { createHttpKernel } from '@getstrata/bootstrap/httpKernel';
 import type { Application } from '@getstrata/core/contracts/application';
 import { createServiceToken } from '@getstrata/core/contracts/token';
 import { defineProvider } from '@getstrata/core/runtime/application';
+import type { PublicTenancyOptions } from '@getstrata/core/tenant/publicTenantHost';
 
 import {
 	type AppDefinition,
@@ -298,6 +301,123 @@ test('invalid config and missing worker transport reject before schema side effe
 	await expect(app.bootstrapApp({ mode: 'worker' })).rejects.toThrow('REDIS_URL');
 	expect(schemaChanges).toBe(0);
 });
+
+async function startPublicTenantServer(publicTenancy?: PublicTenancyOptions) {
+	const { definition } = await fixture({
+		tenancy: 'column',
+		routes: (dependencies) => ({
+			'/tenant': createHttpKernel(dependencies).wrapPublicRead(
+				async (_request, { established }) => Response.json({ tenant: established.tenant.id }),
+				{ allowAnonymous: true },
+			),
+		}),
+	});
+
+	Object.assign(process.env, {
+		APP_ENV: 'production',
+		APP_URL: 'https://app.example.test',
+		DATABASE_URL: 'sqlite:production.sqlite',
+		APP_DEBUG: 'false',
+		AUTH_DEV_HEADERS: 'false',
+		TENANT_DEV_HEADERS: 'false',
+		FEATURE_SCIM: 'false',
+	});
+	delete process.env.ADMIN_API_TOKEN;
+	delete process.env.MEMBER_API_TOKEN;
+	delete process.env.CSRF_TARGET_ORIGIN;
+
+	const app = defineApp({
+		...definition,
+		publicTenancy,
+		auth: {
+			...definition.auth,
+			create(options) {
+				const auth = definition.auth.create(options);
+
+				return {
+					...auth,
+					metadata: () => ({
+						authenticate: async (request) =>
+							request.headers.get('authorization') === 'Bearer account-fixture'
+								? {
+										status: 'authenticated',
+										user: { id: 10, role: 'member' },
+										credentialSource: 'bearer',
+									}
+								: { status: 'absent', user: null, credentialSource: null },
+						memberships: async () => [],
+						userTenantId: async () => 7,
+						tenant: async (id) => ([1, 7, 8].includes(id) ? { id, slug: `tenant-${id}` } : null),
+					}),
+				};
+			},
+		},
+	});
+
+	const { server } = await app.createAppServer({
+		server: { port: 0, native: { hostname: '127.0.0.1' } },
+		onConstructed: (owner) => {
+			owners.push(owner);
+		},
+	});
+
+	ok(server, 'Expected a native HTTP listener');
+
+	return (host: string, headers?: Record<string, string>) =>
+		fetch(new URL('/tenant', server.url), { headers: { host, ...headers } });
+}
+
+test('starter native HTTP defaults to the APP_URL host and ignores forwarding', async () => {
+	const request = await startPublicTenantServer();
+
+	const approved = await request('app.example.test', { 'x-forwarded-host': 'other.example.test' });
+
+	expect(approved.status).toBe(200);
+	expect(await approved.json()).toEqual({ tenant: 1 });
+	expect(
+		(await request('other.example.test', { 'x-forwarded-host': 'app.example.test' })).status,
+	).toBe(403);
+});
+
+for (const trusted of [false, true]) {
+	test(`starter native HTTP resolves app-owned hosts with proxy trust ${trusted}`, async () => {
+		const domains = new Map([
+			['catalog.example.test', 7],
+			['other.example.test', 8],
+			['missing.example.test', 9],
+		]);
+
+		const request = await startPublicTenantServer({
+			resolveTenantId: async (host) => domains.get(host) ?? null,
+			...(trusted ? { trustedProxyAddresses: ['127.0.0.1'] } : {}),
+		});
+
+		const catalog = await request('CATALOG.example.test.:443', { 'x-tenant-id': '8' });
+
+		expect(catalog.status).toBe(200);
+		expect(await catalog.json()).toEqual({ tenant: 7 });
+		const other = await request('other.example.test');
+
+		expect(other.status).toBe(200);
+		expect(await other.json()).toEqual({ tenant: 8 });
+		expect((await request('app.example.test')).status).toBe(403);
+		expect((await request('missing.example.test')).status).toBe(403);
+		const forwarded = await request('catalog.example.test', {
+			'x-forwarded-host': 'other.example.test',
+			'x-forwarded-for': '127.0.0.1',
+		});
+
+		expect(forwarded.status).toBe(200);
+		expect(await forwarded.json()).toEqual({ tenant: trusted ? 8 : 7 });
+		const authorization = { authorization: 'Bearer account-fixture' };
+
+		const account = await request('other.example.test', authorization);
+
+		expect(account.status).toBe(200);
+		expect(await account.json()).toEqual({ tenant: 7 });
+		expect((await request('unknown.example.test', authorization)).status).toBe(403);
+	});
+}
 
 test('production entrypoint snapshots host policy and drains HTTP on its installed signal', async () => {
 	const { serveApplication } = await import('../../src/bootstrap/application');
