@@ -102,14 +102,23 @@ The consumer and distributed middleware expose idempotent `dispose()`. Disposal 
 
 `kernel.wrapWebPublicRead(handler, { allowAnonymous: true })` and `kernel.wrapPublicRead(handler, { allowAnonymous: true })` explicitly admit public HTML/JSON reads. Omit the option to use the exact-string `FEATURE_PUBLIC_READS=true` default policy; set `allowAnonymous: false` to require authentication regardless of that default. JSON routes still compose the normal API group, and writes/admin routes retain their authentication, CSRF, ability and policy checks. Public-read admission does not authorize arbitrary business resources.
 
-When tenancy is enabled, bind `CORE_PUBLIC_TENANCY_TOKEN` before constructing the kernel:
+When tenancy is enabled, pass `publicTenancy` to `defineApp` in your generated app's `src/bootstrap/createApp.ts`. For example, supply an explicit map of approved hostnames to existing tenant IDs:
 
 ```typescript
-container.set(CORE_PUBLIC_TENANCY_TOKEN, {
-	resolveTenantId: async (hostname) => approvedDomainLookup(hostname),
-	trustedProxyAddresses: ['10.0.0.10'],
+const approvedDomains = new Map([
+	['catalog.example.com', 1],
+	['outlet.example.com', 2],
+]);
+
+const { bootstrapApp, createApp, createAppServer } = defineApp({
+	...appDefinition,
+	publicTenancy: {
+		resolveTenantId: async (hostname) => approvedDomains.get(hostname) ?? null,
+	},
 });
 ```
+
+The same `PublicTenancyOptions` contract supports an application-owned lookup service. Apps using `createApplicationContext` directly pass it as `http.publicTenancy`.
 
 The application owns the approved-domain directory, its uniqueness, administrative changes and persistence. The framework passes only a normalized hostname (case folded, IDNA encoded, one terminal dot removed, port omitted), validates the positive safe-integer identity, then uses the ordinary tenant resolver and RLS scope. Use the exported `normalizeTenantHostname` for domain storage. Unknown hosts or missing tenants return 403, with no default-tenant fallback. Resolver outages propagate through the normal error boundary and never select another tenant. Production/staging anonymous requests without a public resolver are denied, including login pages; single-tenant `TENANCY_DRIVER=none` retains its existing synthetic identity.
 
@@ -117,7 +126,7 @@ The native server records the immediate socket peer separately from the forwarde
 
 A configured host allowlist is checked for authenticated requests too. Persisted authenticated users retain account membership/tenant selection; the public resolver cannot move them to another tenant. Existing authenticated administrator overrides remain unchanged. SCIM retains its dedicated authenticated tenant selection. Domain selection is an anonymous scope, not account authorization or a source for signed URLs.
 
-In production/staging, generated apps bind their configured `APP_URL` hostname to starter tenant 1 and approve no proxy by default. Multi-tenant products replace that application provider with their approved-domain mapping. This contains no commerce entitlements. Changing that mapping or its proxy topology requires a coordinated application deployment; forwarded headers are never accepted just because a public-read flag is on.
+Without an explicit resolver, generated apps keep the production/staging default of mapping the `APP_URL` hostname to starter tenant 1 with no trusted proxy. An explicit resolver handles host selection in every environment. It includes the `APP_URL` hostname only if the application's lookup approves it. Keep `APP_URL` set to the app's canonical public URL for signed links and redirects. `CSRF_TARGET_ORIGIN` remains a separate single-origin setting. Approving a tenant hostname does not add it to the CSRF origin policy.
 
 **Upgrade:** remove the former assumption that `FEATURE_PUBLIC_READS` enables guest `x-tenant-id`. Development tests that deliberately select guest tenants must opt into `TENANT_DEV_HEADERS=true`. Keep it false in production. Existing tenancy-enabled applications must add the public host binding before upgrading their production login/storefront deployment. Enabling public reads is now allowed by the secrets guard; it does not bypass the host resolver or authentication on other routes. No automatic domain table/migration, data rewrite or wildcard approval is performed.
 
