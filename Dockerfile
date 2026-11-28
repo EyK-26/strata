@@ -1,5 +1,5 @@
 # Framework acceptance image. Product applications own their deployment images.
-FROM oven/bun:1.4.4 AS base
+FROM oven/bun:1.4.5 AS base
 WORKDIR /workspace
 
 FROM base AS install
@@ -22,7 +22,7 @@ RUN --mount=type=secret,id=proxy_ca \
     if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
     bun scripts/build-docker-acceptance.ts /opt/strata-acceptance
 
-FROM oven/bun:1.4.4 AS release
+FROM oven/bun:1.4.5 AS release
 WORKDIR /app
 COPY --from=build --chown=bun:bun /opt/strata-acceptance/ ./
 ENV NODE_ENV=production
